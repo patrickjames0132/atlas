@@ -1,0 +1,18 @@
+[project]
+name = "arxiv-digest"
+version = "0.1.0"
+description = "A dashboard that turns your arXiv email subscriptions into an AI-summarized daily digest."
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "anthropic>=0.40",
+    "arxiv>=2.1",
+    "python-dotenv>=1.0",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = []

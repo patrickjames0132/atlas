@@ -1,0 +1,22 @@
+# Secrets & credentials — NEVER commit these
+.env
+
+# Data
+data/
+*.db
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.uv/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
