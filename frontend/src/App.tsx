@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchPapers,
   fetchSummary,
@@ -10,6 +10,7 @@ import {
   type CategoryGroup,
 } from './api'
 import CategoryPicker from './CategoryPicker'
+import CategoryFilter, { type FilterOption } from './CategoryFilter'
 import './App.css'
 
 const PAGE_SIZE = 20
@@ -104,33 +105,158 @@ export default function App() {
   const [catOpen, setCatOpen] = useState(false)
   const [catSaving, setCatSaving] = useState(false)
 
-  async function load(date: string) {
+  // Dates we've already auto-pulled this session (so empty days aren't re-pulled
+  // every time you revisit them). Re-pull is always available via the ↻ button.
+  const autoPulled = useRef<Set<string>>(new Set())
+  // Mirror activeDate in a ref so async loads/pulls can drop stale results from
+  // a date the user has since navigated away from.
+  const activeDateRef = useRef(activeDate)
+  useEffect(() => {
+    activeDateRef.current = activeDate
+  }, [activeDate])
+
+  async function load(date: string): Promise<Paper[]> {
     setLoading(true)
     try {
       const data = await fetchPapers(date)
+      if (activeDateRef.current !== date) return data.papers // stale; don't apply
       setPapers(data.papers)
       setPulledDates(data.dates)
       setFollowed(data.followed_categories ?? [])
+      return data.papers
     } catch (e) {
-      setStatus(String(e))
+      if (activeDateRef.current === date) setStatus(String(e))
+      return []
     } finally {
-      setLoading(false)
+      if (activeDateRef.current === date) setLoading(false)
     }
   }
 
+  async function pull(date: string) {
+    setBusy(true)
+    setStatus(`Fetching papers submitted on ${date} from arXiv…`)
+    try {
+      const result = await refresh(date)
+      if (activeDateRef.current !== date) return
+      if (!result.ok) {
+        setStatus(`Error: ${result.error}`)
+        return
+      }
+      const got = await load(date)
+      if (activeDateRef.current !== date) return
+      setPage(1)
+      setStatus(
+        got.length > 0
+          ? `Pulled ${result.papers_new} new paper(s) for ${date}.`
+          : `No papers found on arXiv for ${date} in your followed categories.`,
+      )
+    } catch (e) {
+      if (activeDateRef.current === date) setStatus(String(e))
+    } finally {
+      if (activeDateRef.current === date) setBusy(false)
+    }
+  }
+
+  // Load the selected date; if it has no papers (and we haven't tried yet this
+  // session), auto-pull it from arXiv after a short debounce so scrubbing
+  // through dates doesn't fire a request per date.
   useEffect(() => {
-    load(activeDate)
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    ;(async () => {
+      const found = await load(activeDate)
+      if (cancelled) return
+      if (found.length === 0 && !autoPulled.current.has(activeDate)) {
+        autoPulled.current.add(activeDate)
+        timer = setTimeout(() => {
+          if (!cancelled) pull(activeDate)
+        }, 500)
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDate])
+
+  // Load the taxonomy once so filter chips can show natural-language names.
+  useEffect(() => {
+    fetchCategories()
+      .then((d) => {
+        setCatGroups(d.groups)
+        setFollowed(d.followed)
+      })
+      .catch(() => {})
   }, [])
 
   function onDateChange(date: string) {
-    if (!date) return
+    if (!date || date === activeDate) return
     setActiveDate(date)
     setSelected([])
     setPage(1)
     setStatus('')
-    load(date)
   }
+
+  // Map every category code to its natural-language name (from the taxonomy),
+  // so filters read "Machine Learning" rather than "cs.LG".
+  const nameMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const g of catGroups) for (const c of g.categories) m.set(c.code, c.name)
+    return m
+  }, [catGroups])
+
+  // Map each paper's tags to natural-language names; the names dedupe codes that
+  // mean the same subject (e.g. cs.LG + stat.ML → "Machine Learning").
+  function paperNames(p: Paper): string[] {
+    return p.categories
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((c) => nameMap.get(c) ?? c)
+  }
+
+  // Filter options = the subjects present in the loaded day, grouped by name
+  // (mirrored tags merged into one), each with a deduped paper count and the
+  // underlying codes, most common first.
+  const categoryOptions = useMemo<FilterOption[]>(() => {
+    const counts = new Map<string, number>()
+    const codes = new Map<string, Set<string>>()
+    for (const p of papers) {
+      const names = new Set<string>()
+      for (const c of p.categories.split(/\s+/).filter(Boolean)) {
+        const name = nameMap.get(c) ?? c
+        names.add(name)
+        let set = codes.get(name)
+        if (!set) {
+          set = new Set()
+          codes.set(name, set)
+        }
+        set.add(c)
+      }
+      for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({
+        key: name,
+        label: name,
+        codes: [...(codes.get(name) ?? [])].sort(),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [papers, nameMap])
+
+  const presentCategories = useMemo(
+    () => categoryOptions.map((o) => o.key),
+    [categoryOptions],
+  )
+
+  // Drop any active filter that's no longer present in the loaded day.
+  useEffect(() => {
+    setSelected((cur) => {
+      const next = cur.filter((c) => presentCategories.includes(c))
+      return next.length === cur.length ? cur : next
+    })
+  }, [presentCategories])
 
   function toggleCategory(cat: string) {
     setPage(1)
@@ -150,19 +276,21 @@ export default function App() {
     }
   }
 
-  async function onSaveCategories(codes: string[]) {
+  async function onSaveCategories(codes: string[], alsoPull: boolean) {
     setCatSaving(true)
     try {
       const saved = await saveCategories(codes)
       setFollowed(saved)
-      // Drop any active filter chips that are no longer followed.
-      setSelected((cur) => cur.filter((c) => saved.includes(c)))
-      setPage(1)
       setCatOpen(false)
-      setStatus(
-        `Categories updated (${saved.length} followed). ` +
-          `Click Refresh papers to pull ${activeDate} with the new set.`,
-      )
+      if (alsoPull) {
+        autoPulled.current.add(activeDate) // we're pulling now; don't double-fire
+        await pull(activeDate)
+      } else {
+        setStatus(
+          `Categories updated (${saved.length} followed). ` +
+            `Re-pull ${activeDate} (↻) to apply them.`,
+        )
+      }
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     } finally {
@@ -170,34 +298,14 @@ export default function App() {
     }
   }
 
-  async function onRefresh() {
-    setBusy(true)
-    setStatus(`Fetching papers submitted on ${activeDate} from arXiv…`)
-    try {
-      const result = await refresh(activeDate)
-      if (!result.ok) {
-        setStatus(`Error: ${result.error}`)
-      } else {
-        await load(activeDate)
-        setPage(1)
-        setStatus(
-          `Done — ${result.papers_new} new paper(s) pulled for ${activeDate}.`,
-        )
-      }
-    } catch (e) {
-      setStatus(String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // Show papers that carry at least one selected category; no selection = all.
+  // Show papers carrying at least one selected subject (by name); none = all.
   const visiblePapers =
     selected.length === 0
       ? papers
-      : papers.filter((p) =>
-          p.categories.split(/\s+/).some((c) => selected.includes(c)),
-        )
+      : papers.filter((p) => {
+          const names = new Set(paperNames(p))
+          return selected.some((n) => names.has(n))
+        })
 
   const totalPages = Math.max(1, Math.ceil(visiblePapers.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -229,15 +337,21 @@ export default function App() {
               ))}
             </datalist>
           </label>
+          <button
+            className={`icon-btn${busy ? ' spinning' : ''}`}
+            onClick={() => pull(activeDate)}
+            disabled={busy}
+            title={`Re-pull ${activeDate} from arXiv`}
+            aria-label={`Re-pull ${activeDate} from arXiv`}
+          >
+            ↻
+          </button>
           <button className="btn secondary" onClick={openCategories}>
             Categories{followed.length > 0 ? ` (${followed.length})` : ''}
           </button>
           <a className="btn secondary" href={notebookLmExportUrl(activeDate)}>
             Export for NotebookLM
           </a>
-          <button className="btn" onClick={onRefresh} disabled={busy}>
-            {busy ? 'Fetching…' : 'Refresh papers'}
-          </button>
         </div>
       </header>
 
@@ -246,6 +360,7 @@ export default function App() {
           groups={catGroups}
           followed={followed}
           saving={catSaving}
+          dateLabel={activeDate}
           onSave={onSaveCategories}
           onClose={() => setCatOpen(false)}
         />
@@ -253,37 +368,32 @@ export default function App() {
 
       {status && <div className="status">{status}</div>}
 
-      {followed.length > 0 && papers.length > 0 && (
-        <div className="filters">
-          <span className="filters-label">Filter:</span>
-          {followed.map((cat) => (
-            <button
-              key={cat}
-              className={`filter-chip${selected.includes(cat) ? ' active' : ''}`}
-              onClick={() => toggleCategory(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-          {selected.length > 0 && (
-            <button className="link-btn" onClick={() => setSelected([])}>
-              clear
-            </button>
-          )}
-        </div>
+      {papers.length > 0 && categoryOptions.length > 0 && (
+        <CategoryFilter
+          options={categoryOptions}
+          selected={selected}
+          onToggle={toggleCategory}
+          onClear={() => setSelected([])}
+        />
       )}
 
-      {loading ? (
-        <p className="muted">Loading…</p>
+      {loading || busy ? (
+        <p className="muted">
+          {busy ? `Fetching ${activeDate} from arXiv…` : 'Loading…'}
+        </p>
       ) : papers.length === 0 ? (
         <div className="empty">
-          <p>No papers have been pulled for {activeDate} yet.</p>
+          <p>No papers for {activeDate}.</p>
           <p className="muted">
-            Click <strong>Refresh papers</strong> to fetch this day's
-            submissions from arXiv in the categories you follow.
+            Nothing was found on arXiv for this date in your followed
+            categories. Try another date, broaden your{' '}
+            <button className="link-btn inline" onClick={openCategories}>
+              categories
+            </button>
+            , or pull again.
           </p>
-          <button className="btn" onClick={onRefresh} disabled={busy}>
-            {busy ? 'Fetching…' : 'Refresh papers'}
+          <button className="btn" onClick={() => pull(activeDate)} disabled={busy}>
+            Pull papers for {activeDate}
           </button>
         </div>
       ) : (

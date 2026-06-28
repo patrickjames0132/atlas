@@ -7,13 +7,15 @@ export default function CategoryPicker({
   groups,
   followed,
   saving,
+  dateLabel,
   onSave,
   onClose,
 }: {
   groups: CategoryGroup[]
   followed: string[]
   saving: boolean
-  onSave: (codes: string[]) => void
+  dateLabel: string
+  onSave: (codes: string[], pull: boolean) => void
   onClose: () => void
 }) {
   const [picked, setPicked] = useState<Set<string>>(new Set(followed))
@@ -128,11 +130,18 @@ export default function CategoryPicker({
               Cancel
             </button>
             <button
-              className="btn"
-              onClick={() => onSave([...picked])}
+              className="btn secondary"
+              onClick={() => onSave([...picked], false)}
               disabled={saving || picked.size === 0}
             >
               {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              className="btn"
+              onClick={() => onSave([...picked], true)}
+              disabled={saving || picked.size === 0}
+            >
+              {saving ? 'Saving…' : `Save & pull ${dateLabel}`}
             </button>
           </div>
         </div>
