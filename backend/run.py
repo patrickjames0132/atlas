@@ -28,6 +28,9 @@ def main() -> None:
 
     p_refresh = sub.add_parser("refresh", help="Fetch from arXiv, store, and summarize")
     p_refresh.add_argument(
+        "--date", help="Pull papers submitted on this date (YYYY-MM-DD); default today"
+    )
+    p_refresh.add_argument(
         "--no-summary", action="store_true", help="Skip AI summaries"
     )
 
@@ -37,7 +40,7 @@ def main() -> None:
         app_module.main()
     elif args.command == "refresh":
         store.init_db()
-        result = pipeline.run(summarize=not args.no_summary)
+        result = pipeline.run(digest_date=args.date, summarize=not args.no_summary)
         print("\nDone:", result)
 
 

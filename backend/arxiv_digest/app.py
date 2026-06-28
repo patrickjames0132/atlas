@@ -13,6 +13,7 @@ In production it also serves the built React app from frontend/dist.
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, request, Response, send_from_directory
@@ -56,12 +57,22 @@ def get_dates() -> Response:
 
 @app.post("/api/refresh")
 def refresh() -> Response:
-    """Requery arXiv for new papers. Summaries are generated per-row on demand,
-    so this does NOT summarize by default (pass summarize=true to also do so)."""
+    """Pull papers submitted on a given date (default today) from arXiv.
+
+    Summaries are generated per-row on demand, so this does NOT summarize by
+    default (pass summarize=true to also do so)."""
     payload = request.get_json(silent=True) or {}
+    digest_date = payload.get("date")
     summarize = payload.get("summarize", False)
+
+    if digest_date:
+        try:
+            datetime.strptime(digest_date, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"ok": False, "error": "date must be YYYY-MM-DD"}), 400
+
     try:
-        result = pipeline.run(summarize=summarize)
+        result = pipeline.run(digest_date=digest_date, summarize=summarize)
     except Exception as exc:  # surface the error to the dashboard
         return jsonify({"ok": False, "error": str(exc)}), 500
     return jsonify({"ok": True, **result})

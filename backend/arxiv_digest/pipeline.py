@@ -11,17 +11,21 @@ from datetime import date
 from . import arxiv_client, config, store, summarizer
 
 
-def run(digest_date: str | None = None, summarize: bool = True) -> dict:
-    """Run the full pipeline once and return a small summary of what happened."""
+def run(digest_date: str | None = None, summarize: bool = False) -> dict:
+    """Pull papers submitted on `digest_date` (default today) and store them.
+
+    Summaries are generated on demand per row in the dashboard, so this skips
+    them by default; pass ``summarize=True`` (e.g. from a cron job) to also
+    summarize everything in one go.
+    """
     digest_date = digest_date or date.today().isoformat()
     store.init_db()
 
     print(
-        f"[1/3] Fetching recent papers from arXiv "
-        f"(categories: {', '.join(config.ARXIV_CATEGORIES)}; "
-        f"last {config.ARXIV_LOOKBACK_DAYS} day(s)) ..."
+        f"[1/3] Fetching arXiv papers submitted on {digest_date} "
+        f"(categories: {', '.join(config.ARXIV_CATEGORIES)}) ..."
     )
-    papers = arxiv_client.fetch_recent_papers()
+    papers = arxiv_client.fetch_papers_for_date(digest_date)
     print(f"      Fetched {len(papers)} paper(s).")
 
     print("[2/3] Storing new papers ...")

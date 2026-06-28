@@ -35,9 +35,6 @@ ARXIV_CATEGORIES = [
     if c.strip()
 ]
 
-# How many days back counts as "the latest batch" (handles weekends/gaps).
-ARXIV_LOOKBACK_DAYS = int(os.getenv("ARXIV_LOOKBACK_DAYS", "2"))
-
 # Upper bound on how many papers to pull per run (safety valve).
 ARXIV_MAX_RESULTS = int(os.getenv("ARXIV_MAX_RESULTS", "100"))
 

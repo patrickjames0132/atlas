@@ -1,13 +1,13 @@
-"""Fetch recent papers directly from the arXiv API (via the `arxiv` package).
+"""Fetch papers directly from the arXiv API (via the `arxiv` package).
 
 This replaces the old Gmail-fetch + email-parse approach: no OAuth, no email
 format quirks — just a structured query against arXiv, filtered to the subject
-categories you follow.
+categories you follow and to a single submission date.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Optional
 
 import arxiv
@@ -20,23 +20,28 @@ def _short_id(result: arxiv.Result) -> str:
     return result.get_short_id().split("v")[0]
 
 
-def fetch_recent_papers(
+def fetch_papers_for_date(
+    target_date: str,
     categories: Optional[list[str]] = None,
-    lookback_days: Optional[int] = None,
     max_results: Optional[int] = None,
 ) -> list[dict]:
-    """Return recent papers in the given categories as store-ready dicts.
+    """Return papers SUBMITTED on `target_date` (YYYY-MM-DD) as store-ready dicts.
 
-    "Latest announced batch": results are sorted by submission date (newest
-    first) and we keep everything submitted within `lookback_days`. Because the
-    feed is date-descending, we can stop as soon as we pass the cutoff.
+    Filters arXiv by ``submittedDate`` (a GMT day-range) intersected with the
+    categories you follow. Results come back date-descending; we keep the whole
+    day's batch up to ``max_results``.
     """
     categories = categories or config.ARXIV_CATEGORIES
-    lookback_days = lookback_days if lookback_days is not None else config.ARXIV_LOOKBACK_DAYS
     max_results = max_results or config.ARXIV_MAX_RESULTS
 
-    # e.g. "cat:cs.LG OR cat:cs.AI OR cat:cs.CL OR cat:cs.CV"
-    query = " OR ".join(f"cat:{c}" for c in categories)
+    # arXiv wants submittedDate as YYYYMMDDTTTT in GMT; cover the full day.
+    day = datetime.strptime(target_date, "%Y-%m-%d")
+    start = day.strftime("%Y%m%d0000")
+    end = day.strftime("%Y%m%d2359")
+
+    # e.g. "(cat:cs.LG OR cat:cs.AI) AND submittedDate:[202406260000 TO 202406262359]"
+    cat_query = " OR ".join(f"cat:{c}" for c in categories)
+    query = f"({cat_query}) AND submittedDate:[{start} TO {end}]"
     search = arxiv.Search(
         query=query,
         max_results=max_results,
@@ -44,12 +49,8 @@ def fetch_recent_papers(
         sort_order=arxiv.SortOrder.Descending,
     )
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-
     papers: list[dict] = []
     for result in arxiv.Client().results(search):
-        if result.published < cutoff:
-            break  # everything after this is older — stop early
         arxiv_id = _short_id(result)
         papers.append(
             {
