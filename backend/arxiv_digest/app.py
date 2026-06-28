@@ -19,7 +19,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory
 from flask_cors import CORS
 
-from . import config, pipeline, store, summarizer
+from . import config, pipeline, store, summarizer, taxonomy
 
 # The built frontend lands in frontend/dist after `npm run build`.
 FRONTEND_DIST = config.PROJECT_ROOT / "frontend" / "dist"
@@ -45,7 +45,7 @@ def get_papers() -> Response:
             "count": len(papers),
             "papers": papers,
             "dates": store.available_dates(),
-            "followed_categories": config.ARXIV_CATEGORIES,
+            "followed_categories": store.get_followed_categories(),
         }
     )
 
@@ -53,6 +53,36 @@ def get_papers() -> Response:
 @app.get("/api/dates")
 def get_dates() -> Response:
     return jsonify({"dates": store.available_dates()})
+
+
+@app.get("/api/categories")
+def get_categories() -> Response:
+    """The full arXiv taxonomy plus the categories the user currently follows."""
+    return jsonify(
+        {
+            "groups": taxonomy.groups(),
+            "followed": store.get_followed_categories(),
+        }
+    )
+
+
+@app.put("/api/categories")
+def put_categories() -> Response:
+    """Replace the followed-category set. Body: {"followed": ["cs.LG", ...]}."""
+    payload = request.get_json(silent=True) or {}
+    followed = payload.get("followed")
+    if not isinstance(followed, list) or not all(isinstance(c, str) for c in followed):
+        return jsonify({"ok": False, "error": "followed must be a list of strings"}), 400
+
+    valid = taxonomy.valid_codes()
+    unknown = [c for c in followed if c not in valid]
+    if unknown:
+        return jsonify({"ok": False, "error": f"unknown categories: {', '.join(unknown)}"}), 400
+    if not followed:
+        return jsonify({"ok": False, "error": "select at least one category"}), 400
+
+    saved = store.set_followed_categories(followed)
+    return jsonify({"ok": True, "followed": saved})
 
 
 @app.post("/api/refresh")

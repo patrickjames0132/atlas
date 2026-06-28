@@ -6,6 +6,7 @@ a paper — or pay to summarize it — twice.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -27,7 +28,15 @@ CREATE TABLE IF NOT EXISTS papers (
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_papers_digest_date ON papers (digest_date);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
+
+# Key under which the user's followed categories live in the settings table.
+_FOLLOWED_KEY = "followed_categories"
 
 
 @contextmanager
@@ -113,6 +122,37 @@ def get_paper(arxiv_id: str) -> Optional[dict]:
             "SELECT * FROM papers WHERE arxiv_id = ?", (arxiv_id,)
         ).fetchone()
     return dict(row) if row else None
+
+
+def get_followed_categories() -> list[str]:
+    """The categories the user follows (pulled from arXiv + used as filters).
+
+    Stored in the settings table; falls back to the .env default (config) the
+    first time, before the user has customized anything.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (_FOLLOWED_KEY,)
+        ).fetchone()
+    if row is None:
+        return list(config.ARXIV_CATEGORIES)
+    return json.loads(row["value"])
+
+
+def set_followed_categories(categories: list[str]) -> list[str]:
+    """Persist the followed categories (order preserved, duplicates dropped)."""
+    seen: dict[str, None] = {}
+    for c in categories:
+        if c not in seen:
+            seen[c] = None
+    cleaned = list(seen)
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (_FOLLOWED_KEY, json.dumps(cleaned)),
+        )
+    return cleaned
 
 
 def available_dates() -> list[str]:

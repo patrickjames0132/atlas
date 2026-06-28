@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from . import arxiv_client, config, store, summarizer
+from . import arxiv_client, store, summarizer
 
 
 def run(digest_date: str | None = None, summarize: bool = False) -> dict:
@@ -21,11 +21,12 @@ def run(digest_date: str | None = None, summarize: bool = False) -> dict:
     digest_date = digest_date or date.today().isoformat()
     store.init_db()
 
+    categories = store.get_followed_categories()
     print(
         f"[1/3] Fetching arXiv papers submitted on {digest_date} "
-        f"(categories: {', '.join(config.ARXIV_CATEGORIES)}) ..."
+        f"(categories: {', '.join(categories)}) ..."
     )
-    papers = arxiv_client.fetch_papers_for_date(digest_date)
+    papers = arxiv_client.fetch_papers_for_date(digest_date, categories=categories)
     print(f"      Fetched {len(papers)} paper(s).")
 
     print("[2/3] Storing new papers ...")
