@@ -1,6 +1,6 @@
 [project]
 name = "arxiv-digest"
-version = "0.3.0"
+version = "0.4.0"
 description = "A dashboard that turns your arXiv email subscriptions into an AI-summarized daily digest."
 requires-python = ">=3.11"
 dependencies = [
