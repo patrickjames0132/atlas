@@ -138,7 +138,17 @@ export async function saveCategories(followed: string[]): Promise<string[]> {
   return data.followed as string[]
 }
 
-// Returns the URL that downloads a NotebookLM-ready Markdown digest.
-export function notebookLmExportUrl(start?: string, end?: string): string {
-  return `/api/export/notebooklm${rangeQuery(start, end)}`
+// Returns the URL that downloads a NotebookLM-ready Markdown digest. When `q` is
+// given, the digest contains only that search's results (else the whole range).
+export function notebookLmExportUrl(
+  start?: string,
+  end?: string,
+  q?: string,
+): string {
+  const params = new URLSearchParams()
+  if (start) params.set('start', start)
+  if (end) params.set('end', end)
+  if (q && q.trim()) params.set('q', q.trim())
+  const qs = params.toString()
+  return `/api/export/notebooklm${qs ? `?${qs}` : ''}`
 }

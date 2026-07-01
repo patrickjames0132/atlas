@@ -473,9 +473,14 @@ export default function App() {
           </button>
           <a
             className="btn secondary"
-            href={notebookLmExportUrl(startDate, endDate)}
+            href={notebookLmExportUrl(startDate, endDate, searchActive ? query : undefined)}
+            title={
+              searchActive
+                ? `Export the ${searchResults.length} search result(s) for “${query.trim()}”`
+                : `Export every paper in ${rangeLabel}`
+            }
           >
-            Export for NotebookLM
+            {searchActive ? 'Export results' : 'Export for NotebookLM'}
           </a>
         </div>
       </header>

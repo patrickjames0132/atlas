@@ -125,6 +125,12 @@ for NotebookLM** in the dashboard (or hit `/api/export/notebooklm`) to download 
 clean Markdown digest plus a list of PDF links. In NotebookLM: **New notebook →
 Add source → paste the Markdown** (or add the PDF links as website sources).
 
+**Search-aware:** with a search active the button becomes **Export results** and
+the digest contains only that search's hits (`/api/export/notebooklm?q=…`, hybrid
+lexical + semantic, scoped to the date range) — capped at the same 100 results
+the dashboard shows, which conveniently keeps a NotebookLM notebook focused.
+Clear the search to export the whole date range again.
+
 ---
 
 ## Project layout

@@ -6,7 +6,8 @@ GET  /api/papers?start=&end=       -> papers submitted in a date range
 GET  /api/search?q=&start=&end=    -> hybrid search (BM25 + embedding similarity)
 GET  /api/dates                    -> list of dates that have papers
 POST /api/refresh                  -> run the fetch/parse/summarize pipeline
-GET  /api/export/notebooklm?start=&end= -> a Markdown digest for NotebookLM
+GET  /api/export/notebooklm?start=&end=&q= -> a Markdown digest for NotebookLM
+                                     (q present -> only that search's results)
 GET  /api/health                   -> simple liveness check
 
 In production it also serves the built React app from frontend/dist.
@@ -15,6 +16,7 @@ In production it also serves the built React app from frontend/dist.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -199,16 +201,29 @@ def summarize_paper(arxiv_id: str) -> Response:
 
 @app.get("/api/export/notebooklm")
 def export_notebooklm() -> Response:
-    """Return a clean Markdown digest you can paste/upload into NotebookLM."""
+    """Return a clean Markdown digest you can paste/upload into NotebookLM.
+
+    When a search query ``q`` is given, the digest contains only that search's
+    results (hybrid lexical + semantic, scoped to the date range) — matching what
+    you see in the dashboard. Without ``q`` it exports the whole date range.
+    """
     start, end = _range_args()
-    if start and end:
+    q = (request.args.get("q") or "").strip()
+    if q:
+        papers, _mode = search.hybrid_search(q, start, end)
+    elif start and end:
         papers = store.get_papers_in_range(start, end)
     else:
         papers = store.get_papers()
     date_label = start if start == end else f"{start} to {end}"
     date_label = date_label or "today"
+    if q:
+        date_label = f"{date_label} · “{q}”"
 
-    lines = [f"# arXiv Digest — {date_label}", ""]
+    heading = f"# arXiv Digest — {date_label}"
+    if q:
+        heading += f"\n\n_Search: **{q}** — {len(papers)} matching paper(s)._"
+    lines = [heading, ""]
     for i, p in enumerate(papers, 1):
         lines.append(f"## {i}. {p['title']}")
         if p.get("authors"):
@@ -232,7 +247,11 @@ def export_notebooklm() -> Response:
         lines.append(f"- {p['url'].replace('/abs/', '/pdf/')}")
 
     markdown = "\n".join(lines)
-    filename = f"arxiv-digest-{date_label.replace(' ', '')}.md"
+    range_label = start if start == end else f"{start} to {end}"
+    range_label = range_label or "today"
+    slug = f"{range_label}-{q}" if q else range_label
+    slug = re.sub(r"[^0-9A-Za-z-]+", "-", slug).strip("-") or "digest"
+    filename = f"arxiv-digest-{slug}.md"
     return Response(
         markdown,
         mimetype="text/markdown",
