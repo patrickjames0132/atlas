@@ -4,6 +4,8 @@ Endpoints
 ---------
 GET  /api/papers?start=&end=       -> papers submitted in a date range
 GET  /api/search?q=&start=&end=    -> hybrid search (BM25 + embedding similarity)
+GET  /api/arxiv_search?q=&limit=   -> live relevance search across all of arXiv
+POST /api/arxiv_search/add         -> add live arXiv result(s) to the library
 GET  /api/dates                    -> list of dates that have papers
 POST /api/refresh                  -> run the fetch/parse/summarize pipeline
 GET  /api/export/notebooklm?start=&end=&q= -> a Markdown digest for NotebookLM
@@ -118,6 +120,47 @@ def search_route() -> Response:
             "papers": papers,
         }
     )
+
+
+@app.get("/api/arxiv_search")
+def arxiv_search_route() -> Response:
+    """Live relevance search across ALL of arXiv (not just the stored library).
+
+    Query args: q (keywords, title, author, or an arXiv id/URL), optional limit
+    (default 25). Ignores the date range and followed categories. Each result is
+    tagged ``in_library`` so the dashboard shows Add vs In library. Saves nothing.
+    """
+    q = (request.args.get("q") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit", "25")), 100))
+    except ValueError:
+        limit = 25
+    if not q:
+        return jsonify({"q": q, "count": 0, "papers": []})
+    try:
+        papers = search.arxiv_search(q, limit=limit)
+    except Exception as exc:
+        app.logger.exception("arxiv search failed for %r", q)
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"q": q, "count": len(papers), "papers": papers})
+
+
+@app.post("/api/arxiv_search/add")
+def arxiv_search_add() -> Response:
+    """Add live arXiv-search results to the library. Body: {"arxiv_ids": [...]}
+    (or a single "arxiv_id"). Fetches each by id, stores and embeds it."""
+    payload = request.get_json(silent=True) or {}
+    ids = payload.get("arxiv_ids")
+    if ids is None and payload.get("arxiv_id"):
+        ids = [payload["arxiv_id"]]
+    if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids) or not ids:
+        return jsonify({"ok": False, "error": "arxiv_ids must be a non-empty list of strings"}), 400
+    try:
+        result = pipeline.add_papers_by_ids(ids)
+    except Exception as exc:
+        app.logger.exception("adding arxiv papers failed: %s", ids)
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"ok": True, **result})
 
 
 @app.get("/api/dates")

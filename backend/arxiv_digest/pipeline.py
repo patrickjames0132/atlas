@@ -41,6 +41,19 @@ def embed_papers(papers: list[dict]) -> int:
     return len(todo)
 
 
+def add_papers_by_ids(arxiv_ids: list[str]) -> dict:
+    """Fetch specific papers from arXiv by id, store and embed them. Used to add a
+    live arXiv-search result to the library on demand. Deliberately does NOT touch
+    the pull-coverage ledger — this is an ad-hoc keyword add, not a full
+    category+date pull of a day, so it must not mark that day as covered.
+    """
+    store.init_db()
+    papers = arxiv_client.fetch_by_ids(arxiv_ids)
+    added = store.upsert_papers(papers)
+    embedded = embed_papers(papers)
+    return {"papers": papers, "added": added, "embedded": embedded}
+
+
 def run(
     start_date: str | None = None,
     end_date: str | None = None,

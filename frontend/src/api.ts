@@ -91,6 +91,42 @@ export async function searchPapers(
   return res.json()
 }
 
+// A live arXiv-search result: a normal paper plus whether it's already stored.
+export interface ArxivHit extends Paper {
+  in_library: boolean
+}
+
+export interface ArxivSearchResponse {
+  q: string
+  count: number
+  papers: ArxivHit[]
+}
+
+// Live relevance search across ALL of arXiv (not just the local library). Ignores
+// the date range; accepts keywords, a title, an author, or an arXiv id/URL.
+export async function searchArxiv(
+  q: string,
+  limit = 25,
+): Promise<ArxivSearchResponse> {
+  const params = new URLSearchParams({ q, limit: String(limit) })
+  const res = await fetch(`/api/arxiv_search?${params.toString()}`)
+  if (!res.ok) throw new Error(`arXiv search failed (${res.status})`)
+  return res.json()
+}
+
+// Add a live arXiv-search result to the library (fetch -> store -> embed).
+export async function addArxivPaper(arxivId: string): Promise<void> {
+  const res = await fetch('/api/arxiv_search/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ arxiv_id: arxivId }),
+  })
+  const data = await res.json()
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `Failed to add paper (${res.status})`)
+  }
+}
+
 // Generate (or fetch the cached) summary for a single paper.
 export async function fetchSummary(arxivId: string): Promise<string> {
   const res = await fetch(

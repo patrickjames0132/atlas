@@ -219,6 +219,25 @@ uv run python backend/run.py embed --rebuild    # wipe + re-embed (e.g. new mode
 Semantic search degrades gracefully: set `ARXIV_SEMANTIC=0` (or if the model /
 `sqlite-vec` can't load) and search stays keyword-only with no other changes.
 
+### Searching all of arXiv (not just your library)
+
+The hybrid search above only sees papers you've already pulled. To find a paper
+you *don't* have yet — say the original *Attention Is All You Need* — type it in
+the search bar and click **Search all of arXiv →** (it stands out when your
+library search comes up empty). That runs a live relevance query against the
+whole arXiv corpus (`GET /api/arxiv_search?q=&limit=`, default 25 results),
+ignoring your date range and followed categories. Paste an **arXiv id or
+abs/pdf URL** to fetch that exact paper instead of a keyword hunt; free-text
+queries are title-phrase-boosted so an exact title floats to the top despite
+arXiv's noisy default relevance ranking.
+
+Results show in a **From arXiv** panel, each with an **Add** button that fetches
+that one paper, stores it, and embeds it (`POST /api/arxiv_search/add`) — after
+which it's a normal library paper: locally searchable, summarizable, and
+exportable. Nothing is saved until you click Add, so a broad search doesn't
+clutter your database. (Adding is deliberately kept out of the pull-coverage
+ledger — it's an ad-hoc fetch, not a full category+date pull of a day.)
+
 **Next: retrieval-augmented generation (RAG).** With embeddings in place, the
 natural follow-on is answering questions *over* your library — retrieve the most
 relevant papers for a question and have Claude synthesize an answer with

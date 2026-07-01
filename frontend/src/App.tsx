@@ -6,8 +6,11 @@ import {
   saveCategories,
   refresh,
   searchPapers,
+  searchArxiv,
+  addArxivPaper,
   notebookLmExportUrl,
   type Paper,
+  type ArxivHit,
   type CategoryGroup,
 } from './api'
 import CategoryPicker from './CategoryPicker'
@@ -110,6 +113,74 @@ function PaperRow({ paper }: { paper: Paper }) {
   )
 }
 
+// One live arXiv search result, with an Add-to-library action.
+function ArxivHitRow({
+  hit,
+  onAdd,
+  adding,
+  added,
+}: {
+  hit: ArxivHit
+  onAdd: () => void
+  adding: boolean
+  added: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const inLibrary = hit.in_library || added
+  return (
+    <div className="arxiv-hit">
+      <div className="arxiv-hit-main">
+        <a
+          href={hit.url}
+          target="_blank"
+          rel="noreferrer"
+          className="arxiv-hit-title"
+        >
+          {hit.title}
+        </a>
+        <div className="authors">{hit.authors}</div>
+        <div className="arxiv-hit-meta">
+          <span className="muted">{hit.digest_date}</span>
+          {hit.categories
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 4)
+            .map((c) => (
+              <span className="cat-chip" key={c}>
+                {c}
+              </span>
+            ))}
+        </div>
+        {hit.abstract && (
+          <button className="link-btn" onClick={() => setOpen((o) => !o)}>
+            {open ? 'Hide abstract' : 'Show abstract'}
+          </button>
+        )}
+        {open && <div className="abstract">{hit.abstract}</div>}
+      </div>
+      <div className="arxiv-hit-actions">
+        {inLibrary ? (
+          <span className="in-library" title="Already in your library">
+            ✓ In library
+          </span>
+        ) : (
+          <button className="btn small" onClick={onAdd} disabled={adding}>
+            {adding ? 'Adding…' : 'Add'}
+          </button>
+        )}
+        <a
+          className="link-btn"
+          href={hit.url.replace('/abs/', '/pdf/')}
+          target="_blank"
+          rel="noreferrer"
+        >
+          pdf
+        </a>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const today = todayISO()
   const [papers, setPapers] = useState<Paper[]>([])
@@ -124,6 +195,13 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<Paper[]>([])
   const [searchMode, setSearchMode] = useState<'hybrid' | 'lexical'>('lexical')
   const [searching, setSearching] = useState(false)
+  // Live "search all of arXiv" results (separate from the local library search).
+  const [arxivHits, setArxivHits] = useState<ArxivHit[]>([])
+  const [arxivSearching, setArxivSearching] = useState(false)
+  const [arxivSearched, setArxivSearched] = useState(false)
+  const [arxivError, setArxivError] = useState<string | null>(null)
+  const [addingIds, setAddingIds] = useState<Set<string>>(new Set())
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   // Day-by-day pull progress (null when idle): which day we're on of how many,
@@ -310,6 +388,57 @@ export default function App() {
   const searchActive = query.trim().length > 0
   const basePapers = searchActive ? searchResults : papers
 
+  // --- Live "search all of arXiv" (fetch/add papers not yet in the library) ---
+  const arxivSeq = useRef(0)
+
+  async function runArxivSearch() {
+    const q = query.trim()
+    if (!q) return
+    const seq = ++arxivSeq.current
+    setArxivSearching(true)
+    setArxivSearched(true)
+    setArxivError(null)
+    try {
+      const data = await searchArxiv(q)
+      if (arxivSeq.current === seq) setArxivHits(data.papers)
+    } catch (e) {
+      if (arxivSeq.current === seq) {
+        setArxivHits([])
+        setArxivError(e instanceof Error ? e.message : String(e))
+      }
+    } finally {
+      if (arxivSeq.current === seq) setArxivSearching(false)
+    }
+  }
+
+  // Drop any live arXiv results (used when the query changes or the user dismisses
+  // the panel); bumping the seq also invalidates an in-flight search.
+  function clearArxiv() {
+    arxivSeq.current++
+    setArxivHits([])
+    setArxivSearched(false)
+    setArxivSearching(false)
+    setArxivError(null)
+  }
+
+  async function addPaper(hit: ArxivHit) {
+    setAddingIds((prev) => new Set(prev).add(hit.arxiv_id))
+    try {
+      await addArxivPaper(hit.arxiv_id)
+      setAddedIds((prev) => new Set(prev).add(hit.arxiv_id))
+      // Refresh the library view so the new paper joins coverage + local search.
+      load(startDate, endDate)
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    } finally {
+      setAddingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(hit.arxiv_id)
+        return next
+      })
+    }
+  }
+
   function onStartChange(date: string) {
     if (!date || date === startDate) return
     setStartDate(date)
@@ -442,7 +571,7 @@ export default function App() {
         <div>
           <h1>arXiv Digest</h1>
           <p className="subtitle">
-            Your daily CS/ML papers, summarized by Claude.
+            Your daily arxiv papers, summarized by Claude.
           </p>
         </div>
         <div className="controls">
@@ -513,6 +642,7 @@ export default function App() {
           onChange={(e) => {
             setQuery(e.target.value)
             setPage(1)
+            clearArxiv()
           }}
         />
         {searching ? (
@@ -531,12 +661,27 @@ export default function App() {
             )}
           </span>
         ) : null}
+        {query.trim() && (
+          <button
+            className={`btn small arxiv-btn${
+              searchActive && !searching && searchResults.length === 0
+                ? ' emphasized'
+                : ''
+            }`}
+            onClick={runArxivSearch}
+            disabled={arxivSearching}
+            title="Search all of arXiv (not just your library) and add papers on the fly"
+          >
+            {arxivSearching ? 'Searching arXiv…' : 'Search all of arXiv →'}
+          </button>
+        )}
         {query && (
           <button
             className="search-clear"
             onClick={() => {
               setQuery('')
               setPage(1)
+              clearArxiv()
             }}
             aria-label="Clear search"
             title="Clear search"
@@ -545,6 +690,52 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {arxivSearched && (
+        <div className="arxiv-results">
+          <div className="arxiv-results-head">
+            <span className="arxiv-results-title">
+              From arXiv
+              {!arxivSearching &&
+                ` — ${arxivHits.length} result${
+                  arxivHits.length === 1 ? '' : 's'
+                } for “${query.trim()}”`}
+            </span>
+            <button className="link-btn" onClick={clearArxiv}>
+              Dismiss
+            </button>
+          </div>
+          {arxivSearching ? (
+            <p className="muted">Searching all of arXiv…</p>
+          ) : arxivError ? (
+            <p className="error-text">
+              arXiv search failed: {arxivError}. arXiv rate-limits rapid
+              requests — wait a few seconds and{' '}
+              <button className="link-btn inline" onClick={runArxivSearch}>
+                try again
+              </button>
+              .
+            </p>
+          ) : arxivHits.length === 0 ? (
+            <p className="muted">
+              Nothing on arXiv matched “{query.trim()}”. Try different terms, or
+              paste an arXiv id or link.
+            </p>
+          ) : (
+            <div className="arxiv-hit-list">
+              {arxivHits.map((h) => (
+                <ArxivHitRow
+                  key={h.arxiv_id}
+                  hit={h}
+                  adding={addingIds.has(h.arxiv_id)}
+                  added={addedIds.has(h.arxiv_id)}
+                  onAdd={() => addPaper(h)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {catOpen && (
         <CategoryPicker

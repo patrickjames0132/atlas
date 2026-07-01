@@ -313,6 +313,23 @@ def has_vectors() -> bool:
     return _HAS_VEC is True
 
 
+def existing_ids(candidate_ids: list[str]) -> set[str]:
+    """Of the given arxiv_ids, which are already stored in the papers table."""
+    if not candidate_ids:
+        return set()
+    out: set[str] = set()
+    with _connect() as conn:
+        for i in range(0, len(candidate_ids), 900):
+            chunk = candidate_ids[i : i + 900]
+            placeholders = ",".join("?" * len(chunk))
+            rows = conn.execute(
+                f"SELECT arxiv_id FROM papers WHERE arxiv_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            out.update(r["arxiv_id"] for r in rows)
+    return out
+
+
 def embedded_ids(candidate_ids: list[str]) -> set[str]:
     """Of the given arxiv_ids, which already have an embedding stored."""
     if not _HAS_VEC or not candidate_ids:

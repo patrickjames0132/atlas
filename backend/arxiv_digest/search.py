@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from . import config, embeddings, store
+from . import arxiv_client, config, embeddings, store
 
 
 def _rrf_scores(ranked_ids: list[list[str]], k: int) -> dict[str, float]:
@@ -78,3 +78,16 @@ def hybrid_search(
     ordered_ids = sorted(scores, key=lambda i: scores[i], reverse=True)
     fused = [by_id[i] for i in ordered_ids if i in by_id]
     return fused[:limit], "hybrid"
+
+
+def arxiv_search(query: str, limit: int = 25) -> list[dict]:
+    """Live relevance search across all of arXiv (not just the local library).
+
+    Returns store-ready paper dicts, each tagged ``in_library`` so the dashboard
+    can show "Add" vs "In library". Does not save anything — adding is an explicit
+    step (see pipeline.add_papers_by_ids)."""
+    papers = arxiv_client.search_arxiv(query, max_results=limit)
+    have = store.existing_ids([p["arxiv_id"] for p in papers])
+    for p in papers:
+        p["in_library"] = p["arxiv_id"] in have
+    return papers
