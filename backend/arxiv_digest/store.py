@@ -7,6 +7,7 @@ a paper — or pay to summarize it — twice.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import date
@@ -35,6 +36,37 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 """
 
+# A full-text index over the searchable columns, kept in sync with `papers` by
+# triggers. It's a standalone FTS5 table (not external-content) storing arxiv_id
+# UNINDEXED so we can join results back to the row. Created separately from the
+# base SCHEMA because FTS5 may not be compiled into every SQLite build — if the
+# CREATE fails we fall back to LIKE search (see `search_papers`).
+_FTS_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
+    arxiv_id UNINDEXED,
+    title,
+    authors,
+    abstract,
+    tokenize = 'porter unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS papers_fts_ai AFTER INSERT ON papers BEGIN
+    INSERT INTO papers_fts (arxiv_id, title, authors, abstract)
+    VALUES (new.arxiv_id, new.title, new.authors, new.abstract);
+END;
+CREATE TRIGGER IF NOT EXISTS papers_fts_ad AFTER DELETE ON papers BEGIN
+    DELETE FROM papers_fts WHERE arxiv_id = old.arxiv_id;
+END;
+CREATE TRIGGER IF NOT EXISTS papers_fts_au AFTER UPDATE ON papers BEGIN
+    UPDATE papers_fts
+       SET title = new.title, authors = new.authors, abstract = new.abstract
+     WHERE arxiv_id = new.arxiv_id;
+END;
+"""
+
+# Set by init_db(): True when FTS5 is available, False when we're on the LIKE
+# fallback path.
+_HAS_FTS = False
+
 # Key under which the user's followed categories live in the settings table.
 _FOLLOWED_KEY = "followed_categories"
 
@@ -54,8 +86,27 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
+    global _HAS_FTS
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        try:
+            conn.executescript(_FTS_SCHEMA)
+            _HAS_FTS = True
+        except sqlite3.OperationalError:
+            # FTS5 isn't compiled into this SQLite build; search falls back to
+            # LIKE. Everything else keeps working.
+            _HAS_FTS = False
+            return
+        # First run after adding search: backfill the index for rows that were
+        # stored before the triggers existed. (New writes stay in sync via the
+        # triggers, so this only fires once.)
+        fts_count = conn.execute("SELECT count(*) FROM papers_fts").fetchone()[0]
+        papers_count = conn.execute("SELECT count(*) FROM papers").fetchone()[0]
+        if fts_count == 0 and papers_count > 0:
+            conn.execute(
+                "INSERT INTO papers_fts (arxiv_id, title, authors, abstract) "
+                "SELECT arxiv_id, title, authors, abstract FROM papers"
+            )
 
 
 def upsert_papers(papers: Iterable[dict], digest_date: Optional[str] = None) -> int:
@@ -127,6 +178,67 @@ def get_papers_in_range(start_date: str, end_date: str) -> list[dict]:
             "ORDER BY digest_date DESC, created_at",
             (start_date, end_date),
         ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _fts_query(raw: str) -> str:
+    """Turn free-text into a safe FTS5 prefix-AND query.
+
+    Each bare word becomes a quoted prefix term (``"word"*``): quoting neutralizes
+    FTS5 operators/punctuation so user input can't cause a syntax error, and the
+    trailing ``*`` lets partial words match (typing "transform" finds
+    "transformer"). Multiple terms are implicitly AND-ed. Returns "" when the
+    input has no word characters.
+    """
+    terms = re.findall(r"\w+", raw, flags=re.UNICODE)
+    return " ".join(f'"{t}"*' for t in terms)
+
+
+def search_papers(
+    query: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 200,
+) -> list[dict]:
+    """Full-text search stored papers by title/authors/abstract.
+
+    Ranked best-match-first via BM25. Optionally scoped to a ``digest_date``
+    range (both bounds required to scope; otherwise searches all stored papers).
+    Falls back to a substring LIKE search when FTS5 isn't available.
+    """
+    q = (query or "").strip()
+    if not q:
+        return []
+    scoped = bool(start_date and end_date)
+    with _connect() as conn:
+        if _HAS_FTS:
+            match = _fts_query(q)
+            if not match:
+                return []
+            sql = (
+                "SELECT papers.* FROM papers_fts "
+                "JOIN papers ON papers.arxiv_id = papers_fts.arxiv_id "
+                "WHERE papers_fts MATCH ? "
+            )
+            params: list = [match]
+            if scoped:
+                sql += "AND papers.digest_date BETWEEN ? AND ? "
+                params += [start_date, end_date]
+            sql += "ORDER BY bm25(papers_fts) LIMIT ?"
+            params.append(limit)
+        else:
+            like = f"%{q}%"
+            sql = (
+                "SELECT * FROM papers "
+                "WHERE (title LIKE ? OR abstract LIKE ? OR authors LIKE ?) "
+            )
+            params = [like, like, like]
+            if scoped:
+                sql += "AND digest_date BETWEEN ? AND ? "
+                params += [start_date, end_date]
+            sql += "ORDER BY digest_date DESC, created_at LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 
 

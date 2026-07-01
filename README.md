@@ -105,7 +105,9 @@ range to view its papers (if none have been pulled yet, you'll see a prompt to
 fetch them), the **↻** button pulls the selected range's submissions in your
 followed categories, **Get summary** on any row summarizes that one paper on
 demand, the category chips filter the loaded batch, and long ranges are
-paginated.
+paginated. The **search bar** does a fast keyword search over the papers you've
+already pulled (title, abstract, authors), scoped to the current date range —
+see [How search works](#how-search-works) below.
 
 ---
 
@@ -132,7 +134,7 @@ arxiv-digest/
 │       ├── arxiv_client.py   # fetch papers for a date range from the arXiv API
 │       ├── taxonomy.py       # full arXiv category taxonomy (+ taxonomy.json)
 │       ├── summarizer.py     # Claude summaries (cached by arXiv id)
-│       ├── store.py          # SQLite persistence (papers + settings)
+│       ├── store.py          # SQLite persistence (papers + settings + FTS5 search)
 │       ├── pipeline.py       # fetch → store → summarize
 │       └── app.py            # Flask API + serves the built dashboard
 └── frontend/                 # React + TS + Vite dashboard
@@ -147,6 +149,39 @@ arxiv-digest/
 stores each under its own submission day. There is no result cap; the whole
 matching batch is fetched. Papers are keyed by arXiv id, so re-pulling never
 duplicates a paper or re-pays to summarize one.
+
+## How search works
+
+The search bar (and `GET /api/search?q=&start=&end=`) is **lexical** — it matches
+the literal words you type against the papers already in `digest.db`. It does
+**not** understand meaning: searching `automobile` won't surface a paper that
+only says "car", and `LLM` won't match "large language model". (That's the job of
+*semantic* search — the next planned feature; see below.)
+
+Two mechanisms, both keyword-based:
+
+- **FTS5 (primary)** — SQLite's built-in full-text search. A `papers_fts` virtual
+  table holds an **inverted index** (word → the papers containing it), kept in
+  sync with `papers` by triggers on insert/update/delete. Text is lowercased and
+  tokenized (`unicode61`) and **stemmed** (`porter`) so word variants collide —
+  `learning`/`learned` → `learn`; combined with a `*` prefix on each term, typing
+  `transform` also finds "transformer". Matches are ranked by **BM25**, a
+  standard relevance score built from word statistics only (how often your terms
+  appear, how rare each term is across all papers, and document length) — no AI,
+  no embeddings. Results are capped at 200.
+- **`LIKE` (fallback)** — a plain `%word%` substring scan, used only if the local
+  SQLite build lacks FTS5. It's an unranked safety net, not a smarter mode.
+
+Search is scoped to the selected **From / To** range, so to search more of your
+library, widen the range (searching *everything* you've pulled is just a wide
+range).
+
+**Next: semantic search.** Lexical search will be complemented by an
+embeddings-based *semantic* layer — each abstract mapped to a vector so that
+conceptually-similar papers match even when the words differ ("car" ≈
+"automobile"). That needs an embedding backend and a vector store (e.g.
+`sqlite-vec`/FAISS) and is a separate build; the usual endgame is *hybrid*
+search that merges lexical + semantic results.
 
 ## Notes & next steps
 

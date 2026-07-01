@@ -5,6 +5,7 @@ import {
   fetchCategories,
   saveCategories,
   refresh,
+  searchPapers,
   notebookLmExportUrl,
   type Paper,
   type CategoryGroup,
@@ -117,6 +118,9 @@ export default function App() {
   const [selected, setSelected] = useState<string[]>([])
   const [startDate, setStartDate] = useState<string>(today)
   const [endDate, setEndDate] = useState<string>(today)
+  const [query, setQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Paper[]>([])
+  const [searching, setSearching] = useState(false)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   // Day-by-day pull progress (null when idle): which day we're on of how many,
@@ -224,6 +228,37 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  // Full-text search, debounced. Runs whenever the query or date range changes;
+  // an empty query clears results (reverting to the range view). searchSeq drops
+  // responses from a superseded keystroke so results never arrive out of order.
+  const searchSeq = useRef(0)
+  useEffect(() => {
+    const q = query.trim()
+    if (!q) {
+      setSearchResults([])
+      setSearching(false)
+      return
+    }
+    const seq = ++searchSeq.current
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const data = await searchPapers(q, startDate, endDate)
+        if (searchSeq.current === seq) setSearchResults(data.papers)
+      } catch {
+        if (searchSeq.current === seq) setSearchResults([])
+      } finally {
+        if (searchSeq.current === seq) setSearching(false)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [query, startDate, endDate])
+
+  // The list everything downstream (filters, table, pagination, footer) renders
+  // from: search results when searching, otherwise the range-loaded papers.
+  const searchActive = query.trim().length > 0
+  const basePapers = searchActive ? searchResults : papers
+
   function onStartChange(date: string) {
     if (!date || date === startDate) return
     setStartDate(date)
@@ -267,7 +302,7 @@ export default function App() {
   const categoryOptions = useMemo<FilterOption[]>(() => {
     const counts = new Map<string, number>()
     const codes = new Map<string, Set<string>>()
-    for (const p of papers) {
+    for (const p of basePapers) {
       const names = new Set<string>()
       for (const c of p.categories.split(/\s+/).filter(Boolean)) {
         const name = nameMap.get(c) ?? c
@@ -289,7 +324,7 @@ export default function App() {
         count,
       }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-  }, [papers, nameMap])
+  }, [basePapers, nameMap])
 
   const presentCategories = useMemo(
     () => categoryOptions.map((o) => o.key),
@@ -339,8 +374,8 @@ export default function App() {
   // Show papers carrying at least one selected subject (by name); none = all.
   const visiblePapers =
     selected.length === 0
-      ? papers
-      : papers.filter((p) => {
+      ? basePapers
+      : basePapers.filter((p) => {
           const names = new Set(paperNames(p))
           return selected.some((n) => names.has(n))
         })
@@ -407,6 +442,42 @@ export default function App() {
         </div>
       </header>
 
+      <div className="search-bar">
+        <span className="search-icon" aria-hidden>
+          ⌕
+        </span>
+        <input
+          className="search-input"
+          type="text"
+          value={query}
+          placeholder={`Search titles, abstracts & authors in ${rangeLabel}…`}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setPage(1)
+          }}
+        />
+        {searching ? (
+          <span className="search-meta muted">Searching…</span>
+        ) : searchActive ? (
+          <span className="search-meta muted">
+            {searchResults.length} result{searchResults.length === 1 ? '' : 's'}
+          </span>
+        ) : null}
+        {query && (
+          <button
+            className="search-clear"
+            onClick={() => {
+              setQuery('')
+              setPage(1)
+            }}
+            aria-label="Clear search"
+            title="Clear search"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       {catOpen && (
         <CategoryPicker
           groups={catGroups}
@@ -420,7 +491,7 @@ export default function App() {
 
       {status && <div className="status">{status}</div>}
 
-      {papers.length > 0 && categoryOptions.length > 0 && (
+      {basePapers.length > 0 && categoryOptions.length > 0 && (
         <CategoryFilter
           options={categoryOptions}
           selected={selected}
@@ -446,30 +517,7 @@ export default function App() {
         </div>
       )}
 
-      {loading && !busy && papers.length === 0 ? (
-        <p className="muted">Loading…</p>
-      ) : papers.length === 0 ? (
-        busy ? null : (
-        <div className="empty">
-          <p>No papers for {rangeLabel}.</p>
-          <p className="muted">
-            Nothing was found on arXiv for this range in your followed
-            categories. Try another range, broaden your{' '}
-            <button className="link-btn inline" onClick={openCategories}>
-              categories
-            </button>
-            , or pull again.
-          </p>
-          <button
-            className="btn"
-            onClick={() => pull(startDate, endDate)}
-            disabled={busy}
-          >
-            Pull papers for {rangeLabel}
-          </button>
-        </div>
-        )
-      ) : (
+      {basePapers.length > 0 ? (
         <>
           <table>
             <thead>
@@ -509,14 +557,48 @@ export default function App() {
             </div>
           )}
         </>
+      ) : searchActive ? (
+        searching ? (
+          <p className="muted">Searching…</p>
+        ) : (
+          <div className="empty">
+            <p>No papers match “{query.trim()}”.</p>
+            <p className="muted">
+              Searching your saved papers for {rangeLabel}. Try different terms,
+              or widen the date range to search more of what you've pulled.
+            </p>
+          </div>
+        )
+      ) : loading && !busy ? (
+        <p className="muted">Loading…</p>
+      ) : busy ? null : (
+        <div className="empty">
+          <p>No papers for {rangeLabel}.</p>
+          <p className="muted">
+            Nothing was found on arXiv for this range in your followed
+            categories. Try another range, broaden your{' '}
+            <button className="link-btn inline" onClick={openCategories}>
+              categories
+            </button>
+            , or pull again.
+          </p>
+          <button
+            className="btn"
+            onClick={() => pull(startDate, endDate)}
+            disabled={busy}
+          >
+            Pull papers for {rangeLabel}
+          </button>
+        </div>
       )}
 
       <footer>
         <span>
           {visiblePapers.length}
-          {selected.length > 0 ? ` of ${papers.length}` : ''} papers
+          {selected.length > 0 ? ` of ${basePapers.length}` : ''} papers
         </span>
         <span> · {rangeLabel}</span>
+        {searchActive && <span> · matching “{query.trim()}”</span>}
       </footer>
     </div>
   )

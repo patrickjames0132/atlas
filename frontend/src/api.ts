@@ -63,6 +63,29 @@ export async function refresh(
   return res.json()
 }
 
+export interface SearchResponse {
+  q: string
+  start: string | null
+  end: string | null
+  count: number
+  papers: Paper[]
+}
+
+// Full-text search stored papers by title/authors/abstract, ranked best-match
+// first. When start/end are given the search is scoped to that date range.
+export async function searchPapers(
+  q: string,
+  start?: string,
+  end?: string,
+): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q })
+  if (start) params.set('start', start)
+  if (end) params.set('end', end)
+  const res = await fetch(`/api/search?${params.toString()}`)
+  if (!res.ok) throw new Error(`Search failed (${res.status})`)
+  return res.json()
+}
+
 // Generate (or fetch the cached) summary for a single paper.
 export async function fetchSummary(arxivId: string): Promise<string> {
   const res = await fetch(
