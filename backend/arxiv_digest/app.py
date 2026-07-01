@@ -2,10 +2,10 @@
 
 Endpoints
 ---------
-GET  /api/papers?date=YYYY-MM-DD   -> papers for a date (default: latest)
+GET  /api/papers?start=&end=       -> papers submitted in a date range
 GET  /api/dates                    -> list of dates that have papers
 POST /api/refresh                  -> run the fetch/parse/summarize pipeline
-GET  /api/export/notebooklm?date=  -> a Markdown digest to drop into NotebookLM
+GET  /api/export/notebooklm?start=&end= -> a Markdown digest for NotebookLM
 GET  /api/health                   -> simple liveness check
 
 In production it also serves the built React app from frontend/dist.
@@ -13,6 +13,7 @@ In production it also serves the built React app from frontend/dist.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -24,9 +25,36 @@ from . import config, pipeline, store, summarizer, taxonomy
 # The built frontend lands in frontend/dist after `npm run build`.
 FRONTEND_DIST = config.PROJECT_ROOT / "frontend" / "dist"
 
+# Emit tracebacks + arXiv client chatter to the console so failed pulls aren't
+# silent. Level is DEBUG when ARXIV_DEBUG is set, else INFO.
+logging.basicConfig(
+    level=logging.DEBUG if config.DEBUG else logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 app = Flask(__name__, static_folder=None)
 # Allow the Vite dev server (localhost:5173) to call the API during development.
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+
+def _valid_date(value: str) -> bool:
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _range_args() -> tuple[str, str]:
+    """Resolve (start, end) from request args, tolerating a single `date`.
+
+    Both default to today's most-recent data when omitted; if only one bound is
+    given the range collapses to that single day.
+    """
+    start = request.args.get("start") or request.args.get("date")
+    end = request.args.get("end") or request.args.get("date") or start
+    start = start or end
+    return start, end
 
 
 # --- API ---------------------------------------------------------------------
@@ -37,11 +65,16 @@ def health() -> Response:
 
 @app.get("/api/papers")
 def get_papers() -> Response:
-    digest_date = request.args.get("date")
-    papers = store.get_papers(digest_date)
+    start, end = _range_args()
+    if start and end:
+        papers = store.get_papers_in_range(start, end)
+    else:
+        # No range given: fall back to the latest date on record.
+        papers = store.get_papers()
     return jsonify(
         {
-            "date": papers[0]["digest_date"] if papers else digest_date,
+            "start": start,
+            "end": end,
             "count": len(papers),
             "papers": papers,
             "dates": store.available_dates(),
@@ -87,23 +120,27 @@ def put_categories() -> Response:
 
 @app.post("/api/refresh")
 def refresh() -> Response:
-    """Pull papers submitted on a given date (default today) from arXiv.
+    """Pull papers submitted in a date range (default today) from arXiv.
 
-    Summaries are generated per-row on demand, so this does NOT summarize by
-    default (pass summarize=true to also do so)."""
+    Body: {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD", "summarize": false}. A
+    single "date" is also accepted (collapses to that day). Summaries are
+    generated per-row on demand, so this does NOT summarize by default."""
     payload = request.get_json(silent=True) or {}
-    digest_date = payload.get("date")
+    start = payload.get("start") or payload.get("date")
+    end = payload.get("end") or payload.get("date") or start
+
+    for value in (start, end):
+        if value and not _valid_date(value):
+            return jsonify({"ok": False, "error": "dates must be YYYY-MM-DD"}), 400
+    if start and end and start > end:
+        return jsonify({"ok": False, "error": "start must be on or before end"}), 400
+
     summarize = payload.get("summarize", False)
 
-    if digest_date:
-        try:
-            datetime.strptime(digest_date, "%Y-%m-%d")
-        except ValueError:
-            return jsonify({"ok": False, "error": "date must be YYYY-MM-DD"}), 400
-
     try:
-        result = pipeline.run(digest_date=digest_date, summarize=summarize)
-    except Exception as exc:  # surface the error to the dashboard
+        result = pipeline.run(start_date=start, end_date=end, summarize=summarize)
+    except Exception as exc:  # surface the error to the dashboard AND log it
+        app.logger.exception("refresh failed for %s..%s", start, end)
         return jsonify({"ok": False, "error": str(exc)}), 500
     return jsonify({"ok": True, **result})
 
@@ -121,6 +158,7 @@ def summarize_paper(arxiv_id: str) -> Response:
     try:
         summarizer.summarize_pending([paper])
     except Exception as exc:
+        app.logger.exception("summary failed for %s", arxiv_id)
         return jsonify({"ok": False, "error": str(exc)}), 500
 
     updated = store.get_paper(arxiv_id)
@@ -132,9 +170,13 @@ def summarize_paper(arxiv_id: str) -> Response:
 @app.get("/api/export/notebooklm")
 def export_notebooklm() -> Response:
     """Return a clean Markdown digest you can paste/upload into NotebookLM."""
-    digest_date = request.args.get("date")
-    papers = store.get_papers(digest_date)
-    date_label = papers[0]["digest_date"] if papers else (digest_date or "today")
+    start, end = _range_args()
+    if start and end:
+        papers = store.get_papers_in_range(start, end)
+    else:
+        papers = store.get_papers()
+    date_label = start if start == end else f"{start} to {end}"
+    date_label = date_label or "today"
 
     lines = [f"# arXiv Digest — {date_label}", ""]
     for i, p in enumerate(papers, 1):
@@ -160,7 +202,7 @@ def export_notebooklm() -> Response:
         lines.append(f"- {p['url'].replace('/abs/', '/pdf/')}")
 
     markdown = "\n".join(lines)
-    filename = f"arxiv-digest-{date_label}.md"
+    filename = f"arxiv-digest-{date_label.replace(' ', '')}.md"
     return Response(
         markdown,
         mimetype="text/markdown",

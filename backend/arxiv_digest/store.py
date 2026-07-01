@@ -62,9 +62,11 @@ def upsert_papers(papers: Iterable[dict], digest_date: Optional[str] = None) -> 
     """Insert papers we haven't seen before. Returns the count of NEW papers.
 
     Existing papers (same arxiv_id) are left untouched so we keep their original
-    digest_date and any summary already generated.
+    digest_date and any summary already generated. Each paper's own
+    ``digest_date`` (its submission day) is used when present; otherwise the
+    ``digest_date`` argument (or today) is the fallback for all of them.
     """
-    digest_date = digest_date or date.today().isoformat()
+    fallback_date = digest_date or date.today().isoformat()
     new_count = 0
     with _connect() as conn:
         for p in papers:
@@ -81,7 +83,7 @@ def upsert_papers(papers: Iterable[dict], digest_date: Optional[str] = None) -> 
                     "categories": p.get("categories", ""),
                     "abstract": p.get("abstract", ""),
                     "url": p.get("url", ""),
-                    "digest_date": digest_date,
+                    "digest_date": p.get("digest_date") or fallback_date,
                 },
             )
             new_count += cur.rowcount
@@ -112,6 +114,18 @@ def get_papers(digest_date: Optional[str] = None) -> list[dict]:
         rows = conn.execute(
             "SELECT * FROM papers WHERE digest_date = ? ORDER BY created_at",
             (digest_date,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_papers_in_range(start_date: str, end_date: str) -> list[dict]:
+    """Return papers whose digest_date falls in [start_date, end_date], newest
+    submission day first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM papers WHERE digest_date BETWEEN ? AND ? "
+            "ORDER BY digest_date DESC, created_at",
+            (start_date, end_date),
         ).fetchall()
     return [dict(r) for r in rows]
 

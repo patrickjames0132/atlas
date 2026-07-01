@@ -35,9 +35,6 @@ ARXIV_CATEGORIES = [
     if c.strip()
 ]
 
-# Upper bound on how many papers to pull per run (safety valve).
-ARXIV_MAX_RESULTS = int(os.getenv("ARXIV_MAX_RESULTS", "100"))
-
 # --- Summaries ---------------------------------------------------------------
 # Backends:
 #   "api"        — call the Anthropic API directly (pay-as-you-go, needs a key).
@@ -68,6 +65,8 @@ CLAUDE_CLI_TIMEOUT = int(os.getenv("CLAUDE_CLI_TIMEOUT", "120"))
 # --- Server ------------------------------------------------------------------
 FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")
 FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
+# Verbose logging (DEBUG level, incl. the arXiv client's per-page requests).
+DEBUG = os.getenv("ARXIV_DEBUG", "").lower() in ("1", "true", "yes")
 
 
 def ensure_dirs() -> None:
