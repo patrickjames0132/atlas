@@ -1,6 +1,6 @@
 [project]
 name = "arxiv-digest"
-version = "0.6.0"
+version = "0.7.0"
 description = "A dashboard that turns your arXiv email subscriptions into an AI-summarized daily digest."
 requires-python = ">=3.11"
 dependencies = [
@@ -9,6 +9,8 @@ dependencies = [
     "anthropic>=0.40",
     "arxiv>=2.1",
     "python-dotenv>=1.0",
+    "sentence-transformers>=3.0",
+    "sqlite-vec>=0.1.6",
 ]
 
 [tool.uv]

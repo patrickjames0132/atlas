@@ -113,6 +113,10 @@ select {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.search-mode {
+  color: var(--accent);
+  cursor: help;
+}
 .search-clear {
   background: none;
   border: none;

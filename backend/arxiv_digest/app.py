@@ -3,7 +3,7 @@
 Endpoints
 ---------
 GET  /api/papers?start=&end=       -> papers submitted in a date range
-GET  /api/search?q=&start=&end=    -> full-text search stored papers (BM25-ranked)
+GET  /api/search?q=&start=&end=    -> hybrid search (BM25 + embedding similarity)
 GET  /api/dates                    -> list of dates that have papers
 POST /api/refresh                  -> run the fetch/parse/summarize pipeline
 GET  /api/export/notebooklm?start=&end= -> a Markdown digest for NotebookLM
@@ -21,7 +21,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory
 from flask_cors import CORS
 
-from . import config, pipeline, store, summarizer, taxonomy
+from . import config, pipeline, search, store, summarizer, taxonomy
 
 # The built frontend lands in frontend/dist after `npm run build`.
 FRONTEND_DIST = config.PROJECT_ROOT / "frontend" / "dist"
@@ -85,23 +85,28 @@ def get_papers() -> Response:
 
 
 @app.get("/api/search")
-def search() -> Response:
-    """Full-text search over stored papers, scoped to a date range when given.
+def search_route() -> Response:
+    """Hybrid (lexical + semantic) search over stored papers, scoped to a date
+    range when given.
 
     Query args: q (the search text), plus optional start/end (or a single date).
-    Ranked best-match-first. Returns the same paper shape as /api/papers.
+    Blends BM25 keyword matches with embedding similarity via rank fusion; falls
+    back to lexical-only when embeddings aren't available. ``mode`` reports which
+    ran. Returns the same paper shape as /api/papers (plus per-row matched_by).
     """
     q = (request.args.get("q") or "").strip()
     start, end = _range_args()
     if not q:
         papers: list[dict] = []
+        mode = "lexical"
     else:
-        papers = store.search_papers(q, start, end)
+        papers, mode = search.hybrid_search(q, start, end)
     return jsonify(
         {
             "q": q,
             "start": start,
             "end": end,
+            "mode": mode,
             "count": len(papers),
             "papers": papers,
         }

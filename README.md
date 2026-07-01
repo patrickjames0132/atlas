@@ -22,8 +22,9 @@ Markdown digest for **NotebookLM**.
 
 **Stack:** Python/Flask + uv · React + TypeScript + Vite · Claude (via the
 `claude` CLI **or** the Anthropic API) · the
-[`arxiv`](https://pypi.org/project/arxiv/) package · SQLite. Runs locally on
-your Mac.
+[`arxiv`](https://pypi.org/project/arxiv/) package · SQLite (+ FTS5 &
+`sqlite-vec`) · local `sentence-transformers` embeddings for semantic search.
+Runs locally on your Mac.
 
 No Gmail, no Google Cloud, no OAuth. By default summaries run through the
 **Anthropic API** (cheap Haiku 4.5) and **automatically fall back to the `claude`
@@ -72,10 +73,15 @@ uv run python backend/run.py refresh --start 2026-06-20 --end 2026-06-25   # a r
 ```
 
 Pulls papers **submitted in the given date range** (default: today; `--end`
-defaults to `--start`) in your categories and stores each under its own
-submission day. Add `--no-summary` to skip summaries (the default in the
-dashboard, where you summarize each paper on demand via its **Get summary**
-button); without it the CLI also summarizes the batch, handy for a daily cron.
+defaults to `--start`) in your categories, stores each under its own submission
+day, and **embeds new papers for semantic search** (add `--no-embed` to skip).
+Add `--no-summary` to skip summaries (the default in the dashboard, where you
+summarize each paper on demand via its **Get summary** button); without it the
+CLI also summarizes the batch, handy for a daily cron.
+
+The first time you run with semantic search enabled, backfill embeddings for
+papers already in your database with `uv run python backend/run.py embed` (see
+[How search works](#how-search-works)).
 
 ### 3. Open the dashboard
 
@@ -105,9 +111,10 @@ range to view its papers (if none have been pulled yet, you'll see a prompt to
 fetch them), the **↻** button pulls the selected range's submissions in your
 followed categories, **Get summary** on any row summarizes that one paper on
 demand, the category chips filter the loaded batch, and long ranges are
-paginated. The **search bar** does a fast keyword search over the papers you've
-already pulled (title, abstract, authors), scoped to the current date range —
-see [How search works](#how-search-works) below.
+paginated. The **search bar** does a **hybrid keyword + semantic** search over the
+papers you've already pulled, scoped to the current date range — so you can search
+by meaning ("teaching machines to see") or exact terms alike; see
+[How search works](#how-search-works) below.
 
 ---
 
@@ -128,14 +135,16 @@ arxiv-digest/
 ├── .env / .env.example       # config + Anthropic key (gitignored)
 ├── data/digest.db            # SQLite store (auto-created; gitignored)
 ├── backend/
-│   ├── run.py                # CLI: serve | refresh
+│   ├── run.py                # CLI: serve | refresh | embed
 │   └── arxiv_digest/
 │       ├── config.py         # all settings, from .env
 │       ├── arxiv_client.py   # fetch papers for a date range from the arXiv API
 │       ├── taxonomy.py       # full arXiv category taxonomy (+ taxonomy.json)
 │       ├── summarizer.py     # Claude summaries (cached by arXiv id)
-│       ├── store.py          # SQLite persistence (papers + settings + FTS5 search)
-│       ├── pipeline.py       # fetch → store → summarize
+│       ├── embeddings.py     # local sentence-transformers embeddings
+│       ├── search.py         # hybrid lexical + semantic search (RRF fusion)
+│       ├── store.py          # SQLite persistence (papers, settings, FTS5, vectors)
+│       ├── pipeline.py       # fetch → store → embed → summarize
 │       └── app.py            # Flask API + serves the built dashboard
 └── frontend/                 # React + TS + Vite dashboard
     └── src/{App.tsx, CategoryPicker.tsx, api.ts, App.css}
@@ -152,36 +161,54 @@ duplicates a paper or re-pays to summarize one.
 
 ## How search works
 
-The search bar (and `GET /api/search?q=&start=&end=`) is **lexical** — it matches
-the literal words you type against the papers already in `digest.db`. It does
-**not** understand meaning: searching `automobile` won't surface a paper that
-only says "car", and `LLM` won't match "large language model". (That's the job of
-*semantic* search — the next planned feature; see below.)
+The search bar (and `GET /api/search?q=&start=&end=`) is **hybrid** — it runs a
+keyword search and a semantic search over the papers already in `digest.db`, then
+blends the two ranked lists. So `automobile` still surfaces a paper that only says
+"car", *and* an exact term like a method name or author still lands a direct hit.
+Search is scoped to the selected **From / To** range; widen the range to search
+more of your library.
 
-Two mechanisms, both keyword-based:
+**1. Lexical (keyword) — FTS5 + BM25.** SQLite's built-in full-text search. A
+`papers_fts` virtual table holds an **inverted index** (word → the papers
+containing it), kept in sync with `papers` by triggers. Text is lowercased,
+tokenized (`unicode61`) and **stemmed** (`porter`) so variants collide
+(`learning`/`learned` → `learn`); with a `*` prefix on each term, typing
+`transform` also finds "transformer". Matches are ranked by **BM25**, a relevance
+score from word statistics only — term frequency, how rare each term is, document
+length. (A plain `LIKE` substring scan is the fallback if a SQLite build lacks
+FTS5.)
 
-- **FTS5 (primary)** — SQLite's built-in full-text search. A `papers_fts` virtual
-  table holds an **inverted index** (word → the papers containing it), kept in
-  sync with `papers` by triggers on insert/update/delete. Text is lowercased and
-  tokenized (`unicode61`) and **stemmed** (`porter`) so word variants collide —
-  `learning`/`learned` → `learn`; combined with a `*` prefix on each term, typing
-  `transform` also finds "transformer". Matches are ranked by **BM25**, a
-  standard relevance score built from word statistics only (how often your terms
-  appear, how rare each term is across all papers, and document length) — no AI,
-  no embeddings. Results are capped at 200.
-- **`LIKE` (fallback)** — a plain `%word%` substring scan, used only if the local
-  SQLite build lacks FTS5. It's an unranked safety net, not a smarter mode.
+**2. Semantic (meaning) — sentence-transformers + sqlite-vec.** Each paper's
+title + abstract is embedded into a 384-dim **vector** with the local
+[`all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
+model — no API, no key, nothing leaves your machine. Vectors live in a
+[`sqlite-vec`](https://github.com/asg017/sqlite-vec) virtual table (`papers_vec`)
+inside the same `digest.db`. A query is embedded the same way, and sqlite-vec
+returns its nearest neighbours by **cosine distance** — so conceptually-similar
+papers match even with no shared words.
 
-Search is scoped to the selected **From / To** range, so to search more of your
-library, widen the range (searching *everything* you've pulled is just a wide
-range).
+**3. Fusion — Reciprocal Rank Fusion (RRF).** The two lists are merged by
+`score = Σ 1/(k + rank)` across each list a paper appears in (`k` = `ARXIV_RRF_K`,
+default 60). RRF needs only each result's *rank*, not comparable scores, so it
+fairly blends BM25 with cosine distance; a paper ranked highly by *both* rises to
+the top. The dashboard tags each row `lexical`, `semantic`, or both, and shows
+whether a search ran `hybrid` or fell back to `keyword`-only.
 
-**Next: semantic search.** Lexical search will be complemented by an
-embeddings-based *semantic* layer — each abstract mapped to a vector so that
-conceptually-similar papers match even when the words differ ("car" ≈
-"automobile"). That needs an embedding backend and a vector store (e.g.
-`sqlite-vec`/FAISS) and is a separate build; the usual endgame is *hybrid*
-search that merges lexical + semantic results.
+Embeddings are generated when papers are pulled. After first enabling this
+feature (or changing the model) backfill the existing library once:
+
+```bash
+uv run python backend/run.py embed              # embed anything not yet indexed
+uv run python backend/run.py embed --rebuild    # wipe + re-embed (e.g. new model)
+```
+
+Semantic search degrades gracefully: set `ARXIV_SEMANTIC=0` (or if the model /
+`sqlite-vec` can't load) and search stays keyword-only with no other changes.
+
+**Next: retrieval-augmented generation (RAG).** With embeddings in place, the
+natural follow-on is answering questions *over* your library — retrieve the most
+relevant papers for a question and have Claude synthesize an answer with
+citations.
 
 ## Notes & next steps
 

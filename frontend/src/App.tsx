@@ -120,6 +120,7 @@ export default function App() {
   const [endDate, setEndDate] = useState<string>(today)
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Paper[]>([])
+  const [searchMode, setSearchMode] = useState<'hybrid' | 'lexical'>('lexical')
   const [searching, setSearching] = useState(false)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -244,7 +245,10 @@ export default function App() {
     const timer = setTimeout(async () => {
       try {
         const data = await searchPapers(q, startDate, endDate)
-        if (searchSeq.current === seq) setSearchResults(data.papers)
+        if (searchSeq.current === seq) {
+          setSearchResults(data.papers)
+          setSearchMode(data.mode)
+        }
       } catch {
         if (searchSeq.current === seq) setSearchResults([])
       } finally {
@@ -450,7 +454,7 @@ export default function App() {
           className="search-input"
           type="text"
           value={query}
-          placeholder={`Search titles, abstracts & authors in ${rangeLabel}…`}
+          placeholder={`Search by meaning or keywords in ${rangeLabel}…`}
           onChange={(e) => {
             setQuery(e.target.value)
             setPage(1)
@@ -461,6 +465,15 @@ export default function App() {
         ) : searchActive ? (
           <span className="search-meta muted">
             {searchResults.length} result{searchResults.length === 1 ? '' : 's'}
+            {searchResults.length > 0 && (
+              <span className="search-mode" title={
+                searchMode === 'hybrid'
+                  ? 'Keyword (BM25) + semantic (embeddings), rank-fused'
+                  : 'Keyword only — semantic index unavailable'
+              }>
+                {' '}· {searchMode === 'hybrid' ? 'hybrid' : 'keyword'}
+              </span>
+            )}
           </span>
         ) : null}
         {query && (

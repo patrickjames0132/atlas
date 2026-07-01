@@ -67,12 +67,15 @@ export interface SearchResponse {
   q: string
   start: string | null
   end: string | null
+  mode: 'hybrid' | 'lexical'
   count: number
   papers: Paper[]
 }
 
-// Full-text search stored papers by title/authors/abstract, ranked best-match
-// first. When start/end are given the search is scoped to that date range.
+// Hybrid (keyword + semantic) search over stored papers, ranked by fused
+// relevance. When start/end are given the search is scoped to that date range.
+// `mode` reports whether the semantic half ran ("hybrid") or it fell back to
+// keyword-only ("lexical").
 export async function searchPapers(
   q: string,
   start?: string,

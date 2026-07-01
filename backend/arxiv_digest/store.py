@@ -67,8 +67,29 @@ END;
 # fallback path.
 _HAS_FTS = False
 
+# sqlite-vec (the vector index behind semantic search) is a loadable extension.
+# _HAS_VEC is set once during init_db: True when the extension loads and the
+# vector table exists. None = not yet probed. The extension must be (re)loaded on
+# every connection that touches papers_vec (extensions are per-connection), which
+# _connect() does when _HAS_VEC isn't known to be False.
+_HAS_VEC: Optional[bool] = None
+
 # Key under which the user's followed categories live in the settings table.
 _FOLLOWED_KEY = "followed_categories"
+
+
+def _try_load_vec(conn: sqlite3.Connection) -> bool:
+    """Load the sqlite-vec extension into a connection. False if unavailable
+    (extension not installed, or this SQLite build forbids loading extensions)."""
+    try:
+        import sqlite_vec
+
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+        return True
+    except Exception:
+        return False
 
 
 @contextmanager
@@ -78,6 +99,10 @@ def _connect() -> Iterator[sqlite3.Connection]:
     # polls papers while refresh writes summaries concurrently).
     conn = sqlite3.connect(config.DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    # Reload sqlite-vec per connection (extensions are per-connection) unless we
+    # already know it's unavailable. Feature detection itself happens in init_db.
+    if _HAS_VEC is not False:
+        _try_load_vec(conn)
     try:
         yield conn
         conn.commit()
@@ -86,9 +111,10 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    global _HAS_FTS
+    global _HAS_FTS, _HAS_VEC
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        _init_vec(conn)
         try:
             conn.executescript(_FTS_SCHEMA)
             _HAS_FTS = True
@@ -107,6 +133,33 @@ def init_db() -> None:
                 "INSERT INTO papers_fts (arxiv_id, title, authors, abstract) "
                 "SELECT arxiv_id, title, authors, abstract FROM papers"
             )
+
+
+def _init_vec(conn: sqlite3.Connection) -> None:
+    """Probe sqlite-vec and create the vector index if possible. Sets _HAS_VEC.
+
+    papers_vec is a vec0 virtual table keyed by arxiv_id with the embedding and
+    a digest_date copy (kept as a plain column so we can date-scope results by
+    joining back to papers). Unlike FTS there are no sync triggers — embeddings
+    are written explicitly by the pipeline / `embed` command, since generating a
+    vector is an expensive model call, not a cheap copy.
+    """
+    global _HAS_VEC
+    if not _try_load_vec(conn):
+        _HAS_VEC = False
+        return
+    try:
+        conn.execute(
+            f"""
+            CREATE VIRTUAL TABLE IF NOT EXISTS papers_vec USING vec0(
+                arxiv_id TEXT PRIMARY KEY,
+                embedding float[{config.EMBED_DIM}] distance_metric=cosine
+            )
+            """
+        )
+        _HAS_VEC = True
+    except sqlite3.OperationalError:
+        _HAS_VEC = False
 
 
 def upsert_papers(papers: Iterable[dict], digest_date: Optional[str] = None) -> int:
@@ -238,6 +291,109 @@ def search_papers(
                 params += [start_date, end_date]
             sql += "ORDER BY digest_date DESC, created_at LIMIT ?"
             params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def has_vectors() -> bool:
+    """True when the sqlite-vec index is available for semantic search."""
+    return _HAS_VEC is True
+
+
+def embedded_ids(candidate_ids: list[str]) -> set[str]:
+    """Of the given arxiv_ids, which already have an embedding stored."""
+    if not _HAS_VEC or not candidate_ids:
+        return set()
+    out: set[str] = set()
+    with _connect() as conn:
+        # Chunk to stay well under SQLite's parameter limit on big backfills.
+        for i in range(0, len(candidate_ids), 900):
+            chunk = candidate_ids[i : i + 900]
+            placeholders = ",".join("?" * len(chunk))
+            rows = conn.execute(
+                f"SELECT arxiv_id FROM papers_vec WHERE arxiv_id IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            out.update(r["arxiv_id"] for r in rows)
+    return out
+
+
+def papers_missing_embedding(limit: Optional[int] = None) -> list[dict]:
+    """Stored papers that have no embedding yet (for backfilling the index)."""
+    if not _HAS_VEC:
+        return []
+    sql = (
+        "SELECT p.* FROM papers p "
+        "WHERE NOT EXISTS (SELECT 1 FROM papers_vec v WHERE v.arxiv_id = p.arxiv_id) "
+        "ORDER BY p.digest_date DESC, p.created_at"
+    )
+    params: list = []
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with _connect() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def upsert_embeddings(items: list[tuple[str, list[float]]]) -> int:
+    """Store (arxiv_id, vector) pairs, replacing any existing vector. Returns the
+    number written. No-op when sqlite-vec is unavailable."""
+    if not _HAS_VEC or not items:
+        return 0
+    import sqlite_vec
+
+    with _connect() as conn:
+        for arxiv_id, vector in items:
+            conn.execute("DELETE FROM papers_vec WHERE arxiv_id = ?", (arxiv_id,))
+            conn.execute(
+                "INSERT INTO papers_vec (arxiv_id, embedding) VALUES (?, ?)",
+                (arxiv_id, sqlite_vec.serialize_float32(vector)),
+            )
+    return len(items)
+
+
+def clear_embeddings() -> None:
+    """Drop every stored vector (used by `embed --rebuild`)."""
+    if not _HAS_VEC:
+        return
+    with _connect() as conn:
+        conn.execute("DELETE FROM papers_vec")
+
+
+def semantic_search(
+    query_embedding: list[float],
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 200,
+) -> list[dict]:
+    """K-nearest-neighbour search over paper embeddings (cosine distance).
+
+    Each returned paper dict carries a ``distance`` (smaller = closer). Optionally
+    scoped to a digest_date range: we ask sqlite-vec for a generous candidate
+    pool, then join to papers and filter by date, so scoping stays correct
+    without relying on vec0 metadata filters.
+    """
+    if not _HAS_VEC:
+        return []
+    import sqlite_vec
+
+    scoped = bool(start_date and end_date)
+    # Over-fetch so date-scoping still yields enough in-range neighbours.
+    pool = max(limit, 500) if scoped else limit
+    sql = (
+        "SELECT papers.*, papers_vec.distance AS distance "
+        "FROM papers_vec "
+        "JOIN papers ON papers.arxiv_id = papers_vec.arxiv_id "
+        "WHERE embedding MATCH ? AND k = ? "
+    )
+    params: list = [sqlite_vec.serialize_float32(query_embedding), pool]
+    if scoped:
+        sql += "AND papers.digest_date BETWEEN ? AND ? "
+        params += [start_date, end_date]
+    sql += "ORDER BY distance LIMIT ?"
+    params.append(limit)
+    with _connect() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 

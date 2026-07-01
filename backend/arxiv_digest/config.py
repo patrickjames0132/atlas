@@ -35,6 +35,19 @@ ARXIV_CATEGORIES = [
     if c.strip()
 ]
 
+# --- Semantic search (embeddings) --------------------------------------------
+# The sentence-transformers model used to embed papers for semantic/hybrid
+# search. EMBED_DIM MUST match the model's output dimension (all-MiniLM-L6-v2 →
+# 384); if you swap to a model with a different dimension, set both and re-embed
+# (`python backend/run.py embed --rebuild`). Set ARXIV_SEMANTIC=0 to turn the
+# whole embedding layer off (search then stays lexical-only).
+EMBED_MODEL = os.getenv("ARXIV_EMBED_MODEL", "all-MiniLM-L6-v2")
+EMBED_DIM = int(os.getenv("ARXIV_EMBED_DIM", "384"))
+SEMANTIC_ENABLED = os.getenv("ARXIV_SEMANTIC", "1").lower() not in ("0", "false", "no")
+# Reciprocal-rank-fusion constant for blending lexical + semantic result lists.
+# Higher = flatter weighting across ranks; 60 is the common default.
+RRF_K = int(os.getenv("ARXIV_RRF_K", "60"))
+
 # --- Summaries ---------------------------------------------------------------
 # Backends:
 #   "api"        — call the Anthropic API directly (pay-as-you-go, needs a key).

@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from arxiv_digest import app as app_module  # noqa: E402
-from arxiv_digest import pipeline, store  # noqa: E402
+from arxiv_digest import embeddings, pipeline, store  # noqa: E402
 
 
 def main() -> None:
@@ -36,6 +36,21 @@ def main() -> None:
     p_refresh.add_argument(
         "--no-summary", action="store_true", help="Skip AI summaries"
     )
+    p_refresh.add_argument(
+        "--no-embed", action="store_true", help="Skip embedding new papers"
+    )
+
+    p_embed = sub.add_parser(
+        "embed", help="Backfill embeddings for stored papers (semantic search)"
+    )
+    p_embed.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="Clear and re-embed every paper (e.g. after changing the model)",
+    )
+    p_embed.add_argument(
+        "--batch", type=int, default=256, help="Embedding batch size (default 256)"
+    )
 
     args = parser.parse_args()
 
@@ -47,8 +62,35 @@ def main() -> None:
             start_date=args.start,
             end_date=args.end,
             summarize=not args.no_summary,
+            embed=not args.no_embed,
         )
         print("\nDone:", result)
+    elif args.command == "embed":
+        store.init_db()
+        if not store.has_vectors():
+            print(
+                "Semantic search is unavailable (sqlite-vec didn't load). "
+                "Nothing to embed."
+            )
+            return
+        if not embeddings.available():
+            print(
+                "Embedding model is unavailable (ARXIV_SEMANTIC=0 or model failed "
+                "to load). Nothing to embed."
+            )
+            return
+        if args.rebuild:
+            print("Clearing existing embeddings ...")
+            store.clear_embeddings()
+        pending = store.papers_missing_embedding()
+        total = len(pending)
+        print(f"Embedding {total} paper(s) ...")
+        done = 0
+        for i in range(0, total, args.batch):
+            batch = pending[i : i + args.batch]
+            done += pipeline.embed_papers(batch)
+            print(f"  {min(i + args.batch, total)}/{total}")
+        print(f"\nDone: embedded {done} paper(s).")
 
 
 if __name__ == "__main__":
