@@ -1,34 +1,42 @@
-# arXiv Digest
+# arXiv Atlas
 
-Turn the latest arXiv papers in the subjects you follow into an AI-summarized
-daily dashboard.
+**Explore how research papers connect — and (soon) have an AI teacher narrate
+the story of how a field got here.**
 
-It pulls recent papers straight from the **official arXiv API**, filtered to the
-subject categories you choose, generates a short plain-English summary for each
-with Claude, and shows them in a React dashboard — with one-click export of a
-Markdown digest for **NotebookLM**.
+Drop in a paper and Atlas renders a **Connected-Papers-style interactive graph**
+of how it links to the literature — the papers it cites (its intellectual
+ancestors), the papers that cite it (its descendants), and its nearest neighbors
+by meaning. Then wander: double-click any node to re-center the graph on it and
+keep exploring.
+
+It connects to the academic-graph ecosystem **dynamically** — there's no local
+corpus of papers to store (millions of papers are many TB; we leave that to the
+people who already host it). The only thing kept on disk is a tiny cache of the
+graphs you've already looked at.
+
+> **Status:** v1.0 — the graph explorer is live. The AI teacher, Q&A, concept
+> mindmaps, and audio lectures are on the roadmap — see
+> **[OnePager.md](OnePager.md)** for the full vision and phase plan.
 
 ```
-┌──────────┐  arXiv API   ┌─────────┐   store   ┌──────────┐   Claude    ┌───────────┐
-│  arXiv   │ ───────────▶ │ backend │ ────────▶ │  SQLite  │ ──────────▶ │ summaries │
-│ (cs.LG…) │   (cat: …)   │ (Flask) │           │ digest.db│             │  cached   │
-└──────────┘              └────┬────┘           └──────────┘             └───────────┘
-                               │ /api
+┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
+│  arXiv   │ ───────────▶ │ backend │ ──────────────────────▶ │ Semantic Scholar │
+│  search  │  (title/id)  │ (Flask) │      (dynamic API)      │  Academic Graph  │
+└──────────┘              └────┬────┘                         └──────────────────┘
+                               │ /api/graph  (thin cache only)
                                ▼
-                       ┌───────────────┐
-                       │ React + Vite  │  ← the dashboard you open in a browser
-                       └───────────────┘
+                     ┌───────────────────────┐
+                     │  React + force graph  │  ← the interactive map you explore
+                     └───────────────────────┘
 ```
 
-**Stack:** Python/Flask + uv · React + TypeScript + Vite · Claude (via the
-`claude` CLI **or** the Anthropic API) · the
-[`arxiv`](https://pypi.org/project/arxiv/) package · SQLite (+ FTS5 &
-`sqlite-vec`) · local `sentence-transformers` embeddings for semantic search.
+**Stack:** Python/Flask + uv · React + TypeScript + Vite ·
+[`react-force-graph-2d`](https://github.com/vasturiano/react-force-graph) ·
+[Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/)
+(the same data backbone Connected Papers uses) · the
+[`arxiv`](https://pypi.org/project/arxiv/) package for seed search · Claude (via
+the `claude` CLI **or** the Anthropic API) for the upcoming AI-teacher features.
 Runs locally on your Mac.
-
-No Gmail, no Google Cloud, no OAuth. By default summaries run through the
-**Anthropic API** (cheap Haiku 4.5) and **automatically fall back to the `claude`
-CLI** under your Claude Pro/Max subscription if your API credits run out.
 
 ---
 
@@ -43,47 +51,25 @@ cd ~/arxiv-digest
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` (everything here is **optional** — Atlas works with no keys, just
+more slowly):
 
-- **`SUMMARY_BACKEND`** / **`SUMMARY_FALLBACK_BACKEND`** — summaries try the
-  primary backend, then switch to the fallback for the rest of the run if it
-  fails (e.g. API credits run out). Defaults: `api` primary, `claude_cli`
-  fallback.
-  - `api` — Anthropic API, pay-as-you-go (~$0.0015/paper with Haiku 4.5). Set
-    `ANTHROPIC_API_KEY` from <https://console.anthropic.com>. Deployable anywhere.
-  - `claude_cli` — the `claude` CLI under your **Claude Pro/Max subscription**
-    (no API billing; local-only; needs Claude Code installed + signed in via
-    `claude` then `/login`). Uses Haiku via `CLAUDE_CLI_MODEL=haiku`.
-- **`ARXIV_CATEGORIES`** — the *initial* subjects to follow, comma-separated
-  (default `cs.LG,cs.AI,cs.CL,cs.CV`). This is only a seed: once the app is
-  running you manage the set from the dashboard's **Categories** button, and the
-  choice is saved in the database. Full list:
-  <https://arxiv.org/category_taxonomy>.
+- **`S2_API_KEY`** — a free [Semantic Scholar API key](https://www.semanticscholar.org/product/api).
+  Strongly recommended: the unauthenticated pool is tight and graph builds will
+  occasionally hit rate limits without it (the client backs off and retries, and
+  snapshots are cached, so it still works — just less snappily).
+- **`ANTHROPIC_API_KEY`** / **`SUMMARY_BACKEND`** — used by the AI-teacher
+  features (roadmap). Summaries can run through the Anthropic API (cheap Haiku
+  4.5) or the `claude` CLI under a Claude Pro/Max subscription.
 
-There is no cap on how many papers a refresh pulls — the entire matching batch
-is fetched. A wide date range across many categories can therefore be large and
-slow (arXiv paginates ~100 results at a time).
+### 2. Build the frontend & run
 
-### 2. Fetch papers
+**Single-server** (serves the built dashboard + API together):
 
 ```bash
-uv run python backend/run.py refresh                          # papers submitted today
-uv run python backend/run.py refresh --start 2026-06-25       # a single day
-uv run python backend/run.py refresh --start 2026-06-20 --end 2026-06-25   # a range
+cd frontend && npm install && npm run build && cd ..
+uv run python backend/run.py serve            # http://127.0.0.1:5000
 ```
-
-Pulls papers **submitted in the given date range** (default: today; `--end`
-defaults to `--start`) in your categories, stores each under its own submission
-day, and **embeds new papers for semantic search** (add `--no-embed` to skip).
-Add `--no-summary` to skip summaries (the default in the dashboard, where you
-summarize each paper on demand via its **Get summary** button); without it the
-CLI also summarizes the batch, handy for a daily cron.
-
-The first time you run with semantic search enabled, backfill embeddings for
-papers already in your database with `uv run python backend/run.py embed` (see
-[How search works](#how-search-works)).
-
-### 3. Open the dashboard
 
 **Development** (two terminals, hot-reloading frontend):
 
@@ -95,165 +81,84 @@ uv run python backend/run.py serve            # http://127.0.0.1:5000
 cd frontend && npm run dev                     # http://localhost:5173
 ```
 
-Open <http://localhost:5173>. The Vite dev server proxies `/api/*` to Flask.
-
-**Single-server** (after building the frontend once):
-
-```bash
-cd frontend && npm run build && cd ..
-uv run python backend/run.py serve             # serves dashboard + API at :5000
-```
-
-Open <http://127.0.0.1:5000>. The dashboard cleanly separates **downloading**
-from **browsing**:
-
-- **Download papers** (the **⬇ Download** button) opens one modal holding
-  everything ingestion-related — a searchable picker for the full arXiv taxonomy,
-  a **date range to pull**, and **Download** / **Re-pull all**. The subjects you
-  pick are what gets fetched *and* what's offered as filters. **Download** skips
-  days already pulled for your categories; **Re-pull all** re-fetches every day.
-- The top-bar **View From / To** range only *filters what you've already
-  downloaded* — changing it never fetches from arXiv. (After a download the view
-  jumps to the range you just pulled; narrow it from there.)
-
-**Get summary** on any row summarizes that one paper on demand, the category
-chips filter the loaded batch, and long ranges are paginated. The **search bar**
-does a **hybrid keyword + semantic** search over the papers you've already
-pulled, scoped to the view range — search by meaning ("teaching machines to
-see") or exact terms alike, and **Search all of arXiv →** to pull in a paper you
-don't have yet; see [How search works](#how-search-works) below.
+The Vite dev server proxies `/api/*` to Flask.
 
 ---
 
-## NotebookLM
+## Using it
 
-NotebookLM has no public API, so this can't auto-push into it. Click **Export
-for NotebookLM** in the dashboard (or hit `/api/export/notebooklm`) to download a
-clean Markdown digest plus a list of PDF links. In NotebookLM: **New notebook →
-Add source → paste the Markdown** (or add the PDF links as website sources).
+1. **Search a paper** — type a title (e.g. *Attention Is All You Need*) and pick
+   from the arXiv hits, or paste an **arXiv id / URL** to jump straight in.
+2. **Read the map** — 🟡 gold = the seed · 🔵 blue = **references** (papers it
+   cites) · 🟢 green = **citations** (papers citing it) · 🟣 purple = **similar**
+   (SPECTER2 neighbors). Node size = citation count; arrows show citation
+   direction; thicker links mark "influential" citations.
+3. **Declutter** (top-left panel):
+   - **Relation filters** — toggle references / citations / similar on and off.
+   - **Year range** — a dual slider to focus on an era (the seed always stays).
+   - **Drag-to-pin** — drag a node to fix it in place; *Release* unpins all.
+   - **Focus-on-hover** — hover a node to fade everything not connected to it.
+4. **Traverse** — **double-click** any node (or use *Explore from here*) to
+   re-seed the whole graph on that paper. Re-seeding works by Semantic Scholar
+   id, so you can hop onto cited **journal** papers with no arXiv id and keep
+   going. Every hop is cached, so backtracking is instant.
 
-**Search-aware:** with a search active the button becomes **Export results** and
-the digest contains only that search's hits (`/api/export/notebooklm?q=…`, hybrid
-lexical + semantic, scoped to the date range) — capped at the same 100 results
-the dashboard shows, which conveniently keeps a NotebookLM notebook focused.
-Clear the search to export the whole date range again.
+---
+
+## How the graph is built
+
+`graph.build_graph(seed)` assembles a neighborhood from the
+[Semantic Scholar Academic Graph + Recommendations APIs](https://api.semanticscholar.org/api-docs/):
+
+- **Seed details** are hydrated through `POST /paper/batch` — deliberately, not
+  the single-paper GET, which is throttled hardest for unauthenticated callers.
+  A spike against the live API confirmed batch returns everything we need
+  (title, abstract, `tldr`, `externalIds.ArXiv`, SPECTER2 embedding) and isn't
+  rate-limited the same way.
+- **References** (`/paper/{id}/references`) and **citations**
+  (`/paper/{id}/citations`) become the directed edges.
+- **Similar papers** come from the **recommendations** endpoint
+  (`forpaper?from=all-cs`) — embedding-based neighbors.
+- Nodes are deduped by S2 paperId; edges are tagged `reference | citation |
+  similar`. The whole snapshot is cached in `data/digest.db` (a small key→JSON
+  `cache` table) with a 1-day TTL, so repeat exploration stays fast and polite.
+
+Seed lookup accepts either an **arXiv id** (`ARXIV:1706.03762`) or a raw **S2
+paperId** (how re-seeding on any node works).
 
 ---
 
 ## Project layout
 
 ```
-arxiv-digest/
-├── pyproject.toml            # uv-managed backend deps
-├── .env / .env.example       # config + Anthropic key (gitignored)
-├── data/digest.db            # SQLite store (auto-created; gitignored)
+arxiv-digest/                    # (repo name predates the "Atlas" rename)
+├── OnePager.md                  # product vision, feature stack & phase roadmap
+├── pyproject.toml               # uv-managed backend deps
+├── .env / .env.example          # optional keys (S2, Anthropic) — .env gitignored
+├── data/digest.db               # thin cache (graph snapshots); gitignored
 ├── backend/
-│   ├── run.py                # CLI: serve | refresh | embed
+│   ├── run.py                   # CLI: serve | refresh | embed
 │   └── arxiv_digest/
-│       ├── config.py         # all settings, from .env
-│       ├── arxiv_client.py   # fetch papers for a date range from the arXiv API
-│       ├── taxonomy.py       # full arXiv category taxonomy (+ taxonomy.json)
-│       ├── summarizer.py     # Claude summaries (cached by arXiv id)
-│       ├── embeddings.py     # local sentence-transformers embeddings
-│       ├── search.py         # hybrid lexical + semantic search (RRF fusion)
-│       ├── store.py          # SQLite persistence (papers, settings, FTS5, vectors)
-│       ├── pipeline.py       # fetch → store → embed → summarize
-│       └── app.py            # Flask API + serves the built dashboard
-└── frontend/                 # React + TS + Vite dashboard
-    └── src/{App.tsx, CategoryPicker.tsx, api.ts, App.css}
+│       ├── config.py            # settings from .env (incl. Semantic Scholar)
+│       ├── semantic_scholar.py  # S2 Academic Graph + Recommendations client
+│       ├── graph.py             # assemble a paper's neighborhood graph
+│       ├── cache.py             # tiny TTL cache for dynamic artifacts
+│       ├── arxiv_client.py      # arXiv search (finds the seed paper)
+│       ├── app.py               # Flask API + serves the built frontend
+│       └── … (summarizer, taxonomy, and legacy digest modules)
+└── frontend/                    # React + TS + Vite
+    └── src/{GraphExplorer.tsx, api.ts, atlas.css, main.tsx}
 ```
 
-## How fetching works
-
-`arxiv_client.fetch_papers_in_range()` builds a query like
-`(cat:cs.LG OR cat:cs.AI OR …) AND submittedDate:[YYYYMMDD0000 TO YYYYMMDD2359]`
-— i.e. papers **submitted in that date range** (GMT) in your categories — and
-stores each under its own submission day. There is no result cap; the whole
-matching batch is fetched. Papers are keyed by arXiv id, so re-pulling never
-duplicates a paper or re-pays to summarize one.
-
-**Smart, category-aware pulls.** The **↻** button skips days it has already
-downloaded so overlapping re-pulls stay fast — but "already downloaded" is
-tracked *per category* in a `pulls` ledger (date → categories fetched). A day is
-skipped only when **every** followed category has been pulled for it, so adding a
-new subject and hitting **Save & pull** correctly re-fetches days that already
-hold papers from other categories. **Re-pull all** ignores the ledger and
-re-fetches every day (catching late or newly cross-listed arXiv additions).
-
-## How search works
-
-The search bar (and `GET /api/search?q=&start=&end=`) is **hybrid** — it runs a
-keyword search and a semantic search over the papers already in `digest.db`, then
-blends the two ranked lists. So `automobile` still surfaces a paper that only says
-"car", *and* an exact term like a method name or author still lands a direct hit.
-Search is scoped to the selected **From / To** range; widen the range to search
-more of your library.
-
-**1. Lexical (keyword) — FTS5 + BM25.** SQLite's built-in full-text search. A
-`papers_fts` virtual table holds an **inverted index** (word → the papers
-containing it), kept in sync with `papers` by triggers. Text is lowercased,
-tokenized (`unicode61`) and **stemmed** (`porter`) so variants collide
-(`learning`/`learned` → `learn`); with a `*` prefix on each term, typing
-`transform` also finds "transformer". Matches are ranked by **BM25**, a relevance
-score from word statistics only — term frequency, how rare each term is, document
-length. (A plain `LIKE` substring scan is the fallback if a SQLite build lacks
-FTS5.)
-
-**2. Semantic (meaning) — sentence-transformers + sqlite-vec.** Each paper's
-title + abstract is embedded into a 384-dim **vector** with the local
-[`all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
-model — no API, no key, nothing leaves your machine. Vectors live in a
-[`sqlite-vec`](https://github.com/asg017/sqlite-vec) virtual table (`papers_vec`)
-inside the same `digest.db`. A query is embedded the same way, and sqlite-vec
-returns its nearest neighbours by **cosine distance** — so conceptually-similar
-papers match even with no shared words.
-
-**3. Fusion — Reciprocal Rank Fusion (RRF).** The two lists are merged by
-`score = Σ 1/(k + rank)` across each list a paper appears in (`k` = `ARXIV_RRF_K`,
-default 60). RRF needs only each result's *rank*, not comparable scores, so it
-fairly blends BM25 with cosine distance; a paper ranked highly by *both* rises to
-the top. The dashboard tags each row `lexical`, `semantic`, or both, and shows
-whether a search ran `hybrid` or fell back to `keyword`-only.
-
-Embeddings are generated when papers are pulled. After first enabling this
-feature (or changing the model) backfill the existing library once:
-
-```bash
-uv run python backend/run.py embed              # embed anything not yet indexed
-uv run python backend/run.py embed --rebuild    # wipe + re-embed (e.g. new model)
-```
-
-Semantic search degrades gracefully: set `ARXIV_SEMANTIC=0` (or if the model /
-`sqlite-vec` can't load) and search stays keyword-only with no other changes.
-
-### Searching all of arXiv (not just your library)
-
-The hybrid search above only sees papers you've already pulled. To find a paper
-you *don't* have yet — say the original *Attention Is All You Need* — type it in
-the search bar and click **Search all of arXiv →** (it stands out when your
-library search comes up empty). That runs a live relevance query against the
-whole arXiv corpus (`GET /api/arxiv_search?q=&limit=`, default 25 results),
-ignoring your date range and followed categories. Paste an **arXiv id or
-abs/pdf URL** to fetch that exact paper instead of a keyword hunt; free-text
-queries are title-phrase-boosted so an exact title floats to the top despite
-arXiv's noisy default relevance ranking.
-
-Results show in a **From arXiv** panel, each with an **Add** button that fetches
-that one paper, stores it, and embeds it (`POST /api/arxiv_search/add`) — after
-which it's a normal library paper: locally searchable, summarizable, and
-exportable. Nothing is saved until you click Add, so a broad search doesn't
-clutter your database. (Adding is deliberately kept out of the pull-coverage
-ledger — it's an ad-hoc fetch, not a full category+date pull of a day.)
-
-**Next: retrieval-augmented generation (RAG).** With embeddings in place, the
-natural follow-on is answering questions *over* your library — retrieve the most
-relevant papers for a question and have Claude synthesize an answer with
-citations.
+*Legacy note:* the earlier "daily digest" era (local paper store, hybrid FTS5 +
+`sqlite-vec` search, category pulls, NotebookLM export) still exists in the
+backend — its modules currently power the arXiv seed search and are otherwise
+dormant. They'll be retired as the v1.0 rewrite proceeds; see **OnePager.md**.
 
 ## Notes & next steps
 
-- **Automate the daily run:** add a `cron`/`launchd` job that runs
-  `uv run python backend/run.py refresh` each morning.
-- **Learn Node later:** the backend is Python today; porting it to Node is a
-  great, well-scoped exercise once everything works.
-- **Secrets:** `.env` is gitignored — never commit it.
+- **The AI teacher** is the headline of the roadmap: Claude narrating the
+  history and intuition of a field, synced to the graph, with follow-up Q&A —
+  plus concept mindmaps and Podcastfy audio lectures. See **[OnePager.md](OnePager.md)**.
+- **Secrets:** `.env` is gitignored — never commit it. Keys are optional; Atlas
+  runs keyless (just rate-limited on Semantic Scholar).

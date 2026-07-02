@@ -25,7 +25,17 @@ from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory
 from flask_cors import CORS
 
-from . import config, pipeline, search, store, summarizer, taxonomy
+from . import (
+    arxiv_client,
+    config,
+    graph,
+    pipeline,
+    search,
+    semantic_scholar,
+    store,
+    summarizer,
+    taxonomy,
+)
 
 # The built frontend lands in frontend/dist after `npm run build`.
 FRONTEND_DIST = config.PROJECT_ROOT / "frontend" / "dist"
@@ -62,10 +72,57 @@ def _range_args() -> tuple[str, str]:
     return start, end
 
 
+def _normalize_arxiv_id(raw: str) -> str:
+    """Pull a bare arXiv id out of a pasted id / abs-or-pdf URL, version stripped.
+
+    Reuses the id/URL pattern from arxiv_client so "https://arxiv.org/abs/1706.03762v5"
+    and "1706.03762" both resolve to "1706.03762".
+    """
+    match = arxiv_client._ID_RE.search(raw or "")
+    if match:
+        return match.group(1).split("v")[0]
+    return (raw or "").strip()
+
+
 # --- API ---------------------------------------------------------------------
 @app.get("/api/health")
 def health() -> Response:
     return jsonify({"status": "ok", "model": config.ANTHROPIC_MODEL})
+
+
+@app.get("/api/graph")
+def api_graph() -> Response:
+    """The neighborhood graph for a seed paper (references + citations + similar).
+
+    `seed` is an arXiv id or a pasted abs/pdf URL. `refresh=1` bypasses the cache.
+    """
+    seed = _normalize_arxiv_id(request.args.get("seed", ""))
+    if not seed:
+        return jsonify({"error": "missing 'seed' arXiv id"}), 400
+    refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
+    try:
+        result = graph.build_graph(seed, refresh=refresh)
+    except semantic_scholar.S2Error as e:
+        app.logger.warning("graph build failed for %s: %s", seed, e)
+        return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
+    if not result:
+        return jsonify({"error": f"No paper found on Semantic Scholar for {seed}."}), 404
+    return jsonify(result)
+
+
+@app.get("/api/paper/<path:arxiv_id>")
+def api_paper(arxiv_id: str) -> Response:
+    """Full details (abstract, tldr, authors) for one paper — used to hydrate a
+    node's detail panel on click."""
+    seed = _normalize_arxiv_id(arxiv_id)
+    try:
+        node = semantic_scholar.get_paper(f"ARXIV:{seed}")
+    except semantic_scholar.S2Error as e:
+        app.logger.warning("paper fetch failed for %s: %s", seed, e)
+        return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
+    if not node:
+        return jsonify({"error": f"No paper found for {seed}."}), 404
+    return jsonify(node)
 
 
 @app.get("/api/papers")

@@ -176,6 +176,69 @@ export async function saveCategories(followed: string[]): Promise<string[]> {
   return data.followed as string[]
 }
 
+// --- arXiv Atlas: the paper neighborhood graph -------------------------------
+
+export type EdgeType = 'reference' | 'citation' | 'similar'
+
+export interface GraphNode {
+  id: string // Semantic Scholar paperId (stable graph key)
+  arxiv_id: string | null
+  title: string
+  abstract?: string | null
+  tldr?: string | null
+  year: number | null
+  citation_count: number | null
+  authors?: string | null
+  url: string | null
+  rels: string[] // 'seed' | 'reference' | 'citation' | 'similar'
+  is_seed: boolean
+}
+
+export interface GraphEdge {
+  source: string
+  target: string
+  type: EdgeType
+  influential?: boolean
+}
+
+export interface GraphResponse {
+  seed: { arxiv_id: string; id: string; title: string }
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  counts: {
+    references: number
+    citations: number
+    similar: number
+    nodes: number
+  }
+}
+
+// The neighborhood graph for a seed paper (references + citations + similar).
+// `seed` is an arXiv id or a pasted abs/pdf URL; `refresh` bypasses the cache.
+export async function fetchGraph(
+  seed: string,
+  refresh = false,
+): Promise<GraphResponse> {
+  const params = new URLSearchParams({ seed })
+  if (refresh) params.set('refresh', '1')
+  const res = await fetch(`/api/graph?${params.toString()}`)
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to load graph (${res.status})`)
+  }
+  return res.json()
+}
+
+// Full details (abstract, tldr, authors) for one paper — hydrates a node panel.
+export async function fetchPaperDetail(arxivId: string): Promise<GraphNode> {
+  const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}`)
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `Failed to load paper (${res.status})`)
+  }
+  return res.json()
+}
+
 // Returns the URL that downloads a NotebookLM-ready Markdown digest. When `q` is
 // given, the digest contains only that search's results (else the whole range).
 export function notebookLmExportUrl(

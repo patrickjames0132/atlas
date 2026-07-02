@@ -35,6 +35,31 @@ ARXIV_CATEGORIES = [
     if c.strip()
 ]
 
+# --- Semantic Scholar (dynamic academic graph) -------------------------------
+# arXiv Atlas connects to Semantic Scholar dynamically instead of storing a paper
+# corpus locally — S2 is the same data backbone Connected Papers uses. The
+# unauthenticated pool is tight (the single-paper GET 429s almost immediately, so
+# we hydrate nodes through the far more lenient POST /paper/batch endpoint); set
+# S2_API_KEY for reliable, higher-rate access:
+# https://www.semanticscholar.org/product/api
+S2_API_KEY = os.getenv("S2_API_KEY", "")
+S2_GRAPH_URL = os.getenv("S2_GRAPH_URL", "https://api.semanticscholar.org/graph/v1")
+S2_RECS_URL = os.getenv(
+    "S2_RECS_URL", "https://api.semanticscholar.org/recommendations/v1"
+)
+S2_TIMEOUT = int(os.getenv("S2_TIMEOUT", "30"))
+
+# How many neighbors of each kind to pull into a paper's graph neighborhood.
+GRAPH_REF_LIMIT = int(os.getenv("ATLAS_GRAPH_REFS", "25"))
+GRAPH_CITE_LIMIT = int(os.getenv("ATLAS_GRAPH_CITES", "25"))
+GRAPH_SIMILAR_LIMIT = int(os.getenv("ATLAS_GRAPH_SIMILAR", "15"))
+# The recommendation candidate pool: "all-cs" (all of CS, good for older seminal
+# papers) or "recent". The default "recent" pool returns nothing for a 2017 seed.
+GRAPH_RECS_POOL = os.getenv("ATLAS_GRAPH_RECS_POOL", "all-cs")
+# Graph-snapshot cache TTL (seconds). S2 citation data changes slowly, so a day
+# keeps repeat exploration snappy while respecting the rate limit.
+GRAPH_CACHE_TTL = int(os.getenv("ATLAS_GRAPH_CACHE_TTL", "86400"))
+
 # --- Semantic search (embeddings) --------------------------------------------
 # The sentence-transformers model used to embed papers for semantic/hybrid
 # search. EMBED_DIM MUST match the model's output dimension (all-MiniLM-L6-v2 →
