@@ -1,6 +1,7 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.1 · living document · AI teacher (lecture + Q&A) shipped in v1.1.0
+> **Status:** v1.2 · living document · AI teacher shipped v1.1.0; sidebar figures
+> + PDF link + dual-thumb year slider shipped v1.2.0
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -136,10 +137,14 @@ optional, behind a key.
       y-axis into citation "threads" flowing through time — so the chronological
       lecture sweeps left→right as nodes light up. (Force layout stays the
       default; a relation-band variant is a possible later sub-toggle.)
-- [ ] **Sidebar enrichment** — under the detail panel's TL;DR, show the paper's
-      **own figures with their captions** (extracted from **ar5iv** HTML, cached,
-      images proxied to dodge hotlink/CORS; graceful fallback where ar5iv has no
-      coverage), plus a **direct PDF link** alongside the arXiv-abstract link.
+- [x] **Sidebar enrichment** *(v1.2.0)* — under the detail panel's TL;DR, the
+      paper's **own figures with their captions** (`figures.py` extracts them from
+      **ar5iv** HTML, cached 30 days; images streamed through a same-origin
+      `/api/figure_proxy` locked to the ar5iv host — no hotlink reliance, no open
+      proxy; tables skipped; graceful fallback where ar5iv has no render), plus a
+      **direct PDF link** beside the arXiv-abstract link. Shipped alongside a UI
+      polish: the year filter is now a single **dual-thumb range slider** (two
+      overlaid inputs on one track + fill) instead of two stacked sliders.
 - [ ] **Phase 4 — Concept mindmap** — Claude concept-map JSON, "bridge two
       topics," `/api/mindmap`.
 - [ ] **Phase 5 — Audio lecture** — Podcastfy integration, Edge TTS default,

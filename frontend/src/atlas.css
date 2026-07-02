@@ -220,11 +220,75 @@
   color: var(--text-strong);
   font-weight: 600;
 }
-.years input[type='range'] {
-  width: 100%;
+/* Dual-thumb range: two overlaid inputs (pointer-events only on the thumbs) over
+   a shared track + fill, so one slider carries both knobs. */
+.range-dual {
+  position: relative;
+  height: 22px;
   margin: 2px 0;
-  accent-color: var(--accent);
+}
+.range-track,
+.range-fill {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.range-track {
+  left: 0;
+  right: 0;
+  background: var(--border);
+}
+.range-fill {
+  background: var(--accent);
+}
+.range-dual input[type='range'] {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
   height: 16px;
+  margin: 0;
+  transform: translateY(-50%);
+  background: transparent;
+  pointer-events: none; /* only the thumbs are interactive */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-dual input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+  border: none;
+}
+.range-dual input[type='range']::-moz-range-track {
+  height: 4px;
+  background: transparent;
+  border: none;
+}
+.range-dual input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  margin-top: -6px;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.range-dual input[type='range']::-moz-range-thumb {
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
 }
 
 .ctrl-foot {
@@ -358,6 +422,41 @@
   padding: 9px 14px;
   border-radius: 8px;
   border: 1px solid var(--border);
+}
+
+/* --- figures (ar5iv) in the detail panel --- */
+.detail-figs {
+  margin-top: 16px;
+}
+.detail-figs-head,
+.detail-figs-hint {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.detail-figs-hint {
+  margin-top: 16px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+}
+.detail-fig {
+  margin: 0 0 14px;
+}
+.detail-fig img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  display: block;
+}
+.detail-fig figcaption {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 /* --- AI teacher panel --- */

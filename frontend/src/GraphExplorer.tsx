@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import ForceGraph2DImport from 'react-force-graph-2d'
 import {
+  fetchFigures,
   fetchGraph,
   fetchPaperDetail,
   searchArxiv,
   type ArxivHit,
   type EdgeType,
+  type FiguresResponse,
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
@@ -77,6 +79,9 @@ export default function GraphExplorer() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, Partial<GraphNode>>>({})
+  // Figures (ar5iv) per arXiv id, lazily fetched when a node is opened.
+  const [figures, setFigures] = useState<Record<string, FiguresResponse>>({})
+  const [figLoading, setFigLoading] = useState<string | null>(null)
 
   // Declutter controls.
   const [enabled, setEnabled] = useState<Set<string>>(new Set(REL_TYPES))
@@ -187,11 +192,23 @@ export default function GraphExplorer() {
     return details[selectedId] ? ({ ...n, ...details[selectedId] } as VNode) : n
   }, [base, selectedId, details])
 
+  // Lazily fetch the selected paper's figures (ar5iv) the first time it's opened.
+  useEffect(() => {
+    const aid = selected?.arxiv_id
+    if (!aid || figures[aid] || figLoading === aid) return
+    setFigLoading(aid)
+    fetchFigures(aid)
+      .then((res) => setFigures((f) => ({ ...f, [aid]: res })))
+      .catch(() => setFigures((f) => ({ ...f, [aid]: { available: false, figures: [] } })))
+      .finally(() => setFigLoading((cur) => (cur === aid ? null : cur)))
+  }, [selected, figures, figLoading])
+
   const loadGraph = useCallback(async (seed: string) => {
     setLoadingGraph(true)
     setError(null)
     setHits(null)
     setDetails({})
+    setFigures({})
     fitDone.current = false
     try {
       const g = await fetchGraph(seed)
@@ -310,6 +327,10 @@ export default function GraphExplorer() {
 
   const hasGraph = !!base && base.nodes.length > 0
   const showYears = !!base && base.maxYear > base.minYear
+  // Position (0–100%) of a year along the range track, for the fill + knobs.
+  const yearSpan = base ? base.maxYear - base.minYear : 0
+  const yearPct = (y: number) =>
+    yearSpan && base ? ((y - base.minYear) / yearSpan) * 100 : 0
 
   return (
     <div className="atlas">
@@ -391,24 +412,36 @@ export default function GraphExplorer() {
                   <div className="years-label">
                     Years <b>{yearLo}</b> – <b>{yearHi}</b>
                   </div>
-                  <input
-                    type="range"
-                    min={base!.minYear}
-                    max={base!.maxYear}
-                    value={yearLo}
-                    onChange={(e) =>
-                      setYearLo(Math.min(Number(e.target.value), yearHi))
-                    }
-                  />
-                  <input
-                    type="range"
-                    min={base!.minYear}
-                    max={base!.maxYear}
-                    value={yearHi}
-                    onChange={(e) =>
-                      setYearHi(Math.max(Number(e.target.value), yearLo))
-                    }
-                  />
+                  <div className="range-dual">
+                    <div className="range-track" />
+                    <div
+                      className="range-fill"
+                      style={{
+                        left: `${yearPct(yearLo)}%`,
+                        width: `${yearPct(yearHi) - yearPct(yearLo)}%`,
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min={base!.minYear}
+                      max={base!.maxYear}
+                      value={yearLo}
+                      aria-label="Earliest year"
+                      onChange={(e) =>
+                        setYearLo(Math.min(Number(e.target.value), yearHi))
+                      }
+                    />
+                    <input
+                      type="range"
+                      min={base!.minYear}
+                      max={base!.maxYear}
+                      value={yearHi}
+                      aria-label="Latest year"
+                      onChange={(e) =>
+                        setYearHi(Math.max(Number(e.target.value), yearLo))
+                      }
+                    />
+                  </div>
                 </div>
               )}
 
@@ -586,10 +619,40 @@ export default function GraphExplorer() {
                 )}
               </p>
             )}
+            {selected.arxiv_id &&
+              (() => {
+                const figs = figures[selected.arxiv_id]
+                if (!figs) {
+                  return figLoading === selected.arxiv_id ? (
+                    <div className="detail-figs-hint">Loading figures…</div>
+                  ) : null
+                }
+                if (!figs.available || figs.figures.length === 0) return null
+                return (
+                  <div className="detail-figs">
+                    <div className="detail-figs-head">Figures</div>
+                    {figs.figures.map((f, i) => (
+                      <figure key={i} className="detail-fig">
+                        <img src={f.image} alt={f.caption || `Figure ${i + 1}`} loading="lazy" />
+                        {f.caption && <figcaption>{f.caption}</figcaption>}
+                      </figure>
+                    ))}
+                  </div>
+                )
+              })()}
             <div className="detail-actions">
               {selected.url && (
                 <a href={selected.url} target="_blank" rel="noreferrer">
-                  Open ↗
+                  Abstract ↗
+                </a>
+              )}
+              {selected.url && selected.arxiv_id && (
+                <a
+                  href={selected.url.replace('/abs/', '/pdf/')}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  PDF ↗
                 </a>
               )}
               <button className="ghost-btn" onClick={togglePinSelected}>

@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from flask_cors import CORS
 from . import (
     arxiv_client,
     config,
+    figures,
     graph,
     pipeline,
     search,
@@ -125,6 +127,44 @@ def api_paper(arxiv_id: str) -> Response:
     if not node:
         return jsonify({"error": f"No paper found for {seed}."}), 404
     return jsonify(node)
+
+
+@app.get("/api/paper/<path:arxiv_id>/figures")
+def api_figures(arxiv_id: str) -> Response:
+    """A paper's figures + captions (from ar5iv) for the detail panel.
+
+    Returns {available, figures: [{image, caption}]}. Image URLs are rewritten to
+    the same-origin proxy below so the browser never hotlinks ar5iv directly.
+    ar5iv gaps (no LaTeX render) come back as available:false — not an error."""
+    seed = _normalize_arxiv_id(arxiv_id)
+    try:
+        result = figures.get_figures(seed)
+    except Exception:  # ar5iv down/slow — degrade gracefully, don't 500 the panel
+        app.logger.warning("figure fetch failed for %s", seed, exc_info=True)
+        return jsonify({"available": False, "figures": []})
+    for fig in result.get("figures", []):
+        fig["image"] = "/api/figure_proxy?src=" + urllib.parse.quote(fig["image"], safe="")
+    return jsonify(result)
+
+
+@app.get("/api/figure_proxy")
+def figure_proxy() -> Response:
+    """Stream an ar5iv image through our origin (dodges hotlink/CORS).
+
+    Locked to the ar5iv host so this can't be used as an open proxy (SSRF)."""
+    src = request.args.get("src", "")
+    if not figures.is_ar5iv_url(src):
+        return jsonify({"error": "src must be an ar5iv image URL"}), 400
+    try:
+        data, content_type = figures.fetch_image(src)
+    except Exception:
+        app.logger.warning("figure proxy failed for %s", src, exc_info=True)
+        return Response(status=502)
+    return Response(
+        data,
+        mimetype=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # --- AI teacher (Phase 3a): streaming lecture + grounded Q&A -----------------

@@ -14,12 +14,13 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.1 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.2 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
-> answers follow-up questions grounded in the papers on screen. Full-text
-> reading + agentic graph traversal (Phase 3b), concept mindmaps, and audio
-> lectures are next — see **[OnePager.md](OnePager.md)** for the full vision and
-> phase plan.
+> answers follow-up questions grounded in the papers on screen. The detail panel
+> shows a paper's own **figures + captions** (via ar5iv) and links to both the
+> abstract and the PDF. Full-text reading + agentic graph traversal (Phase 3b),
+> concept mindmaps, and audio lectures are next — see
+> **[OnePager.md](OnePager.md)** for the full vision and phase plan.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
@@ -95,7 +96,10 @@ The Vite dev server proxies `/api/*` to Flask.
 2. **Read the map** — 🟡 gold = the seed · 🔵 blue = **references** (papers it
    cites) · 🟢 green = **citations** (papers citing it) · 🟣 purple = **similar**
    (SPECTER2 neighbors). Node size = citation count; arrows show citation
-   direction; thicker links mark "influential" citations.
+   direction; thicker links mark "influential" citations. **Click a node** for a
+   detail panel — TL;DR, the paper's own **figures + captions** (pulled from
+   [ar5iv](https://ar5iv.org) when available), and links to the **abstract** and
+   the **PDF**.
 3. **Declutter** (top-left panel):
    - **Relation filters** — toggle references / citations / similar on and off.
    - **Year range** — a dual slider to focus on an era (the seed always stays).
@@ -161,6 +165,7 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 │       ├── cache.py             # tiny TTL cache for dynamic artifacts
 │       ├── arxiv_client.py      # arXiv search (finds the seed paper)
 │       ├── teacher.py           # streaming AI lecture + grounded Q&A (dual backend)
+│       ├── figures.py           # paper figures + captions from ar5iv (cached)
 │       ├── app.py               # Flask API (incl. /api/lecture, /api/ask) + frontend
 │       └── … (summarizer, taxonomy, and legacy digest modules)
 └── frontend/                    # React + TS + Vite

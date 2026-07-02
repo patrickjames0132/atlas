@@ -239,6 +239,26 @@ export async function fetchPaperDetail(arxivId: string): Promise<GraphNode> {
   return res.json()
 }
 
+// A figure pulled from the paper (via ar5iv): a proxied image URL + the paper's
+// own caption.
+export interface Figure {
+  image: string
+  caption: string
+}
+
+export interface FiguresResponse {
+  available: boolean
+  figures: Figure[]
+}
+
+// The paper's figures + captions for the detail panel. `available` is false when
+// ar5iv has no render for the paper (older / PDF-only submissions).
+export async function fetchFigures(arxivId: string): Promise<FiguresResponse> {
+  const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/figures`)
+  if (!res.ok) return { available: false, figures: [] }
+  return res.json()
+}
+
 // --- arXiv Atlas: the AI teacher (streaming lecture + Q&A) --------------------
 
 // One beat of a lecture: a paragraph of narration bound to the graph nodes it's
