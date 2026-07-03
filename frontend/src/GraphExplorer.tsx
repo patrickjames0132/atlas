@@ -1,5 +1,19 @@
+/**
+ * The arXiv Atlas explorer — owns all graph state and the force simulation.
+ *
+ * This component holds: seed search + graph loading, the stable `base`
+ * node/link objects the simulation mutates, the filtered `view`, selection /
+ * hover / highlight / pin state, layout switching (force vs. timeline), the
+ * teacher's mid-conversation graph discoveries, and saved-session save /
+ * restore (Phase 4).
+ *
+ * Presentational pieces live in `explorer/`: HitList (seed search results),
+ * GraphControls (filters + layout), DetailPanel (selected paper), Legend,
+ * plus the shared theme constants and view-model helpers.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
+import type { FormEvent } from 'react'
 import ForceGraph2DImport from 'react-force-graph-2d'
 // react-force-graph's own force lib (d3-force-3d) ships no types; we only need
 // forceCollide to space timeline nodes out by their radius.
@@ -16,7 +30,6 @@ import {
   type ArxivHit,
   type Beat,
   type ChatMsg,
-  type EdgeType,
   type FiguresResponse,
   type GraphEdge,
   type GraphNode,
@@ -26,6 +39,28 @@ import {
   type SavedSessionMeta,
   listSources,
 } from './api'
+import {
+  ID_RE,
+  cleanNode,
+  countRels,
+  nodeRadius,
+  primaryRel,
+  type Base,
+  type VLink,
+  type VNode,
+} from './explorer/model'
+import {
+  DIM_EDGE,
+  DIM_NODE,
+  EDGE_COLOR,
+  REL_COLOR,
+  REL_TYPES,
+  YEAR_SPACING,
+} from './explorer/theme'
+import HitList from './explorer/HitList'
+import GraphControls from './explorer/GraphControls'
+import DetailPanel from './explorer/DetailPanel'
+import Legend from './explorer/Legend'
 import Teacher from './Teacher'
 import Sources from './Sources'
 import Sessions from './Sessions'
@@ -36,117 +71,6 @@ import './atlas.css'
 // untyped alias so our canvas/link callbacks stay readable.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ForceGraph2D = ForceGraph2DImport as any
-
-// A pasted arXiv id or abs/pdf URL — jump straight to a graph instead of a
-// keyword search. Mirrors the backend's tolerance.
-const ID_RE =
-  /^(?:https?:\/\/arxiv\.org\/(?:abs|pdf)\/)?(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Z]{2})?\/\d{7}(?:v\d+)?)$/i
-
-const REL_COLOR: Record<string, string> = {
-  seed: '#ffd166', // gold — the paper you're exploring
-  reference: '#6ea8fe', // blue — ancestors it cites
-  citation: '#4ade80', // green — descendants that cite it
-  similar: '#c084fc', // purple — embedding-similar papers
-  search: '#f472b6', // pink — pulled in by the teacher's topic search (3c.2)
-}
-const EDGE_COLOR: Record<EdgeType, string> = {
-  reference: 'rgba(110,168,254,0.30)',
-  citation: 'rgba(74,222,128,0.30)',
-  similar: 'rgba(192,132,252,0.24)',
-}
-const DIM_NODE = 'rgba(120,130,150,0.18)'
-const DIM_EDGE = 'rgba(120,130,150,0.05)'
-
-// Timeline layout: graph-x units per publication year. Wide enough that year
-// columns read as distinct; zoomToFit handles the overall scale.
-const YEAR_SPACING = 120
-
-const REL_TYPES = ['reference', 'citation', 'similar'] as const
-const REL_LABEL: Record<string, string> = {
-  reference: 'References',
-  citation: 'Citations',
-  similar: 'Similar',
-}
-
-type VNode = GraphNode & { x?: number; y?: number; fx?: number; fy?: number }
-type VLink = GraphEdge & { _s: string; _t: string }
-type Base = {
-  nodes: VNode[]
-  links: VLink[]
-  minYear: number
-  maxYear: number
-  counts: Record<string, number>
-}
-
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
-
-// Human-readable publication date: "Jun 12, 2017" from a "YYYY-MM-DD" string,
-// gracefully degrading to "Jun 2017" / the year / "—" as data thins out. Parsed
-// by hand (not new Date) to avoid timezone off-by-one on date-only strings.
-function formatPubDate(pubDate?: string | null, year?: number | null): string {
-  if (pubDate) {
-    const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(pubDate)
-    if (m) {
-      const mon = MONTHS[Number(m[2]) - 1]
-      if (mon && m[3]) return `${mon} ${Number(m[3])}, ${m[1]}`
-      if (mon) return `${mon} ${m[1]}`
-      return m[1]
-    }
-  }
-  return year != null ? String(year) : '—'
-}
-
-function primaryRel(node: GraphNode): string {
-  if (node.is_seed) return 'seed'
-  for (const rel of REL_TYPES) if (node.rels.includes(rel)) return rel
-  // Ungrounded topic-search hits (no graph relation) get their own color.
-  if (node.rels.includes('search')) return 'search'
-  return 'similar'
-}
-
-function nodeRadius(node: GraphNode): number {
-  if (node.is_seed) return 10
-  const c = node.citation_count ?? 0
-  return Math.min(3 + Math.sqrt(c) / 6, 18)
-}
-
-// Strip a live VNode back to its persistable GraphNode fields — dropping the
-// sim's x/y and any fx/fy pins, which are re-derived on restore (Phase 4).
-function cleanNode(n: VNode): GraphNode {
-  return {
-    id: n.id,
-    arxiv_id: n.arxiv_id,
-    title: n.title,
-    abstract: n.abstract,
-    tldr: n.tldr,
-    year: n.year,
-    month: n.month,
-    pub_date: n.pub_date,
-    citation_count: n.citation_count,
-    authors: n.authors,
-    url: n.url,
-    rels: n.rels,
-    is_seed: n.is_seed,
-    discovered: n.discovered,
-  }
-}
-
-// Rebuild a GraphResponse's relation counts from its nodes — used when restoring
-// a saved session (whose stored node set already includes discovered papers).
-function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
-  const c = { references: 0, citations: 0, similar: 0, nodes: nodes.length }
-  nodes.forEach((n) =>
-    n.rels.forEach((r) => {
-      if (r === 'reference') c.references++
-      else if (r === 'citation') c.citations++
-      else if (r === 'similar') c.similar++
-    }),
-  )
-  return c
-}
 
 export default function GraphExplorer() {
   const [query, setQuery] = useState('')
@@ -362,6 +286,7 @@ export default function GraphExplorer() {
       .finally(() => setFigLoading((cur) => (cur === aid ? null : cur)))
   }, [selected, figures, figLoading])
 
+  /** Load (or re-seed) the graph for a seed and remount the teacher fresh. */
   const loadGraph = useCallback(async (seed: string) => {
     setLoadingGraph(true)
     setError(null)
@@ -385,6 +310,7 @@ export default function GraphExplorer() {
     }
   }, [])
 
+  /** Run the seed search: local cache first (instant), live arXiv alongside. */
   const runSearch = useCallback(async (q: string) => {
     setSearching(true)
     setError(null)
@@ -552,6 +478,7 @@ export default function GraphExplorer() {
     [layout, nodeTimelineX],
   )
 
+  /** Pin the selected node in place, or release it if already pinned. */
   const togglePinSelected = useCallback(() => {
     if (!base || !selectedId) return
     const n = base.nodes.find((x) => x.id === selectedId)
@@ -573,6 +500,7 @@ export default function GraphExplorer() {
     }
   }, [base, selectedId, pinned, layout, nodeTimelineX])
 
+  /** Unpin every node (keeps timeline date columns when in Timeline). */
   const releaseAll = useCallback(() => {
     base?.nodes.forEach((n) => {
       // Clearing user pins keeps the timeline structure (re-pin x by date).
@@ -648,9 +576,12 @@ export default function GraphExplorer() {
   }, [base, setLayoutMode])
 
   // --- Saved sessions & workspaces (Phase 4) ---------------------------------
-  // Save the current workspace: the full graph as it stands (every node/edge,
-  // including agent-discovered ones) + the teacher transcript. `base` is the
-  // source of truth — it holds the merged, mutated node/edge objects.
+
+  /**
+   * Save the current workspace: the full graph as it stands (every node/edge,
+   * including agent-discovered ones) + the teacher transcript. `base` is the
+   * source of truth — it holds the merged, mutated node/edge objects.
+   */
   const handleSave = useCallback(
     async (name: string, id?: string): Promise<SavedSessionMeta> => {
       if (!base || !graph) throw new Error('No graph to save yet.')
@@ -679,9 +610,11 @@ export default function GraphExplorer() {
     [base, graph, layout],
   )
 
-  // Reopen a saved session: rebuild its graph directly (no Semantic Scholar
-  // fetch, so no rate-limit cost and the exact discovered papers are preserved)
-  // and remount the teacher with the saved transcript + layout.
+  /**
+   * Reopen a saved session: rebuild its graph directly (no Semantic Scholar
+   * fetch, so no rate-limit cost and the exact discovered papers are
+   * preserved) and remount the teacher with the saved transcript + layout.
+   */
   const restoreSession = useCallback(async (id: string) => {
     setLoadingGraph(true)
     setError(null)
@@ -780,11 +713,6 @@ export default function GraphExplorer() {
   }, [layout, yearLo, yearHi])
 
   const hasGraph = !!base && base.nodes.length > 0
-  const showYears = !!base && base.maxYear > base.minYear
-  // Position (0–100%) of a year along the range track, for the fill + knobs.
-  const yearSpan = base ? base.maxYear - base.minYear : 0
-  const yearPct = (y: number) =>
-    yearSpan && base ? ((y - base.minYear) / yearSpan) * 100 : 0
 
   return (
     <div className="atlas">
@@ -882,76 +810,17 @@ export default function GraphExplorer() {
 
       <div className="atlas-body">
         <main className="canvas-wrap" ref={wrapRef}>
-          {(hits || localHits) && (
-            <div className="hit-list">
-              <div className="hit-head">
-                Pick a paper to explore
-                <button
-                  className="link-btn"
-                  onClick={() => {
-                    setHits(null)
-                    setLocalHits(null)
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-              {localHits && (
-                <>
-                  <div className="hit-sub">From your cache</div>
-                  {localHits.map((h) => (
-                    <button
-                      key={h.id}
-                      className="hit"
-                      onClick={() => loadGraph(h.arxiv_id ?? h.id)}
-                    >
-                      <div className="hit-title">
-                        {h.title}
-                        {h.has_graph && (
-                          <span className="hit-badge" title="Graph snapshot cached — explores without hitting the API">
-                            instant
-                          </span>
-                        )}
-                      </div>
-                      <div className="hit-meta">
-                        {h.authors ? `${h.authors} · ` : ''}
-                        {h.year ?? '—'} ·{' '}
-                        {(h.citation_count ?? 0).toLocaleString()} citations
-                      </div>
-                    </button>
-                  ))}
-                </>
-              )}
-              {localHits && (searching || hits || arxivFailed) && (
-                <div className="hit-sub">From arXiv</div>
-              )}
-              {searching && <div className="hit-note">Searching arXiv…</div>}
-              {arxivFailed && (
-                <div className="hit-note">
-                  arXiv search unavailable — showing cached papers only.
-                </div>
-              )}
-              {hits && hits.length === 0 && !searching && (
-                <div className="hit-note">No results from arXiv.</div>
-              )}
-              {hits
-                ?.filter(
-                  (h) => !localHits?.some((l) => l.arxiv_id === h.arxiv_id),
-                )
-                .map((h) => (
-                  <button
-                    key={h.arxiv_id}
-                    className="hit"
-                    onClick={() => loadGraph(h.arxiv_id)}
-                  >
-                    <div className="hit-title">{h.title}</div>
-                    <div className="hit-meta">
-                      {h.authors} · {h.arxiv_id}
-                    </div>
-                  </button>
-                ))}
-            </div>
-          )}
+          <HitList
+            hits={hits}
+            localHits={localHits}
+            searching={searching}
+            arxivFailed={arxivFailed}
+            onPick={loadGraph}
+            onClose={() => {
+              setHits(null)
+              setLocalHits(null)
+            }}
+          />
 
           {loadingGraph && <div className="overlay">Building graph…</div>}
           {error && !hits && <div className="overlay error">{error}</div>}
@@ -974,102 +843,24 @@ export default function GraphExplorer() {
           )}
 
           {hasGraph && (
-            <div className="controls">
-              <div className="layout-toggle">
-                <button
-                  className={layout === 'force' ? 'on' : ''}
-                  onClick={() => setLayoutMode('force')}
-                >
-                  Force
-                </button>
-                <button
-                  className={layout === 'timeline' ? 'on' : ''}
-                  onClick={() => setLayoutMode('timeline')}
-                >
-                  Timeline
-                </button>
-              </div>
-              <div className="ctrl-chips">
-                {REL_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    className={`chip ${enabled.has(t) ? 'on' : ''}`}
-                    onClick={() => toggleType(t)}
-                    style={{ '--c': REL_COLOR[t] } as CSSProperties}
-                  >
-                    <i />
-                    {REL_LABEL[t]}
-                    <em>{base!.counts[t]}</em>
-                  </button>
-                ))}
-              </div>
-
-              {showYears && (
-                <div className="years">
-                  <div className="years-label">
-                    Years <b>{yearLo}</b> – <b>{yearHi}</b>
-                  </div>
-                  <div className="range-dual">
-                    <div className="range-track" />
-                    <div
-                      className="range-fill"
-                      style={{
-                        left: `${yearPct(yearLo)}%`,
-                        width: `${yearPct(yearHi) - yearPct(yearLo)}%`,
-                      }}
-                    />
-                    <input
-                      type="range"
-                      min={base!.minYear}
-                      max={base!.maxYear}
-                      value={yearLo}
-                      aria-label="Earliest year"
-                      onChange={(e) =>
-                        setYearLo(Math.min(Number(e.target.value), yearHi))
-                      }
-                    />
-                    <input
-                      type="range"
-                      min={base!.minYear}
-                      max={base!.maxYear}
-                      value={yearHi}
-                      aria-label="Latest year"
-                      onChange={(e) =>
-                        setYearHi(Math.max(Number(e.target.value), yearLo))
-                      }
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="ctrl-foot">
-                <span className="count-readout">
-                  {view.nodes.length} / {base!.nodes.length} papers
-                </span>
-                <div className="ctrl-btns">
-                  <button
-                    className="mini-btn"
-                    onClick={releaseAll}
-                    disabled={pinned.size === 0}
-                    title="Unpin every node"
-                  >
-                    Release {pinned.size || ''}
-                  </button>
-                  <button
-                    className="mini-btn"
-                    onClick={() => fgRef.current?.zoomToFit(400, 60)}
-                    title="Re-center the graph"
-                  >
-                    Fit
-                  </button>
-                </div>
-              </div>
-              <div className="ctrl-hint">
-                {layout === 'timeline'
-                  ? 'papers placed left→right by year · double-click to re-seed'
-                  : 'drag to pin · double-click a node to re-seed'}
-              </div>
-            </div>
+            <GraphControls
+              layout={layout}
+              onLayout={setLayoutMode}
+              enabled={enabled}
+              onToggleType={toggleType}
+              counts={base!.counts}
+              minYear={base!.minYear}
+              maxYear={base!.maxYear}
+              yearLo={yearLo}
+              yearHi={yearHi}
+              onYearLo={setYearLo}
+              onYearHi={setYearHi}
+              visibleCount={view.nodes.length}
+              totalCount={base!.nodes.length}
+              pinnedCount={pinned.size}
+              onReleaseAll={releaseAll}
+              onFit={() => fgRef.current?.zoomToFit(400, 60)}
+            />
           )}
 
           {hasGraph && (
@@ -1174,117 +965,23 @@ export default function GraphExplorer() {
           )}
 
           {hasGraph && (
-            <div className="legend">
-              <span>
-                <i style={{ background: REL_COLOR.seed }} />
-                Seed
-              </span>
-              <span>
-                <i style={{ background: REL_COLOR.reference }} />
-                References
-              </span>
-              <span>
-                <i style={{ background: REL_COLOR.citation }} />
-                Citations
-              </span>
-              <span>
-                <i style={{ background: REL_COLOR.similar }} />
-                Similar
-              </span>
-              {discoveredNodes.length > 0 && (
-                <span>
-                  <i className="ring" />
-                  Discovered by teacher
-                </span>
-              )}
-              {discoveredNodes.some((n) => n.rels.includes('search')) && (
-                <span>
-                  <i style={{ background: REL_COLOR.search }} />
-                  Found by search
-                </span>
-              )}
-            </div>
+            <Legend
+              hasDiscovered={discoveredNodes.length > 0}
+              hasSearchHits={discoveredNodes.some((n) => n.rels.includes('search'))}
+            />
           )}
         </main>
 
         {selected && (
-          <aside className="detail">
-            <button className="link-btn close" onClick={() => setSelectedId(null)}>
-              ✕
-            </button>
-            <div className="detail-badges">
-              {selected.rels.map((r) => (
-                <span key={r} className="badge" style={{ color: REL_COLOR[r] }}>
-                  {r}
-                </span>
-              ))}
-            </div>
-            <h2>{selected.title}</h2>
-            <div className="detail-meta">
-              {selected.authors && <div>{selected.authors}</div>}
-              <div>
-                {formatPubDate(selected.pub_date, selected.year)} ·{' '}
-                {(selected.citation_count ?? 0).toLocaleString()} citations
-              </div>
-            </div>
-            {(selected.tldr || selected.abstract) && (
-              <p className="detail-summary">
-                {selected.tldr ? (
-                  <>
-                    <strong>TL;DR </strong>
-                    {selected.tldr}
-                  </>
-                ) : (
-                  selected.abstract
-                )}
-              </p>
-            )}
-            {selected.arxiv_id &&
-              (() => {
-                const figs = figures[selected.arxiv_id]
-                if (!figs) {
-                  return figLoading === selected.arxiv_id ? (
-                    <div className="detail-figs-hint">Loading figures…</div>
-                  ) : null
-                }
-                if (!figs.available || figs.figures.length === 0) return null
-                return (
-                  <div className="detail-figs">
-                    <div className="detail-figs-head">Figures</div>
-                    {figs.figures.map((f, i) => (
-                      <figure key={i} className="detail-fig">
-                        <img src={f.image} alt={f.caption || `Figure ${i + 1}`} loading="lazy" />
-                        {f.caption && <figcaption>{f.caption}</figcaption>}
-                      </figure>
-                    ))}
-                  </div>
-                )
-              })()}
-            <div className="detail-actions">
-              {selected.url && (
-                <a href={selected.url} target="_blank" rel="noreferrer">
-                  Abstract ↗
-                </a>
-              )}
-              {selected.url && selected.arxiv_id && (
-                <a
-                  href={selected.url.replace('/abs/', '/pdf/')}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  PDF ↗
-                </a>
-              )}
-              <button className="ghost-btn" onClick={togglePinSelected}>
-                {pinned.has(selected.id) ? 'Unpin' : 'Pin'}
-              </button>
-              {!selected.is_seed && (
-                <button onClick={() => loadGraph(selected.id)}>
-                  Explore from here →
-                </button>
-              )}
-            </div>
-          </aside>
+          <DetailPanel
+            node={selected}
+            figures={selected.arxiv_id ? figures[selected.arxiv_id] : undefined}
+            figuresLoading={figLoading === selected.arxiv_id}
+            isPinned={pinned.has(selected.id)}
+            onTogglePin={togglePinSelected}
+            onClose={() => setSelectedId(null)}
+            onExplore={loadGraph}
+          />
         )}
 
         {hasGraph && graph && (
