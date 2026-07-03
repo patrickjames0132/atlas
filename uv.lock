@@ -72,11 +72,12 @@ wheels = [
 
 [[package]]
 name = "arxiv-digest"
-version = "1.10.1"
+version = "1.11.0"
 source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "arxiv" },
+    { name = "click" },
     { name = "flask" },
     { name = "flask-cors" },
     { name = "pymupdf" },
@@ -89,6 +90,7 @@ dependencies = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40" },
     { name = "arxiv", specifier = ">=2.1" },
+    { name = "click", specifier = ">=8.1" },
     { name = "flask", specifier = ">=3.0" },
     { name = "flask-cors", specifier = ">=4.0" },
     { name = "pymupdf", specifier = ">=1.24" },

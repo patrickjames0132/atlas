@@ -181,7 +181,7 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 ├── .env / .env.example          # optional keys (S2, Anthropic) — .env gitignored
 ├── data/digest.db               # thin cache (graph snapshots); gitignored
 ├── backend/
-│   ├── run.py                   # CLI: serve
+│   ├── run.py                   # click CLI: serve, ingest, sources, …
 │   └── arxiv_digest/
 │       ├── config.py            # settings from .env (incl. Semantic Scholar)
 │       ├── semantic_scholar.py  # S2 Academic Graph + Recommendations client

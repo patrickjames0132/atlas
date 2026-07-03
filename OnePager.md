@@ -268,10 +268,12 @@ optional, behind a key.
 - [ ] **Frontend/backend package refactor** — break large modules into logical
       packages/groups so the code is easier to follow (e.g. `GraphExplorer.tsx`
       is 1,000+ lines; some backend grouping too).
-- [ ] **CLI → `click`** — replace the hand-rolled `argparse` in `run.py` with a
-      `click`-based CLI.
-- [ ] **"Powered by Claude Code"** — add the credit text + a Claude icon
-      somewhere in the app UI.
+- [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
+      `run.py` with a `click` group (same command names: `serve`, `ingest`,
+      `sources`, `search-sources`, `forget`).
+- [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
+      sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
+      names the model the AI teacher actually runs on, not the build tool.
 - [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
       `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
       with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.

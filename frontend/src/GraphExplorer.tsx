@@ -645,6 +645,35 @@ export default function GraphExplorer() {
         >
           📚 Sources
         </button>
+        <a
+          className="cc-credit"
+          href="https://www.anthropic.com/claude"
+          target="_blank"
+          rel="noreferrer"
+          title="The AI teacher runs on Claude"
+        >
+          <svg className="cc-credit-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <g
+              stroke="#D97757"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            >
+              <line x1="15" y1="12" x2="22" y2="12" />
+              <line x1="14.6" y1="13.5" x2="20.66" y2="17" />
+              <line x1="13.5" y1="14.6" x2="17" y2="20.66" />
+              <line x1="12" y1="15" x2="12" y2="22" />
+              <line x1="10.5" y1="14.6" x2="7" y2="20.66" />
+              <line x1="9.4" y1="13.5" x2="3.34" y2="17" />
+              <line x1="9" y1="12" x2="2" y2="12" />
+              <line x1="9.4" y1="10.5" x2="3.34" y2="7" />
+              <line x1="10.5" y1="9.4" x2="7" y2="3.34" />
+              <line x1="12" y1="9" x2="12" y2="2" />
+              <line x1="13.5" y1="9.4" x2="17" y2="3.34" />
+              <line x1="14.6" y1="10.5" x2="20.66" y2="7" />
+            </g>
+          </svg>
+          Powered by Claude
+        </a>
       </header>
 
       <Sources open={showSources} onClose={() => setShowSources(false)} />
