@@ -272,6 +272,9 @@ optional, behind a key.
       `click`-based CLI.
 - [ ] **"Powered by Claude Code"** — add the credit text + a Claude icon
       somewhere in the app UI.
+- [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
+      `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
+      with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).

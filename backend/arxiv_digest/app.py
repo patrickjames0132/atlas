@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import urllib.parse
 from pathlib import Path
 
@@ -332,9 +333,18 @@ def api_sources_add() -> Response:
         if upload and upload.filename:
             title = (request.form.get("title") or "").strip() or None
             suffix = Path(upload.filename).suffix or ".pdf"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
-                upload.save(tmp.name)
-                src = sources.ingest_pdf(tmp.name, title=title or Path(upload.filename).stem)
+            # NB: on Windows an open NamedTemporaryFile holds an exclusive lock,
+            # so we must close our handle before save()/ingest can reopen it.
+            fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            try:
+                upload.save(tmp_path)
+                src = sources.ingest_pdf(tmp_path, title=title or Path(upload.filename).stem)
+            finally:
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
         else:
             payload = request.get_json(silent=True) or {}
             url = (payload.get("url") or "").strip()
