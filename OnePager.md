@@ -249,6 +249,18 @@ optional, behind a key.
   - **3d.3 — polish** *(scoped)* — hybrid **FTS5 + vector (RRF)** for exact-term /
     proper-noun lookups, per-source scoping in the UI, figure/image handling
     (OCR for scanned PDFs), and an optional stronger embed model (`bge-small`).
+- [ ] **Phase 3e — Agentic "How we got here" (time travel)** — the history lecture
+      is grounded only in the papers already on the graph, so it can't reach a
+      field's true origins when the seed is modern (a 2024 Hawking-radiation
+      paper's neighborhood may never include Hawking's 1974 original). Give the
+      lecture the Q&A agent's traversal: hop **backward through references** to pull
+      in foundational older work — bounded by a **year threshold** (how far back to
+      go) and a hop budget — before narrating, so the story starts at the real
+      beginning rather than mid-stream. Likely **smaller than it looks**: the Phase
+      3c machinery already does the hard part — `expand_node` fetches reference
+      hops, discovered nodes merge into the graph with budgets/visited-sets — so 3e
+      is mostly pointing that backward (references, year-thresholded) and letting
+      the *lecture* drive the traversal before it narrates.
 
 **Beyond the teacher**
 
@@ -258,6 +270,13 @@ optional, behind a key.
       ElevenLabs optional, `/api/lecture/audio`.
 - [ ] **Phase 6 — Polished media (optional)** — `autocontent.py` behind
       `AUTOCONTENT_API_KEY`; "Generate visuals" button.
+- [ ] **Phase 7 — Saved sessions & workspaces** — persistence, deliberately
+      dropped at the v1.0 pivot, reintroduced as opt-in: save & restore a **graph**
+      (including nodes the agent discovered / expanded / searched in) and a **chat
+      session**, plus a "my saved graphs / sessions" surface to reopen them. Also a
+      lighter in-session control that ships alongside: **clear chat history on
+      demand**, e.g. when re-seeding via "Explore from here" (a new seed = a fresh
+      conversation). Needs a storage layer — the app is otherwise dynamic/ephemeral.
 
 **Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
 
@@ -271,6 +290,15 @@ optional, behind a key.
 - [ ] **Frontend/backend package refactor** — break large modules into logical
       packages/groups so the code is easier to follow (e.g. `GraphExplorer.tsx`
       is 1,000+ lines; some backend grouping too).
+- [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
+      selected paper when available (Papers with Code / Hugging Face Papers), so a
+      node links out to runnable implementations, not just its abstract. Show in
+      the detail panel; maybe flag which graph nodes have code.
+- [ ] **Figures in agent answers** *(teacher/media-adjacent)* — let the Q&A agent
+      pull relevant figures from the papers it reads into its answer, to illustrate
+      an explanation inline. Reuses the existing figure extraction (`figures.py`
+      via ar5iv) already shown in the detail panel; sits near Phase 6's media
+      intent but surfaces *existing* figures rather than generating new visuals.
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).
