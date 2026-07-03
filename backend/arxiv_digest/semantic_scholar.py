@@ -33,12 +33,13 @@ log = logging.getLogger(__name__)
 # Rich fields for a focused node (the seed, or a clicked node). Requested via the
 # un-throttled batch endpoint.
 _DETAIL_FIELDS = (
-    "paperId,externalIds,title,abstract,tldr,year,"
+    "paperId,externalIds,title,abstract,tldr,year,publicationDate,"
     "citationCount,referenceCount,authors.name"
 )
 # Lighter fields for the many neighbors in a traversal — no abstract/tldr, which
-# we hydrate lazily when a node is opened.
-_NEIGHBOR_FIELDS = "paperId,externalIds,title,year,citationCount"
+# we hydrate lazily when a node is opened. publicationDate gives month granularity
+# for the timeline layout.
+_NEIGHBOR_FIELDS = "paperId,externalIds,title,year,publicationDate,citationCount"
 
 _BATCH_MAX = 500  # S2 caps /paper/batch at 500 ids per call.
 
@@ -92,6 +93,16 @@ def _node(p: Optional[dict]) -> Optional[dict]:
     arxiv_id = ext.get("ArXiv")
     tldr_obj = p.get("tldr")
     tldr = tldr_obj.get("text") if isinstance(tldr_obj, dict) else None
+    # Month (1–12) from S2's publicationDate ("YYYY-MM-DD"), when present — lets
+    # the timeline place papers between year lines. Null when only the year is known.
+    pub_date = p.get("publicationDate")
+    month: Optional[int] = None
+    if isinstance(pub_date, str) and len(pub_date) >= 7:
+        try:
+            m = int(pub_date[5:7])
+            month = m if 1 <= m <= 12 else None
+        except ValueError:
+            month = None
     authors = ", ".join(
         a.get("name", "") for a in (p.get("authors") or []) if a.get("name")
     )
@@ -106,6 +117,8 @@ def _node(p: Optional[dict]) -> Optional[dict]:
         "abstract": p.get("abstract"),
         "tldr": tldr,
         "year": p.get("year"),
+        "month": month,
+        "pub_date": pub_date if isinstance(pub_date, str) and pub_date else None,
         "citation_count": p.get("citationCount"),
         "authors": authors or None,
         "url": url,

@@ -187,6 +187,8 @@ export interface GraphNode {
   abstract?: string | null
   tldr?: string | null
   year: number | null
+  month?: number | null // 1–12 from S2 publicationDate; for timeline placement
+  pub_date?: string | null // full "YYYY-MM-DD" from S2, when known
   citation_count: number | null
   authors?: string | null
   url: string | null

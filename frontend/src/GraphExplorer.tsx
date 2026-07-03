@@ -65,6 +65,27 @@ type Base = {
   counts: Record<string, number>
 }
 
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+// Human-readable publication date: "Jun 12, 2017" from a "YYYY-MM-DD" string,
+// gracefully degrading to "Jun 2017" / the year / "—" as data thins out. Parsed
+// by hand (not new Date) to avoid timezone off-by-one on date-only strings.
+function formatPubDate(pubDate?: string | null, year?: number | null): string {
+  if (pubDate) {
+    const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(pubDate)
+    if (m) {
+      const mon = MONTHS[Number(m[2]) - 1]
+      if (mon && m[3]) return `${mon} ${Number(m[3])}, ${m[1]}`
+      if (mon) return `${mon} ${m[1]}`
+      return m[1]
+    }
+  }
+  return year != null ? String(year) : '—'
+}
+
 function primaryRel(node: GraphNode): string {
   if (node.is_seed) return 'seed'
   for (const rel of REL_TYPES) if (node.rels.includes(rel)) return rel
@@ -163,7 +184,7 @@ export default function GraphExplorer() {
   useEffect(() => {
     if (!base || layout !== 'timeline') return
     base.nodes.forEach((n) => {
-      n.fx = yearToX(n.year)
+      n.fx = nodeTimelineX(n)
       n.fy = undefined
     })
     const fg = fgRef.current
@@ -296,8 +317,8 @@ export default function GraphExplorer() {
     [details, loadGraph],
   )
 
-  // Map a year to its x on the timeline. Papers with no year sit in an "n.d."
-  // lane just left of the earliest year.
+  // Map a year to its gridline x on the timeline. Papers with no year sit in an
+  // "n.d." lane just left of the earliest year.
   const yearToX = useCallback(
     (year: number | null | undefined) => {
       if (!base) return 0
@@ -307,11 +328,23 @@ export default function GraphExplorer() {
     [base],
   )
 
+  // A node's timeline x: its year plus a month fraction, so papers sit *between*
+  // the yearly gridlines by publication month (unknown month → start of year).
+  const nodeTimelineX = useCallback(
+    (node: { year: number | null; month?: number | null }) => {
+      if (!base) return 0
+      const y = typeof node.year === 'number' ? node.year : base.minYear - 1
+      const frac = typeof node.month === 'number' ? (node.month - 1) / 12 : 0
+      return (y - base.minYear + frac) * YEAR_SPACING
+    },
+    [base],
+  )
+
   const onNodeDragEnd = useCallback(
     (node: VNode) => {
       if (layout === 'timeline') {
-        // Keep the paper in its year column; the drag only sets its height.
-        node.fx = yearToX(node.year)
+        // Keep the paper at its date column; the drag only sets its height.
+        node.fx = nodeTimelineX(node)
         node.fy = node.y
       } else {
         node.fx = node.x
@@ -319,7 +352,7 @@ export default function GraphExplorer() {
       }
       setPinned((p) => new Set(p).add(node.id))
     },
-    [layout, yearToX],
+    [layout, nodeTimelineX],
   )
 
   const togglePinSelected = useCallback(() => {
@@ -327,8 +360,8 @@ export default function GraphExplorer() {
     const n = base.nodes.find((x) => x.id === selectedId)
     if (!n) return
     if (pinned.has(selectedId)) {
-      // Unpin: in Timeline, keep the year-column x-pin; in Force, fully release.
-      n.fx = layout === 'timeline' ? yearToX(n.year) : undefined
+      // Unpin: in Timeline, keep the date-column x-pin; in Force, fully release.
+      n.fx = layout === 'timeline' ? nodeTimelineX(n) : undefined
       n.fy = undefined
       setPinned((p) => {
         const s = new Set(p)
@@ -341,18 +374,18 @@ export default function GraphExplorer() {
       n.fy = n.y
       setPinned((p) => new Set(p).add(selectedId))
     }
-  }, [base, selectedId, pinned, layout, yearToX])
+  }, [base, selectedId, pinned, layout, nodeTimelineX])
 
   const releaseAll = useCallback(() => {
     base?.nodes.forEach((n) => {
-      // Clearing user pins keeps the timeline structure (re-pin x by year).
-      n.fx = base && layout === 'timeline' ? yearToX(n.year) : undefined
+      // Clearing user pins keeps the timeline structure (re-pin x by date).
+      n.fx = base && layout === 'timeline' ? nodeTimelineX(n) : undefined
       n.fy = undefined
     })
     setPinned(new Set())
     fitDone.current = false
     fgRef.current?.d3ReheatSimulation?.()
-  }, [base, layout, yearToX])
+  }, [base, layout, nodeTimelineX])
 
   const toggleType = useCallback((t: string) => {
     setEnabled((prev) => {
@@ -373,7 +406,7 @@ export default function GraphExplorer() {
       // mode stays stuck at that position in the other.
       base.nodes.forEach((n) => {
         if (mode === 'timeline') {
-          n.fx = yearToX(n.year)
+          n.fx = nodeTimelineX(n)
           n.fy = undefined
         } else {
           n.fx = undefined
@@ -394,7 +427,7 @@ export default function GraphExplorer() {
       fitDone.current = false
       fg?.d3ReheatSimulation?.()
     },
-    [base, yearToX],
+    [base, nodeTimelineX],
   )
 
   const setLayoutMode = useCallback(
@@ -760,7 +793,7 @@ export default function GraphExplorer() {
             <div className="detail-meta">
               {selected.authors && <div>{selected.authors}</div>}
               <div>
-                {selected.year ?? '—'} ·{' '}
+                {formatPubDate(selected.pub_date, selected.year)} ·{' '}
                 {(selected.citation_count ?? 0).toLocaleString()} citations
               </div>
             </div>

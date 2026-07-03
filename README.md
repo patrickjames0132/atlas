@@ -103,8 +103,9 @@ The Vite dev server proxies `/api/*` to Flask.
    the **PDF**.
 3. **Declutter** (top-left panel):
    - **Layout** — toggle **Force** (organic force-directed) ↔ **Timeline** (x =
-     publication year, oldest left; papers spread into citation threads through
-     time). In Timeline, narrowing the year slider zooms into that span.
+     publication date — year + month, so papers sit between the yearly gridlines;
+     oldest left; papers spread into citation threads through time). In Timeline,
+     narrowing the year slider zooms into that span.
    - **Relation filters** — toggle references / citations / similar on and off.
    - **Year range** — a dual-thumb slider to focus on an era (the seed always stays).
    - **Drag-to-pin** — drag a node to fix it in place; *Release* unpins all.

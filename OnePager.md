@@ -132,9 +132,11 @@ optional, behind a key.
       **hop budget**, a **visited-set** (kills reference cycles), a total-step cap,
       and size-capped tool results. This is what makes Q&A actually *source the
       papers* rather than reason over titles + the seed's summary.
-- [x] **Phase 3.5 — Timeline layout** *(v1.3.0)* — a **Force ↔ Timeline** toggle.
-      Timeline pins each node's x to its **publication year** (via `fx`) while the
-      sim resolves y; a `d3-force-3d` **collision force** (radius-sized) spreads
+- [x] **Phase 3.5 — Timeline layout** *(v1.3.0, month granularity v1.3.1)* — a
+      **Force ↔ Timeline** toggle. Timeline pins each node's x to its **publication
+      date** (year + month fraction from S2 `publicationDate`, so papers sit
+      *between* the yearly gridlines; the detail panel shows the full date) while
+      the sim resolves y; a `d3-force-3d` **collision force** (radius-sized) spreads
       papers out within a year column, and once settled **y is frozen** so a drag
       can't re-scramble the layout. A faint **year axis** is drawn behind the
       graph (labels thinned when zoomed out); narrowing the year slider **zooms
