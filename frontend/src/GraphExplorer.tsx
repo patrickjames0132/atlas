@@ -18,9 +18,11 @@ import {
   type GraphNode,
   type GraphResponse,
   type LocalHit,
+  listSources,
 } from './api'
 import Teacher from './Teacher'
 import Sources from './Sources'
+import LibraryChat from './LibraryChat'
 import './atlas.css'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
@@ -146,6 +148,16 @@ export default function GraphExplorer() {
   const [graphVersion, setGraphVersion] = useState(0)
   // The Sources drawer (Phase 3d) — the user's local semantic library.
   const [showSources, setShowSources] = useState(false)
+  // Offline library chat (Phase 3d): a graph-free RAG chat over the library. We
+  // track whether a library exists (>0 sources) so the entry point only shows
+  // when there's something to ask; refreshed whenever the Sources drawer closes.
+  const [showLibraryChat, setShowLibraryChat] = useState(false)
+  const [libraryCount, setLibraryCount] = useState(0)
+
+  const refreshLibraryCount = useCallback(() => {
+    listSources().then((res) => setLibraryCount(res.sources.length)).catch(() => {})
+  }, [])
+  useEffect(refreshLibraryCount, [refreshLibraryCount])
 
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -639,12 +651,21 @@ export default function GraphExplorer() {
           </div>
         )}
         <button
-          className="sources-toggle"
+          className="sources-toggle top-right-start"
           onClick={() => setShowSources(true)}
           title="Your sources — books, PDFs, and pages the teacher can search"
         >
           📚 Sources
         </button>
+        {libraryCount > 0 && (
+          <button
+            className="sources-toggle"
+            onClick={() => setShowLibraryChat(true)}
+            title="Ask questions answered straight from your uploaded library — no graph needed"
+          >
+            💬 Ask library
+          </button>
+        )}
         <a
           className="cc-credit"
           href="https://www.anthropic.com/claude"
@@ -676,7 +697,14 @@ export default function GraphExplorer() {
         </a>
       </header>
 
-      <Sources open={showSources} onClose={() => setShowSources(false)} />
+      <Sources
+        open={showSources}
+        onClose={() => {
+          setShowSources(false)
+          refreshLibraryCount() // they may have added/removed sources
+        }}
+      />
+      {showLibraryChat && <LibraryChat onClose={() => setShowLibraryChat(false)} />}
 
       <div className="atlas-body">
         <main className="canvas-wrap" ref={wrapRef}>
@@ -757,6 +785,17 @@ export default function GraphExplorer() {
             <div className="overlay hint">
               Search for a paper to map its citations, references, and similar
               work.
+              {libraryCount > 0 && (
+                <>
+                  <div className="hint-or">— or —</div>
+                  <button
+                    className="hint-cta"
+                    onClick={() => setShowLibraryChat(true)}
+                  >
+                    💬 Chat with your library
+                  </button>
+                </>
+              )}
             </div>
           )}
 

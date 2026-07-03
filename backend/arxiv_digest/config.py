@@ -135,6 +135,10 @@ SOURCE_CHUNK_OVERLAP = int(os.getenv("SOURCE_CHUNK_OVERLAP", "150"))
 # the agent may run per question (its own budget, separate from S2 search).
 SOURCE_SEARCH_K = int(os.getenv("SOURCE_SEARCH_K", "6"))
 AGENT_MAX_SOURCE_SEARCHES = int(os.getenv("AGENT_MAX_SOURCE_SEARCHES", "5"))
+# Offline library chat (Phase 3d): a graph-free RAG chat straight over the local
+# library. Retrieve a few more passages than a single agent search, since this is
+# the answer's only grounding (no paper reading, no follow-up searches).
+SOURCES_CHAT_K = int(os.getenv("SOURCES_CHAT_K", "8"))
 
 # --- Server ------------------------------------------------------------------
 FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")

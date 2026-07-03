@@ -284,6 +284,41 @@ export async function streamAsk(
   })
 }
 
+// Offline library chat (Phase 3d): the one trace it emits — which passages the
+// retrieval pulled, and from which sources — shown above the grounded answer.
+export interface RetrieveEvent {
+  found: number
+  sources: string[]
+}
+
+export interface AskSourcesHandlers {
+  onToken: (text: string) => void
+  onRetrieve?: (r: RetrieveEvent) => void
+  onDone?: () => void
+  onError?: (message: string) => void
+  signal?: AbortSignal
+}
+
+// Stream an answer grounded purely in the user's local library — no graph. A
+// single retrieve event, then prose tokens.
+export async function streamAskSources(
+  body: { question: string; session_id: string },
+  h: AskSourcesHandlers,
+): Promise<void> {
+  const res = await fetch('/api/ask_sources', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: h.signal,
+  })
+  await readSSE(res, (event, data) => {
+    if (event === 'token') h.onToken((data as { text: string }).text)
+    else if (event === 'trace') h.onRetrieve?.(data as RetrieveEvent)
+    else if (event === 'done') h.onDone?.()
+    else if (event === 'error') h.onError?.((data as { error: string }).error)
+  })
+}
+
 // --- Bring-your-own sources: the user's local semantic library (Phase 3d) ----
 
 export interface Source {

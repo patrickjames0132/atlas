@@ -950,12 +950,18 @@ def _run_search_sources(block, source_searches: dict) -> tuple[str, dict]:
             f'No passages in your library matched "{query}".',
             {"action": "search_sources", "ok": True, "query": query, "found": 0},
         )
+    trace = {"action": "search_sources", "ok": True, "query": query, "found": len(hits)}
+    return (f'Passages from your library for "{query}":\n\n' + _format_passages(hits), trace)
+
+
+def _format_passages(hits: list[dict]) -> str:
+    """Render retrieved source passages for a prompt: one per line, tagged with
+    the source title and (for PDFs) page so the model can cite them inline."""
     lines = []
     for h in hits:
         loc = f", p.{h['page']}" if h.get("page") else ""
         lines.append(f"[{h['source_title']}{loc}] {' '.join(h['text'].split())}")
-    trace = {"action": "search_sources", "ok": True, "query": query, "found": len(hits)}
-    return (f'Passages from your library for "{query}":\n\n' + "\n\n".join(lines), trace)
+    return "\n\n".join(lines)
 
 
 def answer_agentic(
@@ -1099,3 +1105,71 @@ def answer_agentic(
         if cid not in cited:
             cited.append(cid)
     yield ("cited", cited)
+
+
+# --- Offline library chat (Phase 3d) -----------------------------------------
+# A graph-free RAG chat straight over the user's local library: retrieve the most
+# relevant passages, then answer grounded only in them, citing inline by page. No
+# tool loop, so it works under BOTH backends (api and the claude CLI) and needs no
+# open graph — the lightweight entry point for "just ask my books a question".
+_SOURCES_CHAT_SYSTEM = (
+    "You are a sharp, friendly teacher answering a student's question grounded ONLY "
+    "in passages retrieved from their OWN uploaded library (books, PDFs, web pages), "
+    "shown below. Answer conversationally and concretely, in a few short paragraphs "
+    "at most. Attribute what you draw on inline by source and page, e.g. "
+    "\"(Deep Learning, p.243)\". If the passages don't contain the answer, say so "
+    "plainly and suggest what to upload or how to rephrase — do NOT invent facts or "
+    "cite sources that aren't shown."
+)
+
+
+def _hit_titles(hits: list[dict]) -> list[str]:
+    """Distinct source titles among the retrieved passages, in first-seen order —
+    surfaced in the trace so the chat can show which sources it drew on."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for h in hits:
+        t = h.get("source_title")
+        if t and t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def answer_from_sources(
+    question: str,
+    history: Optional[list[dict]] = None,
+) -> Iterator[tuple[str, object]]:
+    """Answer a question purely from the user's local library — no graph.
+
+    Yields a single ``("trace", {...})`` naming the retrieved passages, then
+    ``("token", str)`` prose events. Retrieve-then-answer (no tool use), so it runs
+    on either teacher backend."""
+    hits = sources.search(question, k=config.SOURCES_CHAT_K)
+    yield ("trace", {"found": len(hits), "sources": _hit_titles(hits)})
+    if not hits:
+        yield (
+            "token",
+            "I couldn't find anything in your library about that. Try rephrasing, "
+            "or upload a source that covers it.",
+        )
+        return
+
+    messages: list[dict] = []
+    for turn in history or []:
+        role = turn.get("role")
+        content = turn.get("content")
+        if role in ("user", "assistant") and isinstance(content, str):
+            messages.append({"role": role, "content": content})
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"Passages from your library:\n\n{_format_passages(hits)}\n\n"
+                f"Question: {question}"
+            ),
+        }
+    )
+
+    for chunk in _stream(_SOURCES_CHAT_SYSTEM, messages, config.TEACHER_MAX_TOKENS):
+        yield ("token", chunk)

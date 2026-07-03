@@ -196,6 +196,9 @@ def local_search_route() -> Response:
 # Session-scoped Q&A history, kept in memory (cleared on restart — fine for v1).
 # Maps a client-generated session id -> [{role, content}, ...].
 _QA_SESSIONS: dict[str, list[dict]] = {}
+# Separate history store for the offline library chat (Phase 3d) — same shape,
+# kept apart so a graph Q&A and a library chat don't cross-contaminate context.
+_SOURCES_SESSIONS: dict[str, list[dict]] = {}
 
 
 def _sse(event: str, data: object) -> str:
@@ -298,6 +301,47 @@ def api_ask() -> Response:
         # Persist the turn only on success, capped to the recent window.
         if session_id:
             convo = _QA_SESSIONS.setdefault(session_id, [])
+            convo.append({"role": "user", "content": question})
+            convo.append({"role": "assistant", "content": "".join(answer_parts).strip()})
+            keep = config.TEACHER_HISTORY_TURNS * 2
+            if len(convo) > keep:
+                del convo[:-keep]
+
+    return _sse_response(gen())
+
+
+@app.post("/api/ask_sources")
+def api_ask_sources() -> Response:
+    """Offline library chat: answer a question purely from the user's local
+    library, streamed as SSE — no graph required. Emits one ``trace`` event
+    (retrieved passages), then ``token`` prose, then ``done``. History is keyed by
+    session_id (a separate store from the graph Q&A) so follow-ups keep context."""
+    payload = request.get_json(silent=True) or {}
+    question = (payload.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+    if not sources.available():
+        return jsonify({"error": "Your local library is unavailable (embeddings/sqlite-vec didn't load)."}), 400
+
+    session_id = payload.get("session_id") or ""
+    history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
+
+    def gen():
+        answer_parts: list[str] = []
+        try:
+            for kind, data in teacher.answer_from_sources(question, history):
+                if kind == "token":
+                    answer_parts.append(data)
+                    yield _sse("token", {"text": data})
+                elif kind == "trace":
+                    yield _sse("trace", data)
+            yield _sse("done", {})
+        except Exception as exc:
+            app.logger.exception("ask_sources failed")
+            yield _sse("error", {"error": str(exc)})
+            return
+        if session_id:
+            convo = _SOURCES_SESSIONS.setdefault(session_id, [])
             convo.append({"role": "user", "content": question})
             convo.append({"role": "assistant", "content": "".join(answer_parts).strip()})
             keep = config.TEACHER_HISTORY_TURNS * 2

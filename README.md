@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.10 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.12 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
 > answers follow-up questions grounded in the papers on screen. The Q&A agent
 > **reads the papers' actual full text** (via ar5iv), can **traverse to papers
@@ -33,7 +33,9 @@ graphs you've already looked at.
 > your own sources** — upload a PDF/book or paste a URL and it's chunked, embedded
 > **locally** (no API key; the text never leaves your machine), and made
 > semantically searchable via sqlite-vec; the **teacher then searches your library
-> in Q&A and cites it by page** ("*per your textbook, p.243…*"). Concept mindmaps
+> in Q&A and cites it by page** ("*per your textbook, p.243…*"). You can also
+> **chat with your library directly** — an "💬 Ask library" mode answers straight
+> from your uploaded sources, no graph or seed search needed. Concept mindmaps
 > and audio lectures follow — see **[OnePager.md](OnePager.md)** for the full
 > vision and phase plan.
 

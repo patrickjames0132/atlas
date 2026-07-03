@@ -261,10 +261,13 @@ optional, behind a key.
 
 **Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
 
-- [ ] **Offline chat mode** — query the local sources / embeddings directly in a
-      chat without first opening a graph or running a seed search. The retrieval
-      layer already exists (Phase 3d); needs a lightweight chat entry point +
-      route that skips the graph-grounding context.
+- [x] **Offline chat mode** *(v1.12.0)* — a graph-free RAG chat straight over the
+      local library. `teacher.answer_from_sources` retrieves the top passages
+      (`SOURCES_CHAT_K`) and answers grounded only in them, citing inline by page —
+      retrieve-then-answer (no tool loop), so it runs on both teacher backends.
+      New route `POST /api/ask_sources` (SSE, own session store) + a `LibraryChat`
+      modal reachable from a top-bar "💬 Ask library" button and an empty-state CTA
+      (both shown only when a library exists).
 - [ ] **Frontend/backend package refactor** — break large modules into logical
       packages/groups so the code is easier to follow (e.g. `GraphExplorer.tsx`
       is 1,000+ lines; some backend grouping too).
