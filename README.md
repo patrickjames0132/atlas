@@ -14,16 +14,18 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.5 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.6 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync, and
 > answers follow-up questions grounded in the papers on screen. The Q&A agent
-> now **reads the papers' actual full text** (via ar5iv) before answering —
+> **reads the papers' actual full text** (via ar5iv) before answering —
 > tool-use loop with live trace UI, read budgets, and wall-clock guardrails. A
 > **Timeline layout** arranges papers left→right by year (so the lecture sweeps
 > through time), and the detail panel shows a paper's own **figures + captions**
-> and links to both the abstract and the PDF. Agentic graph traversal (3b.2),
-> concept mindmaps, and audio lectures are next — see
-> **[OnePager.md](OnePager.md)** for the full vision and phase plan.
+> and links to both the abstract and the PDF. Seed search is **cache-first**:
+> papers you've already seen appear instantly (and still work when the APIs are
+> rate-limiting). Agentic graph traversal + topic search (Phase 3c), concept
+> mindmaps, and audio lectures are next — see **[OnePager.md](OnePager.md)**
+> for the full vision and phase plan.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
@@ -96,7 +98,11 @@ The Vite dev server proxies `/api/*` to Flask.
 ## Using it
 
 1. **Search a paper** — type a title (e.g. *Attention Is All You Need*) and pick
-   from the arXiv hits, or paste an **arXiv id / URL** to jump straight in.
+   from the hits, or paste an **arXiv id / URL** to jump straight in. Papers
+   you've seen on previous graphs appear **instantly from the local cache**
+   (above the live arXiv results); an **instant** badge marks papers whose
+   whole neighborhood is cached — those explore without touching the API at
+   all, rate limits be damned.
 2. **Read the map** — 🟡 gold = the seed · 🔵 blue = **references** (papers it
    cites) · 🟢 green = **citations** (papers citing it) · 🟣 purple = **similar**
    (SPECTER2 neighbors). Node size = citation count; arrows show citation
@@ -172,8 +178,9 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 │       ├── graph.py             # assemble a paper's neighborhood graph
 │       ├── cache.py             # tiny TTL cache for dynamic artifacts
 │       ├── arxiv_client.py      # arXiv seed search (finds the paper to map)
-│       ├── search.py            # thin seed-search wrapper over arxiv_client
-│       ├── teacher.py           # streaming AI lecture + grounded Q&A (dual backend)
+│       ├── search.py            # seed search: live arXiv + instant local-cache
+│       ├── teacher.py           # streaming AI lecture + agentic Q&A (dual backend)
+│       ├── fulltext.py          # full paper text from ar5iv for the Q&A agent (cached)
 │       ├── figures.py           # paper figures + captions from ar5iv (cached)
 │       ├── taxonomy.py          # arXiv category taxonomy (dormant; for future use)
 │       └── app.py               # Flask API (incl. /api/lecture, /api/ask) + frontend
@@ -189,9 +196,10 @@ near-term features (graph filtering, topic-bridging); see **OnePager.md**.
 ## Notes & next steps
 
 - **The AI teacher** (lecture + Q&A) is **live** — Claude narrates the history
-  and intuition of a field, synced to the graph, with follow-up Q&A grounded in
-  the visible papers. Next up: **full-text reading + agentic graph traversal**
-  (Phase 3b) so answers source the papers themselves, plus concept mindmaps and
+  and intuition of a field, synced to the graph, and Q&A answers are grounded
+  in the papers' **actual full text** (read via a tool-use loop). Next up:
+  **agentic graph traversal + topic search** (Phase 3c) so the agent can pull
+  in papers beyond the visible neighborhood, plus concept mindmaps and
   Podcastfy audio lectures. See **[OnePager.md](OnePager.md)**.
 - **Secrets:** `.env` is gitignored — never commit it. Keys are optional; Atlas
   runs keyless (just rate-limited on Semantic Scholar).

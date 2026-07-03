@@ -1,9 +1,9 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.5 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.6 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
-> reading (v1.5.0)
+> reading (v1.5.0), cache-first seed search (v1.6.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -100,6 +100,15 @@ optional, behind a key.
 
 ## Roadmap
 
+> Grouped by **theme**, not ship order — renumbered 2026-07-03 once features
+> started landing out of sequence (the explorer polish now under 2.x shipped
+> *after* Phase 3a). **Version tags are untouched** and carry the true
+> chronology. Old → new names: *Phase 3.5* → **2.2**, *Sidebar enrichment* →
+> **2.1**, *Legacy teardown* → **2.3**, *Phase 3b.1* → **3b**, *Phase 3b.2* →
+> **3c.1**.
+
+**Foundation**
+
 - [x] **Phase 0 — One-pager** (this file)
 - [x] **Phase 1 — Backend pivot to Semantic Scholar** *(v1.0.0)* —
       `semantic_scholar.py` client (batch hydration to dodge the single-GET
@@ -107,7 +116,10 @@ optional, behind a key.
       builder, thin `cache.py` (graph snapshots), new `/api/graph` & `/api/paper`
       routes. Seed accepts an arXiv id **or** a raw S2 paperId. *(The deeper
       teardown of the legacy digest backend was completed later — see
-      **Legacy teardown (v1.4.0)** below.)*
+      **Phase 2.3 — Legacy teardown** below.)*
+
+**The graph explorer**
+
 - [x] **Phase 2 — Graph explorer frontend** *(v1.0.0)* — force-directed canvas
       (`react-force-graph-2d`), seed via arXiv search, nodes colored by relation
       / sized by citations / edges typed & directed, detail panel with `tldr`.
@@ -116,31 +128,16 @@ optional, behind a key.
       all), **focus-on-hover** dimming, and a papers-shown readout. **Visual
       traversal:** double-click (or "Explore from here") re-seeds the graph on
       any node — journal papers included.
-- [x] **Phase 3a — AI teacher + Q&A (grounded)** *(v1.1.0)* — `teacher.py` with
-      the dual Claude backend (Anthropic API **or** the `claude` CLI subscription)
-      **streamed** so narration reveals beat-by-beat. `/api/lecture` (SSE) emits
-      ordered lecture **beats**, each bound to graph nodes that **light up in
-      sync**; modes: *history* ("how we got here") and *intuition* (bridge mode
-      exists in the backend, no UI button yet). `/api/ask` (SSE) answers
-      conversational, **session-scoped** questions grounded in the on-screen
-      graph, streaming tokens then highlighting the **cited nodes**. Frontend:
-      the `Teacher.tsx` panel + a `highlightIds` glow/dim path reusing the
-      focus-on-hover machinery. *Grounded in the visible neighborhood only — no
-      full-text reading or graph-jumping yet (that's 3b).*
-- [x] **Phase 3b.1 — Agentic Q&A: full-text reading** *(v1.5.0)* — the Q&A agent
-      now runs a **tool-use loop** (`read_paper` tool, via ar5iv full text or
-      abstract+TL;DR summary) before answering. Hard guardrails: 4 full-text reads,
-      12 summary reads, 12 agent steps, 90 s wall-clock. Each read emits a live
-      **trace event** (`📖 Read <title> · full text`) in the chat before the answer
-      streams. `fulltext.py` extracts readable body text from ar5iv HTML (math,
-      scripts, and figures stripped; 30-day cache). Requires the Anthropic API;
-      falls back gracefully to the Phase 3a grounded answer with the CLI backend.
-- [ ] **Phase 3b.2 — Agentic graph traversal** — `expand_node` tool lets the agent
-      fetch papers **not yet on the graph** and auto-merge them as new nodes (distinct
-      "discovered" ring), with a **hop budget** and **visited-set** to kill reference
-      cycles. This is what makes Q&A able to say "let me look at a paper outside
-      your current view."
-- [x] **Phase 3.5 — Timeline layout** *(v1.3.0, month granularity v1.3.1)* — a
+- [x] **Phase 2.1 — Sidebar enrichment** *(v1.2.0)* — under the detail panel's
+      TL;DR, the paper's **own figures with their captions** (`figures.py`
+      extracts them from **ar5iv** HTML, cached 30 days; images streamed through
+      a same-origin `/api/figure_proxy` locked to the ar5iv host — no hotlink
+      reliance, no open proxy; tables skipped; graceful fallback where ar5iv has
+      no render), plus a **direct PDF link** beside the arXiv-abstract link.
+      Shipped alongside a UI polish: the year filter is now a single
+      **dual-thumb range slider** (two overlaid inputs on one track + fill)
+      instead of two stacked sliders.
+- [x] **Phase 2.2 — Timeline layout** *(v1.3.0, month granularity v1.3.1)* — a
       **Force ↔ Timeline** toggle. Timeline pins each node's x to its **publication
       date** (year + month fraction from S2 `publicationDate`, so papers sit
       *between* the yearly gridlines; the detail panel shows the full date) while
@@ -151,21 +148,71 @@ optional, behind a key.
       into that span**. So the chronological lecture sweeps left→right as nodes
       light up. Force stays the default; switching layout releases all pins. (A
       relation-band variant remains a possible later sub-toggle.)
-- [x] **Sidebar enrichment** *(v1.2.0)* — under the detail panel's TL;DR, the
-      paper's **own figures with their captions** (`figures.py` extracts them from
-      **ar5iv** HTML, cached 30 days; images streamed through a same-origin
-      `/api/figure_proxy` locked to the ar5iv host — no hotlink reliance, no open
-      proxy; tables skipped; graceful fallback where ar5iv has no render), plus a
-      **direct PDF link** beside the arXiv-abstract link. Shipped alongside a UI
-      polish: the year filter is now a single **dual-thumb range slider** (two
-      overlaid inputs on one track + fill) instead of two stacked sliders.
-- [x] **Legacy teardown** *(v1.4.0)* — retired the digest-era backend now that
-      Atlas stands on its own: deleted `store.py`, `pipeline.py`, `summarizer.py`,
-      `embeddings.py`; slimmed `search.py`/`arxiv_client.py` to just the seed
-      search; removed 8 legacy `app.py` routes + 8 unused `api.ts` functions;
-      trimmed dead `config.py`/`.env.example` settings; `run.py` is now
+- [x] **Phase 2.3 — Legacy teardown** *(v1.4.0)* — retired the digest-era backend
+      now that Atlas stands on its own: deleted `store.py`, `pipeline.py`,
+      `summarizer.py`, `embeddings.py`; slimmed `search.py`/`arxiv_client.py` to
+      just the seed search; removed 8 legacy `app.py` routes + 8 unused `api.ts`
+      functions; trimmed dead `config.py`/`.env.example` settings; `run.py` is now
       `serve`-only. `taxonomy.py` kept **dormant** for near-term features. (See
       "Deliberately dropped" below for the what/why.)
+- [x] **Phase 2.4 — Cache-first seed search** *(v1.6.0)* — seed-search results
+      served from the **local snapshot cache instantly**, before (and independent
+      of) the live arXiv search: `/api/local_search` scans cached graph snapshots
+      by title/authors, ranks phrase matches → explored seeds → citation count,
+      and flags papers whose own neighborhood is freshly cached (an **instant**
+      badge — those explore without touching the rate-limited API). Live arXiv
+      results append below when they land; if arXiv is unreachable, the cached
+      papers still work. Born of a real rate-limited evening.
+
+**The AI teacher**
+
+- [x] **Phase 3a — AI teacher + Q&A (grounded)** *(v1.1.0)* — `teacher.py` with
+      the dual Claude backend (Anthropic API **or** the `claude` CLI subscription)
+      **streamed** so narration reveals beat-by-beat. `/api/lecture` (SSE) emits
+      ordered lecture **beats**, each bound to graph nodes that **light up in
+      sync**; modes: *history* ("how we got here") and *intuition* (bridge mode
+      exists in the backend, no UI button yet). `/api/ask` (SSE) answers
+      conversational, **session-scoped** questions grounded in the on-screen
+      graph, streaming tokens then highlighting the **cited nodes**. Frontend:
+      the `Teacher.tsx` panel + a `highlightIds` glow/dim path reusing the
+      focus-on-hover machinery. *Grounded in the visible neighborhood only — no
+      full-text reading or graph-jumping yet (that's 3b/3c).*
+- [x] **Phase 3b — Agentic Q&A: full-text reading** *(v1.5.0)* — the Q&A agent
+      now runs a **tool-use loop** (`read_paper` tool, via ar5iv full text or
+      abstract+TL;DR summary) before answering. Hard guardrails: 4 full-text reads,
+      12 summary reads, 12 agent steps, 90 s wall-clock. Each read emits a live
+      **trace event** (`📖 Read <title> · full text`) in the chat before the answer
+      streams. `fulltext.py` extracts readable body text from ar5iv HTML (math,
+      scripts, and figures stripped; 30-day cache). Requires the Anthropic API;
+      falls back gracefully to the Phase 3a grounded answer with the CLI backend.
+- [ ] **Phase 3c — Agentic reach beyond the graph** — the Q&A agent escapes the
+      visible neighborhood, in two steps:
+  - **3c.1 — Graph traversal (`expand_node`)** — fetch papers **not yet on the
+    graph** (one hop of references / citations / similar from a paper already in
+    context) and auto-merge them as new nodes (distinct dashed **"discovered"
+    ring**), with a **hop budget** and **visited-set** to kill reference cycles;
+    discoveries feed back into the grounding context for follow-up questions.
+    *(Built 2026-07-03; browser testing paused — code stashed pending the S2 API
+    key / OpenAlex decision.)*
+  - **3c.2 — Topic search (`search_papers`)** — traversal alone is lineage- and
+    embedding-biased, not recency-biased: a 2026 paper citing a 2017 seed has had
+    no time to accumulate citations of its own, so questions like *"what's the
+    latest transformer architecture in 2026?"* can't be reached by hops from an
+    old seed. Add a `search_papers(query, year_from?, year_to?)` tool hitting
+    S2's paper-search endpoint directly (**ungrounded** — no source node
+    required) with a **year filter** so "latest" queries bias recent; hits merge
+    in under a **distinct relation type** (not `similar`, which would imply a
+    verified embedding link) with its own edge style and its **own budget**,
+    separate from the hop budget (open-ended search can wander topically in a
+    way graph hops can't). Generalizes the earlier `find_paper(title)` idea.
+    *(Scoped; not started.)*
+- [ ] **Phase 3d — Bring your own documents** — upload files (books, PDFs,
+      notes) into the teacher's context so Q&A can read them alongside the
+      papers it pulls via `read_paper` — "how does this paper relate to chapter
+      3 of my textbook?" *(From the backlog; unscoped.)*
+
+**Beyond the teacher**
+
 - [ ] **Phase 4 — Concept mindmap** — Claude concept-map JSON, "bridge two
       topics," `/api/mindmap`.
 - [ ] **Phase 5 — Audio lecture** — Podcastfy integration, Edge TTS default,
@@ -231,7 +278,11 @@ the digest table, and the smart-pull ledger.
 - **Daily digest mode?** — Decide whether to keep any date-range "what's new
   today" view, or go fully graph-first. Leaning fully graph-first for v1.0.
 - **Semantic Scholar rate limits** — free key ~1 req/sec; need polite batching +
-  caching. Request a higher research limit if exploration feels throttled.
+  caching. Key application submitted 2026-07-03 (S2 requires an academic /
+  corporate email — used the old academic address, approval pending). Keyless
+  429s are painful enough that **OpenAlex** (free, no key, generous limits) is
+  under consideration as a fallback backbone — decision parked for a night.
+  Cache-first seed search (Phase 2.4) softens browsing in the meantime.
 - **S2 coverage gaps** — arXiv CS/ML coverage is high but not total; some papers
   may have sparse citation edges. Consider OpenAlex as a later fallback.
 - **AutoContent API** — ~€24/mo (1,000 credits: infographic 10, slide deck 30,

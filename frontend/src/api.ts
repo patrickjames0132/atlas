@@ -28,6 +28,33 @@ export async function searchArxiv(
   return res.json()
 }
 
+// A paper found in the local snapshot cache — instant, and available even when
+// the live APIs are rate-limiting us.
+export interface LocalHit {
+  id: string // Semantic Scholar paperId (always usable as a graph seed)
+  arxiv_id: string | null
+  title: string
+  authors: string | null
+  year: number | null
+  citation_count: number | null
+  url?: string | null
+  has_graph: boolean // a fresh graph snapshot exists — explores without hitting S2
+}
+
+// Instant search over papers already seen on previous graphs. Failures degrade
+// to "no local hits" — this must never block the live search.
+export async function searchLocal(q: string, limit = 10): Promise<LocalHit[]> {
+  try {
+    const params = new URLSearchParams({ q, limit: String(limit) })
+    const res = await fetch(`/api/local_search?${params.toString()}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.papers as LocalHit[]) ?? []
+  } catch {
+    return []
+  }
+}
+
 // --- arXiv Atlas: the paper neighborhood graph -------------------------------
 
 export type EdgeType = 'reference' | 'citation' | 'similar'

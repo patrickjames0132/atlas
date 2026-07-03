@@ -8,6 +8,7 @@ GET  /api/paper/<arxiv_id>             -> full details for one paper (panel hydr
 GET  /api/paper/<arxiv_id>/figures     -> the paper's figures + captions (ar5iv)
 GET  /api/figure_proxy?src=            -> same-origin proxy for an ar5iv image
 GET  /api/arxiv_search?q=&limit=       -> live seed search across arXiv
+GET  /api/local_search?q=&limit=       -> instant seed search over the local cache
 POST /api/lecture                      -> streamed AI lecture over the visible graph
 POST /api/ask                          -> streamed grounded Q&A over the visible graph
 
@@ -158,6 +159,29 @@ def arxiv_search_route() -> Response:
     except Exception as exc:
         app.logger.exception("arxiv search failed for %r", q)
         return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify({"q": q, "count": len(papers), "papers": papers})
+
+
+@app.get("/api/local_search")
+def local_search_route() -> Response:
+    """Instant seed search over papers already in the local snapshot cache.
+
+    Purely local (no arXiv / S2 calls) — the cache-first results shown while the
+    live arXiv search is still in flight, and the only results available when
+    Semantic Scholar is rate-limiting us. Never errors: a failure just means no
+    local hits."""
+    q = (request.args.get("q") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit", "10")), 50))
+    except ValueError:
+        limit = 10
+    if not q:
+        return jsonify({"q": q, "count": 0, "papers": []})
+    try:
+        papers = search.local_search(q, limit=limit)
+    except Exception:
+        app.logger.exception("local search failed for %r", q)
+        papers = []
     return jsonify({"q": q, "count": len(papers), "papers": papers})
 
 

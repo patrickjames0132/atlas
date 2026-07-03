@@ -73,3 +73,23 @@ def set(key: str, value: Any) -> None:
 def delete(key: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM cache WHERE key = ?", (key,))
+
+
+def scan(prefix: str) -> list[tuple[str, Any, float]]:
+    """All rows whose key starts with `prefix`, as (key, parsed value,
+    created_at) — including expired ones (callers decide what staleness means;
+    e.g. local search still wants papers from old snapshots). Rows whose value
+    fails to parse are skipped."""
+    like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT key, value, created_at FROM cache WHERE key LIKE ? ESCAPE '\\'",
+            (like,),
+        ).fetchall()
+    out: list[tuple[str, Any, float]] = []
+    for row in rows:
+        try:
+            out.append((row["key"], json.loads(row["value"]), row["created_at"]))
+        except (ValueError, TypeError):
+            continue
+    return out

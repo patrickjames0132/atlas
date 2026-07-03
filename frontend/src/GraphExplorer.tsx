@@ -10,12 +10,14 @@ import {
   fetchGraph,
   fetchPaperDetail,
   searchArxiv,
+  searchLocal,
   type ArxivHit,
   type EdgeType,
   type FiguresResponse,
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
+  type LocalHit,
 } from './api'
 import Teacher from './Teacher'
 import './atlas.css'
@@ -101,6 +103,11 @@ function nodeRadius(node: GraphNode): number {
 export default function GraphExplorer() {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<ArxivHit[] | null>(null)
+  // Cache-first results: papers already seen on previous graphs, shown the
+  // moment they resolve (before the live arXiv search lands) — and the only
+  // results available when the APIs are rate-limiting us.
+  const [localHits, setLocalHits] = useState<LocalHit[] | null>(null)
+  const [arxivFailed, setArxivFailed] = useState(false)
   const [searching, setSearching] = useState(false)
   const [graph, setGraph] = useState<GraphResponse | null>(null)
   const [loadingGraph, setLoadingGraph] = useState(false)
@@ -255,6 +262,7 @@ export default function GraphExplorer() {
     setLoadingGraph(true)
     setError(null)
     setHits(null)
+    setLocalHits(null)
     setDetails({})
     setFigures({})
     fitDone.current = false
@@ -272,12 +280,22 @@ export default function GraphExplorer() {
   const runSearch = useCallback(async (q: string) => {
     setSearching(true)
     setError(null)
+    setHits(null)
+    setLocalHits(null)
+    setArxivFailed(false)
+    // Cache-first: local hits resolve near-instantly and render while the live
+    // arXiv search is still in flight (or failing, when we're rate-limited).
+    const localP = searchLocal(q, 10)
+    localP.then((l) => setLocalHits(l.length ? l : null))
     try {
       const res = await searchArxiv(q, 12)
       setHits(res.papers)
-      if (res.papers.length === 0) setError(`Nothing on arXiv matched "${q}".`)
+      if (res.papers.length === 0 && (await localP).length === 0)
+        setError(`Nothing matched "${q}" — not on arXiv, not in your cache.`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setArxivFailed(true)
+      if ((await localP).length === 0)
+        setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSearching(false)
     }
@@ -531,26 +549,74 @@ export default function GraphExplorer() {
 
       <div className="atlas-body">
         <main className="canvas-wrap" ref={wrapRef}>
-          {hits && (
+          {(hits || localHits) && (
             <div className="hit-list">
               <div className="hit-head">
                 Pick a paper to explore
-                <button className="link-btn" onClick={() => setHits(null)}>
+                <button
+                  className="link-btn"
+                  onClick={() => {
+                    setHits(null)
+                    setLocalHits(null)
+                  }}
+                >
                   ✕
                 </button>
               </div>
-              {hits.map((h) => (
-                <button
-                  key={h.arxiv_id}
-                  className="hit"
-                  onClick={() => loadGraph(h.arxiv_id)}
-                >
-                  <div className="hit-title">{h.title}</div>
-                  <div className="hit-meta">
-                    {h.authors} · {h.arxiv_id}
-                  </div>
-                </button>
-              ))}
+              {localHits && (
+                <>
+                  <div className="hit-sub">From your cache</div>
+                  {localHits.map((h) => (
+                    <button
+                      key={h.id}
+                      className="hit"
+                      onClick={() => loadGraph(h.arxiv_id ?? h.id)}
+                    >
+                      <div className="hit-title">
+                        {h.title}
+                        {h.has_graph && (
+                          <span className="hit-badge" title="Graph snapshot cached — explores without hitting the API">
+                            instant
+                          </span>
+                        )}
+                      </div>
+                      <div className="hit-meta">
+                        {h.authors ? `${h.authors} · ` : ''}
+                        {h.year ?? '—'} ·{' '}
+                        {(h.citation_count ?? 0).toLocaleString()} citations
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+              {localHits && (searching || hits || arxivFailed) && (
+                <div className="hit-sub">From arXiv</div>
+              )}
+              {searching && <div className="hit-note">Searching arXiv…</div>}
+              {arxivFailed && (
+                <div className="hit-note">
+                  arXiv search unavailable — showing cached papers only.
+                </div>
+              )}
+              {hits && hits.length === 0 && !searching && (
+                <div className="hit-note">No results from arXiv.</div>
+              )}
+              {hits
+                ?.filter(
+                  (h) => !localHits?.some((l) => l.arxiv_id === h.arxiv_id),
+                )
+                .map((h) => (
+                  <button
+                    key={h.arxiv_id}
+                    className="hit"
+                    onClick={() => loadGraph(h.arxiv_id)}
+                  >
+                    <div className="hit-title">{h.title}</div>
+                    <div className="hit-meta">
+                      {h.authors} · {h.arxiv_id}
+                    </div>
+                  </button>
+                ))}
             </div>
           )}
 
