@@ -39,7 +39,7 @@ it's locked in.
   (`1.0.0` → `1.1.0`), bug fix = **patch**, breaking change = **major**. Bump
   `version` in `pyproject.toml`, then run `uv lock`. (History: the `0.x` line was
   the earlier "daily digest" era, ending at `v0.11.0`.)
-- **Commit:** stage files **explicitly** (see the config.py caveat below). End
+- **Commit:** stage files **explicitly**. End
   the message with a `Co-Authored-By` trailer naming **the Claude model actually
   writing the commit** (don't copy an old commit's trailer verbatim), e.g.:
 
@@ -55,12 +55,6 @@ branch `main`.
 
 ## Caveats — read before committing
 
-- **`backend/arxiv_digest/config.py`:** Patrick's local port override
-  (`FLASK_PORT=8000`) now lives in `.env`, so config.py should be **clean** in
-  `git status`. (Historically it carried a hardcoded local `= 8000` edit that
-  had to be kept out of every commit — if you ever see config.py modified with
-  a port change, that's what it is; don't commit it.) The local backend serves
-  on **port 8000**, not the committed default 5000.
 - **Secrets:** `.env` is gitignored — never commit it. `.env.example` holds only
   placeholders. All API keys (`S2_API_KEY`, `ANTHROPIC_API_KEY`, etc.) are
   optional; the app runs keyless (just rate-limited on Semantic Scholar).

@@ -206,10 +206,18 @@ optional, behind a key.
     separate from the hop budget (open-ended search can wander topically in a
     way graph hops can't). Generalizes the earlier `find_paper(title)` idea.
     *(Scoped; not started.)*
-- [ ] **Phase 3d — Bring your own documents** — upload files (books, PDFs,
-      notes) into the teacher's context so Q&A can read them alongside the
-      papers it pulls via `read_paper` — "how does this paper relate to chapter
-      3 of my textbook?" *(From the backlog; unscoped.)*
+- [ ] **Phase 3d — Bring your own sources** — pull the user's own material into
+      the teacher's context so Q&A can read it alongside the papers it fetches
+      via `read_paper` — "how does this paper relate to chapter 3 of my
+      textbook?" Two intake paths:
+  - **Uploaded files** — books, PDFs, notes (text extracted server-side).
+  - **Web links** — paste a URL (blog post, docs page, another paper's page)
+    and the teacher fetches + extracts the readable text, the same way
+    `fulltext.py` already strips ar5iv HTML down to body text. Handy for
+    material that isn't a formal paper on Semantic Scholar.
+      Both land as first-class sources the agent reads through a
+      `read_source`-style tool (mirroring `read_paper`), under their own read
+      budget. *(From the backlog; unscoped.)*
 
 **Beyond the teacher**
 
