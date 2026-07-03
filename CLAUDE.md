@@ -32,6 +32,21 @@ Don't skip ahead: no committing before the browser test, no starting the next
 phase without a green light. Patrick is hands-on and likes to eyeball UX before
 it's locked in.
 
+## The `todos.md` inbox
+
+Patrick brainstorms on the fly while I'm building, so `todos.md` at the repo root
+is a scratch **inbox** — not a durable list. When he points me at it (or brings
+it up at the start of a session), I:
+
+1. **File** each item into `OnePager.md` — feature ideas into the roadmap
+   ("Enhancements & tech debt", or a new phase where it fits) so OnePager stays
+   the single source of truth.
+2. **Clear** each item out of `todos.md` as I file it, leaving it an empty inbox
+   (just the `TODOs:` header) for the next round.
+
+OnePager wins — its roadmap boxes get ticked as we ship. `todos.md` is gitignored
+scratch; never treat leftover items there as authoritative.
+
 ## Release mechanics
 
 - **Versioning:** SemVer. **`v1.0.0`** is the arXiv Atlas pivot (the graph

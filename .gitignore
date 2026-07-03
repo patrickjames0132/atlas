@@ -20,3 +20,6 @@ frontend/node_modules/
 .DS_Store
 .vscode/
 .idea/
+
+# Personal brainstorm inbox (filed into OnePager, then cleared)
+todos.md

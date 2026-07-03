@@ -259,6 +259,20 @@ optional, behind a key.
 - [ ] **Phase 6 — Polished media (optional)** — `autocontent.py` behind
       `AUTOCONTENT_API_KEY`; "Generate visuals" button.
 
+**Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
+
+- [ ] **Offline chat mode** — query the local sources / embeddings directly in a
+      chat without first opening a graph or running a seed search. The retrieval
+      layer already exists (Phase 3d); needs a lightweight chat entry point +
+      route that skips the graph-grounding context.
+- [ ] **Frontend/backend package refactor** — break large modules into logical
+      packages/groups so the code is easier to follow (e.g. `GraphExplorer.tsx`
+      is 1,000+ lines; some backend grouping too).
+- [ ] **CLI → `click`** — replace the hand-rolled `argparse` in `run.py` with a
+      `click`-based CLI.
+- [ ] **"Powered by Claude Code"** — add the credit text + a Claude icon
+      somewhere in the app UI.
+
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
 
