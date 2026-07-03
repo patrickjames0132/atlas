@@ -42,6 +42,11 @@ S2_RECS_URL = os.getenv(
     "S2_RECS_URL", "https://api.semanticscholar.org/recommendations/v1"
 )
 S2_TIMEOUT = int(os.getenv("S2_TIMEOUT", "30"))
+# Minimum seconds between S2 requests. Even authenticated, the graph endpoints
+# allow ~1 req/sec per key, so we self-throttle to keep bursts (graph build, the
+# Phase 3e backfill, agent expansion) from tripping 429s — cheaper than eating a
+# 429 + exponential backoff. Set 0 to disable.
+S2_MIN_INTERVAL = float(os.getenv("S2_MIN_INTERVAL", "1.1"))
 
 # How many neighbors of each kind to pull into a paper's graph neighborhood.
 GRAPH_REF_LIMIT = int(os.getenv("ATLAS_GRAPH_REFS", "25"))
@@ -116,6 +121,17 @@ AGENT_MAX_SEARCHES = int(os.getenv("AGENT_MAX_SEARCHES", "3"))
 AGENT_SEARCH_LIMIT = int(os.getenv("AGENT_SEARCH_LIMIT", "8"))
 # Max characters of full text loaded per paper read (keeps the context bounded).
 FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
+
+# Phase 3e — "How we got here" time travel. Before the history lecture narrates,
+# walk BACKWARD through references to surface a field's older roots, so the story
+# starts at the beginning even when the seed is modern. Bounded so it doesn't
+# hammer the rate limit: HOPS backward levels, PER_HOP most-cited ancestors added
+# each level, FRONTIER oldest of those carried into the next hop, and LOOKBACK
+# years back from the seed we aim to reach before stopping early.
+LECTURE_HISTORY_HOPS = int(os.getenv("LECTURE_HISTORY_HOPS", "3"))
+LECTURE_HISTORY_PER_HOP = int(os.getenv("LECTURE_HISTORY_PER_HOP", "6"))
+LECTURE_HISTORY_FRONTIER = int(os.getenv("LECTURE_HISTORY_FRONTIER", "2"))
+LECTURE_HISTORY_LOOKBACK = int(os.getenv("LECTURE_HISTORY_LOOKBACK", "40"))
 
 # --- Bring-your-own sources (Phase 3d) ---------------------------------------
 # Uploaded books/PDFs and fetched web pages are chunked, embedded LOCALLY (no

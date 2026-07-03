@@ -324,6 +324,110 @@ def lecture_beats(
         yield beat
 
 
+# --- "How we got here" time travel (Phase 3e) --------------------------------
+def _seed_year(nodes: list[dict], seed_id: Optional[str]) -> Optional[int]:
+    """The seed's publication year — from the seed node if present, else the newest
+    visible year (the seed is almost always the most recent paper on the graph)."""
+    for n in nodes:
+        if n.get("id") == seed_id and isinstance(n.get("year"), int):
+            return n["year"]
+    years = [n["year"] for n in nodes if isinstance(n.get("year"), int)]
+    return max(years) if years else None
+
+
+def history_backfill(seed: dict, nodes: list[dict]) -> Iterator[tuple[str, object]]:
+    """Walk BACKWARD through references before the history lecture, so it can start
+    at a field's roots instead of mid-stream (a modern seed's graph rarely reaches
+    the foundational work). We launch NOT from the seed — its references are already
+    on the graph — but from the OLDEST papers already visible, which sit closest to
+    the roots; each hop pulls their references, adds the most-cited new (older) ones,
+    and carries the oldest additions into the next hop, stopping once we reach papers
+    ~LOOKBACK years older than the seed or spend the hop budget. Yields
+    ``("trace", {hop, found, oldest})`` per productive level and
+    ``("nodes", {nodes, edges})`` discoveries to merge into the live graph. Reuses
+    the Phase 3c reference-hop machinery (``_s2_neighbors``, day-cached)."""
+    seed_id = seed.get("id")
+    if not seed_id:
+        return
+
+    known = {n["id"] for n in nodes if n.get("id")}
+    known.add(seed_id)
+    seed_year = _seed_year(nodes, seed_id)
+    year_floor = seed_year - config.LECTURE_HISTORY_LOOKBACK if seed_year else None
+
+    # Launch from the oldest papers already on the graph, not the seed: expanding
+    # the seed only re-finds its already-visible references. The oldest visible
+    # papers are the closest to the roots — walking back from them reaches the
+    # foundational work the graph doesn't show yet.
+    launch = sorted(
+        (n for n in nodes if n.get("id") and not n.get("is_seed")),
+        key=lambda n: (n.get("year") or 9999),
+    )
+    frontier = [n["id"] for n in launch[: config.LECTURE_HISTORY_FRONTIER]] or [seed_id]
+    total_added = 0
+    errored = False
+
+    for hop in range(config.LECTURE_HISTORY_HOPS):
+        if not frontier:
+            break
+        candidates: dict[str, dict] = {}
+        edges: list[dict] = []
+        for pid in frontier:
+            try:
+                hits = _s2_neighbors(pid, "references")
+            except s2.S2Error:
+                errored = True
+                continue
+            for hit in hits:
+                n = hit["node"]
+                nid = n.get("id")
+                if not nid or nid == pid:
+                    continue
+                edges.append({
+                    "source": pid, "target": nid, "type": "reference",
+                    "influential": hit.get("influential", False),
+                })
+                if nid not in known and nid not in candidates:
+                    candidates[nid] = n
+        if not candidates:
+            break
+
+        # Add the most-cited new ancestors (the seminal ones), capped per hop.
+        ranked = sorted(
+            candidates.values(),
+            key=lambda n: (n.get("citation_count") or 0),
+            reverse=True,
+        )
+        additions = ranked[: config.LECTURE_HISTORY_PER_HOP]
+        new_nodes = []
+        for n in additions:
+            known.add(n["id"])
+            disc = dict(n)
+            disc["rels"] = ["reference"]
+            disc["is_seed"] = False
+            disc["discovered"] = True
+            new_nodes.append(disc)
+
+        # Keep only edges whose endpoints both landed on the graph (no danglers).
+        kept_edges = [e for e in edges if e["source"] in known and e["target"] in known]
+        years = [n["year"] for n in additions if isinstance(n.get("year"), int)]
+        oldest = min(years) if years else None
+        total_added += len(new_nodes)
+        yield ("trace", {"hop": hop + 1, "found": len(new_nodes), "oldest": oldest})
+        yield ("nodes", {"nodes": new_nodes, "edges": kept_edges})
+
+        # March further back: carry the oldest additions (all on-graph) into the
+        # next hop so their edges stay coherent.
+        by_year = sorted(additions, key=lambda n: (n.get("year") or 9999))
+        frontier = [n["id"] for n in by_year[: config.LECTURE_HISTORY_FRONTIER]]
+        if year_floor and oldest is not None and oldest <= year_floor:
+            break
+
+    # Never found anything older — say so once, rather than failing silently.
+    if total_added == 0:
+        yield ("trace", {"hop": 1, "found": 0, "oldest": None, "error": errored})
+
+
 # --- Q&A ---------------------------------------------------------------------
 _QA_SYSTEM = (
     "You are a sharp, friendly research teacher answering a student's question, "

@@ -14,9 +14,12 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.13 — the graph explorer **and a streaming AI teacher** are live:
-> Claude narrates a lecture over the graph and lights up nodes in sync, and
-> answers follow-up questions grounded in the papers on screen. The Q&A agent
+> **Status:** v1.14 — the graph explorer **and a streaming AI teacher** are live:
+> Claude narrates a lecture over the graph and lights up nodes in sync — and the
+> **"How we got here" lecture time-travels**, walking backward through references
+> to a field's older roots before it narrates, so the story starts at the
+> beginning. It also answers follow-up questions grounded in the papers on screen.
+> The Q&A agent
 > **reads the papers' actual full text** (via ar5iv), can **traverse to papers
 > not yet on the graph** (`expand_node` — one hop of references / citations /
 > similar work), and can **search all of Semantic Scholar** for off-graph work

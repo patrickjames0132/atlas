@@ -226,6 +226,9 @@ def api_lecture() -> Response:
     Body: {seed: {title,...}, nodes: [visible node objects], mode:
     history|intuition|bridge, target?: {title,...}}. Each ``beat`` event carries
     {heading, text, node_ids} so the frontend can reveal it and light up nodes.
+    In ``history`` mode we first walk backward through references (Phase 3e),
+    emitting ``trace`` + ``nodes`` events, so the story can start at the field's
+    roots; the discovered ancestors join the node set the lecture narrates over.
     """
     payload = request.get_json(silent=True) or {}
     nodes = payload.get("nodes")
@@ -237,7 +240,15 @@ def api_lecture() -> Response:
 
     def gen():
         try:
-            for beat in teacher.lecture_beats(seed, nodes, mode=mode, target=target):
+            enriched = nodes
+            if mode == "history" and seed.get("id"):
+                for kind, data in teacher.history_backfill(seed, nodes):
+                    if kind == "nodes":
+                        enriched = enriched + data["nodes"]
+                        yield _sse("nodes", data)
+                    elif kind == "trace":
+                        yield _sse("trace", data)
+            for beat in teacher.lecture_beats(seed, enriched, mode=mode, target=target):
                 yield _sse("beat", beat)
             yield _sse("done", {})
         except Exception as exc:  # surface to the panel AND log the traceback

@@ -9,6 +9,7 @@ import {
   type GraphNode,
   type GraphResponse,
   type LectureMode,
+  type LectureTrace,
   type TeacherNode,
   type TraceEvent,
 } from './api'
@@ -57,6 +58,9 @@ export default function Teacher({
   onDiscover: (nodes: GraphNode[], edges: GraphEdge[]) => void
 }) {
   const [beats, setBeats] = useState<Beat[]>([])
+  // History-mode backward hops (Phase 3e), shown above the beats as the lecture
+  // traces a field back to its roots before narrating.
+  const [histTrace, setHistTrace] = useState<LectureTrace[]>([])
   const [activeBeat, setActiveBeat] = useState<number | null>(null)
   // Which chat answer is "active" (its cited papers lit on the graph) — mirrors
   // activeBeat for lecture beats. Only one of the two is active at a time.
@@ -116,6 +120,7 @@ export default function Teacher({
       const ctrl = new AbortController()
       abortRef.current = ctrl
       setBeats([])
+      setHistTrace([])
       setActiveBeat(null)
       setActiveChat(null)
       setError(null)
@@ -133,6 +138,10 @@ export default function Teacher({
                 highlightBeat(next.length - 1, beat)
                 return next
               }),
+            // History mode first walks back through references to the field's
+            // roots: show the hops, and merge the ancestors into the live graph.
+            onTrace: (t) => setHistTrace((prev) => [...prev, t]),
+            onNodes: (d) => onDiscover(d.nodes, d.edges),
             onError: (m) => setError(m),
           },
         )
@@ -144,7 +153,7 @@ export default function Teacher({
         setTeaching(false)
       }
     },
-    [teacherNodes, seed, onHighlight, highlightBeat, stopActive],
+    [teacherNodes, seed, onHighlight, onDiscover, highlightBeat, stopActive],
   )
 
   const onAsk = useCallback(
@@ -239,6 +248,22 @@ export default function Teacher({
       </div>
 
       <div className="teacher-scroll">
+        {histTrace.length > 0 && (
+          <div className="chat-trace hist-trace">
+            {histTrace.map((t, i) => (
+              <div key={i} className={`trace-line ${t.found ? '' : 'fail'}`}>
+                ⏳ Traced back{t.oldest ? <> to <b>{t.oldest}</b></> : null}
+                <em>
+                  {t.found
+                    ? `+${t.found} paper${t.found > 1 ? 's' : ''}`
+                    : t.error
+                      ? 'rate-limited'
+                      : 'nothing older found'}
+                </em>
+              </div>
+            ))}
+          </div>
+        )}
         {beats.length > 0 && (
           <ol className="beats">
             {beats.map((b, i) => (

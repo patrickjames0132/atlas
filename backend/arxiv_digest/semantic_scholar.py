@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -29,6 +30,23 @@ from typing import Optional
 from . import config
 
 log = logging.getLogger(__name__)
+
+# Pace S2 calls to at most one per S2_MIN_INTERVAL, serialized across threads —
+# the graph build, the 3e backfill, and agent expansion all burst otherwise, and
+# even an authenticated key gets ~1 req/sec on the graph endpoints.
+_throttle_lock = threading.Lock()
+_last_request = 0.0
+
+
+def _throttle() -> None:
+    global _last_request
+    if config.S2_MIN_INTERVAL <= 0:
+        return
+    with _throttle_lock:
+        wait = config.S2_MIN_INTERVAL - (time.monotonic() - _last_request)
+        if wait > 0:
+            time.sleep(wait)
+        _last_request = time.monotonic()
 
 # Rich fields for a focused node (the seed, or a clicked node). Requested via the
 # un-throttled batch endpoint.
@@ -61,6 +79,7 @@ def _request(url: str, *, method: str = "GET", body: Optional[dict] = None,
     data = json.dumps(body).encode() if body is not None else None
     last_err: Optional[Exception] = None
     for attempt in range(tries):
+        _throttle()
         req = urllib.request.Request(
             url, data=data, headers=_headers(), method=method
         )

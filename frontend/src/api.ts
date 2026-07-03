@@ -203,14 +203,26 @@ async function readSSE(
   }
 }
 
+// A backward-in-time hop the history lecture took before narrating (Phase 3e):
+// how many foundational ancestors it pulled in and the oldest year it reached.
+export interface LectureTrace {
+  hop: number
+  found: number
+  oldest: number | null
+  error?: boolean // the hop hit an S2 error / rate limit rather than empty results
+}
+
 export interface LectureHandlers {
   onBeat: (beat: Beat) => void
+  onTrace?: (t: LectureTrace) => void // history-mode backward hops
+  onNodes?: (d: Discovery) => void // ancestors pulled in, to merge into the graph
   onDone?: () => void
   onError?: (message: string) => void
   signal?: AbortSignal
 }
 
-// Stream a lecture over the visible graph. Beats arrive one at a time.
+// Stream a lecture over the visible graph. Beats arrive one at a time. In history
+// mode, trace + nodes events (the backward walk to the field's roots) precede them.
 export async function streamLecture(
   body: { seed: { title: string; id?: string }; nodes: TeacherNode[]; mode: LectureMode; target?: { title: string } },
   h: LectureHandlers,
@@ -223,6 +235,8 @@ export async function streamLecture(
   })
   await readSSE(res, (event, data) => {
     if (event === 'beat') h.onBeat(data as Beat)
+    else if (event === 'trace') h.onTrace?.(data as LectureTrace)
+    else if (event === 'nodes') h.onNodes?.(data as Discovery)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { error: string }).error)
   })

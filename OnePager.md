@@ -255,21 +255,27 @@ optional, behind a key.
       (also 384-dim, so `ARXIV_EMBED_DIM` is unchanged) via `ARXIV_EMBED_MODEL`,
       with a query-only instruction prefix (`ARXIV_EMBED_QUERY_PREFIX`, empty by
       default) for asymmetric retrieval; re-ingest sources to apply.
-    - [ ] hybrid **FTS5 + vector (RRF)** for exact-term / proper-noun lookups.
+    - [ ] hybrid **FTS5 + vector (RRF)** for exact-term / proper-noun lookups
+      *(deferred — S2 already covers the main search surface; this only helps
+      exact-term lookups inside the local library, a niche gain for the plumbing)*.
     - [ ] figure/image handling — **OCR for scanned PDFs** *(deferred — needs a
       system Tesseract dep, fiddly on Windows)*.
-- [ ] **Phase 3e — Agentic "How we got here" (time travel)** — the history lecture
-      is grounded only in the papers already on the graph, so it can't reach a
-      field's true origins when the seed is modern (a 2024 Hawking-radiation
-      paper's neighborhood may never include Hawking's 1974 original). Give the
-      lecture the Q&A agent's traversal: hop **backward through references** to pull
-      in foundational older work — bounded by a **year threshold** (how far back to
-      go) and a hop budget — before narrating, so the story starts at the real
-      beginning rather than mid-stream. Likely **smaller than it looks**: the Phase
-      3c machinery already does the hard part — `expand_node` fetches reference
-      hops, discovered nodes merge into the graph with budgets/visited-sets — so 3e
-      is mostly pointing that backward (references, year-thresholded) and letting
-      the *lecture* drive the traversal before it narrates.
+- [x] **Phase 3e — "How we got here" time travel** *(v1.14.0)* — the history
+      lecture no longer starts mid-stream: before narrating, `history_backfill`
+      walks **backward through references** to a field's older roots. It launches
+      from the **oldest papers already on the graph** (expanding the seed just
+      re-finds its visible refs), each hop adding the most-cited new ancestors and
+      carrying the oldest into the next hop, bounded by a hop budget
+      (`LECTURE_HISTORY_HOPS`) and a **year floor** (`LECTURE_HISTORY_LOOKBACK`
+      years before the seed). Discovered ancestors merge into the live graph
+      (dashed rings; far-left in Timeline) and join the node set the lecture
+      narrates over; the panel shows the hops live (`⏳ Traced back to <year>`).
+      Deterministic, so it runs on both teacher backends, reusing the Phase 3c
+      `_s2_neighbors` machinery. Shipped with an **S2 request throttle** (~1 req/s,
+      `S2_MIN_INTERVAL`) so the backward burst — and graph build / agent expansion
+      — don't 429. *(Browser-tested — reaches genuinely older foundational work; a
+      specific origin paper can still be missed since additions rank by citations
+      over a narrow frontier — future tweak: prefer `influential` edges.)*
 
 **Beyond the teacher**
 
