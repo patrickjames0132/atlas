@@ -1,7 +1,7 @@
 [project]
 name = "arxiv-digest"
-version = "1.3.1"
-description = "A dashboard that turns your arXiv email subscriptions into an AI-summarized daily digest."
+version = "1.4.0"
+description = "arXiv Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0",

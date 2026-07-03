@@ -1,19 +1,15 @@
-"""Fetch papers directly from the arXiv API (via the `arxiv` package).
+"""Seed search against the arXiv API (via the `arxiv` package).
 
-This replaces the old Gmail-fetch + email-parse approach: no OAuth, no email
-format quirks — just a structured query against arXiv, filtered to the subject
-categories you follow and to a submission-date range.
+A relevance-ranked hunt across all of arXiv to find the paper you want to drop
+into the graph (by keywords, title, author, or a pasted id / URL). Its id is then
+handed to the Semantic Scholar graph builder.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import datetime
-from typing import Optional
 
 import arxiv
-
-from . import config
 
 # A bare arXiv id (new-style "2406.12345" / "2406.12345v2", or old-style
 # "hep-th/9901001"), optionally wrapped in an arxiv.org URL. Lets a search box
@@ -54,41 +50,6 @@ def _to_paper(result: arxiv.Result) -> dict:
     }
 
 
-def fetch_papers_in_range(
-    start_date: str,
-    end_date: str,
-    categories: Optional[list[str]] = None,
-) -> list[dict]:
-    """Return papers SUBMITTED in [start_date, end_date] as store-ready dicts.
-
-    Both dates are inclusive YYYY-MM-DD strings. Filters arXiv by
-    ``submittedDate`` (a GMT range) intersected with the categories you follow.
-    There is no result cap — the whole matching batch is returned, which for a
-    wide range across many categories can be a lot of papers (and slow, since
-    arXiv paginates ~100 at a time). Each paper carries its own ``digest_date``
-    (its actual submission day) so a range spanning multiple days is stored
-    per-day.
-    """
-    categories = categories or config.ARXIV_CATEGORIES
-
-    # arXiv wants submittedDate as YYYYMMDDTTTT in GMT; cover the full range.
-    start = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d0000")
-    end = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y%m%d2359")
-
-    # e.g. "(cat:cs.LG OR cat:cs.AI) AND submittedDate:[202406240000 TO 202406262359]"
-    cat_query = " OR ".join(f"cat:{c}" for c in categories)
-    query = f"({cat_query}) AND submittedDate:[{start} TO {end}]"
-    # max_results=None tells the arxiv client to page through every result.
-    search = arxiv.Search(
-        query=query,
-        max_results=None,
-        sort_by=arxiv.SortCriterion.SubmittedDate,
-        sort_order=arxiv.SortOrder.Descending,
-    )
-
-    return [_to_paper(result) for result in _client.results(search)]
-
-
 def search_arxiv(query: str, max_results: int = 25) -> list[dict]:
     """Search ALL of arXiv by keyword/title/author and return store-ready dicts.
 
@@ -121,14 +82,4 @@ def search_arxiv(query: str, max_results: int = 25) -> list[dict]:
             max_results=max_results,
             sort_by=arxiv.SortCriterion.Relevance,
         )
-    return [_to_paper(result) for result in _client.results(search)]
-
-
-def fetch_by_ids(arxiv_ids: list[str]) -> list[dict]:
-    """Fetch specific papers by arXiv id as store-ready dicts (authoritative —
-    used when adding a live search result to the library)."""
-    ids = [i for i in (arxiv_ids or []) if i]
-    if not ids:
-        return []
-    search = arxiv.Search(id_list=ids)
     return [_to_paper(result) for result in _client.results(search)]

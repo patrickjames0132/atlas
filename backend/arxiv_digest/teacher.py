@@ -6,10 +6,10 @@ no agentic traversal or full-text reading yet; the teacher cannot jump to papers
 that aren't on screen. That agentic layer — a tool-use loop with a hop budget and
 a visited-set to kill reference cycles — is Phase 3b.
 
-Backends mirror ``summarizer.py``: the Anthropic API (``anthropic`` SDK) or the
-``claude`` CLI under a Pro/Max subscription (no API billing). Both are consumed
-here as a **stream** of text so the frontend can reveal the lecture beat-by-beat
-and light up graph nodes in sync with the story.
+Two Claude backends (set via TEACHER_BACKEND): the Anthropic API (``anthropic``
+SDK) or the ``claude`` CLI under a Pro/Max subscription (no API billing). Both are
+consumed here as a **stream** of text so the frontend can reveal the lecture
+beat-by-beat and light up graph nodes in sync with the story.
 
 Two products:
   * ``lecture_beats(...)`` — an ordered sequence of *beats*. Each beat is a short
@@ -156,8 +156,8 @@ def _stream(system: str, messages: list[dict], max_tokens: int) -> Iterator[str]
     """Stream a completion, trying the primary backend then the fallback.
 
     Fallback only helps for failures **before the first token** (missing key, CLI
-    not on PATH, spawn error) — the common case, matching summarizer.py. Once
-    streaming has begun we can't cleanly switch, so a mid-stream failure surfaces.
+    not on PATH, spawn error) — the common case. Once streaming has begun we can't
+    cleanly switch, so a mid-stream failure surfaces.
     """
     primary = config.TEACHER_BACKEND
     fallback = config.TEACHER_FALLBACK_BACKEND or None

@@ -1,7 +1,10 @@
 """The full arXiv category taxonomy (loaded from taxonomy.json).
 
-Sourced from https://arxiv.org/category_taxonomy. Powers the "Manage categories"
-picker in the dashboard and validates the categories a user chooses to follow.
+Sourced from https://arxiv.org/category_taxonomy.
+
+NOTE: retained but currently DORMANT (no importers) after the v1.4.0 legacy
+teardown. Kept deliberately for near-term Atlas features — filtering the graph by
+field, the "bridge these topics" mode, or category-scoped seed discovery.
 """
 
 from __future__ import annotations

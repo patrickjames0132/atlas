@@ -1,7 +1,8 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.3 · living document · AI teacher shipped v1.1.0; sidebar figures
-> + PDF link + dual-thumb year slider shipped v1.2.0; Timeline layout shipped v1.3.0
+> **Status:** v1.4 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
+> v1.3.1), legacy digest backend retired (v1.4.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -104,9 +105,8 @@ optional, behind a key.
       throttle, 429 backoff, optional `S2_API_KEY`), `graph.py` neighborhood
       builder, thin `cache.py` (graph snapshots), new `/api/graph` & `/api/paper`
       routes. Seed accepts an arXiv id **or** a raw S2 paperId. *(The deeper
-      teardown of the legacy digest backend — old routes, `papers`/FTS/vec/pulls
-      tables — is deferred; those modules still power the arXiv seed search and do
-      no harm.)*
+      teardown of the legacy digest backend was completed later — see
+      **Legacy teardown (v1.4.0)** below.)*
 - [x] **Phase 2 — Graph explorer frontend** *(v1.0.0)* — force-directed canvas
       (`react-force-graph-2d`), seed via arXiv search, nodes colored by relation
       / sized by citations / edges typed & directed, detail panel with `tldr`.
@@ -151,6 +151,13 @@ optional, behind a key.
       **direct PDF link** beside the arXiv-abstract link. Shipped alongside a UI
       polish: the year filter is now a single **dual-thumb range slider** (two
       overlaid inputs on one track + fill) instead of two stacked sliders.
+- [x] **Legacy teardown** *(v1.4.0)* — retired the digest-era backend now that
+      Atlas stands on its own: deleted `store.py`, `pipeline.py`, `summarizer.py`,
+      `embeddings.py`; slimmed `search.py`/`arxiv_client.py` to just the seed
+      search; removed 8 legacy `app.py` routes + 8 unused `api.ts` functions;
+      trimmed dead `config.py`/`.env.example` settings; `run.py` is now
+      `serve`-only. `taxonomy.py` kept **dormant** for near-term features. (See
+      "Deliberately dropped" below for the what/why.)
 - [ ] **Phase 4 — Concept mindmap** — Claude concept-map JSON, "bridge two
       topics," `/api/mindmap`.
 - [ ] **Phase 5 — Audio lecture** — Podcastfy integration, Edge TTS default,
@@ -165,16 +172,23 @@ Each phase is independently shippable and gets its own version bump
 
 ## Deliberately dropped in v1.0
 
-The digest era's local-first machinery is retired in favor of dynamic queries:
+The digest era's local-first machinery is retired in favor of dynamic queries.
+The **code** for all of this was removed in the **v1.4.0 legacy teardown** (only
+`taxonomy.py` survives, dormant):
 
-- Local **paper corpus** (`papers` table) — no more storing paper rows.
+- Local **paper corpus** (`papers` table) + the `store.py` module — no more
+  storing paper rows.
 - **FTS5** full-text index (`papers_fts`) and **sqlite-vec** vector index
-  (`papers_vec`) — search/similarity now come from Semantic Scholar.
-- The **`pulls` ledger** and category-aware smart-pull — no date-range fetching.
-- The **date-range digest table**, pagination, and the **Download modal**.
+  (`papers_vec`), plus `embeddings.py` and the hybrid `search.py` — search /
+  similarity now come from Semantic Scholar.
+- The **`pulls` ledger**, category-aware smart-pull, and `pipeline.py` — no
+  date-range fetching.
+- The **date-range digest table**, pagination, the **Download modal**, and the
+  **NotebookLM export** — plus `summarizer.py` (its dual-backend Claude pattern
+  lives on in `teacher.py`).
 
-*(Open question: keep a lightweight "daily digest" mode anywhere, or fully commit
-to the graph-first experience? See below.)*
+*(Resolved: we committed fully to the graph-first experience — no daily-digest
+mode.)*
 
 ---
 

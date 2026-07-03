@@ -63,9 +63,10 @@ more slowly):
   Strongly recommended: the unauthenticated pool is tight and graph builds will
   occasionally hit rate limits without it (the client backs off and retries, and
   snapshots are cached, so it still works — just less snappily).
-- **`ANTHROPIC_API_KEY`** / **`SUMMARY_BACKEND`** — used by the AI-teacher
-  features (roadmap). Summaries can run through the Anthropic API (cheap Haiku
-  4.5) or the `claude` CLI under a Claude Pro/Max subscription.
+- **`ANTHROPIC_API_KEY`** / **`TEACHER_BACKEND`** — power the AI teacher
+  (lecture + Q&A). It runs through the Anthropic API (**`TEACHER_BACKEND=api`**,
+  needs the key) or the `claude` CLI under a Claude Pro/Max subscription
+  (**`TEACHER_BACKEND=claude_cli`**, no API billing).
 
 ### 2. Build the frontend & run
 
@@ -162,25 +163,26 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 ├── .env / .env.example          # optional keys (S2, Anthropic) — .env gitignored
 ├── data/digest.db               # thin cache (graph snapshots); gitignored
 ├── backend/
-│   ├── run.py                   # CLI: serve | refresh | embed
+│   ├── run.py                   # CLI: serve
 │   └── arxiv_digest/
 │       ├── config.py            # settings from .env (incl. Semantic Scholar)
 │       ├── semantic_scholar.py  # S2 Academic Graph + Recommendations client
 │       ├── graph.py             # assemble a paper's neighborhood graph
 │       ├── cache.py             # tiny TTL cache for dynamic artifacts
-│       ├── arxiv_client.py      # arXiv search (finds the seed paper)
+│       ├── arxiv_client.py      # arXiv seed search (finds the paper to map)
+│       ├── search.py            # thin seed-search wrapper over arxiv_client
 │       ├── teacher.py           # streaming AI lecture + grounded Q&A (dual backend)
 │       ├── figures.py           # paper figures + captions from ar5iv (cached)
-│       ├── app.py               # Flask API (incl. /api/lecture, /api/ask) + frontend
-│       └── … (summarizer, taxonomy, and legacy digest modules)
+│       ├── taxonomy.py          # arXiv category taxonomy (dormant; for future use)
+│       └── app.py               # Flask API (incl. /api/lecture, /api/ask) + frontend
 └── frontend/                    # React + TS + Vite
     └── src/{GraphExplorer.tsx, Teacher.tsx, api.ts, atlas.css, main.tsx}
 ```
 
 *Legacy note:* the earlier "daily digest" era (local paper store, hybrid FTS5 +
-`sqlite-vec` search, category pulls, NotebookLM export) still exists in the
-backend — its modules currently power the arXiv seed search and are otherwise
-dormant. They'll be retired as the v1.0 rewrite proceeds; see **OnePager.md**.
+`sqlite-vec` search, category pulls, NotebookLM export) was **retired in v1.4.0** —
+its modules, routes, and settings are gone. `taxonomy.py` is kept **dormant** for
+near-term features (graph filtering, topic-bridging); see **OnePager.md**.
 
 ## Notes & next steps
 
