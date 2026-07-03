@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { streamAskSources, type RetrieveEvent } from './api'
+import { listSources, streamAskSources, type RetrieveEvent, type Source } from './api'
 
 // Offline library chat (Phase 3d): ask questions answered purely from your own
 // uploaded library — no graph, no seed search. A lightweight RAG chat that opens
@@ -18,6 +18,13 @@ export default function LibraryChat({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Scope retrieval to one uploaded source, or '' for the whole library.
+  const [items, setItems] = useState<Source[]>([])
+  const [scope, setScope] = useState('')
+
+  useEffect(() => {
+    listSources().then((res) => setItems(res.sources)).catch(() => {})
+  }, [])
 
   const sessionId = useRef(
     (crypto.randomUUID?.() as string) || String(Math.random()).slice(2),
@@ -38,7 +45,7 @@ export default function LibraryChat({ onClose }: { onClose: () => void }) {
       setChat((prev) => [...prev, { role: 'user', text: q }, { role: 'assistant', text: '' }])
       try {
         await streamAskSources(
-          { question: q, session_id: sessionId.current },
+          { question: q, session_id: sessionId.current, source_id: scope || undefined },
           {
             signal: ctrl.signal,
             onRetrieve: (r) =>
@@ -65,7 +72,7 @@ export default function LibraryChat({ onClose }: { onClose: () => void }) {
         setAsking(false)
       }
     },
-    [input, asking],
+    [input, asking, scope],
   )
 
   return (
@@ -74,9 +81,27 @@ export default function LibraryChat({ onClose }: { onClose: () => void }) {
       <aside className="library-chat" role="dialog" aria-label="Chat with your library">
         <header className="library-chat-head">
           <span>💬 Ask your library</span>
-          <button className="link-btn" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <div className="library-chat-head-right">
+            {items.length > 1 && (
+              <select
+                className="scope-select"
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+                aria-label="Scope to a source"
+                title="Search your whole library, or just one source"
+              >
+                <option value="">All sources</option>
+                {items.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.title}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button className="link-btn" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
         </header>
 
         <div className="library-chat-scroll">

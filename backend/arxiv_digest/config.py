@@ -126,6 +126,11 @@ FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
 SEMANTIC_ENABLED = os.getenv("ARXIV_SEMANTIC", "1").lower() not in ("0", "false", "no")
 EMBED_MODEL = os.getenv("ARXIV_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 EMBED_DIM = int(os.getenv("ARXIV_EMBED_DIM", "384"))
+# Optional instruction prepended to SEARCH QUERIES only (not stored passages).
+# Asymmetric-retrieval models want one, e.g. BAAI/bge-small-en-v1.5:
+# ARXIV_EMBED_QUERY_PREFIX="Represent this sentence for searching relevant passages: "
+# Empty for symmetric models like all-MiniLM-L6-v2 (the default).
+EMBED_QUERY_PREFIX = os.getenv("ARXIV_EMBED_QUERY_PREFIX", "")
 # Chunking is char-based (cheap, model-agnostic). all-MiniLM-L6-v2 truncates at
 # ~256 word-pieces, so keep a chunk under ~1000 chars (~250 tokens) or its tail
 # is embedded into nothing. Overlap preserves context across chunk boundaries.

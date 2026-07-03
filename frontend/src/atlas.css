@@ -957,6 +957,25 @@
   font-size: 15px;
   color: var(--text-strong);
 }
+.library-chat-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scope-select {
+  max-width: 200px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.scope-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
 .library-chat-scroll {
   flex: 1;
   overflow-y: auto;

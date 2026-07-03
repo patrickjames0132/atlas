@@ -1139,13 +1139,14 @@ def _hit_titles(hits: list[dict]) -> list[str]:
 def answer_from_sources(
     question: str,
     history: Optional[list[dict]] = None,
+    source_id: Optional[str] = None,
 ) -> Iterator[tuple[str, object]]:
     """Answer a question purely from the user's local library — no graph.
 
     Yields a single ``("trace", {...})`` naming the retrieved passages, then
     ``("token", str)`` prose events. Retrieve-then-answer (no tool use), so it runs
-    on either teacher backend."""
-    hits = sources.search(question, k=config.SOURCES_CHAT_K)
+    on either teacher backend. ``source_id`` scopes retrieval to one source."""
+    hits = sources.search(question, k=config.SOURCES_CHAT_K, source_id=source_id)
     yield ("trace", {"found": len(hits), "sources": _hit_titles(hits)})
     if not hits:
         yield (

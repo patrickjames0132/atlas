@@ -73,6 +73,10 @@ def embed_texts(texts: list[str], *, batch_size: int = 64) -> Optional[list[list
 
 
 def embed_query(text: str) -> Optional[list[float]]:
-    """Embed a single search query. Returns None if the model is unavailable."""
-    result = embed_texts([text])
+    """Embed a single search query. Returns None if the model is unavailable.
+
+    Prepends config.EMBED_QUERY_PREFIX (empty by default) so asymmetric-retrieval
+    models like bge-small get their expected query instruction, while stored
+    passages (embed_texts) stay un-prefixed."""
+    result = embed_texts([config.EMBED_QUERY_PREFIX + text])
     return result[0] if result else None

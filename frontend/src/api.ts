@@ -300,9 +300,9 @@ export interface AskSourcesHandlers {
 }
 
 // Stream an answer grounded purely in the user's local library — no graph. A
-// single retrieve event, then prose tokens.
+// single retrieve event, then prose tokens. Pass source_id to scope to one source.
 export async function streamAskSources(
-  body: { question: string; session_id: string },
+  body: { question: string; session_id: string; source_id?: string },
   h: AskSourcesHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask_sources', {

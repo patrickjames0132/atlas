@@ -324,12 +324,13 @@ def api_ask_sources() -> Response:
         return jsonify({"error": "Your local library is unavailable (embeddings/sqlite-vec didn't load)."}), 400
 
     session_id = payload.get("session_id") or ""
+    source_id = payload.get("source_id") or None  # scope to one source (optional)
     history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
 
     def gen():
         answer_parts: list[str] = []
         try:
-            for kind, data in teacher.answer_from_sources(question, history):
+            for kind, data in teacher.answer_from_sources(question, history, source_id):
                 if kind == "token":
                     answer_parts.append(data)
                     yield _sse("token", {"text": data})

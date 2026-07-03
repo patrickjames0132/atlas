@@ -246,9 +246,18 @@ optional, behind a key.
     Sources aren't graph nodes, so they cite rather than highlight the graph.
     *(Shipped 2026-07-03; browser-tested — the teacher pulls from uploaded books
     in Q&A with page citations.)*
-  - **3d.3 — polish** *(scoped)* — hybrid **FTS5 + vector (RRF)** for exact-term /
-    proper-noun lookups, per-source scoping in the UI, figure/image handling
-    (OCR for scanned PDFs), and an optional stronger embed model (`bge-small`).
+  - **3d.3 — polish** *(scoped)* — remaining source-library polish:
+    - [x] **per-source scoping in the UI** *(v1.13.0)* — the offline library chat
+      gets an "All sources / one source" picker (shown at 2+ sources) that scopes
+      retrieval; `source_id` flows question → `/api/ask_sources` →
+      `answer_from_sources` → `sources.search`.
+    - [x] **optional stronger embed model** *(v1.13.0)* — swap in `bge-small`
+      (also 384-dim, so `ARXIV_EMBED_DIM` is unchanged) via `ARXIV_EMBED_MODEL`,
+      with a query-only instruction prefix (`ARXIV_EMBED_QUERY_PREFIX`, empty by
+      default) for asymmetric retrieval; re-ingest sources to apply.
+    - [ ] hybrid **FTS5 + vector (RRF)** for exact-term / proper-noun lookups.
+    - [ ] figure/image handling — **OCR for scanned PDFs** *(deferred — needs a
+      system Tesseract dep, fiddly on Windows)*.
 - [ ] **Phase 3e — Agentic "How we got here" (time travel)** — the history lecture
       is grounded only in the papers already on the graph, so it can't reach a
       field's true origins when the seed is modern (a 2024 Hawking-radiation
