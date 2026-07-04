@@ -39,6 +39,7 @@ def answer_agentic(
     seed: dict,
     nodes: list[dict],
     history: Optional[list[dict]] = None,
+    source_id: Optional[str] = None,
 ) -> Iterator[tuple[str, object]]:
     """Answer a question agentically: read / expand / search via tool use.
 
@@ -60,6 +61,11 @@ def answer_agentic(
             the agent expands/searches).
         history: Prior conversation turns as ``[{role, content}, ...]``;
             malformed turns are skipped.
+        source_id: A user-selected library source to scope the agent's
+            ``search_sources`` to (from the Teacher panel). When set, only that
+            source is offered in the agent's "Your library" context and every
+            source search is pinned to it; None lets the agent search the whole
+            library. A scope that matches no source disables source search.
 
     Yields:
         ``("trace", {...})`` as it reads/expands/searches, ``("nodes", {...})``
@@ -81,6 +87,12 @@ def answer_agentic(
     # (checked before touching the embedding model, so an empty library never
     # pays the torch load). list_sources is cheap; available() loads the model.
     library = sources.list_sources()
+    # A user-set scope pins the teacher to one source: show only it in context
+    # and force every source search to it (below). A scope matching nothing
+    # (e.g. a since-deleted source) simply leaves the library empty → no source
+    # tool, rather than silently falling back to the whole library.
+    if source_id:
+        library = [s for s in library if s.get("id") == source_id]
     has_sources = bool(library) and sources.available()
     tools = _TOOLS + [_SOURCE_TOOL] if has_sources else _TOOLS
     system = _agent_system(has_sources)
@@ -169,7 +181,7 @@ def answer_agentic(
                     if discovery:
                         yield ("nodes", discovery)
                 elif b.name == "search_sources":
-                    content, trace = _run_search_sources(b, source_searches)
+                    content, trace = _run_search_sources(b, source_searches, scope=source_id)
                     yield ("trace", trace)
                 else:
                     content = f"Unknown tool {b.name!r}."

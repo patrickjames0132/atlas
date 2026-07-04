@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.15 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.17 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the
@@ -151,7 +151,9 @@ The Vite dev server proxies `/api/*` to Flask.
    - **"This paper's intuition"** — a deep-dive on the seed paper itself (what it
      solved, the core idea, why it works), using the neighbors for contrast.
    - **Ask** — type a question and get a streamed answer **grounded in the papers
-     on screen**; the papers it draws from light up. Follow-ups keep context.
+     on screen**; the papers it draws from light up. Follow-ups keep context. If
+     you've uploaded a library, the agent can also **search your own sources** —
+     and a header dropdown lets you **scope it to one source** (or all).
 
    The teacher uses Claude through the same dual backend as summaries — the
    `claude` CLI (Pro/Max subscription, no API billing) or the Anthropic API. Set

@@ -15,11 +15,33 @@
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
 }
+.teacher-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .teacher-title {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
+}
+/* Source-scope dropdown, shared by the teacher header and the library chat
+   header (which layers library-chat.css on top of this base). */
+.scope-select {
+  max-width: 200px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.scope-select:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 .teacher-modes {
   display: flex;

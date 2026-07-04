@@ -122,7 +122,9 @@ def api_ask() -> Response:
     the recent window.
 
     Body:
-        ``{question, session_id, seed, nodes}``.
+        ``{question, session_id, seed, nodes, source_id?}`` — ``source_id``
+        scopes the agent's library search to one uploaded source (agentic
+        backend only).
 
     Returns:
         An SSE stream: with the agentic backend, ``trace`` events (tool
@@ -140,12 +142,15 @@ def api_ask() -> Response:
         return jsonify({"error": "nodes must be a non-empty list"}), 400
     seed = payload.get("seed") or {}
     session_id = payload.get("session_id") or ""
+    source_id = payload.get("source_id") or None  # scope the teacher to one library source
     history = _QA_SESSIONS.get(session_id, []) if session_id else []
 
     # Agentic Q&A (reads papers via tool use) when the API backend is available;
     # otherwise the non-agentic grounded answer (e.g. the claude CLI backend).
+    # The source scope only bears on the agentic path's library search; the
+    # non-agentic grounded answer is graph-only and ignores it.
     source = (
-        teacher_service.answer_agentic(question, seed, nodes, history)
+        teacher_service.answer_agentic(question, seed, nodes, history, source_id)
         if teacher_service.agentic_available()
         else teacher_service.answer_stream(question, seed, nodes, history)
     )

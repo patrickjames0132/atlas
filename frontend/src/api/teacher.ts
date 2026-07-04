@@ -150,11 +150,19 @@ export interface AskHandlers {
  * it drew from. (Non-agentic backends just emit tokens + cited.)
  *
  * @param body The question, a session id for follow-up context, the seed,
- *             and the visible nodes (the grounding scope).
+ *             the visible nodes (the grounding scope), and an optional
+ *             source_id scoping the agent's library search to one uploaded
+ *             source (agentic backend only).
  * @param h    Event handlers; see {@link AskHandlers}.
  */
 export async function streamAsk(
-  body: { question: string; session_id: string; seed: { title: string; id?: string }; nodes: TeacherNode[] },
+  body: {
+    question: string
+    session_id: string
+    seed: { title: string; id?: string }
+    nodes: TeacherNode[]
+    source_id?: string
+  },
   h: AskHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask', {

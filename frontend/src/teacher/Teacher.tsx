@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
+  listSources,
   streamAsk,
   streamLecture,
   type Beat,
@@ -11,6 +12,7 @@ import {
   type GraphResponse,
   type LectureMode,
   type LectureTrace,
+  type Source,
   type TeacherNode,
 } from '../api'
 import './teacher.css'
@@ -80,6 +82,19 @@ export default function Teacher({
   const [input, setInput] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The uploaded library, powering the Q&A source-scope selector. Empty until
+  // fetched; the selector only appears when there's more than one source to pick
+  // between. Scoping bears only on Q&A (which can search the library) — lectures
+  // are graph-only and ignore it.
+  const [libraryItems, setLibraryItems] = useState<Source[]>([])
+  // Scope the teacher's library search to one source's id, or '' for the whole library.
+  const [scope, setScope] = useState('')
+
+  useEffect(() => {
+    listSources()
+      .then((res) => setLibraryItems(res.sources))
+      .catch(() => {})
+  }, [])
 
   // Report the transcript up whenever it changes, so the parent always holds the
   // latest to persist. (Cheap — these arrays are small and change on user turns.)
@@ -220,7 +235,13 @@ export default function Teacher({
       })
       try {
         await streamAsk(
-          { question: q, session_id: sessionId.current, seed, nodes: teacherNodes },
+          {
+            question: q,
+            session_id: sessionId.current,
+            seed,
+            nodes: teacherNodes,
+            source_id: scope || undefined,
+          },
           {
             signal: ctrl.signal,
             onToken: (text) =>
@@ -269,13 +290,31 @@ export default function Teacher({
         setAsking(false)
       }
     },
-    [input, asking, teacherNodes, seed, onHighlight, onDiscover, stopActive],
+    [input, asking, teacherNodes, seed, scope, onHighlight, onDiscover, stopActive],
   )
 
   return (
     <section className="teacher">
       <div className="teacher-head">
-        <span className="teacher-title">AI teacher</span>
+        <div className="teacher-head-top">
+          <span className="teacher-title">AI teacher</span>
+          {libraryItems.length > 1 && (
+            <select
+              className="scope-select"
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              aria-label="Scope the teacher's library search to a source"
+              title="When you ask a question, let the teacher draw on your whole library, or just one source"
+            >
+              <option value="">All sources</option>
+              {libraryItems.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="teacher-modes">
           {MODES.map((m) => (
             <button

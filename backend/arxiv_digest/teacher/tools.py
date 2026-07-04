@@ -548,7 +548,9 @@ def _sources_context(library: list[dict]) -> str:
     return "Your library (search with search_sources):\n" + "\n".join(lines)
 
 
-def _run_search_sources(block, source_searches: dict) -> tuple[str, dict]:
+def _run_search_sources(
+    block, source_searches: dict, scope: Optional[str] = None
+) -> tuple[str, dict]:
     """Execute a ``search_sources`` tool call.
 
     Semantic search over the user's own uploaded library. No graph discovery
@@ -559,6 +561,10 @@ def _run_search_sources(block, source_searches: dict) -> tuple[str, dict]:
         block: The tool_use content block (``input`` carries ``query`` and
             optional ``source_id``).
         source_searches: Mutable ``{"left": int}`` budget (decremented here).
+        scope: A user-selected source id the whole answer is pinned to. When
+            set it overrides the agent's own ``source_id``, so the search
+            can't stray outside the chosen source; None lets the agent choose
+            (or search the whole library).
 
     Returns:
         ``(tool_result_text, trace)``. Failures (empty query, spent budget,
@@ -566,7 +572,7 @@ def _run_search_sources(block, source_searches: dict) -> tuple[str, dict]:
     """
     inp = getattr(block, "input", None) or {}
     query = (inp.get("query") or "").strip()
-    source_id = inp.get("source_id") or None
+    source_id = scope or (inp.get("source_id") or None)
     if not query:
         return (
             "Invalid search_sources call (empty query).",

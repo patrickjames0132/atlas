@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.16 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.17 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -9,7 +9,8 @@
 > (v1.9.0), teacher searches your uploaded books in Q&A (v1.10.0), offline library
 > chat (v1.12.0), per-source scoping + stronger embed model (v1.13.0), "how we got
 > here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0), seed-search
-> date/category filters + result dates (v1.16.0)
+> date/category filters + result dates (v1.16.0), teacher source-scope selection
+> (v1.17.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -322,16 +323,30 @@ optional, behind a key.
       drop **multiple files at once** and embed them **in parallel** (with
       per-file progress), so loading a stack of books isn't a serial wait. *(From
       the `todos.md` inbox, 2026-07-03.)*
-- [ ] **Toggle between graph view and library-agent view** — a clean way to switch
-      **off the graph** and into the **offline library chat** (and back) as a
-      first-class mode, rather than the current modal-over-graph. E.g. a top-level
-      view switch so "chat with my library" is a place you go, not just an overlay.
+- [ ] **Unified assistant panel** *(planned — supersedes the old "toggle to
+      library-agent view" idea)* — collapse the two overlapping chat surfaces
+      (the docked `Teacher` panel and the `LibraryChat` modal) into **one
+      header-toggled side drawer** whose capability levels up with context:
+      **no graph, has library** → offline library chat (the backend-agnostic
+      `answer_from_sources` path — works on both teacher backends); **graph open**
+      → the agentic path lights up `read_paper` / `expand_node` / `search_papers`
+      **and** `search_sources` (+ the lecture buttons, which are graph-only);
+      **neither** → an empty state prompting to search a paper or upload a source.
+      One conversation thread that spans library-only → graph+library, one session
+      store, one ask bar. The v1.17.0 source-scope selector folds straight in.
+      *(From the `todos.md` inbox, 2026-07-03; shaped 2026-07-03.)*
+- [x] **Source selection for the AI Teacher** *(v1.17.0)* — the Teacher panel
+      gained the same source-scope control the library assistant has: an **All
+      sources / one source** dropdown (shown when the library has >1 source) that
+      **pins the agent's `search_sources` to the chosen source** — only that source
+      appears in the agent's "Your library" context and every source search is
+      forced to it (a scope matching nothing disables source search rather than
+      silently widening). Threaded `source_id` through `/api/ask` →
+      `answer_agentic`; the graph-only paths (lecture, non-agentic Q&A) ignore it.
       *(From the `todos.md` inbox, 2026-07-03.)*
-- [ ] **Source selection for the AI Teacher** — the offline library assistant lets
-      you scope which uploaded sources it draws on; the **AI Teacher** should get
-      the same **source-selection** control, so a lecture / Q&A can be pointed at a
-      chosen subset of the library too — not just the library assistant. *(From the
-      `todos.md` inbox, 2026-07-03.)*
+      **Next:** fold this into a **single unified assistant panel** (see the
+      library-view toggle item) — one header-toggled drawer that defaults to the
+      library with no graph open and levels up to graph + S2 tools once one is.
 - [x] **Publication date in search results + seed-search filters** *(v1.16.0)* —
       arXiv hits now show their **publication date** (from the paper's own
       submission day), and the search surface gained an optional **filter
