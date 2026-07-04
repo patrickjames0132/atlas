@@ -197,13 +197,25 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 │       ├── cache.py             # tiny TTL cache for dynamic artifacts
 │       ├── arxiv_client.py      # arXiv seed search (finds the paper to map)
 │       ├── search.py            # seed search: live arXiv + instant local-cache
-│       ├── teacher.py           # streaming AI lecture + agentic Q&A (dual backend)
+│       ├── teacher/             # AI teacher package: streaming backends, lecture,
+│       │                        #   grounded + agentic Q&A, tools, library chat
 │       ├── fulltext.py          # full paper text from ar5iv for the Q&A agent (cached)
 │       ├── figures.py           # paper figures + captions from ar5iv (cached)
 │       ├── taxonomy.py          # arXiv category taxonomy (dormant; for future use)
-│       └── app.py               # Flask API (incl. /api/lecture, /api/ask) + frontend
+│       ├── routes/              # the API surface: one Flask blueprint per concern
+│       │                        #   (graph, search, teacher, sources, sessions)
+│       └── app.py               # thin Flask factory: wires routes/ + serves frontend
 └── frontend/                    # React + TS + Vite
-    └── src/{GraphExplorer.tsx, Teacher.tsx, api.ts, atlas.css, main.tsx}
+    └── src/
+        ├── Atlas.tsx            # the workspace orchestrator (owns graph state)
+        ├── api/                 # typed backend client (search, graph, teacher, …)
+        ├── header/              # AtlasHeader (brand, search form, drawer toggles)
+        ├── search/              # Search form + HitList + useSeedSearch
+        ├── graph/               # GraphCanvas/Controls/Legend + layout/pin/discovery hooks
+        ├── detail/              # DetailPanel + useSelection (figures, hydration)
+        ├── teacher/             # Teacher panel + offline LibraryChat
+        ├── library/             # Sources drawer (bring-your-own sources)
+        └── sessions/            # Sessions drawer (saved workspaces)
 ```
 
 *Legacy note:* the earlier "daily digest" era (local paper store, hybrid FTS5 +

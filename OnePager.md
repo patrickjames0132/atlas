@@ -331,9 +331,15 @@ optional, behind a key.
       **filter search results by publication date** (e.g. a date/year control on the
       search surface, complementing the graph's existing year-range slider). *(From
       the `todos.md` inbox, 2026-07-03.)*
-- [ ] **Frontend/backend package refactor** — break large modules into logical
-      packages/groups so the code is easier to follow (e.g. `GraphExplorer.tsx`
-      is 1,000+ lines; some backend grouping too).
+- [x] **Frontend/backend package refactor** *(v1.15.1)* — the whole codebase
+      reorganized into concern packages. Backend: `app.py` → a thin factory over
+      `routes/` blueprints; `teacher.py` (1,280 lines) → a `teacher/` package
+      (backends, lecture, qa, agentic, tools, sources_chat). Frontend:
+      `api.ts` → an `api/` module; `GraphExplorer.tsx` (1,244 lines) →
+      `Atlas.tsx` (a 560-line orchestrator) over concern folders — `header/`,
+      `search/`, `graph/`, `detail/`, `teacher/`, `library/`, `sessions/` —
+      each owning its components, hooks, and CSS (the 1,000-line `atlas.css`
+      split alongside). Everything JSDoc/docstring-documented.
 - [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
       selected paper when available (Papers with Code / Hugging Face Papers), so a
       node links out to runnable implementations, not just its abstract. Show in
