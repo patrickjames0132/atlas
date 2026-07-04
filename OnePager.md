@@ -423,6 +423,10 @@ optional, behind a key.
 - [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
       sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
       names the model the AI teacher actually runs on, not the build tool.
+- [x] **Deselect-all in the assistant source scope** *(v1.20.1)* — the source-scope
+      popover only had **Select all**; added a **Deselect all** (shown whenever any
+      source is checked) so you can clear and then pick a few, rather than unchecking
+      many by hand.
 - [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
       filter popover didn't close when a search fired; `Search`'s form `onSubmit`
       now collapses it (`setOpen(false)`) before running the search.

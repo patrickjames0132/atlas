@@ -391,14 +391,21 @@ export default function Teacher({
                   <div className="scope-pop">
                     <div className="scope-pop-head">
                       <span>Search in</span>
-                      {scopeIds.length < libraryItems.length && (
-                        <button
-                          className="link-btn"
-                          onClick={() => setScopeIds(libraryItems.map((s) => s.id))}
-                        >
-                          Select all
-                        </button>
-                      )}
+                      <span className="scope-pop-actions">
+                        {scopeIds.length < libraryItems.length && (
+                          <button
+                            className="link-btn"
+                            onClick={() => setScopeIds(libraryItems.map((s) => s.id))}
+                          >
+                            Select all
+                          </button>
+                        )}
+                        {scopeIds.length > 0 && (
+                          <button className="link-btn" onClick={() => setScopeIds([])}>
+                            Deselect all
+                          </button>
+                        )}
+                      </span>
                     </div>
                     {libraryItems.map((s) => (
                       <label key={s.id} className="scope-item">
