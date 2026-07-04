@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.21 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.22 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -12,7 +12,8 @@
 > date/category filters + result dates (v1.16.0), teacher source-scope selection
 > (v1.17.0), unified assistant panel (v1.18.0), parallel upload + multi-select
 > source scope (v1.19.0), figures in agent answers (v1.20.0), hybrid lexical +
-> semantic library search (v1.21.0)
+> semantic library search (v1.21.0), quality hardening — strict mypy, src-layout,
+> 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -464,12 +465,37 @@ optional, behind a key.
       rendered (image + caption) in the answer bubble with a **click-to-enlarge
       lightbox** (backdrop / ✕ / Esc to close). Budgeted at `AGENT_MAX_FIGURES`
       (3/answer); agentic path only. A `🖼 Showed Figure N of …` trace chip marks it.
-- [ ] **Embed answer figures inline (not appended)** — figures currently render as
-      a strip at the **end** of the answer bubble; place each one **at the point in
-      the prose where it's most relevant** instead. Needs the agent to mark figure
-      positions in its text (a sentinel like `<<CITED>>`) and the stream parser to
-      split the message around them and interleave the images. *(From testing
-      2026-07-03.)*
+- [x] **Embed answer figures inline (not appended)** *(v1.22.0)* — each
+      `show_figure` attachment now gets a 1-based **slot**, and the tool result
+      instructs the agent to place a **`<<FIG n>>` marker** in its prose exactly
+      where the figure belongs. The marker streams through verbatim (no SSE
+      protocol change); the answer bubble **splits its text on markers and
+      interleaves the figure cards** (a partial marker at the streaming tail is
+      held out of the render so it never flashes). Degrades gracefully: an
+      unplaced figure falls back to the old end-of-bubble strip, a marker with no
+      matching figure vanishes without gluing paragraphs, and pre-v1.22 saved
+      sessions render as before (new saves restore inline placement free, since
+      markers live in the persisted text). Two fixes from browser testing:
+      markers are **stripped from the server-side conversation history** (a model
+      that saw `<<FIG 1>>` in its earlier answers skipped placing the fresh one,
+      so figures degraded to end-anchoring as the chat went on), and the system
+      prompt now hard-forbids the model **drawing figures itself** (ASCII art /
+      box characters) — `show_figure` is the only path to visuals. *(Known limit:
+      tool-call compliance is still somewhat inconsistent; see the agent-
+      reliability item below.)*
+- [ ] **Agent reliability: stronger model or sub-agent decomposition** — even
+      with the hardened prompt, the agent sometimes skips `show_figure` (or
+      tools generally) and answers from context. Two levers to explore: point
+      `AGENT_MODEL` at a stronger model than the default (`TEACHER_MODEL`,
+      Sonnet 4.6) just for the tool loop; or **break the loop into sub-agents**
+      (e.g. a researcher that reads/expands and a writer that composes) so each
+      keeps a **small, focused context** instead of one long conversation
+      carrying every tool result. *(Patrick's observation while testing inline
+      figures, 2026-07-04.)*
+- [ ] **Zoom on detail-panel figures** — the sidebar's paper figures (Phase 2.1)
+      aren't click-to-enlarge; give them the same **lightbox** the answer figures
+      got in v1.20.0 (reuse the existing component). *(From the `todos.md` inbox,
+      2026-07-04.)*
 - [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
       feature to the user's **own library**: pull images out of an ingested PDF
       (via `pymupdf`, which we already use for text) and let the agent surface a

@@ -7,9 +7,10 @@ no network, no API key.
 
 from __future__ import annotations
 
+from conftest import text_turn, tool_turn
+
 from arxiv_digest import config
 from arxiv_digest.teacher.agentic import answer_agentic
-from conftest import text_turn, tool_turn
 
 SEED = {"id": "p1", "title": "Attention Is All You Need", "year": 2017,
         "abstract": "We propose the Transformer.", "tldr": "Attention replaces recurrence."}
@@ -45,8 +46,8 @@ def test_plain_answer_with_sentinel(fake_claude):
 
 def test_split_sentinel_never_leaks(fake_claude):
     """A sentinel split across stream chunks stays hidden from the prose."""
-    from conftest import final_message, text_delta
     from anthropic.types import TextBlock
+    from conftest import final_message, text_delta
 
     full = "RNNs lost. <<CITED>> [2]"
     events = [text_delta("RNNs lost. <<CIT"), text_delta("ED>> [2]")]
@@ -127,6 +128,30 @@ def test_history_threads_into_messages(fake_claude):
     assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
     assert msgs[0]["content"] == "earlier question"
     assert "and now?" in msgs[-1]["content"]
+
+
+def test_show_figure_slot_flows_to_figure_event_and_marker_streams(fake_claude, monkeypatch):
+    """Inline-figure protocol: the figure event carries its slot, and the
+    <<FIG n>> marker the model places in prose streams through verbatim (the
+    frontend splits on it to interleave the image)."""
+    from arxiv_digest.teacher import tools
+
+    monkeypatch.setattr(tools.figures_mod, "get_figures", lambda arxiv_id: {
+        "available": True,
+        "figures": [{"image": "https://ar5iv.labs.arxiv.org/x.png", "caption": "Arch"}],
+    })
+    nodes = [dict(SEED, arxiv_id="1706.03762"), BERT]
+    fake_claude([
+        tool_turn("show_figure", {"index": 1, "figure": 1}),
+        text_turn("See the architecture:\n<<FIG 1>>\nas shown. <<CITED>> [1]"),
+    ])
+    events = list(answer_agentic("show me", SEED, nodes))
+    (figure,) = [d for k, d in events if k == "figure"]
+    assert figure["slot"] == 1 and figure["image"].startswith("/api/figure_proxy")
+    _, text, cited = collect(events)
+    assert "<<FIG 1>>" in text          # marker reaches the frontend intact
+    assert "<<CITED" not in text        # the citation sentinel still hidden
+    assert cited == ["p1"]
 
 
 def test_empty_source_scope_disables_source_tool(fake_claude, stub_embeddings):

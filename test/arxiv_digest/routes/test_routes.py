@@ -5,12 +5,10 @@ module's import site; the sessions routes run against the real (temp) store.
 
 from __future__ import annotations
 
-import pytest
 from arxiv_digest.integrations import semantic_scholar as s2
 from arxiv_digest.routes import graph as graph_routes
 from arxiv_digest.routes import search as search_routes
 from arxiv_digest.routes import sources as sources_routes
-
 
 # --- /api/graph ----------------------------------------------------------------
 
@@ -190,6 +188,30 @@ def test_ask_streams_tokens_then_cited_then_done(flask_client, monkeypatch):
     # The turn persisted into the session store (user + assistant).
     convo = teacher_routes._QA_SESSIONS["sess-1"]
     assert convo[-1] == {"role": "assistant", "content": "Half answer."}
+
+
+def test_ask_persists_history_without_figure_markers(flask_client, monkeypatch):
+    """<<FIG n>> markers are render directives — they stream to the frontend
+    but must NOT be persisted into the model's conversation history (a model
+    that sees an old marker skips placing the fresh one next turn)."""
+    from arxiv_digest.routes import teacher as teacher_routes
+
+    def fake_stream(question, seed, nodes, history):
+        yield ("token", "See the architecture:\n")
+        yield ("token", "<<FIG 1>>\n")
+        yield ("token", "as shown above.")
+        yield ("cited", ["p1"])
+    monkeypatch.setattr(teacher_routes.teacher_service, "agentic_available", lambda: False)
+    monkeypatch.setattr(teacher_routes.teacher_service, "answer_stream", fake_stream)
+
+    resp = flask_client.post("/api/ask", json={
+        "question": "show me", "seed": {}, "nodes": [{"id": "p1"}], "session_id": "sess-fig",
+    })
+    # The marker reaches the frontend intact (it splits the bubble on it)...
+    assert "<<FIG 1>>" in resp.get_data(as_text=True)
+    # ...but the persisted turn is marker-free prose.
+    persisted = teacher_routes._QA_SESSIONS["sess-fig"][-1]["content"]
+    assert persisted == "See the architecture:\nas shown above."
 
 
 def test_ask_stream_failure_emits_error_and_skips_persist(flask_client, monkeypatch):

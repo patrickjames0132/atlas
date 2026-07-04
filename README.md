@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.21 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.22 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the

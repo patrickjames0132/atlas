@@ -40,6 +40,76 @@ const MODES: { key: LectureMode; label: string }[] = [
   { key: 'intuition', label: "This paper's intuition" },
 ]
 
+// A complete inline-figure marker the agent placed in its prose ("<<FIG 2>>").
+const FIG_MARKER = /<<FIG (\d+)>>/g
+// A partial marker at the very end of streaming prose — held out of the render
+// so a marker split across token chunks never flashes raw before completing.
+const FIG_TAIL = /<<(?:F(?:I(?:G(?: ?(?:\d+>?)?)?)?)?)?$/
+
+/**
+ * Split answer prose on `<<FIG n>>` markers, pairing each marker with the
+ * attached figure whose `slot` is n. Returns the interleaved text/figure
+ * parts, plus the figures whose marker never appeared in the prose — those
+ * render at the end of the bubble (the pre-inline fallback, which also covers
+ * pre-v1.22 saved sessions whose figures carry no slot).
+ */
+function splitAnswer(
+  text: string,
+  figures?: AnswerFigure[],
+): { parts: (string | AnswerFigure)[]; leftover: AnswerFigure[] } {
+  const figs = figures ?? []
+  const clean = text.replace(FIG_TAIL, '')
+  const used = new Set<number>()
+  const parts: (string | AnswerFigure)[] = []
+  // Text accumulates in a buffer so a marker with no matching figure (e.g. a
+  // slot the agent invented) just disappears — its surrounding paragraphs stay
+  // joined by their own newlines instead of gluing together.
+  let buf = ''
+  const flush = () => {
+    const t = buf.replace(/^\n+|\n+$/g, '') // outer blank lines only; keep internal breaks
+    if (t) parts.push(t)
+    buf = ''
+  }
+  let last = 0
+  for (const m of clean.matchAll(FIG_MARKER)) {
+    buf += clean.slice(last, m.index)
+    last = (m.index ?? 0) + m[0].length
+    const slot = Number(m[1])
+    const fig = figs.find((f) => f.slot === slot)
+    if (fig && !used.has(slot)) {
+      used.add(slot)
+      flush()
+      parts.push(fig)
+    }
+  }
+  buf += clean.slice(last)
+  flush()
+  if (parts.length === 0) parts.push('')
+  return { parts, leftover: figs.filter((f) => f.slot == null || !used.has(f.slot)) }
+}
+
+/** One attached figure: proxied image + caption, click to enlarge. */
+function FigCard({ f, onEnlarge }: { f: AnswerFigure; onEnlarge: (f: AnswerFigure) => void }) {
+  return (
+    <figure className="chat-fig">
+      <button
+        type="button"
+        className="chat-fig-btn"
+        onClick={() => onEnlarge(f)}
+        title="Click to enlarge"
+        aria-label="Enlarge figure"
+      >
+        <img src={f.image} alt={f.caption || 'Figure'} loading="lazy" />
+      </button>
+      <figcaption className="chat-fig-cap">
+        <b>Figure {f.figure}</b>
+        {f.title ? ` · ${f.title}` : ''}
+        {f.caption ? ` — ${f.caption}` : ''}
+      </figcaption>
+    </figure>
+  )
+}
+
 function toTeacherNodes(nodes: GraphNode[]): TeacherNode[] {
   return nodes.map((n) => ({
     id: n.id,
@@ -585,32 +655,36 @@ export default function Teacher({
                 )}
               </div>
             )}
-            {m.text ||
-              (m.role === 'assistant' && asking && !m.trace?.length && !m.retrieve
-                ? '…'
-                : '')}
-            {m.figures && m.figures.length > 0 && (
-              <div className="chat-figs">
-                {m.figures.map((f, k) => (
-                  <figure key={k} className="chat-fig">
-                    <button
-                      type="button"
-                      className="chat-fig-btn"
-                      onClick={() => setLightbox(f)}
-                      title="Click to enlarge"
-                      aria-label="Enlarge figure"
-                    >
-                      <img src={f.image} alt={f.caption || 'Figure'} loading="lazy" />
-                    </button>
-                    <figcaption className="chat-fig-cap">
-                      <b>Figure {f.figure}</b>
-                      {f.title ? ` · ${f.title}` : ''}
-                      {f.caption ? ` — ${f.caption}` : ''}
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            )}
+            {(() => {
+              if (!m.text) {
+                return m.role === 'assistant' && asking && !m.trace?.length && !m.retrieve
+                  ? '…'
+                  : ''
+              }
+              // Interleave the prose with the figures the agent placed via
+              // <<FIG n>> markers; unplaced figures fall back to the end.
+              const { parts, leftover } = splitAnswer(m.text, m.figures)
+              return (
+                <>
+                  {parts.map((p, k) =>
+                    typeof p === 'string' ? (
+                      <span key={k}>{p}</span>
+                    ) : (
+                      <div key={k} className="chat-figs chat-figs-inline">
+                        <FigCard f={p} onEnlarge={setLightbox} />
+                      </div>
+                    ),
+                  )}
+                  {leftover.length > 0 && (
+                    <div className="chat-figs">
+                      {leftover.map((f, k) => (
+                        <FigCard key={k} f={f} onEnlarge={setLightbox} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
             {m.cited && m.cited.length > 0 && (
               <div className="chat-cited">grounded in {m.cited.length} paper(s) ✦</div>
             )}

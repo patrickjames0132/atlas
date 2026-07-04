@@ -11,6 +11,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from arxiv_digest.teacher import tools
 
 
@@ -236,39 +237,47 @@ def fake_figures(monkeypatch):
     return install
 
 
-def test_show_figure_happy_path_proxies_image(fake_figures):
-    fake_figures([{"image": "https://ar5iv.labs.arxiv.org/x.png", "caption": "The architecture"}])
+def test_show_figure_happy_path_proxies_image_and_assigns_slot(fake_figures):
+    fake_figures([{"image": "https://ar5iv.labs.arxiv.org/x.png", "caption": "The architecture"},
+                  {"image": "https://ar5iv.labs.arxiv.org/y.png", "caption": "Results"}])
     numbered = [node(1, arxiv_id="1706.03762")]
     budget = {"left": 3}
-    text, trace, fig = tools._run_show_figure(block(index=1, figure=1), numbered, set(), budget)
+    shown: dict = {}
+    text, trace, fig = tools._run_show_figure(block(index=1, figure=1), numbered, shown, budget)
     assert budget["left"] == 2 and trace["ok"] is True
     assert fig["image"].startswith("/api/figure_proxy?src=")
     assert "ar5iv" in fig["image"] and fig["caption"] == "The architecture"
-    assert "Attached Figure 1" in text
+    assert fig["slot"] == 1
+    # The result teaches the model where to put the inline marker.
+    assert "Attached Figure 1" in text and "<<FIG 1>>" in text
+    # A second attachment gets the next slot.
+    _, _, fig2 = tools._run_show_figure(block(index=1, figure=2), numbered, shown, budget)
+    assert fig2["slot"] == 2
 
 
-def test_show_figure_repeat_is_noop(fake_figures):
+def test_show_figure_repeat_is_noop_and_restates_marker(fake_figures):
     fake_figures([{"image": "https://ar5iv.labs.arxiv.org/x.png", "caption": "c"}])
     numbered = [node(1, arxiv_id="1706.03762")]
-    shown: set = set()
+    shown: dict = {}
     budget = {"left": 3}
     tools._run_show_figure(block(index=1, figure=1), numbered, shown, budget)
     text, trace, fig = tools._run_show_figure(block(index=1, figure=1), numbered, shown, budget)
     assert "already shown" in text and fig is None
+    assert "<<FIG 1>>" in text  # the original marker, so the model can still place it
     assert budget["left"] == 2  # repeat spends nothing
 
 
 def test_show_figure_out_of_range_and_no_arxiv(fake_figures):
     fake_figures([{"image": "https://ar5iv.labs.arxiv.org/x.png", "caption": "c"}])
     numbered = [node(1, arxiv_id="1706.03762"), node(2)]  # node 2: no arxiv_id
-    text, _, fig = tools._run_show_figure(block(index=1, figure=5), numbered, set(), {"left": 3})
+    text, _, fig = tools._run_show_figure(block(index=1, figure=5), numbered, {}, {"left": 3})
     assert "only 1 figure(s)" in text and fig is None
-    text, _, fig = tools._run_show_figure(block(index=2, figure=1), numbered, set(), {"left": 3})
+    text, _, fig = tools._run_show_figure(block(index=2, figure=1), numbered, {}, {"left": 3})
     assert "no arXiv figures" in text and fig is None
 
 
 @pytest.mark.parametrize("figure", [0, -1, True, "1", None])
 def test_show_figure_invalid_figure_number(figure):
     text, trace, fig = tools._run_show_figure(
-        block(index=1, figure=figure), [node(1, arxiv_id="x")], set(), {"left": 3})
+        block(index=1, figure=figure), [node(1, arxiv_id="x")], {}, {"left": 3})
     assert "Invalid show_figure" in text and fig is None

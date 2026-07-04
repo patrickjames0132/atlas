@@ -253,6 +253,10 @@
   gap: 10px;
   margin: 8px 0 2px;
 }
+/* A figure placed inline at its <<FIG n>> marker, between prose paragraphs. */
+.chat-figs-inline {
+  margin: 10px 0;
+}
 .chat-fig {
   margin: 0;
   border: 1px solid var(--border);

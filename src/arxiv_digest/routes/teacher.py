@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Iterator
 
 from flask import Blueprint, Response, jsonify, request
@@ -30,6 +31,13 @@ log = logging.getLogger(__name__)
 # Session-scoped Q&A history, kept in memory (cleared on restart — fine for v1).
 # Maps a client-generated session id -> [{role, content}, ...].
 _QA_SESSIONS: dict[str, list[dict]] = {}
+
+# Inline-figure markers (<<FIG n>>) are stripped from the PERSISTED history:
+# they stream to the frontend (which replaces them with the image) but must not
+# re-enter the model's context on follow-ups — a model that sees "<<FIG 1>>"
+# already sitting in its previous answer skips placing the fresh marker for
+# this turn's figure, and the image falls back to the end of the bubble.
+_FIG_MARKER_RE = re.compile(r"[ \t]*<<FIG \d+>>\n?")
 # Separate history store for the offline library chat (Phase 3d) — same shape,
 # kept apart so a graph Q&A and a library chat don't cross-contaminate context.
 _SOURCES_SESSIONS: dict[str, list[dict]] = {}
@@ -211,11 +219,14 @@ def api_ask() -> ResponseReturnValue:
             log.exception("ask failed")
             yield _sse("error", {"error": str(exc)})
             return
-        # Persist the turn only on success, capped to the recent window.
+        # Persist the turn only on success, capped to the recent window. Figure
+        # markers are stripped — they're render directives for the frontend,
+        # not conversation content (see _FIG_MARKER_RE).
         if session_id:
+            answer = _FIG_MARKER_RE.sub("", "".join(answer_parts)).strip()
             convo = _QA_SESSIONS.setdefault(session_id, [])
             convo.append({"role": "user", "content": question})
-            convo.append({"role": "assistant", "content": "".join(answer_parts).strip()})
+            convo.append({"role": "assistant", "content": answer})
             keep = config.TEACHER_HISTORY_TURNS * 2
             if len(convo) > keep:
                 del convo[:-keep]

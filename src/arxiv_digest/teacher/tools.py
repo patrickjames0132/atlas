@@ -48,8 +48,14 @@ _AGENT_SYSTEM = (
     "reach (e.g. \"the latest approach to X in 2026\"); pass year_from to bias "
     "toward recent work. Its hits also get numbered and added for you to read. "
     "When a full read lists a paper's figures and one would make your explanation "
-    "clearer, call show_figure(index, figure) to place it in your answer, and "
-    "point to it in your prose (e.g. \"as Figure 2 shows\"). "
+    "clearer, show the student the REAL figure: call show_figure(index, figure), "
+    "then put the <<FIG n>> marker its result gives you on its own line in your "
+    "prose at exactly the point where the figure belongs (and refer to it, e.g. "
+    "\"as Figure 2 shows\"). Markers are per-answer: place every marker this "
+    "turn's show_figure results give you in THIS answer, even if an earlier "
+    "answer used the same marker text. NEVER draw a figure yourself — no ASCII "
+    "art, no text diagrams, no box-drawing characters; if no real figure is "
+    "available, explain in plain prose instead. "
     "Read, expand, and search only what you need — each has its own limited "
     "budget. Do NOT narrate that you're about to use a tool; just call it. When "
     "you have enough, write the answer in at most a few short paragraphs, grounded "
@@ -180,9 +186,10 @@ _TOOLS: list[ToolParam] = [
         "description": (
             "Place one of a paper's own figures (image + caption, from ar5iv) into "
             "your answer to illustrate a point. Only for a paper you've read in full "
-            "— a full read lists that paper's figures and their numbers. Reference "
-            "the figure in your prose (e.g. \"as Figure 2 shows\"); don't rely on it "
-            "alone to make the point."
+            "— a full read lists that paper's figures and their numbers. The result "
+            "gives you a <<FIG n>> marker: put it on its own line in your answer at "
+            "the point where the figure belongs. Reference the figure in your prose "
+            "(e.g. \"as Figure 2 shows\"); don't rely on it alone to make the point."
         ),
         "input_schema": {
             "type": "object",
@@ -334,24 +341,31 @@ def _figure_list(arxiv_id: str, idx: object) -> str:
 
 
 def _run_show_figure(
-    block, numbered: list[dict], shown: set, budget: dict
+    block, numbered: list[dict], shown: dict, budget: dict
 ) -> tuple[str, dict, Optional[dict]]:
     """Execute a ``show_figure`` tool call — attach a paper's figure to the answer.
+
+    Each successful attachment is assigned a 1-based **slot**; the tool result
+    tells the model to place a ``<<FIG slot>>`` marker in its prose where the
+    figure belongs, and the frontend interleaves the image at that marker
+    (figures whose marker never appears fall back to the end of the bubble).
 
     Args:
         block: The tool_use content block (``input`` carries ``index`` and the
             1-based ``figure`` number).
         numbered: The numbered node list.
-        shown: Mutable visited set of ``(node id, figure number)`` — a repeat
-            show is a no-op (no budget spent, no duplicate image).
+        shown: Mutable ``(node id, figure number) -> slot`` map of attached
+            figures — a repeat show is a no-op (no budget spent, no duplicate
+            image; the result re-states the original marker).
         budget: Mutable ``{"left": int}`` figure budget (decremented here).
 
     Returns:
         ``(tool_result_text, trace, figure)`` — ``figure`` is
-        ``{image, caption, title, index, figure}`` for the frontend to render
-        inline (``image`` is the same-origin proxy URL), or None when nothing
-        was attached (invalid index/number, no arXiv id, no ar5iv figures,
-        budget spent, or a repeat — all reported in the text, never raised).
+        ``{image, caption, title, index, figure, slot}`` for the frontend to
+        render inline (``image`` is the same-origin proxy URL), or None when
+        nothing was attached (invalid index/number, no arXiv id, no ar5iv
+        figures, budget spent, or a repeat — all reported in the text, never
+        raised).
     """
     inp = getattr(block, "input", None) or {}
     idx = inp.get("index")
@@ -371,7 +385,7 @@ def _run_show_figure(
 
     key = (node.get("id"), num)
     if key in shown:
-        return (f'Figure {num} of "{title}" is already shown.',
+        return (f'Figure {num} of "{title}" is already shown — its marker is <<FIG {shown[key]}>>.',
                 {"action": "figure", "ok": True, "index": idx, "title": title, "figure": num}, None)
 
     try:
@@ -385,7 +399,8 @@ def _run_show_figure(
     if num > len(figs):
         return (f'"{title}" has only {len(figs)} figure(s); {num} doesn\'t exist.', fail, None)
 
-    shown.add(key)
+    slot = len(shown) + 1
+    shown[key] = slot
     budget["left"] -= 1
     fig = figs[num - 1]
     proxy = "/api/figure_proxy?src=" + urllib.parse.quote(fig["image"], safe="")
@@ -395,9 +410,15 @@ def _run_show_figure(
         "title": title,
         "index": idx,
         "figure": num,
+        "slot": slot,
     }
     trace = {"action": "figure", "ok": True, "index": idx, "title": title, "figure": num}
-    return (f'Attached Figure {num} of "{title}" to your answer.', trace, payload)
+    return (
+        f'Attached Figure {num} of "{title}" to your answer. Place the marker '
+        f"<<FIG {slot}>> on its own line in your prose at exactly the point where "
+        f"this figure belongs.",
+        trace, payload,
+    )
 
 
 def _run_read(block, numbered: list[dict], budgets: dict, read_cache: dict) -> tuple[str, dict, Optional[str]]:

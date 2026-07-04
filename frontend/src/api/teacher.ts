@@ -134,6 +134,13 @@ export interface AnswerFigure {
   index?: number
   /** The figure's 1-based number in that paper. */
   figure?: number
+  /**
+   * The attachment's 1-based slot — pairs the figure with the `<<FIG n>>`
+   * marker the agent places in its prose, so the image renders inline at
+   * that point. Absent on pre-v1.22 saved sessions (those figures render
+   * at the end of the bubble, the old behavior).
+   */
+  slot?: number
 }
 
 /**

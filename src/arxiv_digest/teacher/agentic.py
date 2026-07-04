@@ -127,7 +127,7 @@ def answer_agentic(
     searched: set = set()
     searches = {"left": config.AGENT_MAX_SEARCHES}
     source_searches = {"left": config.AGENT_MAX_SOURCE_SEARCHES}
-    figs_shown: set = set()
+    figs_shown: dict = {}  # (node id, figure number) -> its <<FIG n>> marker slot
     figures_budget = {"left": config.AGENT_MAX_FIGURES}
     cited: list[str] = []
     start = time.time()
