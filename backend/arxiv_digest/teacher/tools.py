@@ -549,7 +549,7 @@ def _sources_context(library: list[dict]) -> str:
 
 
 def _run_search_sources(
-    block, source_searches: dict, scope: Optional[str] = None
+    block, source_searches: dict, scope: Optional[list[str]] = None
 ) -> tuple[str, dict]:
     """Execute a ``search_sources`` tool call.
 
@@ -561,10 +561,10 @@ def _run_search_sources(
         block: The tool_use content block (``input`` carries ``query`` and
             optional ``source_id``).
         source_searches: Mutable ``{"left": int}`` budget (decremented here).
-        scope: A user-selected source id the whole answer is pinned to. When
-            set it overrides the agent's own ``source_id``, so the search
-            can't stray outside the chosen source; None lets the agent choose
-            (or search the whole library).
+        scope: The user-selected subset of source ids the whole answer is
+            pinned to. When set it overrides the agent's own ``source_id``, so
+            the search can't stray outside the chosen sources; None lets the
+            agent choose one source (or search the whole library).
 
     Returns:
         ``(tool_result_text, trace)``. Failures (empty query, spent budget,
@@ -572,7 +572,13 @@ def _run_search_sources(
     """
     inp = getattr(block, "input", None) or {}
     query = (inp.get("query") or "").strip()
-    source_id = scope or (inp.get("source_id") or None)
+    # A user scope (a subset) wins; otherwise fall back to the single source_id
+    # the agent chose (as a one-element list), or None for the whole library.
+    if scope:
+        source_ids: Optional[list[str]] = scope
+    else:
+        one = inp.get("source_id") or None
+        source_ids = [one] if one else None
     if not query:
         return (
             "Invalid search_sources call (empty query).",
@@ -585,7 +591,7 @@ def _run_search_sources(
         )
     source_searches["left"] -= 1
     try:
-        hits = sources.search(query, source_id=source_id)
+        hits = sources.search(query, source_ids=source_ids)
     except Exception as exc:
         log.exception("search_sources failed")
         return (

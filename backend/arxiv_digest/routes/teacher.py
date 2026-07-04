@@ -26,6 +26,24 @@ _QA_SESSIONS: dict[str, list[dict]] = {}
 _SOURCES_SESSIONS: dict[str, list[dict]] = {}
 
 
+def _opt_source_ids(payload: dict) -> "list[str] | None":
+    """Parse the optional ``source_ids`` scope from a request body.
+
+    Args:
+        payload: The parsed JSON body.
+
+    Returns:
+        The library source ids to scope the answer to — the non-empty string
+        entries of a ``source_ids`` array — or None when absent/empty/malformed
+        (scoping is optional, so junk degrades to "the whole library").
+    """
+    raw = payload.get("source_ids")
+    if not isinstance(raw, list):
+        return None
+    ids = [s for s in raw if isinstance(s, str) and s]
+    return ids or None
+
+
 def _sse(event: str, data: object) -> str:
     """Format one Server-Sent Event frame.
 
@@ -122,9 +140,9 @@ def api_ask() -> Response:
     the recent window.
 
     Body:
-        ``{question, session_id, seed, nodes, source_id?}`` — ``source_id``
-        scopes the agent's library search to one uploaded source (agentic
-        backend only).
+        ``{question, session_id, seed, nodes, source_ids?}`` — ``source_ids``
+        scopes the agent's library search to a subset of uploaded sources
+        (agentic backend only).
 
     Returns:
         An SSE stream: with the agentic backend, ``trace`` events (tool
@@ -142,7 +160,7 @@ def api_ask() -> Response:
         return jsonify({"error": "nodes must be a non-empty list"}), 400
     seed = payload.get("seed") or {}
     session_id = payload.get("session_id") or ""
-    source_id = payload.get("source_id") or None  # scope the teacher to one library source
+    source_ids = _opt_source_ids(payload)  # scope the teacher to a subset of sources
     history = _QA_SESSIONS.get(session_id, []) if session_id else []
 
     # Agentic Q&A (reads papers via tool use) when the API backend is available;
@@ -150,7 +168,7 @@ def api_ask() -> Response:
     # The source scope only bears on the agentic path's library search; the
     # non-agentic grounded answer is graph-only and ignores it.
     source = (
-        teacher_service.answer_agentic(question, seed, nodes, history, source_id)
+        teacher_service.answer_agentic(question, seed, nodes, history, source_ids)
         if teacher_service.agentic_available()
         else teacher_service.answer_stream(question, seed, nodes, history)
     )
@@ -199,8 +217,8 @@ def api_ask_sources() -> Response:
     context without cross-contaminating the two chats.
 
     Body:
-        ``{question, session_id, source_id?}`` — ``source_id`` scopes
-        retrieval to one source.
+        ``{question, session_id, source_ids?}`` — ``source_ids`` scopes
+        retrieval to a subset of sources.
 
     Returns:
         An SSE stream: one ``trace`` event (the retrieved passages), then
@@ -216,14 +234,14 @@ def api_ask_sources() -> Response:
         return jsonify({"error": "Your local library is unavailable (embeddings/sqlite-vec didn't load)."}), 400
 
     session_id = payload.get("session_id") or ""
-    source_id = payload.get("source_id") or None  # scope to one source (optional)
+    source_ids = _opt_source_ids(payload)  # scope to a subset of sources (optional)
     history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
 
     def gen():
         """Yield the library answer's SSE frames, persisting the turn on success."""
         answer_parts: list[str] = []
         try:
-            for kind, data in teacher_service.answer_from_sources(question, history, source_id):
+            for kind, data in teacher_service.answer_from_sources(question, history, source_ids):
                 if kind == "token":
                     answer_parts.append(data)
                     yield _sse("token", {"text": data})

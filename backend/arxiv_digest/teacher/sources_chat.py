@@ -49,7 +49,7 @@ def _hit_titles(hits: list[dict]) -> list[str]:
 def answer_from_sources(
     question: str,
     history: Optional[list[dict]] = None,
-    source_id: Optional[str] = None,
+    source_ids: Optional[list[str]] = None,
 ) -> Iterator[tuple[str, object]]:
     """Answer a question purely from the user's local library — no graph.
 
@@ -61,8 +61,8 @@ def answer_from_sources(
         question: The user's question (doubles as the retrieval query).
         history: Prior conversation turns as ``[{role, content}, ...]``;
             malformed turns are skipped.
-        source_id: Scope retrieval to one source's id, or None for the whole
-            library.
+        source_ids: Scope retrieval to this subset of source ids, or None/empty
+            for the whole library.
 
     Yields:
         A single ``("trace", {found, sources})`` naming the retrieved
@@ -72,7 +72,7 @@ def answer_from_sources(
         RuntimeError: When every teacher backend failed to start.
         sqlite3.Error: On library database failures during retrieval.
     """
-    hits = sources.search(question, k=config.SOURCES_CHAT_K, source_id=source_id)
+    hits = sources.search(question, k=config.SOURCES_CHAT_K, source_ids=source_ids)
     yield ("trace", {"found": len(hits), "sources": _hit_titles(hits)})
     if not hits:
         yield (

@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.18 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.19 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -10,7 +10,8 @@
 > chat (v1.12.0), per-source scoping + stronger embed model (v1.13.0), "how we got
 > here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0), seed-search
 > date/category filters + result dates (v1.16.0), teacher source-scope selection
-> (v1.17.0), unified assistant panel (v1.18.0)
+> (v1.17.0), unified assistant panel (v1.18.0), parallel upload + multi-select
+> source scope (v1.19.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -318,11 +319,17 @@ optional, behind a key.
       New route `POST /api/ask_sources` (SSE, own session store) + a `LibraryChat`
       modal reachable from a top-bar "💬 Ask library" button and an empty-state CTA
       (both shown only when a library exists).
-- [ ] **Parallel multi-file source upload** — the Sources drawer ingests one PDF
-      at a time (single-file picker, synchronous ingest). Let the user select /
-      drop **multiple files at once** and embed them **in parallel** (with
-      per-file progress), so loading a stack of books isn't a serial wait. *(From
-      the `todos.md` inbox, 2026-07-03.)*
+- [x] **Parallel multi-file source upload + multi-select scope** *(v1.19.0)* —
+      the Sources drawer now takes **many PDFs at once** (a `multiple` picker
+      **and** drag-and-drop) and ingests them **in parallel** (a 3-wide pool over
+      the threaded server), with **per-file progress** rows (`embedding… → ✓ added`
+      / `✕ failed` with the message). Alongside it, the assistant's source-scope
+      control went from a single-select dropdown to a **checkbox popover** — a
+      checked box = that source is on (defaults to all), so scoping is now a true
+      **subset**, not one-at-a-time. Backend: `sources.search` `source_id` →
+      `source_ids` (an `IN (…)` filter), threaded through `answer_from_sources` /
+      `answer_agentic` / the `search_sources` tool and both ask routes.
+      *(From the `todos.md` inbox, 2026-07-03.)*
 - [x] **Unified assistant panel** *(v1.18.0 — supersedes the old "toggle to
       library-agent view" idea)* — collapsed the two overlapping chat surfaces
       (the docked `Teacher` panel and the `LibraryChat` modal) into **one

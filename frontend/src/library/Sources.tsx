@@ -9,17 +9,43 @@ import {
 import './sources.css'
 
 // The Sources drawer: manage the user's local semantic library — upload PDFs /
-// books or paste a URL, list what's loaded, remove sources. The library is
-// global and persistent; the AI teacher searches it during Q&A (Phase 3d).
+// books (several at once, embedded in parallel) or paste a URL, list what's
+// loaded, remove sources. The library is global and persistent; the AI teacher
+// searches it during Q&A (Phase 3d).
+
+/** One file in an in-flight upload batch, tracked for per-file progress. */
+type Upload = { name: string; status: 'ingesting' | 'done' | 'error'; error?: string }
+
+/** Run `worker` over `items` with at most `limit` in flight at once. */
+async function runPool<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  let next = 0
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++
+      await worker(items[i], i)
+    }
+  })
+  await Promise.all(runners)
+}
 
 export default function Sources({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [available, setAvailable] = useState(true)
   const [items, setItems] = useState<Source[]>([])
   const [loading, setLoading] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null) // label of the in-flight ingest
+  const [busy, setBusy] = useState<string | null>(null) // label of the in-flight URL ingest
+  // Per-file progress for a multi-file upload batch (parallel, capped).
+  const [uploads, setUploads] = useState<Upload[]>([])
+  const [dragging, setDragging] = useState(false)
   const [url, setUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const uploading = uploads.some((u) => u.status === 'ingesting')
+  const locked = !!busy || uploading || !available
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -33,30 +59,58 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
     if (open) refresh()
   }, [open, refresh])
 
-  const onFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (fileRef.current) fileRef.current.value = '' // allow re-picking the same file
-      if (!file) return
+  // Ingest a batch of PDFs in parallel (capped), tracking each file's progress.
+  // Succeeded rows drop out once they land in the list below; failures linger so
+  // the user sees which file broke and why.
+  const onFiles = useCallback(
+    async (files: File[]) => {
+      const pdfs = files.filter(
+        (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+      )
+      if (!pdfs.length || uploading) return
       setError(null)
-      setBusy(file.name)
-      try {
-        await uploadSource(file)
-        await refresh()
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setBusy(null)
-      }
+      setUploads(pdfs.map((f) => ({ name: f.name, status: 'ingesting' })))
+      await runPool(pdfs, 3, async (file, i) => {
+        try {
+          await uploadSource(file)
+          setUploads((prev) => prev.map((u, j) => (j === i ? { ...u, status: 'done' } : u)))
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setUploads((prev) =>
+            prev.map((u, j) => (j === i ? { ...u, status: 'error', error: msg } : u)),
+          )
+        }
+      })
+      await refresh()
+      setUploads((prev) => prev.filter((u) => u.status === 'error'))
     },
-    [refresh],
+    [refresh, uploading],
+  )
+
+  const onPick = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files ? Array.from(e.target.files) : []
+      if (fileRef.current) fileRef.current.value = '' // allow re-picking the same file(s)
+      onFiles(files)
+    },
+    [onFiles],
+  )
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setDragging(false)
+      if (locked) return
+      onFiles(Array.from(e.dataTransfer.files))
+    },
+    [locked, onFiles],
   )
 
   const onAddUrl = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
       const u = url.trim()
-      if (!u || busy) return
+      if (!u || locked) return
       setError(null)
       setBusy(u)
       try {
@@ -69,7 +123,7 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
         setBusy(null)
       }
     },
-    [url, busy, refresh],
+    [url, locked, refresh],
   )
 
   const onRemove = useCallback(
@@ -106,20 +160,29 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
           </div>
         )}
 
-        <div className="sources-add">
+        <div
+          className={`sources-add ${dragging ? 'dragging' : ''}`}
+          onDragOver={(e) => {
+            e.preventDefault()
+            if (!locked) setDragging(true)
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+        >
           <button
             className="src-btn"
-            disabled={!!busy || !available}
+            disabled={locked}
             onClick={() => fileRef.current?.click()}
           >
-            ⬆ Upload PDF
+            ⬆ Upload PDFs
           </button>
           <input
             ref={fileRef}
             type="file"
             accept="application/pdf,.pdf"
+            multiple
             hidden
-            onChange={onFile}
+            onChange={onPick}
           />
           <form className="src-url" onSubmit={onAddUrl}>
             <input
@@ -127,13 +190,40 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
               onChange={(e) => setUrl(e.target.value)}
               placeholder="…or paste a URL"
               aria-label="Source URL"
-              disabled={!!busy || !available}
+              disabled={locked}
             />
-            <button className="src-btn" type="submit" disabled={!!busy || !available || !url.trim()}>
+            <button className="src-btn" type="submit" disabled={locked || !url.trim()}>
               Add
             </button>
           </form>
+          <div className="drop-hint">Pick several at once, or drop PDFs here</div>
         </div>
+
+        {uploads.length > 0 && (
+          <div className="upload-list">
+            {uploads.map((u, i) => (
+              <div key={i} className={`upload-row ${u.status}`}>
+                <span className="upload-name" title={u.name}>
+                  {u.name}
+                </span>
+                <span className="upload-status">
+                  {u.status === 'ingesting' ? (
+                    <>
+                      <span className="spin" /> embedding…
+                    </>
+                  ) : u.status === 'done' ? (
+                    '✓ added'
+                  ) : (
+                    '✕ failed'
+                  )}
+                </span>
+                {u.status === 'error' && u.error && (
+                  <div className="upload-err">{u.error}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {busy && (
           <div className="sources-busy">

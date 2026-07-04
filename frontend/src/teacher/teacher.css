@@ -37,21 +37,82 @@
   letter-spacing: 0.05em;
   color: var(--muted);
 }
-/* Source-scope dropdown in the assistant header — pins the library search to
-   one source (or all). */
-.scope-select {
-  max-width: 200px;
+/* Source-scope selector in the assistant header — a button opening a checkbox
+   popover that pins the library search to a subset of sources (or all). */
+.scope-wrap {
+  position: relative;
+}
+.scope-btn {
   padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text);
+  color: var(--muted);
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
 }
-.scope-select:focus {
-  outline: none;
+.scope-btn:hover {
   border-color: var(--accent);
+  color: var(--text-strong);
+}
+.scope-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.scope-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 240px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.scope-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 2px 4px 6px;
+}
+.scope-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.scope-item:hover {
+  color: var(--text-strong);
+}
+.scope-item input {
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.scope-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scope-hint {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.8;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
 }
 .teacher-modes {
   display: flex;

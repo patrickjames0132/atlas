@@ -94,16 +94,27 @@ export default function Teacher({
   const [input, setInput] = useState('')
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The uploaded library, powering the Q&A source-scope selector. Empty until
+  // The uploaded library, powering the source-scope selector. Empty until
   // fetched; the selector only appears when there's more than one source to pick
   // between. Scoping bears on the library search in either mode.
   const [libraryItems, setLibraryItems] = useState<Source[]>([])
-  // Scope the library search to one source's id, or '' for the whole library.
-  const [scope, setScope] = useState('')
+  // The source ids the assistant may search — a CHECKED box = that source is on.
+  // Defaults to every source; unchecking excludes one. Both extremes (all on /
+  // all off) mean "search the whole library" — only a strict subset filters.
+  const [scopeIds, setScopeIds] = useState<string[]>([])
+  const [scopeOpen, setScopeOpen] = useState(false)
+  const scopeFiltering = scopeIds.length > 0 && scopeIds.length < libraryItems.length
+
+  /** Add/remove one source id from the checked set. */
+  const toggleScope = (id: string) =>
+    setScopeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
   useEffect(() => {
     listSources()
-      .then((res) => setLibraryItems(res.sources))
+      .then((res) => {
+        setLibraryItems(res.sources)
+        setScopeIds(res.sources.map((s) => s.id)) // default: every source checked
+      })
       .catch(() => {})
   }, [])
 
@@ -272,7 +283,7 @@ export default function Teacher({
               session_id: sessionId.current,
               seed: { title: graph.seed.title, id: graph.seed.id },
               nodes: teacherNodes,
-              source_id: scope || undefined,
+              source_ids: scopeFiltering ? scopeIds : undefined,
             },
             {
               signal: ctrl.signal,
@@ -309,7 +320,11 @@ export default function Teacher({
         } else {
           // No graph: answer straight from the user's uploaded library.
           await streamAskSources(
-            { question: q, session_id: sessionId.current, source_id: scope || undefined },
+            {
+              question: q,
+              session_id: sessionId.current,
+              source_ids: scopeFiltering ? scopeIds : undefined,
+            },
             {
               signal: ctrl.signal,
               onRetrieve: (r: RetrieveEvent) =>
@@ -331,7 +346,7 @@ export default function Teacher({
         setAsking(false)
       }
     },
-    [input, asking, graph, teacherNodes, scope, beginTurn, appendToken, onHighlight, onDiscover],
+    [input, asking, graph, teacherNodes, scopeFiltering, scopeIds, beginTurn, appendToken, onHighlight, onDiscover],
   )
 
   return (
@@ -341,20 +356,50 @@ export default function Teacher({
           <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask your library'}</span>
           <div className="teacher-head-right">
             {libraryItems.length > 1 && (
-              <select
-                className="scope-select"
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-                aria-label="Scope the library search to a source"
-                title="Search your whole library, or just one source"
-              >
-                <option value="">All sources</option>
-                {libraryItems.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title}
-                  </option>
-                ))}
-              </select>
+              <div className="scope-wrap">
+                <button
+                  type="button"
+                  className={`scope-btn ${scopeFiltering ? 'on' : ''}`}
+                  onClick={() => setScopeOpen((o) => !o)}
+                  title="Choose which of your sources the assistant may search"
+                >
+                  📚 {scopeFiltering
+                    ? `${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''}`
+                    : 'All sources'}
+                </button>
+                {scopeOpen && (
+                  <div className="scope-pop">
+                    <div className="scope-pop-head">
+                      <span>Search in</span>
+                      {scopeIds.length < libraryItems.length && (
+                        <button
+                          className="link-btn"
+                          onClick={() => setScopeIds(libraryItems.map((s) => s.id))}
+                        >
+                          Select all
+                        </button>
+                      )}
+                    </div>
+                    {libraryItems.map((s) => (
+                      <label key={s.id} className="scope-item">
+                        <input
+                          type="checkbox"
+                          checked={scopeIds.includes(s.id)}
+                          onChange={() => toggleScope(s.id)}
+                        />
+                        <span className="scope-item-title" title={s.title}>
+                          {s.title}
+                        </span>
+                      </label>
+                    ))}
+                    <div className="scope-hint">
+                      {scopeFiltering
+                        ? 'Only the checked sources are searched.'
+                        : 'All sources are searched.'}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {onClose && (
               <button className="link-btn" onClick={onClose} aria-label="Close the assistant panel">

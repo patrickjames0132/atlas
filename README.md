@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.18 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.19 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the
@@ -33,14 +33,16 @@ graphs you've already looked at.
 > panel shows a paper's own **figures + captions** and links to both the abstract
 > and the PDF. Seed search is **cache-first**: papers you've already seen appear
 > instantly (and still work when the APIs are rate-limiting). You can also **bring
-> your own sources** — upload a PDF/book or paste a URL and it's chunked, embedded
+> your own sources** — drop in several PDFs/books at once (embedded in parallel)
+> or paste a URL and it's chunked, embedded
 > **locally** (no API key; the text never leaves your machine), and made
 > semantically searchable via sqlite-vec; the **teacher then searches your library
 > in Q&A and cites it by page** ("*per your textbook, p.243…*"). The teacher and
 > the library live in **one 🎓 Assistant panel** that levels up with context: with
 > **no graph open** it's a chat straight over your uploaded sources (no seed search
 > needed); once a **graph is open** it's the full lecture + agentic Q&A — either
-> way **scoped to one source** on demand. And you can **save a session** — the
+> way **scoped to any subset of sources** on demand (a checkbox picker). And you
+> can **save a session** — the
 > whole graph (including the
 > papers the teacher discovered) plus its chat — and **reopen it later** with no
 > API calls, from a 🗂 Sessions drawer. Concept mindmaps
@@ -155,7 +157,7 @@ The Vite dev server proxies `/api/*` to Flask.
    - **Ask** — type a question and get a streamed answer **grounded in the papers
      on screen**; the papers it draws from light up. Follow-ups keep context. If
      you've uploaded a library, the agent can also **search your own sources** —
-     and a header dropdown lets you **scope it to one source** (or all).
+     and a header checkbox picker lets you **scope it to any subset of sources**.
 
    The teacher uses Claude through the same dual backend as summaries — the
    `claude` CLI (Pro/Max subscription, no API billing) or the Anthropic API. Set

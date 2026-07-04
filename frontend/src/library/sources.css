@@ -44,6 +44,71 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+/* Highlighted while dragging PDFs over the drop zone. */
+.sources-add.dragging {
+  border-color: var(--accent);
+  background: rgba(255, 209, 102, 0.06);
+}
+.drop-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* Per-file progress for a parallel upload batch. */
+.upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.upload-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 12.5px;
+}
+.upload-row.done {
+  opacity: 0.7;
+}
+.upload-row.error {
+  border-color: rgba(247, 140, 160, 0.4);
+}
+.upload-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-strong);
+}
+.upload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.upload-row.done .upload-status {
+  color: var(--accent);
+}
+.upload-row.error .upload-status {
+  color: #f78ca0;
+}
+.upload-err {
+  flex-basis: 100%;
+  color: #f78ca0;
+  font-size: 11.5px;
 }
 .src-url {
   display: flex;

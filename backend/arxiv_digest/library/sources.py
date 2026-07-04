@@ -417,15 +417,18 @@ def delete_source(source_id: str) -> bool:
         return cur.rowcount > 0
 
 
-def search(query: str, k: Optional[int] = None, source_id: Optional[str] = None) -> list[dict]:
+def search(
+    query: str, k: Optional[int] = None, source_ids: Optional[list[str]] = None
+) -> list[dict]:
     """Semantic (KNN) search over the library's chunk vectors.
 
     Args:
         query: What to look for — a concept or question.
         k: Maximum passages to return; defaults to ``config.SOURCE_SEARCH_K``.
-        source_id: Restrict retrieval to one source's id, or None for the
-            whole library. When filtering, the KNN pool is over-fetched (8×)
-            so the join filter can still yield ``k`` hits for that source.
+        source_ids: Restrict retrieval to this subset of source ids, or None
+            (or empty) for the whole library. When filtering, the KNN pool is
+            over-fetched (8×) so the join filter can still yield ``k`` hits
+            from the chosen sources.
 
     Returns:
         Up to ``k`` passage dicts — ``{source_id, source_title, page, text,
@@ -442,13 +445,13 @@ def search(query: str, k: Optional[int] = None, source_id: Optional[str] = None)
 
     import sqlite_vec
 
-    # Over-fetch when filtering to one source so the KNN pool still yields k hits
-    # for it after the join filter.
-    fetch = k * 8 if source_id else k
-    where = "WHERE c.source_id = ?" if source_id else ""
+    ids = [s for s in (source_ids or []) if s]
+    # Over-fetch when filtering so the KNN pool still yields k hits from the
+    # chosen sources after the join filter.
+    fetch = k * 8 if ids else k
+    where = f"WHERE c.source_id IN ({','.join('?' for _ in ids)})" if ids else ""
     params: list = [sqlite_vec.serialize_float32(qvec), fetch]
-    if source_id:
-        params.append(source_id)
+    params.extend(ids)
     params.append(k)
 
     with _connect() as conn:

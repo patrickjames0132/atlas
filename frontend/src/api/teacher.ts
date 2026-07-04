@@ -150,9 +150,9 @@ export interface AskHandlers {
  * it drew from. (Non-agentic backends just emit tokens + cited.)
  *
  * @param body The question, a session id for follow-up context, the seed,
- *             the visible nodes (the grounding scope), and an optional
- *             source_id scoping the agent's library search to one uploaded
- *             source (agentic backend only).
+ *             the visible nodes (the grounding scope), and optional source_ids
+ *             scoping the agent's library search to a subset of uploaded
+ *             sources (agentic backend only).
  * @param h    Event handlers; see {@link AskHandlers}.
  */
 export async function streamAsk(
@@ -161,7 +161,7 @@ export async function streamAsk(
     session_id: string
     seed: { title: string; id?: string }
     nodes: TeacherNode[]
-    source_id?: string
+    source_ids?: string[]
   },
   h: AskHandlers,
 ): Promise<void> {
@@ -207,12 +207,12 @@ export interface AskSourcesHandlers {
  * Stream an answer grounded purely in the user's local library — no graph.
  * A single retrieve event, then prose tokens.
  *
- * @param body The question, a session id for follow-up context, and an
- *             optional source_id to scope retrieval to one source.
+ * @param body The question, a session id for follow-up context, and optional
+ *             source_ids to scope retrieval to a subset of sources.
  * @param h    Event handlers; see {@link AskSourcesHandlers}.
  */
 export async function streamAskSources(
-  body: { question: string; session_id: string; source_id?: string },
+  body: { question: string; session_id: string; source_ids?: string[] },
   h: AskSourcesHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask_sources', {
