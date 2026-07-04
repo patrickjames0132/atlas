@@ -5,7 +5,8 @@ import {
   listSources,
   uploadSource,
   type Source,
-} from './api'
+} from '../api'
+import './sources.css'
 
 // The Sources drawer: manage the user's local semantic library — upload PDFs /
 // books or paste a URL, list what's loaded, remove sources. The library is

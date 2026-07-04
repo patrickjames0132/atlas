@@ -1,0 +1,225 @@
+/* The graph's floating chrome: the declutter controls (layout toggle, filter
+   chips, year slider) and the color legend. The canvas itself paints via
+   ForceGraph2D in GraphCanvas.tsx. */
+
+.controls {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 4;
+  width: 232px;
+  padding: 12px;
+  background: rgba(23, 26, 33, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+}
+.layout-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.layout-toggle button {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.layout-toggle button.on {
+  background: var(--accent-strong);
+  color: #fff;
+}
+.layout-toggle button:not(.on):hover {
+  color: var(--text-strong);
+}
+
+.ctrl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.5;
+}
+.chip.on {
+  opacity: 1;
+  color: var(--text-strong);
+  border-color: var(--c);
+}
+.chip i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.chip em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.years {
+  margin-top: 12px;
+}
+.years-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.years-label b {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+/* Dual-thumb range: two overlaid inputs (pointer-events only on the thumbs) over
+   a shared track + fill, so one slider carries both knobs. */
+.range-dual {
+  position: relative;
+  height: 22px;
+  margin: 2px 0;
+}
+.range-track,
+.range-fill {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.range-track {
+  left: 0;
+  right: 0;
+  background: var(--border);
+}
+.range-fill {
+  background: var(--accent);
+}
+.range-dual input[type='range'] {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  transform: translateY(-50%);
+  background: transparent;
+  pointer-events: none; /* only the thumbs are interactive */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.range-dual input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: transparent;
+  border: none;
+}
+.range-dual input[type='range']::-moz-range-track {
+  height: 4px;
+  background: transparent;
+  border: none;
+}
+.range-dual input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  margin-top: -6px;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.range-dual input[type='range']::-moz-range-thumb {
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.ctrl-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.count-readout {
+  font-size: 12px;
+  color: var(--muted);
+}
+.ctrl-btns {
+  display: flex;
+  gap: 6px;
+}
+.mini-btn {
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.mini-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.mini-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ctrl-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* --- legend --- */
+.legend {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  gap: 14px;
+  padding: 8px 12px;
+  background: rgba(23, 26, 33, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.legend i.ring {
+  background: transparent;
+  border: 1.5px dashed rgba(242, 244, 248, 0.6);
+}

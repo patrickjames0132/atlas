@@ -12,7 +12,8 @@ import {
   type LectureMode,
   type LectureTrace,
   type TeacherNode,
-} from './api'
+} from '../api'
+import './teacher.css'
 
 // The AI teacher panel: a streaming lecture over the visible graph plus a
 // grounded, agentic Q&A chat. Both light up graph nodes via `onHighlight` — the

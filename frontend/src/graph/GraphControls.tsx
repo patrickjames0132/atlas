@@ -9,6 +9,7 @@
 
 import type { CSSProperties } from 'react'
 import { REL_COLOR, REL_LABEL, REL_TYPES } from './theme'
+import './graph.css'
 
 /** Props for {@link GraphControls}. */
 export interface GraphControlsProps {

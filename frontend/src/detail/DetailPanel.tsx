@@ -5,9 +5,10 @@
  */
 
 import type { FiguresResponse } from '../api'
-import type { VNode } from './model'
-import { formatPubDate } from './model'
-import { REL_COLOR } from './theme'
+import type { VNode } from '../graph/model'
+import { formatPubDate } from '../graph/model'
+import { REL_COLOR } from '../graph/theme'
+import './detail.css'
 
 /** Props for {@link DetailPanel}. */
 export interface DetailPanelProps {

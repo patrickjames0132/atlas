@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { listSources, streamAskSources, type RetrieveEvent, type Source } from './api'
+import { listSources, streamAskSources, type RetrieveEvent, type Source } from '../api'
+import './teacher.css'
+import './library-chat.css'
 
 // Offline library chat (Phase 3d): ask questions answered purely from your own
 // uploaded library — no graph, no seed search. A lightweight RAG chat that opens

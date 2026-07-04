@@ -1,0 +1,113 @@
+/* The right-hand paper detail panel: badges, meta, summary, figures, actions. */
+
+.detail {
+  position: relative;
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  padding: 20px;
+  overflow-y: auto;
+}
+.detail .close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+}
+.detail-badges {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.detail h2 {
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--text-strong);
+  margin: 0 0 10px;
+}
+.detail-meta {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.detail-meta div {
+  margin-bottom: 3px;
+}
+.detail-summary {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+}
+.detail-actions a {
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.detail-actions button {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ghost-btn {
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.ghost-btn:hover {
+  border-color: var(--accent);
+}
+
+/* --- figures (ar5iv) --- */
+.detail-figs {
+  margin-top: 16px;
+}
+.detail-figs-head,
+.detail-figs-hint {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.detail-figs-hint {
+  margin-top: 16px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+}
+.detail-fig {
+  margin: 0 0 14px;
+}
+.detail-fig img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  display: block;
+}
+.detail-fig figcaption {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}

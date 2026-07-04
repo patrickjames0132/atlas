@@ -5,6 +5,7 @@
  */
 
 import type { ArxivHit, LocalHit } from '../api'
+import './search.css'
 
 /** Props for {@link HitList}. */
 export interface HitListProps {

@@ -1,0 +1,118 @@
+/* Seed search: the form (rendered in the header) and the results panel
+   (HitList, floating over the canvas). */
+
+.seed-search {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  max-width: 640px;
+}
+.seed-search input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-strong);
+  font-size: 14px;
+}
+.seed-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.seed-search button {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+.seed-search button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- results panel --- */
+.hit-list {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  width: 380px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.hit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 4px 6px 8px;
+}
+.hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.hit:hover {
+  background: var(--chip);
+}
+.hit-title {
+  font-size: 14px;
+  color: var(--text-strong);
+  margin-bottom: 3px;
+}
+.hit-meta {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hit-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 8px 6px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.hit-sub:first-of-type {
+  border-top: none;
+  margin-top: 0;
+}
+.hit-note {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px;
+  font-style: italic;
+}
+.hit-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  vertical-align: 2px;
+}

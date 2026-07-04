@@ -3,7 +3,9 @@ import {
   deleteSession,
   listSessions,
   type SavedSessionMeta,
-} from './api'
+} from '../api'
+import '../library/sources.css'
+import './sessions.css'
 
 // The Sessions drawer (Phase 4): save the current workspace — the graph as it
 // stands (every node/edge, including the ones the agent discovered) plus the

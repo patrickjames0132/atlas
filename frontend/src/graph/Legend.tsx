@@ -4,6 +4,7 @@
  */
 
 import { REL_COLOR } from './theme'
+import './graph.css'
 
 /** Props for {@link Legend}. */
 export interface LegendProps {
