@@ -7,9 +7,14 @@ text never leaves the machine), and stored in a dedicated sqlite-vec index. The
 teacher searches it through tool use, the same way it searches Semantic Scholar,
 so an uploaded textbook effectively makes it an expert in that subject.
 
+Retrieval is **hybrid**: a semantic ranking (vector KNN) and a lexical one
+(FTS5 BM25) are fused with Reciprocal Rank Fusion, so exact terms and proper
+nouns the embedder blurs together still surface (Phase 3d.3).
+
 Everything degrades gracefully: if the embedding model or sqlite-vec can't load,
 `available()` is False and ingestion/search raise/return a clear signal rather
-than crashing the app.
+than crashing the app. If FTS5 isn't compiled into SQLite, lexical search is
+simply skipped and retrieval falls back to pure vector KNN.
 """
 
 from __future__ import annotations
@@ -54,9 +59,26 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks (source_id);
 """
 
+# The FTS5 lexical index mirrors chunks.text via an external-content table kept
+# in sync by triggers, so ingestion/deletion need no extra wiring. FTS5 is a
+# SQLite compile-time option; when it's missing, lexical search is skipped.
+_FTS_SCHEMA = """
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+    text, content='chunks', content_rowid='id', tokenize='porter unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS chunks_fts_ai AFTER INSERT ON chunks BEGIN
+    INSERT INTO chunks_fts (rowid, text) VALUES (new.id, new.text);
+END;
+CREATE TRIGGER IF NOT EXISTS chunks_fts_ad AFTER DELETE ON chunks BEGIN
+    INSERT INTO chunks_fts (chunks_fts, rowid, text) VALUES ('delete', old.id, old.text);
+END;
+"""
+
 # sqlite-vec (the vector index) is a loadable extension; it must be reloaded on
 # every connection (extensions are per-connection). None = not yet probed.
 _HAS_VEC: Optional[bool] = None
+# FTS5 support is a fixed property of the SQLite build; probed once, then cached.
+_HAS_FTS: Optional[bool] = None
 
 
 def _try_load_vec(conn: sqlite3.Connection) -> bool:
@@ -83,13 +105,45 @@ def _try_load_vec(conn: sqlite3.Connection) -> bool:
         return False
 
 
+def _try_setup_fts(conn: sqlite3.Connection) -> bool:
+    """Ensure the FTS5 lexical index and its sync triggers exist.
+
+    Creates the external-content ``chunks_fts`` table plus the insert/delete
+    triggers that keep it mirrored to ``chunks``. On first creation over an
+    existing library it back-fills the index from the current chunks with an
+    FTS5 ``rebuild`` so previously-ingested sources become lexically searchable.
+
+    Args:
+        conn: The open SQLite connection.
+
+    Returns:
+        True when FTS5 is available and set up; False when FTS5 isn't compiled
+        into this SQLite build (logged once, not raised — lexical search is
+        then skipped and retrieval falls back to pure vector KNN).
+    """
+    try:
+        existed = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
+        ).fetchone()
+        conn.executescript(_FTS_SCHEMA)
+        if not existed:
+            # Freshly created (new library, or migrating one built before
+            # hybrid search) — populate from the chunks already stored.
+            conn.execute("INSERT INTO chunks_fts (chunks_fts) VALUES ('rebuild')")
+        return True
+    except sqlite3.OperationalError:
+        log.warning("FTS5 unavailable — lexical search disabled")
+        return False
+
+
 @contextmanager
 def _connect() -> Iterator[sqlite3.Connection]:
     """Open a connection to the sources library, committing on clean exit.
 
     Ensures the schema exists, probes/loads sqlite-vec (recording the result
-    in the module-level ``_HAS_VEC``), and creates the vector table when the
-    extension is available.
+    in the module-level ``_HAS_VEC``), creates the vector table when the
+    extension is available, and sets up the FTS5 lexical index (recording
+    ``_HAS_FTS``).
 
     Yields:
         An open ``sqlite3.Connection`` with ``Row`` as its row factory and
@@ -98,7 +152,7 @@ def _connect() -> Iterator[sqlite3.Connection]:
     Raises:
         sqlite3.Error: On database failures.
     """
-    global _HAS_VEC
+    global _HAS_VEC, _HAS_FTS
     config.ensure_dirs()
     conn = sqlite3.connect(config.SOURCES_DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -112,6 +166,7 @@ def _connect() -> Iterator[sqlite3.Connection]:
                 f"CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0("
                 f"embedding float[{config.EMBED_DIM}] distance_metric=cosine)"
             )
+        _HAS_FTS = _try_setup_fts(conn)
         yield conn
         conn.commit()
     finally:
@@ -417,10 +472,167 @@ def delete_source(source_id: str) -> bool:
         return cur.rowcount > 0
 
 
+# FTS5 treats bare punctuation and words like AND/OR/NEAR as query syntax, so a
+# raw question ("What's the Adam optimizer's β2?") can raise a parse error. We
+# extract word tokens and OR them as quoted string literals — a safe, forgiving
+# "any of these terms" match that never trips the grammar.
+_FTS_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _fts_match_query(query: str) -> str:
+    """Turn a free-text query into a safe FTS5 MATCH expression.
+
+    Args:
+        query: The user/agent's natural-language query.
+
+    Returns:
+        An ``"term1" OR "term2" ...`` string of quoted word tokens, or ``""``
+        when the query has no usable tokens (caller then skips lexical search).
+    """
+    tokens = _FTS_TOKEN_RE.findall(query)
+    return " OR ".join(f'"{t}"' for t in tokens)
+
+
+def _scoped_where(ids: list[str], column: str) -> tuple[str, list[str]]:
+    """Build an optional ``source_id IN (…)`` clause for a scoped search.
+
+    Args:
+        ids: The (already blank-filtered) source ids to restrict to; empty
+            means no restriction.
+        column: The qualified column to filter on, e.g. ``"c.source_id"``.
+
+    Returns:
+        A ``(clause, params)`` tuple — the clause is ``""`` (no restriction)
+        or ``"AND <column> IN (?, …)"`` with matching ``params``.
+    """
+    if not ids:
+        return "", []
+    placeholders = ",".join("?" for _ in ids)
+    return f"AND {column} IN ({placeholders})", list(ids)
+
+
+def _vector_search(
+    conn: sqlite3.Connection, query: str, fetch: int, ids: list[str]
+) -> list[dict]:
+    """Rank chunks by semantic similarity (sqlite-vec cosine KNN).
+
+    Args:
+        conn: An open library connection (sqlite-vec already loaded).
+        query: The natural-language query to embed and match.
+        fetch: How many candidates to pull (the RRF pool for this ranker).
+        ids: Source-id scope (empty = whole library).
+
+    Returns:
+        Chunk dicts ``{id, source_id, source_title, page, text}`` best-first,
+        or ``[]`` when the embedder or sqlite-vec is unavailable.
+    """
+    if not _HAS_VEC:
+        return []
+    qvec = embeddings.embed_query(query)
+    if qvec is None:
+        return []
+
+    import sqlite_vec
+
+    scope, scope_params = _scoped_where(ids, "c.source_id")
+    rows = conn.execute(
+        f"""
+        SELECT c.id, c.source_id, s.title AS source_title, c.page, c.text
+        FROM (SELECT rowid, distance FROM chunks_vec
+              WHERE embedding MATCH ? AND k = ?) knn
+        JOIN chunks c ON c.id = knn.rowid
+        JOIN sources s ON s.id = c.source_id
+        WHERE 1 {scope}
+        ORDER BY knn.distance
+        """,
+        [sqlite_vec.serialize_float32(qvec), fetch, *scope_params],
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _lexical_search(
+    conn: sqlite3.Connection, query: str, fetch: int, ids: list[str]
+) -> list[dict]:
+    """Rank chunks by lexical relevance (FTS5 BM25).
+
+    Args:
+        conn: An open library connection.
+        query: The natural-language query (sanitized into an FTS5 expression).
+        fetch: How many candidates to pull (the RRF pool for this ranker).
+        ids: Source-id scope (empty = whole library).
+
+    Returns:
+        Chunk dicts ``{id, source_id, source_title, page, text}`` best-first,
+        or ``[]`` when FTS5 is unavailable or the query has no usable terms.
+    """
+    if not _HAS_FTS:
+        return []
+    match = _fts_match_query(query)
+    if not match:
+        return []
+    scope, scope_params = _scoped_where(ids, "c.source_id")
+    rows = conn.execute(
+        f"""
+        SELECT c.id, c.source_id, s.title AS source_title, c.page, c.text
+        FROM chunks_fts
+        JOIN chunks c ON c.id = chunks_fts.rowid
+        JOIN sources s ON s.id = c.source_id
+        WHERE chunks_fts MATCH ? {scope}
+        ORDER BY bm25(chunks_fts)
+        LIMIT ?
+        """,
+        [match, *scope_params, fetch],
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _rrf_fuse(rankings: list[list[dict]], k: int, rrf_k: int) -> list[dict]:
+    """Fuse several ranked chunk lists via Reciprocal Rank Fusion.
+
+    Each ranker contributes ``1 / (rrf_k + rank)`` (1-based rank) to a chunk's
+    score, so a chunk ranked highly by *either* the semantic or the lexical
+    side rises — no score normalization across the two scales needed.
+
+    Args:
+        rankings: One best-first list of chunk dicts per ranker; each dict must
+            carry a unique ``id`` plus the display fields.
+        k: Maximum fused passages to return.
+        rrf_k: The RRF damping constant (larger flattens rank influence).
+
+    Returns:
+        Up to ``k`` passage dicts ``{source_id, source_title, page, text,
+        score}`` ordered by fused score (higher = stronger), deduplicated by
+        chunk id.
+    """
+    scores: dict[int, float] = {}
+    chunks: dict[int, dict] = {}
+    for ranking in rankings:
+        for rank, hit in enumerate(ranking, start=1):
+            cid = hit["id"]
+            scores[cid] = scores.get(cid, 0.0) + 1.0 / (rrf_k + rank)
+            chunks.setdefault(cid, hit)
+    ordered = sorted(scores, key=lambda c: scores[c], reverse=True)[:k]
+    return [
+        {
+            "source_id": chunks[c]["source_id"],
+            "source_title": chunks[c]["source_title"],
+            "page": chunks[c]["page"], "text": chunks[c]["text"],
+            "score": scores[c],
+        }
+        for c in ordered
+    ]
+
+
 def search(
     query: str, k: Optional[int] = None, source_ids: Optional[list[str]] = None
 ) -> list[dict]:
-    """Semantic (KNN) search over the library's chunk vectors.
+    """Hybrid search over the library — semantic KNN fused with lexical BM25.
+
+    Runs a vector (sqlite-vec cosine KNN) and a lexical (FTS5 BM25) ranking and
+    combines them with Reciprocal Rank Fusion (Phase 3d.3), so both meaning and
+    exact terms count. Degrades gracefully: with FTS5 missing (or hybrid off) it
+    is pure vector search; with the embedder missing it is lexical-only; with
+    neither it returns ``[]``.
 
     Args:
         query: What to look for — a concept or question.
@@ -428,14 +640,13 @@ def search(
         source_ids: Restrict retrieval to this subset of source ids. ``None``
             means "no scope" — search the whole library; an **explicit empty
             list** means "no sources selected" — search nothing (returns []).
-            When filtering, the KNN pool is over-fetched (8×) so the join
-            filter can still yield ``k`` hits from the chosen sources.
+            When filtering, each ranker's pool is over-fetched (8×) so the
+            scope filter can still yield ``k`` hits from the chosen sources.
 
     Returns:
         Up to ``k`` passage dicts — ``{source_id, source_title, page, text,
-        distance}`` — ordered by cosine distance (lower = closer). Empty when
-        the embedding model or sqlite-vec is unavailable, or when the scope is
-        an explicit empty set.
+        score}``, best-first (higher fused score = stronger). Empty when both
+        rankers are unavailable, or when the scope is an explicit empty set.
 
     Raises:
         sqlite3.Error: On database failures.
@@ -450,40 +661,12 @@ def search(
     else:
         ids = []
 
-    qvec = embeddings.embed_query(query)
-    if qvec is None:
-        return []
-
-    import sqlite_vec
-
-    # Over-fetch when filtering so the KNN pool still yields k hits from the
-    # chosen sources after the join filter.
+    # Over-fetch each ranker when scoping so its pool still yields k in-scope
+    # hits after the filter; also gives RRF a deeper pool to fuse over.
     fetch = k * 8 if ids else k
-    where = f"WHERE c.source_id IN ({','.join('?' for _ in ids)})" if ids else ""
-    params: list = [sqlite_vec.serialize_float32(qvec), fetch]
-    params.extend(ids)
-    params.append(k)
 
     with _connect() as conn:
-        if not _HAS_VEC:
-            return []
-        rows = conn.execute(
-            f"""
-            SELECT c.source_id, s.title AS source_title, c.page, c.text, knn.distance
-            FROM (SELECT rowid, distance FROM chunks_vec
-                  WHERE embedding MATCH ? AND k = ?) knn
-            JOIN chunks c ON c.id = knn.rowid
-            JOIN sources s ON s.id = c.source_id
-            {where}
-            ORDER BY knn.distance
-            LIMIT ?
-            """,
-            params,
-        ).fetchall()
-    return [
-        {
-            "source_id": r["source_id"], "source_title": r["source_title"],
-            "page": r["page"], "text": r["text"], "distance": r["distance"],
-        }
-        for r in rows
-    ]
+        vector = _vector_search(conn, query, fetch, ids)
+        lexical = _lexical_search(conn, query, fetch, ids) if config.SOURCE_HYBRID else []
+
+    return _rrf_fuse([vector, lexical], k, config.SOURCE_RRF_K)

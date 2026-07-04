@@ -173,6 +173,13 @@ SOURCE_CHUNK_OVERLAP = int(os.getenv("SOURCE_CHUNK_OVERLAP", "150"))
 # the agent may run per question (its own budget, separate from S2 search).
 SOURCE_SEARCH_K = int(os.getenv("SOURCE_SEARCH_K", "6"))
 AGENT_MAX_SOURCE_SEARCHES = int(os.getenv("AGENT_MAX_SOURCE_SEARCHES", "5"))
+# Hybrid retrieval (Phase 3d.3): fuse the semantic ranking (vector KNN) with a
+# lexical one (FTS5 BM25) via Reciprocal Rank Fusion, so exact terms and proper
+# nouns the embedder blurs together still surface. RRF_K damps the rank tail
+# (60 is the paper's standard). Set ARXIV_SOURCE_HYBRID=0 to fall back to pure
+# vector search; lexical is skipped automatically when FTS5 isn't compiled in.
+SOURCE_HYBRID = os.getenv("ARXIV_SOURCE_HYBRID", "1").lower() not in ("0", "false", "no")
+SOURCE_RRF_K = int(os.getenv("ARXIV_SOURCE_RRF_K", "60"))
 # Offline library chat (Phase 3d): a graph-free RAG chat straight over the local
 # library. Retrieve a few more passages than a single agent search, since this is
 # the answer's only grounding (no paper reading, no follow-up searches).

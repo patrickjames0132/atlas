@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.20 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.21 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the
@@ -36,8 +36,10 @@ graphs you've already looked at.
 > your own sources** — drop in several PDFs/books at once (embedded in parallel)
 > or paste a URL and it's chunked, embedded
 > **locally** (no API key; the text never leaves your machine), and made
-> semantically searchable via sqlite-vec; the **teacher then searches your library
-> in Q&A and cites it by page** ("*per your textbook, p.243…*"). The teacher and
+> searchable by **both meaning and exact keyword** — a hybrid of semantic
+> (sqlite-vec) and lexical (FTS5) retrieval fused with RRF, so an exact term or
+> proper noun the embedder blurs still surfaces; the **teacher then searches your
+> library in Q&A and cites it by page** ("*per your textbook, p.243…*"). The teacher and
 > the library live in **one 🎓 Assistant panel** that levels up with context: with
 > **no graph open** it's a chat straight over your uploaded sources (no seed search
 > needed); once a **graph is open** it's the full lecture + agentic Q&A — either

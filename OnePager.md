@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.20 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.21 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -11,7 +11,8 @@
 > here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0), seed-search
 > date/category filters + result dates (v1.16.0), teacher source-scope selection
 > (v1.17.0), unified assistant panel (v1.18.0), parallel upload + multi-select
-> source scope (v1.19.0), figures in agent answers (v1.20.0)
+> source scope (v1.19.0), figures in agent answers (v1.20.0), hybrid lexical +
+> semantic library search (v1.21.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -260,9 +261,18 @@ optional, behind a key.
       (also 384-dim, so `ARXIV_EMBED_DIM` is unchanged) via `ARXIV_EMBED_MODEL`,
       with a query-only instruction prefix (`ARXIV_EMBED_QUERY_PREFIX`, empty by
       default) for asymmetric retrieval; re-ingest sources to apply.
-    - [ ] hybrid **FTS5 + vector (RRF)** for exact-term / proper-noun lookups
-      *(deferred — S2 already covers the main search surface; this only helps
-      exact-term lookups inside the local library, a niche gain for the plumbing)*.
+    - [x] hybrid **FTS5 + vector (RRF)** for exact-term / proper-noun lookups
+      *(v1.21.0)* — `sources.search` now fuses a **semantic** ranking (sqlite-vec
+      cosine KNN) and a **lexical** one (FTS5 BM25) via **Reciprocal Rank Fusion**,
+      so an exact term / proper noun / hyperparameter the embedder blurs together
+      (e.g. "β2", a dataset or author name) still surfaces. An external-content
+      `chunks_fts` index is kept in sync by insert/delete **triggers** (so
+      ingest/delete needed no changes; cascade-deletes purge it too) and
+      **back-fills existing libraries** on first connect — no re-ingest. Degrades
+      cleanly: no FTS5 → pure vector (prior behavior), no embed model →
+      lexical-only, neither → empty. Config `ARXIV_SOURCE_HYBRID` (default on) /
+      `ARXIV_SOURCE_RRF_K` (60). Verified: on an exact-term query hybrid lifts the
+      right passage from a razor-thin vector-only lead to a decisive win.
     - [ ] figure/image handling — **OCR for scanned PDFs** *(deferred — needs a
       system Tesseract dep, fiddly on Windows)*.
 - [x] **Phase 3e — "How we got here" time travel** *(v1.14.0)* — the history
@@ -399,6 +409,20 @@ optional, behind a key.
       SDK's wide streamed-block unions; most of the rest are Flask views returning
       `(body, status)` tuples annotated `-> Response`). Type these properly and
       delete the codes from that list one at a time until mypy is strict again.
+- [ ] **Citation sampling across the years (not just recent)** — the papers pulled
+      via S2 citations skew heavily to the **most recent (2026) work**, so a seed's
+      older but influential citers get crowded out. Sample the citation list across
+      its **full time span** (and/or bias toward `isInfluential` / high-citation
+      edges) so the graph shows papers that cited it *throughout the years*, not
+      only the latest. Mirrors the Phase 3e history-backfill's "prefer influential
+      edges" idea, applied forward to citations. *(From the `todos.md` inbox,
+      2026-07-04.)*
+- [ ] **Expand test coverage (a lot)** — the `test/` suite is still just smoke
+      tests plus the hybrid-search unit tests; grow it broadly — the S2/graph
+      builders, the agentic tool loop and budgets, the sources library
+      (ingest/chunk/scope), and the Flask routes — all offline (mock S2/arXiv/
+      Anthropic; no live calls in the gate). Pairs with the `noxfile` backbone.
+      *(From the `todos.md` inbox, 2026-07-04.)*
 - [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
       selected paper when available (Papers with Code / Hugging Face Papers), so a
       node links out to runnable implementations, not just its abstract. Show in
