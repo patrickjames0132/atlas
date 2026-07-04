@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence
 from uuid import uuid4
 
 from .. import config
@@ -302,7 +302,7 @@ def fetch_url(url: str) -> tuple[str, Optional[str]]:
 
 def add_source(
     title: str, kind: str, origin: Optional[str],
-    page_texts: list[tuple[Optional[int], str]], pages: Optional[int] = None,
+    page_texts: Sequence[tuple[Optional[int], str]], pages: Optional[int] = None,
 ) -> dict:
     """Chunk, embed, and store a source's page texts.
 
@@ -357,7 +357,9 @@ def add_source(
                 (cur.lastrowid, sqlite_vec.serialize_float32(vec)),
             )
     log.info("Ingested source %s (%s, %d chunks)", title, kind, len(chunk_rows))
-    return get_source(sid)
+    record = get_source(sid)
+    assert record is not None  # just inserted above
+    return record
 
 
 def ingest_pdf(path: str | Path, title: Optional[str] = None) -> dict:

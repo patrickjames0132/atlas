@@ -9,8 +9,10 @@ POST /api/ask_sources  -> streamed chat answered purely from the local library
 from __future__ import annotations
 
 import json
+from typing import Iterator
 
 from flask import Blueprint, Response, current_app, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from .. import config
 from .. import teacher as teacher_service
@@ -83,7 +85,7 @@ def _sse_response(generator) -> Response:
 
 
 @bp.post("/api/lecture")
-def api_lecture() -> Response:
+def api_lecture() -> ResponseReturnValue:
     """Stream a lecture over the visible graph as SSE ``beat`` events.
 
     In ``history`` mode we first walk backward through references (Phase 3e),
@@ -109,13 +111,14 @@ def api_lecture() -> Response:
     mode = payload.get("mode") or "history"
     target = payload.get("target")
 
-    def gen():
+    def gen() -> Iterator[str]:
         """Yield the lecture's SSE frames (backfill first in history mode)."""
         try:
             enriched = nodes
             if mode == "history" and seed.get("id"):
                 for kind, data in teacher_service.history_backfill(seed, nodes):
                     if kind == "nodes":
+                        assert isinstance(data, dict)  # "nodes" events carry {nodes, ...}
                         enriched = enriched + data["nodes"]
                         yield _sse("nodes", data)
                     elif kind == "trace":
@@ -131,7 +134,7 @@ def api_lecture() -> Response:
 
 
 @bp.post("/api/ask")
-def api_ask() -> Response:
+def api_ask() -> ResponseReturnValue:
     """Answer a question grounded in the visible graph, streamed as SSE.
 
     Runs the agentic Q&A (reads papers via tool use) when the API backend is
@@ -175,12 +178,13 @@ def api_ask() -> Response:
         else teacher_service.answer_stream(question, seed, nodes, history)
     )
 
-    def gen():
+    def gen() -> Iterator[str]:
         """Yield the answer's SSE frames, persisting the turn on success."""
         answer_parts: list[str] = []
         try:
             for kind, data in source:
                 if kind == "token":
+                    assert isinstance(data, str)  # "token" events carry prose
                     answer_parts.append(data)
                     yield _sse("token", {"text": data})
                 elif kind == "trace":
@@ -213,7 +217,7 @@ def api_ask() -> Response:
 
 
 @bp.post("/api/ask_sources")
-def api_ask_sources() -> Response:
+def api_ask_sources() -> ResponseReturnValue:
     """Answer a question purely from the user's local library, streamed as SSE.
 
     The offline library chat — no graph required. History is keyed by
@@ -241,12 +245,13 @@ def api_ask_sources() -> Response:
     source_ids = _opt_source_ids(payload)  # scope to a subset of sources (optional)
     history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
 
-    def gen():
+    def gen() -> Iterator[str]:
         """Yield the library answer's SSE frames, persisting the turn on success."""
         answer_parts: list[str] = []
         try:
             for kind, data in teacher_service.answer_from_sources(question, history, source_ids):
                 if kind == "token":
+                    assert isinstance(data, str)  # "token" events carry prose
                     answer_parts.append(data)
                     yield _sse("token", {"text": data})
                 elif kind == "trace":

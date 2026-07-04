@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from flask import Blueprint, Response, current_app, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from ..library import sources as sources_service
 
@@ -37,7 +38,7 @@ def api_sources_list() -> Response:
 
 
 @bp.post("/api/sources")
-def api_sources_add() -> Response:
+def api_sources_add() -> ResponseReturnValue:
     """Ingest a source into the library.
 
     Body:

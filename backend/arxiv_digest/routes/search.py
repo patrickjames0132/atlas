@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from flask import Blueprint, Response, current_app, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from ..integrations import taxonomy
 from ..services import search as search_service
@@ -58,7 +59,7 @@ def _opt_categories() -> Optional[list[str]]:
 
 
 @bp.get("/api/arxiv_search")
-def arxiv_search_route() -> Response:
+def arxiv_search_route() -> ResponseReturnValue:
     """Live relevance search across all of arXiv to find a seed paper.
 
     Query args:

@@ -402,13 +402,20 @@ optional, behind a key.
       stays green without it). Config lives in `pyproject.toml`; `CLAUDE.md`
       documents the gate. mypy runs on a **lenient baseline** (see next item).
       *(From the `todos.md` inbox, 2026-07-03.)*
-- [ ] **Burn down the mypy baseline** — the `mypy` gate currently silences four
-      error codes (`union-attr`, `return-value`, `arg-type`, `call-overload`) via
-      `disable_error_code` in `pyproject.toml`; they cover ~131 "gradual typing
-      not done yet" findings (109 in `teacher/agentic.py` alone, from the Anthropic
-      SDK's wide streamed-block unions; most of the rest are Flask views returning
-      `(body, status)` tuples annotated `-> Response`). Type these properly and
-      delete the codes from that list one at a time until mypy is strict again.
+- [x] **Burn down the mypy baseline** *(v1.21.1)* — all four silenced error codes
+      (`union-attr`, `return-value`, `arg-type`, `call-overload`; 141 hidden
+      findings) fixed and `disable_error_code` **deleted**, plus
+      `check_untyped_defs = true` turned on (so untyped function bodies are checked
+      too — stricter than the original goal). The big one: `teacher/agentic.py`'s
+      116 union-attr errors fell to **isinstance narrowing on the SDK's real event
+      types** (`RawContentBlockStartEvent` / `RawContentBlockDeltaEvent` /
+      `TextDelta` / `ToolUseBlock`) replacing `getattr(…, "type", "")` duck-typing;
+      Flask views returning `(body, status)` tuples now use
+      `flask.typing.ResponseReturnValue`; `_TOOLS` typed as `list[ToolParam]` via
+      `TYPE_CHECKING`; the SSE generators annotated with runtime-enforcing
+      `assert isinstance` narrowing on the `(kind, data)` event protocol. Verified
+      behavior-neutral by driving `answer_agentic` with a stubbed client emitting
+      real SDK event objects (discard, split-sentinel hiding, cited parsing).
 - [ ] **Citation sampling across the years (not just recent)** — the papers pulled
       via S2 citations skew heavily to the **most recent (2026) work**, so a seed's
       older but influential citers get crowded out. Sample the citation list across

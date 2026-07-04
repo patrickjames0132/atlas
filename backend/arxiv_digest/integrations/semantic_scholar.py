@@ -222,8 +222,10 @@ def get_papers(ids: list[str], fields: str = _DETAIL_FIELDS) -> dict[str, dict]:
     for start in range(0, len(ids), _BATCH_MAX):
         chunk = ids[start:start + _BATCH_MAX]
         data = _request(url, method="POST", body={"ids": chunk})
-        # S2 returns a list aligned to the input ids, with null for unknowns.
-        for req_id, paper in zip(chunk, data or []):
+        # S2 returns a list aligned to the input ids, with null for unknowns
+        # (anything else — _request types its JSON as object — means no rows).
+        papers = data if isinstance(data, list) else []
+        for req_id, paper in zip(chunk, papers):
             node = _node(paper)
             if node:
                 out[req_id] = node

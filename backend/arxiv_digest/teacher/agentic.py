@@ -11,9 +11,12 @@ runners it drives live in ``tools.py``.
 from __future__ import annotations
 
 import time
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional, cast
 
 from .. import config
+
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam
 from ..library import sources
 from .common import (
     _CITED,
@@ -82,6 +85,12 @@ def answer_agentic(
         anthropic.APIError: On API failures.
     """
     import anthropic
+    from anthropic.types import (
+        RawContentBlockDeltaEvent,
+        RawContentBlockStartEvent,
+        TextDelta,
+        ToolUseBlock,
+    )
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     numbered = _number_nodes(nodes)
@@ -134,18 +143,23 @@ def answer_agentic(
             model=config.AGENT_MODEL,
             max_tokens=config.TEACHER_MAX_TOKENS,
             system=system,
-            messages=messages,
+            # Our {role, content} dicts are MessageParams; the cast just says so.
+            messages=cast("list[MessageParam]", messages),
             tools=tools if use_tools else [],
         ) as stream:
             for event in stream:
-                et = getattr(event, "type", "")
-                if et == "content_block_start" and getattr(event.content_block, "type", "") == "tool_use":
+                if (
+                    isinstance(event, RawContentBlockStartEvent)
+                    and event.content_block.type == "tool_use"
+                ):
                     if not tool_turn:
                         tool_turn = True
                         emit_buf = ""  # this turn is a tool call, not the answer
                         if turn_text.strip():
                             yield ("discard", None)  # streamed preamble wasn't the answer
-                elif et == "content_block_delta" and getattr(event.delta, "type", "") == "text_delta":
+                elif isinstance(event, RawContentBlockDeltaEvent) and isinstance(
+                    event.delta, TextDelta
+                ):
                     turn_text += event.delta.text
                     if tool_turn or cut:
                         continue
@@ -169,7 +183,7 @@ def answer_agentic(
             messages.append({"role": "assistant", "content": final.content})
             results = []
             for b in final.content:
-                if getattr(b, "type", "") != "tool_use":
+                if not isinstance(b, ToolUseBlock):
                     continue
                 if b.name == "read_paper":
                     content, trace, read_id = _run_read(b, numbered, budgets, read_cache)
@@ -215,7 +229,7 @@ def answer_agentic(
         model=config.AGENT_MODEL,
         max_tokens=config.TEACHER_MAX_TOKENS,
         system=system,
-        messages=messages,
+        messages=cast("list[MessageParam]", messages),
     ) as stream:
         for text in _emit_hiding_sentinel(stream.text_stream, full_box):
             yield ("token", text)

@@ -1,6 +1,6 @@
 [project]
 name = "arxiv-digest"
-version = "1.21.0"
+version = "1.21.1"
 description = "arXiv Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 requires-python = ">=3.11"
 dependencies = [
@@ -41,13 +41,10 @@ python_version = "3.12"
 ignore_missing_imports = true
 namespace_packages = true
 explicit_package_bases = true
-# Lenient baseline for a codebase mypy has never seen: these four codes account
-# for every current error and are all "gradual typing not done yet", not bugs —
-# `union-attr` from the Anthropic SDK's wide streamed-block unions (agentic.py),
-# `return-value` from Flask views returning (body, status) tuples annotated as
-# Response, plus a few arg-type/overload cases. Burning these down and deleting
-# this line is tracked in OnePager (Enhancements & tech debt).
-disable_error_code = ["union-attr", "return-value", "arg-type", "call-overload"]
+# The 2026-07-04 baseline burndown removed every disabled error code (the four
+# lenient-era codes are gone) and turned on untyped-body checking. Keep it that
+# way: new code should type-check clean, no new disable_error_code entries.
+check_untyped_defs = true
 
 [tool.pytest.ini_options]
 # Tests live in test/; backend/ is on the path so they can import arxiv_digest.

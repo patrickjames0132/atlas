@@ -10,6 +10,7 @@ DEL  /api/sessions/<id>  -> delete a saved session
 from __future__ import annotations
 
 from flask import Blueprint, Response, current_app, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from ..storage import sessions as sessions_service
 
@@ -28,7 +29,7 @@ def api_sessions_list() -> Response:
 
 
 @bp.post("/api/sessions")
-def api_sessions_save() -> Response:
+def api_sessions_save() -> ResponseReturnValue:
     """Save the current workspace (graph + teacher transcript).
 
     Body:
@@ -55,7 +56,7 @@ def api_sessions_save() -> Response:
 
 
 @bp.get("/api/sessions/<session_id>")
-def api_sessions_get(session_id: str) -> Response:
+def api_sessions_get(session_id: str) -> ResponseReturnValue:
     """Fetch the full saved session (graph + transcript) to restore.
 
     Args:

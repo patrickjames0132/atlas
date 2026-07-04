@@ -12,6 +12,7 @@ from __future__ import annotations
 import urllib.parse
 
 from flask import Blueprint, Response, current_app, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from ..integrations import arxiv_client, figures, semantic_scholar
 from ..services import graph as graph_service
@@ -41,7 +42,7 @@ def _normalize_arxiv_id(raw: str) -> str:
 
 
 @bp.get("/api/graph")
-def api_graph() -> Response:
+def api_graph() -> ResponseReturnValue:
     """Build the neighborhood graph for a seed paper.
 
     Query args:
@@ -68,7 +69,7 @@ def api_graph() -> Response:
 
 
 @bp.get("/api/paper/<path:arxiv_id>")
-def api_paper(arxiv_id: str) -> Response:
+def api_paper(arxiv_id: str) -> ResponseReturnValue:
     """Fetch full details for one paper.
 
     Used to hydrate a node's detail panel on click — graph neighbors arrive
@@ -119,7 +120,7 @@ def api_figures(arxiv_id: str) -> Response:
 
 
 @bp.get("/api/figure_proxy")
-def figure_proxy() -> Response:
+def figure_proxy() -> ResponseReturnValue:
     """Stream an ar5iv image through our origin (dodges hotlink/CORS).
 
     Locked to the ar5iv host so this can't be used as an open proxy (SSRF).

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import urllib.parse
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from .. import config
 from ..integrations import figures as figures_mod
@@ -25,6 +25,9 @@ from ..integrations import semantic_scholar as s2
 from ..library import sources
 from .common import _CITED, _format_passages
 from .neighbors import _REL_TAG, _s2_neighbors, _s2_search, _search_scope
+
+if TYPE_CHECKING:
+    from anthropic.types import ToolParam
 
 log = logging.getLogger(__name__)
 
@@ -92,7 +95,7 @@ def _agent_system(has_sources: bool) -> str:
         return _AGENT_SYSTEM
     return _AGENT_SYSTEM[: -len(_CITED_INSTRUCTION)] + _SOURCES_PARA + _CITED_INSTRUCTION
 
-_TOOLS = [
+_TOOLS: list[ToolParam] = [
     {
         "name": "read_paper",
         "description": (
@@ -199,7 +202,7 @@ _TOOLS = [
 ]
 
 # Added to the tool set only when the user has a source library (Phase 3d).
-_SOURCE_TOOL = {
+_SOURCE_TOOL: ToolParam = {
     "name": "search_sources",
     "description": (
         "Semantic search over the student's OWN uploaded sources (books, PDFs, web "

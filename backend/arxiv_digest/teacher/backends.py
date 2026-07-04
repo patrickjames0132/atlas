@@ -17,9 +17,12 @@ import logging
 import os
 import subprocess
 import tempfile
-from typing import Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional, cast
 
 from .. import config
+
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam
 
 log = logging.getLogger(__name__)
 
@@ -51,7 +54,8 @@ def _stream_api(system: str, messages: list[dict], max_tokens: int) -> Iterator[
         model=config.TEACHER_MODEL,
         max_tokens=max_tokens,
         system=system,
-        messages=messages,
+        # Our {role, content} dicts are MessageParams; the cast just says so.
+        messages=cast("list[MessageParam]", messages),
     ) as stream:
         for text in stream.text_stream:
             yield text

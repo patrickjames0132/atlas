@@ -98,11 +98,12 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
   hygiene + **ruff** lint (config in `pyproject.toml`).
-- **`mypy`** — type-checks `backend/arxiv_digest`. On a **lenient baseline**:
-  `disable_error_code` silences four "gradual typing not done yet" codes
-  (`union-attr`, `return-value`, `arg-type`, `call-overload`) that account for
-  every current error — none are bugs. Tightening this is a tracked tech-debt
-  item; delete codes from that list as they're burned down.
+- **`mypy`** — type-checks `backend/arxiv_digest`, **strict since v1.21.1**: no
+  `disable_error_code` entries and `check_untyped_defs = true`. Keep it that way —
+  new code must type-check clean; don't reintroduce disabled codes. At SDK
+  boundaries prefer isinstance narrowing on real types (see `teacher/agentic.py`)
+  over `getattr` duck-typing, and use `flask.typing.ResponseReturnValue` for
+  views that return `(body, status)` tuples.
 - **`tests`** — `pytest` over `test/` (offline; no live arXiv/S2 calls). Add
   new tests there; pass args through with `uv run nox -s tests -- -k foo`.
 - **`security`** — **Trivy** filesystem scan; **skips cleanly when `trivy`
