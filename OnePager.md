@@ -327,6 +327,11 @@ optional, behind a key.
       first-class mode, rather than the current modal-over-graph. E.g. a top-level
       view switch so "chat with my library" is a place you go, not just an overlay.
       *(From the `todos.md` inbox, 2026-07-03.)*
+- [ ] **Source selection for the AI Teacher** — the offline library assistant lets
+      you scope which uploaded sources it draws on; the **AI Teacher** should get
+      the same **source-selection** control, so a lecture / Q&A can be pointed at a
+      chosen subset of the library too — not just the library assistant. *(From the
+      `todos.md` inbox, 2026-07-03.)*
 - [x] **Publication date in search results + seed-search filters** *(v1.16.0)* —
       arXiv hits now show their **publication date** (from the paper's own
       submission day), and the search surface gained an optional **filter
@@ -351,6 +356,14 @@ optional, behind a key.
       `library/`, `sessions/` — each owning its components, hooks, and CSS
       (the 1,000-line `atlas.css` split alongside). Everything
       JSDoc/docstring-documented.
+- [ ] **`src/` layout for the backend** — move the backend package under a `src/`
+      root (the standard `src`-layout), the structural follow-on to the package
+      refactor above. *(From the `todos.md` inbox, 2026-07-03.)*
+- [ ] **`noxfile` + CI quality backbone** — a `noxfile` that runs **pre-commit**,
+      **Trivy**, **type checks (mypy)**, and **unit tests**. No unit tests exist
+      yet; when we start writing them they live in a dedicated `test/` folder. Pairs
+      with the `src/` move as the project's quality/CI backbone. *(From the
+      `todos.md` inbox, 2026-07-03.)*
 - [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
       selected paper when available (Papers with Code / Hugging Face Papers), so a
       node links out to runnable implementations, not just its abstract. Show in
