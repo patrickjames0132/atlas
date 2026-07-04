@@ -61,8 +61,9 @@ def answer_from_sources(
         question: The user's question (doubles as the retrieval query).
         history: Prior conversation turns as ``[{role, content}, ...]``;
             malformed turns are skipped.
-        source_ids: Scope retrieval to this subset of source ids, or None/empty
-            for the whole library.
+        source_ids: Scope retrieval to this subset of source ids. None means no
+            scope — the whole library; an explicit empty list means no sources
+            selected — retrieval finds nothing.
 
     Yields:
         A single ``("trace", {found, sources})`` naming the retrieved

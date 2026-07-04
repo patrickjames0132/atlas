@@ -427,6 +427,13 @@ optional, behind a key.
       popover only had **Select all**; added a **Deselect all** (shown whenever any
       source is checked) so you can clear and then pick a few, rather than unchecking
       many by hand.
+- [x] **Empty source scope means "search nothing"** *(v1.20.2)* — corrects
+      v1.20.1: an empty checkbox set used to fall back to "search the whole
+      library" (both extremes behaved the same). Now the three states are
+      distinct — all checked = whole library, a subset = just those, **none
+      checked = search no sources**. Threaded a `None` (no scope → all) vs `[]`
+      (explicit empty → nothing) distinction through `sources.search`, both ask
+      routes, `answer_agentic`, and the `search_sources` tool.
 - [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
       filter popover didn't close when a search fired; `Search`'s form `onSubmit`
       now collapses it (`setOpen(false)`) before running the search.

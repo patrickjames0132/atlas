@@ -63,11 +63,11 @@ def answer_agentic(
         history: Prior conversation turns as ``[{role, content}, ...]``;
             malformed turns are skipped.
         source_ids: A user-selected subset of library sources to scope the
-            agent's ``search_sources`` to (from the assistant panel). When set,
-            only those sources are offered in the agent's "Your library" context
-            and every source search is pinned to them; None/empty lets the agent
-            search the whole library. A scope that matches no source disables
-            source search.
+            agent's ``search_sources`` to (from the assistant panel). ``None``
+            means "no scope" — the agent may search the whole library. A
+            **present** list restricts context + search to exactly those
+            sources, and an **empty** list ("no sources selected") disables
+            source search entirely.
 
     Yields:
         ``("trace", {...})`` as it reads/expands/searches, ``("nodes", {...})``
@@ -90,11 +90,11 @@ def answer_agentic(
     # (checked before touching the embedding model, so an empty library never
     # pays the torch load). list_sources is cheap; available() loads the model.
     library = sources.list_sources()
-    # A user-set scope pins the teacher to a subset of sources: show only those
-    # in context and force every source search to them (below). A scope matching
-    # nothing (e.g. since-deleted sources) simply leaves the library empty → no
-    # source tool, rather than silently falling back to the whole library.
-    if source_ids:
+    # A user-set scope (present list) pins the teacher to exactly those sources:
+    # show only them in context and force every source search to them (below).
+    # An explicit EMPTY scope ("no sources selected") filters the library to
+    # nothing → no source tool. None means no scope → the whole library.
+    if source_ids is not None:
         wanted = set(source_ids)
         library = [s for s in library if s.get("id") in wanted]
     has_sources = bool(library) and sources.available()

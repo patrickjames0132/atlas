@@ -425,27 +425,37 @@ def search(
     Args:
         query: What to look for — a concept or question.
         k: Maximum passages to return; defaults to ``config.SOURCE_SEARCH_K``.
-        source_ids: Restrict retrieval to this subset of source ids, or None
-            (or empty) for the whole library. When filtering, the KNN pool is
-            over-fetched (8×) so the join filter can still yield ``k`` hits
-            from the chosen sources.
+        source_ids: Restrict retrieval to this subset of source ids. ``None``
+            means "no scope" — search the whole library; an **explicit empty
+            list** means "no sources selected" — search nothing (returns []).
+            When filtering, the KNN pool is over-fetched (8×) so the join
+            filter can still yield ``k`` hits from the chosen sources.
 
     Returns:
         Up to ``k`` passage dicts — ``{source_id, source_title, page, text,
         distance}`` — ordered by cosine distance (lower = closer). Empty when
-        the embedding model or sqlite-vec is unavailable.
+        the embedding model or sqlite-vec is unavailable, or when the scope is
+        an explicit empty set.
 
     Raises:
         sqlite3.Error: On database failures.
     """
     k = k or config.SOURCE_SEARCH_K
+    # None = whole library; an explicit (possibly empty) list = exactly those
+    # sources, so an empty scope searches nothing rather than everything.
+    if source_ids is not None:
+        ids = [s for s in source_ids if s]
+        if not ids:
+            return []
+    else:
+        ids = []
+
     qvec = embeddings.embed_query(query)
     if qvec is None:
         return []
 
     import sqlite_vec
 
-    ids = [s for s in (source_ids or []) if s]
     # Over-fetch when filtering so the KNN pool still yields k hits from the
     # chosen sources after the join filter.
     fetch = k * 8 if ids else k

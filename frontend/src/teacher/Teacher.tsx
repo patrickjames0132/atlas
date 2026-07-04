@@ -100,11 +100,14 @@ export default function Teacher({
   // between. Scoping bears on the library search in either mode.
   const [libraryItems, setLibraryItems] = useState<Source[]>([])
   // The source ids the assistant may search — a CHECKED box = that source is on.
-  // Defaults to every source; unchecking excludes one. Both extremes (all on /
-  // all off) mean "search the whole library" — only a strict subset filters.
+  // Defaults to every source. All checked = no scope (search everything); a
+  // subset = just those; NONE checked = search no sources at all.
   const [scopeIds, setScopeIds] = useState<string[]>([])
   const [scopeOpen, setScopeOpen] = useState(false)
-  const scopeFiltering = scopeIds.length > 0 && scopeIds.length < libraryItems.length
+  // "No scope" (search the whole library) only when every source is checked;
+  // any other state is sent as an explicit id list (empty = search nothing).
+  const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
+  const scopeArg = scopeAll ? undefined : scopeIds
   // The answer figure opened full-screen in the lightbox (null = closed).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
 
@@ -296,7 +299,7 @@ export default function Teacher({
               session_id: sessionId.current,
               seed: { title: graph.seed.title, id: graph.seed.id },
               nodes: teacherNodes,
-              source_ids: scopeFiltering ? scopeIds : undefined,
+              source_ids: scopeArg,
             },
             {
               signal: ctrl.signal,
@@ -343,7 +346,7 @@ export default function Teacher({
             {
               question: q,
               session_id: sessionId.current,
-              source_ids: scopeFiltering ? scopeIds : undefined,
+              source_ids: scopeArg,
             },
             {
               signal: ctrl.signal,
@@ -366,7 +369,7 @@ export default function Teacher({
         setAsking(false)
       }
     },
-    [input, asking, graph, teacherNodes, scopeFiltering, scopeIds, beginTurn, appendToken, onHighlight, onDiscover],
+    [input, asking, graph, teacherNodes, scopeArg, beginTurn, appendToken, onHighlight, onDiscover],
   )
 
   return (
@@ -379,13 +382,15 @@ export default function Teacher({
               <div className="scope-wrap">
                 <button
                   type="button"
-                  className={`scope-btn ${scopeFiltering ? 'on' : ''}`}
+                  className={`scope-btn ${scopeAll ? '' : 'on'}`}
                   onClick={() => setScopeOpen((o) => !o)}
                   title="Choose which of your sources the assistant may search"
                 >
-                  📚 {scopeFiltering
-                    ? `${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''}`
-                    : 'All sources'}
+                  📚 {scopeAll
+                    ? 'All sources'
+                    : scopeIds.length === 0
+                      ? 'No sources'
+                      : `${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''}`}
                 </button>
                 {scopeOpen && (
                   <div className="scope-pop">
@@ -420,9 +425,11 @@ export default function Teacher({
                       </label>
                     ))}
                     <div className="scope-hint">
-                      {scopeFiltering
-                        ? 'Only the checked sources are searched.'
-                        : 'All sources are searched.'}
+                      {scopeAll
+                        ? 'All sources are searched.'
+                        : scopeIds.length === 0
+                          ? "No sources selected — the assistant won't search your library."
+                          : 'Only the checked sources are searched.'}
                     </div>
                   </div>
                 )}

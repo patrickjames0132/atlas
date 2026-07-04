@@ -33,15 +33,16 @@ def _opt_source_ids(payload: dict) -> "list[str] | None":
         payload: The parsed JSON body.
 
     Returns:
-        The library source ids to scope the answer to — the non-empty string
-        entries of a ``source_ids`` array — or None when absent/empty/malformed
-        (scoping is optional, so junk degrades to "the whole library").
+        The library source ids to scope the answer to. ``None`` when the key is
+        absent or malformed — no scope, so the whole library is searched. A
+        **present** ``source_ids`` array yields exactly its string entries,
+        including an **empty list** — an explicit "no sources selected" that
+        searches nothing rather than everything.
     """
     raw = payload.get("source_ids")
     if not isinstance(raw, list):
         return None
-    ids = [s for s in raw if isinstance(s, str) and s]
-    return ids or None
+    return [s for s in raw if isinstance(s, str) and s]
 
 
 def _sse(event: str, data: object) -> str:

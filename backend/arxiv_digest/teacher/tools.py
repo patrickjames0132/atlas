@@ -695,9 +695,10 @@ def _run_search_sources(
     """
     inp = getattr(block, "input", None) or {}
     query = (inp.get("query") or "").strip()
-    # A user scope (a subset) wins; otherwise fall back to the single source_id
-    # the agent chose (as a one-element list), or None for the whole library.
-    if scope:
+    # A user scope (a present list, even empty) wins; otherwise fall back to the
+    # single source_id the agent chose (as a one-element list), or None for the
+    # whole library. An empty scope means "no sources" → search returns nothing.
+    if scope is not None:
         source_ids: Optional[list[str]] = scope
     else:
         one = inp.get("source_id") or None
