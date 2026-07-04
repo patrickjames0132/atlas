@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.15 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.16 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -8,7 +8,8 @@
 > `search_papers` (v1.8.0), local semantic library for your own PDFs/URLs
 > (v1.9.0), teacher searches your uploaded books in Q&A (v1.10.0), offline library
 > chat (v1.12.0), per-source scoping + stronger embed model (v1.13.0), "how we got
-> here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0)
+> here" time-travel (v1.14.0), saved sessions & workspaces (v1.15.0), seed-search
+> date/category filters + result dates (v1.16.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -326,11 +327,16 @@ optional, behind a key.
       first-class mode, rather than the current modal-over-graph. E.g. a top-level
       view switch so "chat with my library" is a place you go, not just an overlay.
       *(From the `todos.md` inbox, 2026-07-03.)*
-- [ ] **Publication date in search results + date filter** — surface each result's
-      **publication date** in the semantic search results list, and add a way to
-      **filter search results by publication date** (e.g. a date/year control on the
-      search surface, complementing the graph's existing year-range slider). *(From
-      the `todos.md` inbox, 2026-07-03.)*
+- [x] **Publication date in search results + seed-search filters** *(v1.16.0)* —
+      arXiv hits now show their **publication date** (from the paper's own
+      submission day), and the search surface gained an optional **filter
+      popover**: a dual-handle **year-range slider** (folds to no-bound at 1991 /
+      the current year, so a full-width slider is the no-op state) plus an **arXiv
+      category picker** fed by a new `/api/taxonomy` endpoint (server-validated
+      codes, any-of match). Filters AND onto arXiv's query (`submittedDate` + `cat`
+      clauses) and the local cache's year window alike; an explicit id/URL lookup
+      ignores them. This is where the dormant `taxonomy.py` finally earns its keep.
+      *(From the `todos.md` inbox, 2026-07-03.)*
 - [x] **Frontend/backend package refactor** *(v1.15.1–v1.15.2)* — the whole
       codebase reorganized into concern packages. Backend: `app.py` → a thin
       factory over `routes/` blueprints; `teacher.py` (1,280 lines) → a

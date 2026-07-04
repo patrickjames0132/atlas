@@ -8,6 +8,7 @@
  */
 
 import type { FormEvent } from 'react'
+import type { SearchFilters } from '../api'
 import Search from '../search/Search'
 import './header.css'
 
@@ -22,6 +23,9 @@ export interface AtlasHeaderProps {
   searching: boolean
   /** A graph is loading. */
   loadingGraph: boolean
+  /** The optional search filters (passed through to Search). */
+  filters: SearchFilters
+  onFilters: (f: SearchFilters) => void
   /** The loaded graph's seed title, shown beside the form (null = none). */
   seedTitle: string | null
   /** How many sources are in the library (>0 shows the Ask-library button). */
@@ -38,6 +42,8 @@ export default function AtlasHeader({
   onSubmit,
   searching,
   loadingGraph,
+  filters,
+  onFilters,
   seedTitle,
   libraryCount,
   onOpenSources,
@@ -55,6 +61,8 @@ export default function AtlasHeader({
         onSubmit={onSubmit}
         searching={searching}
         loadingGraph={loadingGraph}
+        filters={filters}
+        onFilters={onFilters}
       />
       {seedTitle && (
         <div className="seed-info" title={seedTitle}>

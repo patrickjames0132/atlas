@@ -182,9 +182,11 @@ export default function Atlas() {
   const { pinned, clearPins, onNodeDragEnd, togglePin, releaseAll } =
     usePinning({ base, layout, nodeTimelineX, fgRef, fitDone })
 
-  // Seed search: query state + cache-first local / live arXiv results.
-  const { query, setQuery, hits, localHits, searching, arxivFailed, runSearch, clearHits } =
-    useSeedSearch(setError)
+  // Seed search: query + optional filters, cache-first local / live arXiv results.
+  const {
+    query, setQuery, filters, setFilters,
+    hits, localHits, searching, arxivFailed, runSearch, clearHits,
+  } = useSeedSearch(setError)
 
   /**
    * Load (or re-seed) the graph for a seed — an arXiv id, pasted URL, or S2
@@ -426,6 +428,8 @@ export default function Atlas() {
         onSubmit={onSubmit}
         searching={searching}
         loadingGraph={loadingGraph}
+        filters={filters}
+        onFilters={setFilters}
         seedTitle={graph?.seed.title ?? null}
         libraryCount={libraryCount}
         onOpenSources={() => setShowSources(true)}

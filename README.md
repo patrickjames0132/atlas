@@ -116,11 +116,13 @@ The Vite dev server proxies `/api/*` to Flask.
 ## Using it
 
 1. **Search a paper** — type a title (e.g. *Attention Is All You Need*) and pick
-   from the hits, or paste an **arXiv id / URL** to jump straight in. Papers
-   you've seen on previous graphs appear **instantly from the local cache**
-   (above the live arXiv results); an **instant** badge marks papers whose
-   whole neighborhood is cached — those explore without touching the API at
-   all, rate limits be damned.
+   from the hits (each shows its **publication date**), or paste an **arXiv id /
+   URL** to jump straight in. Papers you've seen on previous graphs appear
+   **instantly from the local cache** (above the live arXiv results); an
+   **instant** badge marks papers whose whole neighborhood is cached — those
+   explore without touching the API at all, rate limits be damned. Optional
+   **Filters** narrow the search by a **publication-year range** (a dual-handle
+   slider) and by **arXiv category** — a pasted id/URL ignores them.
 2. **Read the map** — 🟡 gold = the seed · 🔵 blue = **references** (papers it
    cites) · 🟢 green = **citations** (papers citing it) · 🟣 purple = **similar**
    (SPECTER2 neighbors). Node size = citation count; arrows show citation

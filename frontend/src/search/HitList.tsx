@@ -1,10 +1,11 @@
 /**
  * The seed-search results panel: cache-first local hits render immediately,
  * live arXiv hits stream in under them (deduped against the local ones), and
- * clicking any hit loads its graph.
+ * clicking any hit loads its graph. arXiv hits show their publication date.
  */
 
 import type { ArxivHit, LocalHit } from '../api'
+import { formatPubDate } from '../graph/model'
 import './search.css'
 
 /** Props for {@link HitList}. */
@@ -91,6 +92,8 @@ export default function HitList({
           <button key={h.arxiv_id} className="hit" onClick={() => onPick(h.arxiv_id)}>
             <div className="hit-title">{h.title}</div>
             <div className="hit-meta">
+              <span className="hit-date">{formatPubDate(h.published)}</span>
+              {' · '}
               {h.authors} · {h.arxiv_id}
             </div>
           </button>
