@@ -230,8 +230,9 @@ export default function Atlas() {
     [query, loadGraph, runSearch],
   )
 
-  // Selection: the open detail panel, its hydration + figures, click handling.
-  const { selectedId, setSelectedId, selected, figures, figLoading, onNodeClick } =
+  // Selection: the open detail panel, its hydration + figures + code links,
+  // click handling.
+  const { selectedId, setSelectedId, selected, figures, figLoading, codeLinks, onNodeClick } =
     useSelection({ base, graph, loadGraph })
 
   // Agent discoveries: papers the teacher pulls in mid-chat, merged into
@@ -543,6 +544,7 @@ export default function Atlas() {
             node={selected}
             figures={selected.arxiv_id ? figures[selected.arxiv_id] : undefined}
             figuresLoading={figLoading === selected.arxiv_id}
+            codeLinks={selected.arxiv_id ? codeLinks[selected.arxiv_id] : undefined}
             isPinned={pinned.has(selected.id)}
             onTogglePin={() => togglePin(selected.id)}
             onClose={() => setSelectedId(null)}

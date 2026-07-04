@@ -4,6 +4,7 @@ hydration, and a paper's figures (proxied from ar5iv).
 GET /api/graph?seed=&refresh=      -> neighborhood graph for a seed paper
 GET /api/paper/<arxiv_id>          -> full details for one paper (panel hydrate)
 GET /api/paper/<arxiv_id>/figures  -> the paper's figures + captions (ar5iv)
+GET /api/paper/<arxiv_id>/code     -> code & artifact links (Hugging Face Papers)
 GET /api/figure_proxy?src=         -> same-origin proxy for an ar5iv image
 """
 
@@ -14,7 +15,7 @@ import urllib.parse
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from ..integrations import arxiv_client, figures, semantic_scholar
+from ..integrations import arxiv_client, figures, huggingface, semantic_scholar
 from ..services import graph as graph_service
 
 bp = Blueprint("graph", __name__)
@@ -116,6 +117,28 @@ def api_figures(arxiv_id: str) -> Response:
         return jsonify({"available": False, "figures": []})
     for fig in result.get("figures", []):
         fig["image"] = "/api/figure_proxy?src=" + urllib.parse.quote(fig["image"], safe="")
+    return jsonify(result)
+
+
+@bp.get("/api/paper/<path:arxiv_id>/code")
+def api_code(arxiv_id: str) -> Response:
+    """Fetch a paper's code & artifact links (Hugging Face Papers).
+
+    Args:
+        arxiv_id: The paper's arXiv id (path-encoded).
+
+    Returns:
+        JSON ``{available, paper_url, upvotes, github, models, datasets,
+        spaces, totals}``. Papers HF has never indexed come back as
+        ``available: false`` — not an error — and an HF outage degrades the
+        same way rather than 500-ing the panel.
+    """
+    seed = _normalize_arxiv_id(arxiv_id)
+    try:
+        result = huggingface.get_code_links(seed)
+    except Exception:  # HF down/slow — degrade gracefully, don't 500 the panel
+        current_app.logger.warning("code-links fetch failed for %s", seed, exc_info=True)
+        result = huggingface._empty()
     return jsonify(result)
 
 

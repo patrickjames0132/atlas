@@ -1,6 +1,6 @@
 # arXiv Atlas — One-Pager
 
-> **Status:** v1.22 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v1.23 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -13,7 +13,8 @@
 > (v1.17.0), unified assistant panel (v1.18.0), parallel upload + multi-select
 > source scope (v1.19.0), figures in agent answers (v1.20.0), hybrid lexical +
 > semantic library search (v1.21.0), quality hardening — strict mypy, src-layout,
-> 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0)
+> 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0), code &
+> artifact links via Hugging Face Papers (v1.23.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -445,10 +446,18 @@ optional, behind a key.
       and killed the stream before the `error` event reached the panel — now a
       module logger, with the `token → error` framing locked in by a test.
       *(From the `todos.md` inbox, 2026-07-04.)*
-- [ ] **Papers-with-code / implementation links** — surface code + notebooks for a
-      selected paper when available (Papers with Code / Hugging Face Papers), so a
-      node links out to runnable implementations, not just its abstract. Show in
-      the detail panel; maybe flag which graph nodes have code.
+- [x] **Papers-with-code / implementation links** *(v1.23.0)* — the detail panel
+      now shows a **"Code & artifacts"** section from **Hugging Face Papers**
+      (Papers with Code's successor): the community-linked **GitHub repo** (with
+      stars) plus the top linked **models / datasets / Spaces** and their full
+      counts, linking out to the paper's HF page. One call to
+      `huggingface.co/api/papers/{arxiv_id}` (`integrations/huggingface.py`),
+      day-cached in SQLite (misses too), served by `GET /api/paper/<id>/code`,
+      which degrades to `available: false` on any HF failure — never 500s the
+      panel. Lazily fetched per paper alongside figures; the actions row was
+      restyled to fit (compact Abstract/PDF/Pin chips, full-width Explore).
+      *Not done (needs one HF call per node, no batch endpoint): flagging graph
+      nodes that have code.*
 - [x] **Figures in agent answers** *(v1.20.0)* — the agentic Q&A can now pull a
       paper's own figures into its answer. A **full `read_paper` lists that paper's
       figures** (numbered captions) and a **`show_figure(index, figure)`** tool

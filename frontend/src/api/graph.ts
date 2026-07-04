@@ -122,3 +122,58 @@ export async function fetchFigures(arxivId: string): Promise<FiguresResponse> {
   if (!res.ok) return { available: false, figures: [] }
   return res.json()
 }
+
+/** A model/dataset/Space on Hugging Face linked to the paper. */
+export interface CodeRepo {
+  /** The HF repo id, e.g. `google/paligemma-3b-pt-224`. */
+  id: string
+  url: string
+  likes: number
+  /** Models & datasets only. */
+  downloads?: number
+  /** Models only, e.g. `text-generation`. */
+  pipeline_tag?: string | null
+  /** Spaces only. */
+  emoji?: string | null
+}
+
+/** The `/api/paper/<id>/code` response (from Hugging Face Papers). */
+export interface CodeLinksResponse {
+  /** False when HF has never indexed the paper (or HF is unreachable). */
+  available: boolean
+  /** The HF paper page (lists everything, incl. community discussion). */
+  paper_url: string | null
+  upvotes: number
+  /** The community-linked implementation repo, when someone has linked one. */
+  github: { url: string; stars: number } | null
+  models: CodeRepo[]
+  datasets: CodeRepo[]
+  spaces: CodeRepo[]
+  /** Full linked-repo counts on HF (the lists above are samples). */
+  totals: { models: number; datasets: number; spaces: number }
+}
+
+const EMPTY_CODE_LINKS: CodeLinksResponse = {
+  available: false,
+  paper_url: null,
+  upvotes: 0,
+  github: null,
+  models: [],
+  datasets: [],
+  spaces: [],
+  totals: { models: 0, datasets: 0, spaces: 0 },
+}
+
+/**
+ * The paper's code & artifact links (Hugging Face Papers) for the detail panel.
+ *
+ * Never throws — failures degrade to `{ available: false }` so a flaky HF
+ * can't break the panel.
+ *
+ * @param arxivId The paper's arXiv id.
+ */
+export async function fetchCodeLinks(arxivId: string): Promise<CodeLinksResponse> {
+  const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/code`)
+  if (!res.ok) return EMPTY_CODE_LINKS
+  return res.json()
+}

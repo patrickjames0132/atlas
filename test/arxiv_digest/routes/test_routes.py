@@ -52,6 +52,30 @@ def test_figure_proxy_locked_to_ar5iv(flask_client):
     assert resp.status_code == 400  # SSRF lock: only ar5iv images pass
 
 
+def test_code_links_success(flask_client, monkeypatch):
+    seen = {}
+
+    def fake(arxiv_id, refresh=False):
+        seen["id"] = arxiv_id
+        return {"available": True, "github": None, "models": [], "datasets": [],
+                "spaces": [], "totals": {"models": 0, "datasets": 0, "spaces": 0},
+                "paper_url": "https://huggingface.co/papers/1706.03762", "upvotes": 1}
+    monkeypatch.setattr(graph_routes.huggingface, "get_code_links", fake)
+    resp = flask_client.get("/api/paper/https%3A%2F%2Farxiv.org%2Fabs%2F1706.03762v5/code")
+    assert resp.status_code == 200
+    assert resp.get_json()["available"] is True
+    assert seen["id"] == "1706.03762"  # URL + version stripped
+
+
+def test_code_links_degrade_on_hf_failure(flask_client, monkeypatch):
+    def boom(arxiv_id, refresh=False):
+        raise OSError("hf down")
+    monkeypatch.setattr(graph_routes.huggingface, "get_code_links", boom)
+    resp = flask_client.get("/api/paper/1706.03762/code")
+    assert resp.status_code == 200  # degrades, never 500s the panel
+    assert resp.get_json()["available"] is False
+
+
 # --- /api/arxiv_search + /api/local_search ---------------------------------------
 
 def test_arxiv_search_maps_failure_to_502(flask_client, monkeypatch):

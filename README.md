@@ -14,7 +14,7 @@ corpus of papers to store (millions of papers are many TB; we leave that to the
 people who already host it). The only thing kept on disk is a tiny cache of the
 graphs you've already looked at.
 
-> **Status:** v1.22 — the graph explorer **and a streaming AI teacher** are live:
+> **Status:** v1.23 — the graph explorer **and a streaming AI teacher** are live:
 > Claude narrates a lecture over the graph and lights up nodes in sync — and the
 > **"How we got here" lecture time-travels**, walking backward through references
 > to a field's older roots before it narrates, so the story starts at the
@@ -30,8 +30,9 @@ graphs you've already looked at.
 > search" color). Each answer is a **clickable section** that re-lights the
 > papers it drew on, just like a lecture beat. A **Timeline layout** arranges
 > papers left→right by year (so the lecture sweeps through time), and the detail
-> panel shows a paper's own **figures + captions** and links to both the abstract
-> and the PDF. Seed search is **cache-first**: papers you've already seen appear
+> panel shows a paper's own **figures + captions**, links to both the abstract
+> and the PDF, and the paper's **code & artifacts** — the linked GitHub repo and
+> the models/datasets/Spaces built on it, via Hugging Face Papers. Seed search is **cache-first**: papers you've already seen appear
 > instantly (and still work when the APIs are rate-limiting). You can also **bring
 > your own sources** — drop in several PDFs/books at once (embedded in parallel)
 > or paste a URL and it's chunked, embedded
@@ -133,9 +134,12 @@ The Vite dev server proxies `/api/*` to Flask.
    cites) · 🟢 green = **citations** (papers citing it) · 🟣 purple = **similar**
    (SPECTER2 neighbors). Node size = citation count; arrows show citation
    direction; thicker links mark "influential" citations. **Click a node** for a
-   detail panel — TL;DR, the paper's own **figures + captions** (pulled from
-   [ar5iv](https://ar5iv.org) when available), and links to the **abstract** and
-   the **PDF**.
+   detail panel — TL;DR, links to the **abstract** and the **PDF**, the paper's
+   **code & artifacts** (from [Hugging Face Papers](https://huggingface.co/papers),
+   Papers with Code's successor: the community-linked **GitHub repo** with stars,
+   plus the top **models / datasets / Spaces** built on the paper), and the
+   paper's own **figures + captions** (pulled from [ar5iv](https://ar5iv.org)
+   when available).
 3. **Declutter** (top-left panel):
    - **Layout** — toggle **Force** (organic force-directed) ↔ **Timeline** (x =
      publication date — year + month, so papers sit between the yearly gridlines;
@@ -210,7 +214,8 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
 │       ├── teacher/             # AI teacher package: streaming backends, lecture,
 │       │                        #   grounded + agentic Q&A, tools, library chat
 │       ├── integrations/        # external clients: semantic_scholar, arxiv_client,
-│       │                        #   fulltext + figures (ar5iv), taxonomy (dormant)
+│       │                        #   fulltext + figures (ar5iv), huggingface (code
+│       │                        #   links), taxonomy (dormant)
 │       ├── services/            # domain logic: graph assembly, seed search
 │       ├── storage/             # SQLite: cache (ephemeral), sessions (durable)
 │       └── library/             # bring-your-own sources: ingest + embeddings
@@ -221,7 +226,7 @@ arxiv-digest/                    # (repo name predates the "Atlas" rename)
         ├── header/              # AtlasHeader (brand, search form, drawer toggles)
         ├── search/              # Search form + HitList + useSeedSearch
         ├── graph/               # GraphCanvas/Controls/Legend + layout/pin/discovery hooks
-        ├── detail/              # DetailPanel + useSelection (figures, hydration)
+        ├── detail/              # DetailPanel + useSelection (figures, code links, hydration)
         ├── teacher/             # unified Assistant panel (graph lecture/Q&A + library chat)
         ├── library/             # Sources drawer (bring-your-own sources)
         └── sessions/            # Sessions drawer (saved workspaces)

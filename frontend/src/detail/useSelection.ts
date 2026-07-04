@@ -6,8 +6,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchFigures, fetchPaperDetail } from '../api'
-import type { FiguresResponse, GraphNode, GraphResponse } from '../api'
+import { fetchCodeLinks, fetchFigures, fetchPaperDetail } from '../api'
+import type { CodeLinksResponse, FiguresResponse, GraphNode, GraphResponse } from '../api'
 import type { Base, VNode } from '../graph/model'
 
 /** Arguments for {@link useSelection}. */
@@ -32,6 +32,8 @@ export interface SelectionApi {
   figures: Record<string, FiguresResponse>
   /** The arXiv id whose figures are currently being fetched (else null). */
   figLoading: string | null
+  /** Code & artifact links (HF Papers) per arXiv id, as they finish loading. */
+  codeLinks: Record<string, CodeLinksResponse>
   /** Canvas click handler: select on click, re-seed on quick double-click. */
   onNodeClick: (node: VNode) => void
 }
@@ -48,11 +50,16 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
   // Figures (ar5iv) per arXiv id, lazily fetched when a node is opened.
   const [figures, setFigures] = useState<Record<string, FiguresResponse>>({})
   const [figLoading, setFigLoading] = useState<string | null>(null)
+  // Code & artifact links (HF Papers) per arXiv id, same lazy pattern.
+  const [codeLinks, setCodeLinks] = useState<Record<string, CodeLinksResponse>>({})
+  const codeRequested = useRef<Set<string>>(new Set())
 
   // A new graph invalidates the per-paper caches and selects its seed.
   useEffect(() => {
     setDetails({})
     setFigures({})
+    setCodeLinks({})
+    codeRequested.current = new Set()
     setSelectedId(graph ? graph.seed.id : null)
   }, [graph])
 
@@ -75,6 +82,15 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
       .catch(() => setFigures((f) => ({ ...f, [aid]: { available: false, figures: [] } })))
       .finally(() => setFigLoading((cur) => (cur === aid ? null : cur)))
   }, [selected, figures, figLoading])
+
+  // Same for the paper's code & artifact links (HF Papers). fetchCodeLinks
+  // never throws — failures land as { available: false }.
+  useEffect(() => {
+    const aid = selected?.arxiv_id
+    if (!aid || codeRequested.current.has(aid)) return
+    codeRequested.current.add(aid)
+    fetchCodeLinks(aid).then((res) => setCodeLinks((c) => ({ ...c, [aid]: res })))
+  }, [selected])
 
   // Single click selects a node; a quick second click on the SAME node re-seeds
   // the whole graph on it — letting you wander the literature node-to-node. We
@@ -100,5 +116,5 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     [details, loadGraph],
   )
 
-  return { selectedId, setSelectedId, selected, figures, figLoading, onNodeClick }
+  return { selectedId, setSelectedId, selected, figures, figLoading, codeLinks, onNodeClick }
 }
