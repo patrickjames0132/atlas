@@ -8,6 +8,7 @@ on the per-test temp DB (see conftest ``_isolate``).
 from __future__ import annotations
 
 import pytest
+
 from arxiv_digest.services import graph as graph_service
 
 

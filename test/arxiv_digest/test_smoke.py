@@ -8,6 +8,7 @@ offline — no live arXiv / Semantic Scholar calls — so they're safe to run in
 from __future__ import annotations
 
 import pytest
+
 from arxiv_digest.app import app as flask_app
 
 

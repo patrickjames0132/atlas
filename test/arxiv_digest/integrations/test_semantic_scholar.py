@@ -12,8 +12,8 @@ import json
 import urllib.error
 
 import pytest
-from arxiv_digest.integrations import semantic_scholar as s2
 
+from arxiv_digest.integrations import semantic_scholar as s2
 
 # --- _node normalization -------------------------------------------------------
 
