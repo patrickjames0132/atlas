@@ -417,6 +417,15 @@ optional, behind a key.
       positions in its text (a sentinel like `<<CITED>>`) and the stream parser to
       split the message around them and interleave the images. *(From testing
       2026-07-03.)*
+- [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
+      feature to the user's **own library**: pull images out of an ingested PDF
+      (via `pymupdf`, which we already use for text) and let the agent surface a
+      relevant one when it cites a source passage — the library analogue of
+      `show_figure`, which today only covers arXiv papers (ar5iv). Needs page →
+      image extraction at ingest (or on demand), a way to reference an image from
+      a retrieved passage, and a `show_source_figure`-style tool + `figure` event
+      reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
+      2026-07-03.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).
