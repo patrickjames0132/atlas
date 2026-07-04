@@ -24,7 +24,9 @@ from pathlib import Path
 from typing import Iterator, Optional
 from uuid import uuid4
 
-from . import config, embeddings, fulltext
+from . import embeddings
+from .. import config
+from ..integrations import fulltext
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +60,17 @@ _HAS_VEC: Optional[bool] = None
 
 
 def _try_load_vec(conn: sqlite3.Connection) -> bool:
-    """Load the sqlite-vec extension into a connection. False if unavailable."""
+    """Load the sqlite-vec extension into a connection.
+
+    Extensions are per-connection, so this runs on every ``_connect``.
+
+    Args:
+        conn: The open SQLite connection.
+
+    Returns:
+        True when the extension loaded; False when sqlite-vec is missing or
+        the load failed (logged, not raised — the app degrades gracefully).
+    """
     try:
         import sqlite_vec
 
@@ -73,6 +85,19 @@ def _try_load_vec(conn: sqlite3.Connection) -> bool:
 
 @contextmanager
 def _connect() -> Iterator[sqlite3.Connection]:
+    """Open a connection to the sources library, committing on clean exit.
+
+    Ensures the schema exists, probes/loads sqlite-vec (recording the result
+    in the module-level ``_HAS_VEC``), and creates the vector table when the
+    extension is available.
+
+    Yields:
+        An open ``sqlite3.Connection`` with ``Row`` as its row factory and
+        foreign keys enabled.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     global _HAS_VEC
     config.ensure_dirs()
     conn = sqlite3.connect(config.SOURCES_DB_PATH, timeout=10)
@@ -94,7 +119,12 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def available() -> bool:
-    """True when both the embedding model and sqlite-vec are usable."""
+    """Report whether the source library is fully usable.
+
+    Returns:
+        True when both the embedding model and sqlite-vec load. Note the
+        first call may be slow — it triggers the lazy embedding-model load.
+    """
     if not embeddings.available():
         return False
     with _connect() as _:
@@ -104,8 +134,20 @@ def available() -> bool:
 # --- chunking ----------------------------------------------------------------
 
 def _chunk_text(text: str, size: int, overlap: int) -> list[str]:
-    """Split `text` into overlapping windows of ~`size` chars, breaking on a
-    space near each boundary so chunks don't cut mid-word. Whitespace collapsed."""
+    """Split text into overlapping windows for embedding.
+
+    Windows are ~``size`` chars, breaking on a space near each boundary so
+    chunks don't cut mid-word; whitespace is collapsed first.
+
+    Args:
+        text: The raw text to split.
+        size: Target window size in characters.
+        overlap: Characters of overlap carried between consecutive windows
+            (preserves context across chunk boundaries).
+
+    Returns:
+        The chunk strings, in order; empty when ``text`` is blank.
+    """
     text = " ".join(text.split())
     if not text:
         return []
@@ -132,8 +174,21 @@ def _chunk_text(text: str, size: int, overlap: int) -> list[str]:
 # --- extraction --------------------------------------------------------------
 
 def extract_pdf(path: str | Path) -> tuple[list[tuple[int, str]], int]:
-    """Per-page text from a PDF, as [(page_no, text)], plus the total page count.
-    Raises SourceError for a scanned/image-only PDF (no extractable text)."""
+    """Extract per-page text from a PDF.
+
+    Args:
+        path: Filesystem path to the PDF.
+
+    Returns:
+        A ``(pages, total)`` tuple: ``pages`` is ``[(page_no, text)]`` for
+        pages that had extractable text (1-based numbering), ``total`` is the
+        document's full page count.
+
+    Raises:
+        SourceError: For a scanned/image-only PDF (no extractable text — OCR
+            isn't supported yet), or when no text was found at all.
+        fitz.FileDataError: When the file isn't a readable PDF.
+    """
     import fitz  # pymupdf
 
     doc = fitz.open(path)
@@ -160,8 +215,19 @@ _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
 
 def fetch_url(url: str) -> tuple[str, Optional[str]]:
-    """Fetch a web page and return (readable_text, page_title). Raises SourceError
-    on network failure or empty content."""
+    """Fetch a web page and reduce it to readable text.
+
+    Args:
+        url: The page URL.
+
+    Returns:
+        A ``(readable_text, page_title)`` tuple; the title is None when the
+        page declares none.
+
+    Raises:
+        SourceError: On network failure or when no readable text could be
+            extracted.
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "arxiv-atlas/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=config.S2_TIMEOUT) as resp:
@@ -183,7 +249,24 @@ def add_source(
     title: str, kind: str, origin: Optional[str],
     page_texts: list[tuple[Optional[int], str]], pages: Optional[int] = None,
 ) -> dict:
-    """Chunk, embed, and store a source's page texts. Returns the source record."""
+    """Chunk, embed, and store a source's page texts.
+
+    Args:
+        title: Display title for the source.
+        kind: ``"pdf"`` or ``"url"``.
+        origin: Where it came from — the original filename or URL (or None).
+        page_texts: ``[(page_no, text)]`` — page numbers are 1-based for PDFs
+            and None for pageless sources (web pages).
+        pages: Total page count (PDFs), or None.
+
+    Returns:
+        The stored source record (see ``get_source``).
+
+    Raises:
+        SourceError: When the embedding model or sqlite-vec is unavailable,
+            embedding fails, or chunking produced no text to index.
+        sqlite3.Error: On database failures.
+    """
     if not embeddings.available():
         raise SourceError("Embedding model unavailable — cannot ingest sources.")
 
@@ -223,14 +306,39 @@ def add_source(
 
 
 def ingest_pdf(path: str | Path, title: Optional[str] = None) -> dict:
-    """Ingest a PDF file into the source library."""
+    """Ingest a PDF file into the source library.
+
+    Args:
+        path: Filesystem path to the PDF.
+        title: Display title; defaults to the filename stem.
+
+    Returns:
+        The stored source record.
+
+    Raises:
+        SourceError: When extraction or ingestion fails (see ``extract_pdf``
+            and ``add_source``).
+    """
     path = Path(path)
     pages, total = extract_pdf(path)
     return add_source(title or path.stem, "pdf", path.name, pages, pages=total)
 
 
 def ingest_url(url: str, title: Optional[str] = None) -> dict:
-    """Fetch a web page and ingest its readable text as a single source."""
+    """Fetch a web page and ingest its readable text as a single source.
+
+    Args:
+        url: The page URL.
+        title: Display title; defaults to the page's own ``<title>``, then
+            the URL.
+
+    Returns:
+        The stored source record.
+
+    Raises:
+        SourceError: When the fetch or ingestion fails (see ``fetch_url`` and
+            ``add_source``).
+    """
     text, page_title = fetch_url(url)
     return add_source(title or page_title or url, "url", url, [(None, text)])
 
@@ -238,6 +346,15 @@ def ingest_url(url: str, title: Optional[str] = None) -> dict:
 # --- library + search --------------------------------------------------------
 
 def _source_row(row: sqlite3.Row) -> dict:
+    """Convert a ``sources`` table row to the API's source record.
+
+    Args:
+        row: A row from the ``sources`` table.
+
+    Returns:
+        A dict with keys ``id, title, kind, origin, pages, n_chunks,
+        created_at``.
+    """
     return {
         "id": row["id"], "title": row["title"], "kind": row["kind"],
         "origin": row["origin"], "pages": row["pages"],
@@ -246,13 +363,31 @@ def _source_row(row: sqlite3.Row) -> dict:
 
 
 def get_source(source_id: str) -> Optional[dict]:
+    """Fetch one source's record.
+
+    Args:
+        source_id: The source's id.
+
+    Returns:
+        The source record, or None when no such source exists.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         row = conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
     return _source_row(row) if row else None
 
 
 def list_sources() -> list[dict]:
-    """Every source in the library, newest first."""
+    """List every source in the library, newest first.
+
+    Returns:
+        A list of source records (see ``_source_row``).
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         rows = conn.execute(
             "SELECT * FROM sources ORDER BY created_at DESC, rowid DESC"
@@ -261,7 +396,17 @@ def list_sources() -> list[dict]:
 
 
 def delete_source(source_id: str) -> bool:
-    """Remove a source and all its chunks/vectors. True if it existed."""
+    """Remove a source and all its chunks/vectors.
+
+    Args:
+        source_id: The source's id.
+
+    Returns:
+        True when the source existed and was deleted; False otherwise.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         ids = [r["id"] for r in conn.execute(
             "SELECT id FROM chunks WHERE source_id = ?", (source_id,)).fetchall()]
@@ -273,9 +418,23 @@ def delete_source(source_id: str) -> bool:
 
 
 def search(query: str, k: Optional[int] = None, source_id: Optional[str] = None) -> list[dict]:
-    """Semantic search over the library. Returns up to `k` passages, each with its
-    source title, page (for PDFs), text, and cosine distance (lower = closer).
-    Scoped to one source when `source_id` is given."""
+    """Semantic (KNN) search over the library's chunk vectors.
+
+    Args:
+        query: What to look for — a concept or question.
+        k: Maximum passages to return; defaults to ``config.SOURCE_SEARCH_K``.
+        source_id: Restrict retrieval to one source's id, or None for the
+            whole library. When filtering, the KNN pool is over-fetched (8×)
+            so the join filter can still yield ``k`` hits for that source.
+
+    Returns:
+        Up to ``k`` passage dicts — ``{source_id, source_title, page, text,
+        distance}`` — ordered by cosine distance (lower = closer). Empty when
+        the embedding model or sqlite-vec is unavailable.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     k = k or config.SOURCE_SEARCH_K
     qvec = embeddings.embed_query(query)
     if qvec is None:

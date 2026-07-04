@@ -12,8 +12,9 @@ import json
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
-from .. import config, sources
+from .. import config
 from .. import teacher as teacher_service
+from ..library import sources
 
 bp = Blueprint("teacher", __name__)
 
@@ -26,15 +27,34 @@ _SOURCES_SESSIONS: dict[str, list[dict]] = {}
 
 
 def _sse(event: str, data: object) -> str:
-    """Format one Server-Sent Event frame."""
+    """Format one Server-Sent Event frame.
+
+    Args:
+        event: The event name (``beat``, ``token``, ``trace``, …).
+        data: A JSON-serializable payload.
+
+    Returns:
+        The wire-format frame: ``event:`` and ``data:`` lines terminated by a
+        blank line.
+
+    Raises:
+        TypeError: When ``data`` isn't JSON-serializable.
+    """
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 def _sse_response(generator) -> Response:
-    """Wrap a generator of SSE frames as a streaming text/event-stream response.
+    """Wrap a generator of SSE frames as a streaming response.
 
-    X-Accel-Buffering:no keeps nginx (if ever put in front) from buffering the
-    stream; Cache-Control:no-cache stops intermediaries caching partial output.
+    ``X-Accel-Buffering: no`` keeps nginx (if ever put in front) from
+    buffering the stream; ``Cache-Control: no-cache`` stops intermediaries
+    caching partial output.
+
+    Args:
+        generator: An iterator yielding SSE frame strings (from ``_sse``).
+
+    Returns:
+        A ``text/event-stream`` Flask Response streaming the frames.
     """
     return Response(
         generator,
@@ -47,12 +67,20 @@ def _sse_response(generator) -> Response:
 def api_lecture() -> Response:
     """Stream a lecture over the visible graph as SSE ``beat`` events.
 
-    Body: {seed: {title,...}, nodes: [visible node objects], mode:
-    history|intuition|bridge, target?: {title,...}}. Each ``beat`` event carries
-    {heading, text, node_ids} so the frontend can reveal it and light up nodes.
     In ``history`` mode we first walk backward through references (Phase 3e),
-    emitting ``trace`` + ``nodes`` events, so the story can start at the field's
-    roots; the discovered ancestors join the node set the lecture narrates over.
+    emitting ``trace`` + ``nodes`` events, so the story can start at the
+    field's roots; the discovered ancestors join the node set the lecture
+    narrates over.
+
+    Body:
+        ``{seed: {title,...}, nodes: [visible node objects], mode:
+        history|intuition|bridge, target?: {title,...}}``.
+
+    Returns:
+        An SSE stream — each ``beat`` event carries ``{heading, text,
+        node_ids}`` so the frontend can reveal it and light up nodes, ending
+        with ``done`` (or an ``error`` event; failures inside the stream are
+        also logged). HTTP 400 when ``nodes`` is missing/empty.
     """
     payload = request.get_json(silent=True) or {}
     nodes = payload.get("nodes")
@@ -63,6 +91,7 @@ def api_lecture() -> Response:
     target = payload.get("target")
 
     def gen():
+        """Yield the lecture's SSE frames (backfill first in history mode)."""
         try:
             enriched = nodes
             if mode == "history" and seed.get("id"):
@@ -86,11 +115,21 @@ def api_lecture() -> Response:
 def api_ask() -> Response:
     """Answer a question grounded in the visible graph, streamed as SSE.
 
-    Body: {question, session_id, seed, nodes}. With the agentic backend, also
-    emits ``trace`` events (tool steps) and ``nodes`` events ({nodes, edges}) as
-    expand_node discovers papers not yet on the graph; always emits ``token``
-    events (prose) then a final ``cited`` event ({node_ids}). Conversation
-    history is keyed by session_id so follow-ups keep context.
+    Runs the agentic Q&A (reads papers via tool use) when the API backend is
+    available; otherwise the non-agentic grounded answer (e.g. under the
+    claude CLI backend). Conversation history is keyed by ``session_id`` so
+    follow-ups keep context; a turn is persisted only on success, capped to
+    the recent window.
+
+    Body:
+        ``{question, session_id, seed, nodes}``.
+
+    Returns:
+        An SSE stream: with the agentic backend, ``trace`` events (tool
+        steps) and ``nodes`` events (``{nodes, edges}`` discoveries) as
+        expansion finds papers not yet on the graph; always ``token`` events
+        (prose), a final ``cited`` event (``{node_ids}``), then ``done`` (or
+        ``error``). HTTP 400 when the question or nodes are missing.
     """
     payload = request.get_json(silent=True) or {}
     question = (payload.get("question") or "").strip()
@@ -112,6 +151,7 @@ def api_ask() -> Response:
     )
 
     def gen():
+        """Yield the answer's SSE frames, persisting the turn on success."""
         answer_parts: list[str] = []
         try:
             for kind, data in source:
@@ -147,10 +187,22 @@ def api_ask() -> Response:
 
 @bp.post("/api/ask_sources")
 def api_ask_sources() -> Response:
-    """Offline library chat: answer a question purely from the user's local
-    library, streamed as SSE — no graph required. Emits one ``trace`` event
-    (retrieved passages), then ``token`` prose, then ``done``. History is keyed by
-    session_id (a separate store from the graph Q&A) so follow-ups keep context."""
+    """Answer a question purely from the user's local library, streamed as SSE.
+
+    The offline library chat — no graph required. History is keyed by
+    ``session_id`` (a separate store from the graph Q&A) so follow-ups keep
+    context without cross-contaminating the two chats.
+
+    Body:
+        ``{question, session_id, source_id?}`` — ``source_id`` scopes
+        retrieval to one source.
+
+    Returns:
+        An SSE stream: one ``trace`` event (the retrieved passages), then
+        ``token`` prose, then ``done`` (or ``error``). HTTP 400 when the
+        question is missing or the local library is unavailable
+        (embeddings/sqlite-vec didn't load).
+    """
     payload = request.get_json(silent=True) or {}
     question = (payload.get("question") or "").strip()
     if not question:
@@ -163,6 +215,7 @@ def api_ask_sources() -> Response:
     history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
 
     def gen():
+        """Yield the library answer's SSE frames, persisting the turn on success."""
         answer_parts: list[str] = []
         try:
             for kind, data in teacher_service.answer_from_sources(question, history, source_id):

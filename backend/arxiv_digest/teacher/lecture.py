@@ -14,7 +14,7 @@ import json
 from typing import Iterator, Optional
 
 from .. import config
-from .. import semantic_scholar as s2
+from ..integrations import semantic_scholar as s2
 from .backends import _stream
 from .common import _idx_to_id, _node_lines, _number_nodes
 from .neighbors import _s2_neighbors
@@ -63,6 +63,19 @@ _MODE_INTENT = {
 def _lecture_prompt(
     seed: dict, numbered: list[dict], mode: str, target: Optional[dict]
 ) -> str:
+    """Assemble the user prompt for a lecture.
+
+    Args:
+        seed: The seed paper (title used in the header).
+        numbered: Visible nodes that have been through ``_number_nodes``.
+        mode: ``history``, ``intuition``, or ``bridge`` (unknown modes fall
+            back to ``history``).
+        target: The bridge target paper (bridge mode only), or None.
+
+    Returns:
+        The full prompt: mode intent, seed/target header, the numbered paper
+        list, and the delivery instruction.
+    """
     intent = _MODE_INTENT.get(mode, _MODE_INTENT["history"])
     seed_title = seed.get("title", "(the seed paper)")
     header = f"SEED paper: {seed_title}"
@@ -77,10 +90,20 @@ def _lecture_prompt(
 
 
 def _parse_beat(line: str, numbered: list[dict]) -> Optional[dict]:
-    """Parse one JSONL line into a beat dict, or None if it isn't a valid beat.
+    """Parse one JSONL line into a beat dict.
 
     Tolerates stray code fences / blank lines the model might emit around the
-    JSONL despite instructions."""
+    JSONL despite instructions.
+
+    Args:
+        line: One line of the model's newline-delimited JSON output.
+        numbered: Visible nodes that have been through ``_number_nodes``
+            (for mapping the beat's indices back to node ids).
+
+    Returns:
+        ``{"heading", "text", "node_ids"}`` — or None when the line isn't a
+        valid beat (not JSON, or empty text).
+    """
     line = line.strip().strip("`").strip()
     if not line or not line.startswith("{"):
         return None
@@ -101,8 +124,22 @@ def _parse_beat(line: str, numbered: list[dict]) -> Optional[dict]:
 def lecture_beats(
     seed: dict, nodes: list[dict], mode: str = "history", target: Optional[dict] = None
 ) -> Iterator[dict]:
-    """Yield lecture beats ``{heading, text, node_ids}`` one at a time as the model
-    streams newline-delimited JSON."""
+    """Stream a lecture as parsed beats.
+
+    Args:
+        seed: The seed paper.
+        nodes: The visible graph nodes (already including any backfilled
+            ancestors in history mode).
+        mode: ``history``, ``intuition``, or ``bridge``.
+        target: The bridge target paper (bridge mode only), or None.
+
+    Yields:
+        Beat dicts ``{heading, text, node_ids}`` one at a time as the model
+        streams newline-delimited JSON.
+
+    Raises:
+        RuntimeError: When every teacher backend failed to start.
+    """
     numbered = _number_nodes(nodes)
     prompt = _lecture_prompt(seed, numbered, mode, target)
     messages = [{"role": "user", "content": prompt}]
@@ -122,8 +159,17 @@ def lecture_beats(
 
 # --- "How we got here" time travel (Phase 3e) --------------------------------
 def _seed_year(nodes: list[dict], seed_id: Optional[str]) -> Optional[int]:
-    """The seed's publication year — from the seed node if present, else the newest
-    visible year (the seed is almost always the most recent paper on the graph)."""
+    """Determine the seed's publication year.
+
+    Args:
+        nodes: The visible graph nodes.
+        seed_id: The seed's node id, or None.
+
+    Returns:
+        The seed node's year when present; otherwise the newest visible year
+        (the seed is almost always the most recent paper on the graph); None
+        when no node carries a year at all.
+    """
     for n in nodes:
         if n.get("id") == seed_id and isinstance(n.get("year"), int):
             return n["year"]
@@ -132,16 +178,30 @@ def _seed_year(nodes: list[dict], seed_id: Optional[str]) -> Optional[int]:
 
 
 def history_backfill(seed: dict, nodes: list[dict]) -> Iterator[tuple[str, object]]:
-    """Walk BACKWARD through references before the history lecture, so it can start
-    at a field's roots instead of mid-stream (a modern seed's graph rarely reaches
-    the foundational work). We launch NOT from the seed — its references are already
-    on the graph — but from the OLDEST papers already visible, which sit closest to
-    the roots; each hop pulls their references, adds the most-cited new (older) ones,
-    and carries the oldest additions into the next hop, stopping once we reach papers
-    ~LOOKBACK years older than the seed or spend the hop budget. Yields
-    ``("trace", {hop, found, oldest})`` per productive level and
-    ``("nodes", {nodes, edges})`` discoveries to merge into the live graph. Reuses
-    the Phase 3c reference-hop machinery (``_s2_neighbors``, day-cached)."""
+    """Walk BACKWARD through references before the history lecture.
+
+    Lets the story start at a field's roots instead of mid-stream (a modern
+    seed's graph rarely reaches the foundational work). We launch NOT from the
+    seed — its references are already on the graph — but from the OLDEST
+    papers already visible, which sit closest to the roots; each hop pulls
+    their references, adds the most-cited new (older) ones, and carries the
+    oldest additions into the next hop, stopping once we reach papers
+    ~``LECTURE_HISTORY_LOOKBACK`` years older than the seed or spend the hop
+    budget. Reuses the Phase 3c reference-hop machinery (``_s2_neighbors``,
+    day-cached). S2 errors on a hop are noted and skipped, never raised.
+
+    Args:
+        seed: The seed paper (must carry an ``id``; otherwise the walk is a
+            no-op).
+        nodes: The visible graph nodes.
+
+    Yields:
+        ``("trace", {hop, found, oldest})`` per productive level, and
+        ``("nodes", {nodes, edges})`` discoveries to merge into the live
+        graph. When nothing older was found at all, one final
+        ``("trace", {found: 0, error: bool})`` says so rather than failing
+        silently.
+    """
     seed_id = seed.get("id")
     if not seed_id:
         return

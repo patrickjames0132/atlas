@@ -30,12 +30,29 @@ _client = arxiv.Client(page_size=100, delay_seconds=3.0, num_retries=5)
 
 
 def _short_id(result: arxiv.Result) -> str:
-    """Stable arXiv id with the version suffix stripped (e.g. '2406.12345')."""
+    """Extract a stable arXiv id from a result.
+
+    Args:
+        result: An ``arxiv.Result`` from the client.
+
+    Returns:
+        The bare id with any version suffix stripped (e.g. ``"2406.12345"``,
+        never ``"2406.12345v2"``), so the same paper always keys identically.
+    """
     return result.get_short_id().split("v")[0]
 
 
 def _to_paper(result: arxiv.Result) -> dict:
-    """Map an arxiv.Result to our store-ready paper dict."""
+    """Map an ``arxiv.Result`` to the app's paper dict.
+
+    Args:
+        result: An ``arxiv.Result`` from the client.
+
+    Returns:
+        A dict with keys ``arxiv_id, title, authors, categories, abstract,
+        url, digest_date`` — whitespace collapsed, version stripped from the
+        id. ``digest_date`` is the paper's own submission day (GMT).
+    """
     arxiv_id = _short_id(result)
     return {
         "arxiv_id": arxiv_id,
@@ -51,13 +68,29 @@ def _to_paper(result: arxiv.Result) -> dict:
 
 
 def search_arxiv(query: str, max_results: int = 25) -> list[dict]:
-    """Search ALL of arXiv by keyword/title/author and return store-ready dicts.
+    """Search ALL of arXiv by keyword/title/author and return paper dicts.
 
-    Unlike ``fetch_papers_in_range`` this ignores the followed categories and the
-    date range — it's a relevance-ranked hunt across all of arXiv for a specific
-    paper (e.g. "attention is all you need"). If ``query`` is (or contains) an
-    arXiv id or abs/pdf URL, that exact paper is fetched instead of a keyword
-    search. Results are capped at ``max_results`` to stay fast.
+    A relevance-ranked hunt across all of arXiv for a specific paper (e.g.
+    "attention is all you need"). If ``query`` is an arXiv id or abs/pdf URL,
+    that exact paper is fetched instead of a keyword search. For keyword
+    queries, an explicit quoted-title clause is OR-ed with an abstract
+    term-group — arXiv's plain free-text relevance ranks exact-title papers
+    surprisingly low, and a bare unprefixed term group is malformed (arXiv
+    answers it with an empty feed).
+
+    Args:
+        query: Keywords, a title, an author, or an arXiv id / URL. Blank
+            queries short-circuit to an empty list.
+        max_results: Cap on returned papers (keyword searches only; an id
+            lookup returns at most the one paper).
+
+    Returns:
+        A list of paper dicts (see ``_to_paper``), relevance-ranked. Saves
+        nothing.
+
+    Raises:
+        arxiv.ArXivError: When the arXiv API fails after the client's
+            built-in retries (surfaced by the route as a search failure).
     """
     query = (query or "").strip()
     if not query:

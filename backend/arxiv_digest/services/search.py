@@ -16,24 +16,52 @@ from __future__ import annotations
 
 import time
 
-from . import arxiv_client, cache, config
+from .. import config
+from ..integrations import arxiv_client
+from ..storage import cache
 
 
 def arxiv_search(query: str, limit: int = 25) -> list[dict]:
-    """Relevance search across all of arXiv to find a seed paper. Accepts keywords,
-    a title, an author, or an arXiv id / URL. Returns paper dicts; saves nothing."""
+    """Relevance-search all of arXiv to find a seed paper.
+
+    Args:
+        query: Keywords, a title, an author, or an arXiv id / URL (an id/URL
+            fetches that exact paper instead of a keyword hunt).
+        limit: Maximum papers to return.
+
+    Returns:
+        Relevance-ranked paper dicts (see ``arxiv_client._to_paper``). Saves
+        nothing.
+
+    Raises:
+        arxiv.ArXivError: When the arXiv API fails after the client's
+            built-in retries.
+    """
     return arxiv_client.search_arxiv(query, max_results=limit)
 
 
 def local_search(query: str, limit: int = 10) -> list[dict]:
-    """Search papers already in the local graph-snapshot cache.
+    """Search papers already sitting in the local graph-snapshot cache.
 
-    Matches every whitespace token of `query` against a paper's title + authors
-    (case-insensitive substring). Stale snapshots still count — a paper's title
-    doesn't expire — but each hit carries ``has_graph``: True when a *fresh*
-    snapshot exists for it as a seed, i.e. exploring it won't touch the S2 API.
-    Results are deduped across snapshots and ranked: whole-phrase matches first,
-    then seed papers, then by citation count.
+    Matches every whitespace token of ``query`` against a paper's title +
+    authors (case-insensitive substring). Stale snapshots still count — a
+    paper's title doesn't expire. Results are deduped across snapshots
+    (keeping whichever record carries more detail) and ranked: whole-phrase
+    title matches first, then papers explored directly as seeds, then by
+    citation count.
+
+    Args:
+        query: The search text; blank/whitespace-only returns no hits.
+        limit: Maximum hits to return.
+
+    Returns:
+        Hit dicts with keys ``id, arxiv_id, title, authors, year,
+        citation_count, url, has_graph`` — ``has_graph`` is True when a
+        *fresh* snapshot exists for the paper as a seed, i.e. exploring it
+        won't touch the S2 API.
+
+    Raises:
+        sqlite3.Error: On cache database failures.
     """
     tokens = [t for t in (query or "").lower().split() if t]
     if not tokens:
@@ -65,6 +93,14 @@ def local_search(query: str, limit: int = 10) -> list[dict]:
                 best[pid] = n
 
     def rank(n: dict) -> tuple:
+        """Sort key: phrase-in-title first, then seeds, then citation count.
+
+        Args:
+            n: A candidate node dict.
+
+        Returns:
+            A tuple that sorts better matches first.
+        """
         return (
             phrase not in (n.get("title") or "").lower(),  # phrase-in-title first
             not n.get("is_seed"),  # papers you explored directly next

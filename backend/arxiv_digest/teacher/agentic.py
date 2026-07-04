@@ -13,7 +13,8 @@ from __future__ import annotations
 import time
 from typing import Iterator, Optional
 
-from .. import config, sources
+from .. import config
+from ..library import sources
 from .common import (
     _CITED,
     _emit_hiding_sentinel,
@@ -39,13 +40,38 @@ def answer_agentic(
     nodes: list[dict],
     history: Optional[list[dict]] = None,
 ) -> Iterator[tuple[str, object]]:
-    """Agentic Q&A: Claude reads the visible papers via tool use, then answers.
+    """Answer a question agentically: read / expand / search via tool use.
 
-    Yields ``("trace", {...})`` as it reads/expands, ``("nodes", {...})`` when
-    expand_node discovers papers not previously on the graph, ``("token", str)``
-    for the streamed answer, ``("discard", None)`` if streamed preamble must be
-    dropped (the turn turned out to be a tool call), and a final
-    ``("cited", node_ids)`` (the papers it actually read)."""
+    The loop streams each model turn. Prose is emitted live while hiding the
+    ``<<CITED>>`` sentinel (a held-back tail keeps a split sentinel from
+    leaking); if a turn transpires to be a tool call, the streamed preamble is
+    disavowed with a ``discard`` event. Tool results feed back into the
+    conversation and the loop continues until the model answers, the step
+    budget runs out (forcing a tool-free answer), or the wall clock passes
+    ``AGENT_WALLCLOCK`` (after which turns run without tools). The
+    source-search tool is offered only when the user actually has a library —
+    checked before touching the embedding model, so an empty library never
+    pays the torch load.
+
+    Args:
+        question: The user's question.
+        seed: The seed paper (heads the grounding context).
+        nodes: The visible graph nodes (the initial grounding scope; grows as
+            the agent expands/searches).
+        history: Prior conversation turns as ``[{role, content}, ...]``;
+            malformed turns are skipped.
+
+    Yields:
+        ``("trace", {...})`` as it reads/expands/searches, ``("nodes", {...})``
+        when expansion discovers papers not previously on the graph,
+        ``("token", str)`` for the streamed answer, ``("discard", None)`` when
+        streamed preamble must be dropped, and one final
+        ``("cited", node_ids)`` — the papers it actually read, plus any it
+        named via the sentinel.
+
+    Raises:
+        anthropic.APIError: On API failures.
+    """
     import anthropic
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)

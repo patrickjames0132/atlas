@@ -20,10 +20,10 @@ import json
 import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Any, Iterator, Optional
+from typing import Iterator, Optional
 from uuid import uuid4
 
-from . import config
+from .. import config
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS saved_sessions (
@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS saved_sessions (
 
 @contextmanager
 def _connect() -> Iterator[sqlite3.Connection]:
+    """Open a connection to the sessions store, committing on clean exit.
+
+    Ensures the data directory and schema exist first.
+
+    Yields:
+        An open ``sqlite3.Connection`` with ``Row`` as its row factory.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     config.ensure_dirs()
     conn = sqlite3.connect(config.SESSIONS_DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -53,10 +63,18 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def list_sessions() -> list[dict]:
-    """All saved sessions as lightweight metadata rows, newest-updated first.
+    """List every saved session as lightweight metadata, newest-updated first.
 
-    The heavy `data` blob is not parsed here — the list view only needs a name,
-    the seed it explored, how big the graph is, and when it was touched."""
+    The heavy ``data`` blob is not parsed here — the list view only needs a
+    name, the seed it explored, how big the graph is, and when it was touched.
+
+    Returns:
+        A list of dicts with keys ``id, name, seed_id, seed_title, n_nodes,
+        created_at, updated_at``.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         rows = conn.execute(
             "SELECT id, name, seed_id, seed_title, n_nodes, created_at, updated_at "
@@ -66,7 +84,19 @@ def list_sessions() -> list[dict]:
 
 
 def get_session(session_id: str) -> Optional[dict]:
-    """The full saved session (metadata + parsed `data` payload), or None."""
+    """Fetch one full saved session.
+
+    Args:
+        session_id: The saved session's id.
+
+    Returns:
+        The metadata row plus the parsed ``data`` payload (the graph +
+        transcript blob; ``{}`` when the stored blob fails to parse), or None
+        when no such session exists.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         row = conn.execute(
             "SELECT id, name, seed_id, seed_title, n_nodes, data, created_at, updated_at "
@@ -92,13 +122,25 @@ def get_session(session_id: str) -> Optional[dict]:
 
 
 def save_session(payload: dict, session_id: Optional[str] = None) -> dict:
-    """Create a new saved session, or overwrite an existing one when `session_id`
-    is given (re-saving a workspace you already stored). Returns the stored
-    metadata row.
+    """Create a saved session, or overwrite an existing one in place.
 
-    `payload` is the frontend's session blob: {name, seed, layout, nodes, edges,
-    chat, beats, hist_trace}. We store it verbatim in `data` and lift a few fields
-    into columns for the list view."""
+    Args:
+        payload: The frontend's session blob — ``{name, seed, layout, nodes,
+            edges, chat, beats, hist_trace}``. Stored verbatim in ``data``;
+            a few fields are lifted into columns for the list view. A blank
+            name becomes ``"Untitled session"``.
+        session_id: When given, overwrite that session (re-saving a workspace
+            the user already stored — ``created_at`` is preserved); when
+            omitted, a new session with a fresh id is created.
+
+    Returns:
+        The stored metadata row: ``{id, name, seed_id, seed_title, n_nodes,
+        created_at, updated_at}``.
+
+    Raises:
+        TypeError: When ``payload`` isn't JSON-serializable.
+        sqlite3.Error: On database failures.
+    """
     name = (payload.get("name") or "").strip() or "Untitled session"
     seed = payload.get("seed") or {}
     nodes = payload.get("nodes") or []
@@ -144,7 +186,18 @@ def save_session(payload: dict, session_id: Optional[str] = None) -> dict:
 
 
 def delete_session(session_id: str) -> bool:
-    """Remove a saved session. True if a row was actually deleted."""
+    """Remove a saved session.
+
+    Args:
+        session_id: The saved session's id.
+
+    Returns:
+        True when a row was actually deleted, False when no such session
+        existed.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         cur = conn.execute("DELETE FROM saved_sessions WHERE id = ?", (session_id,))
         return cur.rowcount > 0

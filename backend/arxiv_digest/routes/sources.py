@@ -13,15 +13,21 @@ from pathlib import Path
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
-from .. import sources as sources_service
+from ..library import sources as sources_service
 
 bp = Blueprint("sources", __name__)
 
 
 @bp.get("/api/sources")
 def api_sources_list() -> Response:
-    """List the user's uploaded sources. ``available`` reports whether local
-    embeddings + sqlite-vec loaded (so the UI can explain a disabled state)."""
+    """List the user's uploaded sources.
+
+    Returns:
+        JSON ``{available, sources}``. ``available`` reports whether local
+        embeddings + sqlite-vec loaded (so the UI can explain a disabled
+        state); an availability-check failure degrades to False rather than
+        erroring.
+    """
     try:
         available = sources_service.available()
     except Exception:
@@ -32,9 +38,18 @@ def api_sources_list() -> Response:
 
 @bp.post("/api/sources")
 def api_sources_add() -> Response:
-    """Ingest a source: either a multipart PDF upload (field ``file``) or a JSON
-    body ``{"url": ...}``. Returns the created source record. Synchronous — a big
-    book takes a bit while it chunks + embeds."""
+    """Ingest a source into the library.
+
+    Body:
+        Either a multipart PDF upload (field ``file``, optional ``title``
+        form field) or a JSON body ``{"url": ..., "title"?: ...}``.
+        Synchronous — a big book takes a bit while it chunks + embeds.
+
+    Returns:
+        The created source record as JSON on success; ``{error}`` with HTTP
+        400 for user-facing ingestion problems (no file/url, scanned PDF,
+        unreachable URL), or 500 for unexpected failures.
+    """
     title = None
     try:
         upload = request.files.get("file")
@@ -70,5 +85,12 @@ def api_sources_add() -> Response:
 
 @bp.delete("/api/sources/<source_id>")
 def api_sources_delete(source_id: str) -> Response:
-    """Remove a source and its chunks/vectors from the library."""
+    """Remove a source and its chunks/vectors from the library.
+
+    Args:
+        source_id: The source's id.
+
+    Returns:
+        JSON ``{deleted: bool}`` — False when no such source existed.
+    """
     return jsonify({"deleted": sources_service.delete_source(source_id)})

@@ -4,7 +4,7 @@ Given a seed arXiv id, build a Connected-Papers-style graph: the seed plus its
 references (ancestors it cites), citations (descendants that cite it), and
 recommendation neighbors (embedding-similar papers). Nodes are deduped by S2
 paperId; edges are tagged ``reference | citation | similar`` so the frontend can
-color/route them. The whole snapshot is cached (see cache.py) so repeat
+color/route them. The whole snapshot is cached (see storage/cache.py) so repeat
 exploration doesn't re-hit the rate-limited API.
 """
 
@@ -13,25 +13,52 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from . import arxiv_client, cache, config
-from . import semantic_scholar as s2
+from .. import config
+from ..integrations import arxiv_client
+from ..integrations import semantic_scholar as s2
+from ..storage import cache
 
 log = logging.getLogger(__name__)
 
 
 def _looks_arxiv(ref: str) -> bool:
-    """True if `ref` is an arXiv id (vs. a raw Semantic Scholar paperId)."""
+    """Distinguish an arXiv id from a raw Semantic Scholar paperId.
+
+    Args:
+        ref: The seed reference the user (or a re-seed click) supplied.
+
+    Returns:
+        True when ``ref`` matches the arXiv id pattern (new- or old-style,
+        with or without a version suffix); False for anything else — treated
+        as an S2 paperId.
+    """
     return bool(arxiv_client._ID_RE.fullmatch(ref))
 
 
 def build_graph(seed_ref: str, *, refresh: bool = False) -> Optional[dict]:
     """Build (or load from cache) the neighborhood graph for a seed paper.
 
-    `seed_ref` may be an **arXiv id** (e.g. "1706.03762") or a raw **Semantic
-    Scholar paperId** (a node's ``id`` from a previous graph) — the latter lets
-    the user re-seed on any node, including journal papers with no arXiv id, so
-    visual traversal never dead-ends. Returns ``{seed, nodes, edges, counts}`` or
-    None if S2 has no paper for that ref.
+    One S2 detail call for the seed plus three traversals (references,
+    citations, recommendations). Neighbors arrive already hydrated with light
+    fields, so no extra batch call is needed. The finished snapshot is cached
+    under ``graph:<seed_ref>`` for ``GRAPH_CACHE_TTL`` seconds.
+
+    Args:
+        seed_ref: An **arXiv id** (e.g. ``"1706.03762"``) or a raw **Semantic
+            Scholar paperId** (a node's ``id`` from a previous graph) — the
+            latter lets the user re-seed on any node, including journal papers
+            with no arXiv id, so visual traversal never dead-ends.
+        refresh: When True, bypass the cached snapshot and rebuild from S2.
+
+    Returns:
+        ``{"seed", "nodes", "edges", "counts"}`` — the seed summary, deduped
+        node dicts (each carrying its ``rels`` and ``is_seed`` flags), typed
+        edges, and per-relation counts. None when ``seed_ref`` is blank or S2
+        has no paper for it.
+
+    Raises:
+        s2.S2Error: When a Semantic Scholar request fails after retries
+            (surfaced by the route as a 502).
     """
     seed_ref = (seed_ref or "").strip()
     if not seed_ref:
@@ -58,6 +85,14 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Optional[dict]:
     nodes: dict[str, dict] = {}
 
     def add(node: dict, rel: str) -> None:
+        """Dedupe a neighbor into ``nodes``, accumulating its relation tags.
+
+        Args:
+            node: The normalized S2 node dict.
+            rel: The relation that surfaced it (``reference | citation |
+                similar``) — appended to an existing node's ``rels`` rather
+                than duplicating the node.
+        """
         existing = nodes.get(node["id"])
         if existing is None:
             node = dict(node)

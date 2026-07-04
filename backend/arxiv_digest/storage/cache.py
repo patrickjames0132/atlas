@@ -16,7 +16,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional
 
-from . import config
+from .. import config
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
@@ -29,6 +29,16 @@ CREATE TABLE IF NOT EXISTS cache (
 
 @contextmanager
 def _connect() -> Iterator[sqlite3.Connection]:
+    """Open a connection to the cache table, committing on clean exit.
+
+    Ensures the data directory and schema exist first.
+
+    Yields:
+        An open ``sqlite3.Connection`` with ``Row`` as its row factory.
+
+    Raises:
+        sqlite3.Error: On database failures (locked file, corrupt db, …).
+    """
     config.ensure_dirs()
     conn = sqlite3.connect(config.DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -41,9 +51,18 @@ def _connect() -> Iterator[sqlite3.Connection]:
 
 
 def get(key: str, max_age: Optional[float] = None) -> Optional[Any]:
-    """Return the cached JSON value for `key`, or None if missing/expired.
+    """Look up a cached JSON value.
 
-    `max_age` is in seconds; None means never expire.
+    Args:
+        key: The cache key.
+        max_age: Expiry window in seconds; None means never expire.
+
+    Returns:
+        The parsed JSON value, or None when the key is missing, the entry is
+        older than ``max_age``, or the stored blob fails to parse.
+
+    Raises:
+        sqlite3.Error: On database failures.
     """
     with _connect() as conn:
         row = conn.execute(
@@ -60,7 +79,19 @@ def get(key: str, max_age: Optional[float] = None) -> Optional[Any]:
 
 
 def set(key: str, value: Any) -> None:
-    """Store `value` (JSON-serializable) under `key`, stamped with the time now."""
+    """Store a value, stamped with the time now (upserting any existing entry).
+
+    Args:
+        key: The cache key.
+        value: A JSON-serializable value.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: When ``value`` isn't JSON-serializable.
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         conn.execute(
             "INSERT INTO cache (key, value, created_at) VALUES (?, ?, ?) "
@@ -71,15 +102,38 @@ def set(key: str, value: Any) -> None:
 
 
 def delete(key: str) -> None:
+    """Remove a cache entry (a no-op when the key doesn't exist).
+
+    Args:
+        key: The cache key.
+
+    Returns:
+        None.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     with _connect() as conn:
         conn.execute("DELETE FROM cache WHERE key = ?", (key,))
 
 
 def scan(prefix: str) -> list[tuple[str, Any, float]]:
-    """All rows whose key starts with `prefix`, as (key, parsed value,
-    created_at) — including expired ones (callers decide what staleness means;
-    e.g. local search still wants papers from old snapshots). Rows whose value
-    fails to parse are skipped."""
+    """Fetch every entry whose key starts with a prefix — expired ones included.
+
+    Callers decide what staleness means; e.g. local search still wants papers
+    from old snapshots. SQL LIKE wildcards in the prefix are escaped so they
+    match literally.
+
+    Args:
+        prefix: The literal key prefix (e.g. ``"graph:"``).
+
+    Returns:
+        A list of ``(key, parsed value, created_at)`` tuples. Rows whose blob
+        fails to parse are skipped.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
     like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     with _connect() as conn:
         rows = conn.execute(

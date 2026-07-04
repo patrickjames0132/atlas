@@ -25,7 +25,20 @@ log = logging.getLogger(__name__)
 
 
 def _stream_api(system: str, messages: list[dict], max_tokens: int) -> Iterator[str]:
-    """Stream text deltas from the Anthropic API."""
+    """Stream text deltas from the Anthropic API.
+
+    Args:
+        system: The system prompt.
+        messages: The conversation as ``[{role, content}, ...]``.
+        max_tokens: Token budget for the completion.
+
+    Yields:
+        Text deltas as they stream.
+
+    Raises:
+        RuntimeError: When ``TEACHER_BACKEND=api`` but no API key is set.
+        anthropic.APIError: On API failures.
+    """
     import anthropic
 
     if not config.ANTHROPIC_API_KEY:
@@ -47,8 +60,17 @@ def _stream_api(system: str, messages: list[dict], max_tokens: int) -> Iterator[
 def _flatten(messages: list[dict]) -> str:
     """Collapse a message list into one prompt string for the headless CLI.
 
-    A lecture is a single user turn; a Q&A carries prior turns, which we label so
-    the model still sees the conversation."""
+    A lecture is a single user turn; a Q&A carries prior turns, which we label
+    so the model still sees the conversation.
+
+    Args:
+        messages: The conversation as ``[{role, content}, ...]``.
+
+    Returns:
+        The single message's content when there's only one; otherwise the
+        turns labeled ``User:`` / ``Assistant:`` with a trailing
+        ``Assistant:`` cue.
+    """
     if len(messages) == 1:
         return messages[0]["content"]
     parts = []
@@ -65,7 +87,26 @@ def _stream_cli(system: str, messages: list[dict], max_tokens: int) -> Iterator[
     Parses the CLI's ``stream-json`` events (``content_block_delta`` with a
     ``text_delta``); skips thinking deltas. Runs in a throwaway temp cwd so the
     CLI doesn't load this repo's CLAUDE.md / project context (which would bloat
-    every call by thousands of cached tokens and muddy the output)."""
+    every call by thousands of cached tokens and muddy the output). If no
+    deltas streamed (e.g. partial messages disabled by a CLI update), the
+    final ``result`` event is yielded whole as a fallback.
+
+    Args:
+        system: The system prompt.
+        messages: The conversation as ``[{role, content}, ...]`` (flattened
+            into one prompt string for the headless CLI).
+        max_tokens: Unused by the CLI path (kept for signature parity with
+            ``_stream_api``).
+
+    Yields:
+        Text deltas as they stream.
+
+    Raises:
+        RuntimeError: When the CLI exits non-zero (its stderr is included).
+        FileNotFoundError: When the ``claude`` binary isn't on PATH.
+        subprocess.TimeoutExpired: When the CLI outlives
+            ``TEACHER_CLI_TIMEOUT``.
+    """
     cmd = [
         config.CLAUDE_CLI_PATH,
         "-p",
@@ -137,9 +178,21 @@ def _stream_cli(system: str, messages: list[dict], max_tokens: int) -> Iterator[
 def _stream(system: str, messages: list[dict], max_tokens: int) -> Iterator[str]:
     """Stream a completion, trying the primary backend then the fallback.
 
-    Fallback only helps for failures **before the first token** (missing key, CLI
-    not on PATH, spawn error) — the common case. Once streaming has begun we can't
-    cleanly switch, so a mid-stream failure surfaces.
+    Fallback only helps for failures **before the first token** (missing key,
+    CLI not on PATH, spawn error) — the common case. Once streaming has begun
+    we can't cleanly switch, so a mid-stream failure surfaces to the caller.
+
+    Args:
+        system: The system prompt.
+        messages: The conversation as ``[{role, content}, ...]``.
+        max_tokens: Token budget for the completion.
+
+    Yields:
+        Text deltas from whichever backend started successfully.
+
+    Raises:
+        RuntimeError: When every configured backend failed to start (the last
+            error is included).
     """
     primary = config.TEACHER_BACKEND
     fallback = config.TEACHER_FALLBACK_BACKEND or None

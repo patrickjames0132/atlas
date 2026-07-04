@@ -21,5 +21,13 @@ ALL_BLUEPRINTS = [graph_bp, search_bp, teacher_bp, sources_bp, sessions_bp]
 
 
 def register_blueprints(app: Flask) -> None:
+    """Register every route blueprint onto the app.
+
+    Args:
+        app: The Flask app under construction (see ``app.py``).
+
+    Returns:
+        None.
+    """
     for bp in ALL_BLUEPRINTS:
         app.register_blueprint(bp)

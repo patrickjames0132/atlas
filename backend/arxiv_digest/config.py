@@ -18,6 +18,15 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 
 def _path(env_name: str, default: Path) -> Path:
+    """Read a filesystem path from the environment.
+
+    Args:
+        env_name: The environment variable to read.
+        default: The path to use when the variable is unset.
+
+    Returns:
+        The configured path with ``~`` expanded, or ``default``.
+    """
     raw = os.getenv(env_name)
     return Path(raw).expanduser() if raw else default
 
@@ -173,5 +182,15 @@ DEBUG = os.getenv("ARXIV_DEBUG", "").lower() in ("1", "true", "yes")
 
 
 def ensure_dirs() -> None:
-    """Create the data directory if it doesn't exist yet."""
+    """Create the data directory if it doesn't exist yet.
+
+    Called by every storage module before opening its database, so a fresh
+    checkout works without any setup step.
+
+    Returns:
+        None.
+
+    Raises:
+        OSError: When the directory can't be created (permissions, etc.).
+    """
     DATA_DIR.mkdir(parents=True, exist_ok=True)

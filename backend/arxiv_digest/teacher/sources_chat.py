@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
-from .. import config, sources
+from .. import config
+from ..library import sources
 from .backends import _stream
 from .common import _format_passages
 
@@ -26,8 +27,15 @@ _SOURCES_CHAT_SYSTEM = (
 
 
 def _hit_titles(hits: list[dict]) -> list[str]:
-    """Distinct source titles among the retrieved passages, in first-seen order —
-    surfaced in the trace so the chat can show which sources it drew on."""
+    """Collect the distinct source titles among retrieved passages.
+
+    Args:
+        hits: Passage dicts from ``library.sources.search``.
+
+    Returns:
+        The distinct ``source_title`` values in first-seen order — surfaced
+        in the trace so the chat can show which sources it drew on.
+    """
     seen: set[str] = set()
     out: list[str] = []
     for h in hits:
@@ -45,9 +53,25 @@ def answer_from_sources(
 ) -> Iterator[tuple[str, object]]:
     """Answer a question purely from the user's local library — no graph.
 
-    Yields a single ``("trace", {...})`` naming the retrieved passages, then
-    ``("token", str)`` prose events. Retrieve-then-answer (no tool use), so it runs
-    on either teacher backend. ``source_id`` scopes retrieval to one source."""
+    Retrieve-then-answer (no tool use), so it runs on either teacher backend.
+    When retrieval comes up empty, a friendly "nothing found" message is
+    emitted as the answer rather than an error.
+
+    Args:
+        question: The user's question (doubles as the retrieval query).
+        history: Prior conversation turns as ``[{role, content}, ...]``;
+            malformed turns are skipped.
+        source_id: Scope retrieval to one source's id, or None for the whole
+            library.
+
+    Yields:
+        A single ``("trace", {found, sources})`` naming the retrieved
+        passages, then ``("token", str)`` prose events.
+
+    Raises:
+        RuntimeError: When every teacher backend failed to start.
+        sqlite3.Error: On library database failures during retrieval.
+    """
     hits = sources.search(question, k=config.SOURCES_CHAT_K, source_id=source_id)
     yield ("trace", {"found": len(hits), "sources": _hit_titles(hits)})
     if not hits:

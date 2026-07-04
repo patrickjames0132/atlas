@@ -11,22 +11,36 @@ from __future__ import annotations
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
-from .. import sessions as sessions_service
+from ..storage import sessions as sessions_service
 
 bp = Blueprint("sessions", __name__)
 
 
 @bp.get("/api/sessions")
 def api_sessions_list() -> Response:
-    """List the user's saved sessions (metadata only — no graph/chat payload)."""
+    """List the user's saved sessions.
+
+    Returns:
+        JSON ``{sessions: [...]}`` — metadata rows only (no graph/chat
+        payload), newest-updated first.
+    """
     return jsonify({"sessions": sessions_service.list_sessions()})
 
 
 @bp.post("/api/sessions")
 def api_sessions_save() -> Response:
-    """Save the current workspace (graph + teacher transcript). A body with an
-    ``id`` overwrites that saved session; without one, a new session is created.
-    Returns the stored metadata row."""
+    """Save the current workspace (graph + teacher transcript).
+
+    Body:
+        The frontend's session blob — ``{name, seed, layout, nodes, edges,
+        chat, beats, hist_trace}``, plus an optional ``id``. A body with an
+        ``id`` overwrites that saved session; without one, a new session is
+        created.
+
+    Returns:
+        The stored metadata row as JSON on success; ``{error}`` with HTTP 400
+        when ``nodes`` is missing/empty, or 500 when the store fails.
+    """
     payload = request.get_json(silent=True) or {}
     nodes = payload.get("nodes")
     if not isinstance(nodes, list) or not nodes:
@@ -42,7 +56,15 @@ def api_sessions_save() -> Response:
 
 @bp.get("/api/sessions/<session_id>")
 def api_sessions_get(session_id: str) -> Response:
-    """The full saved session (graph + transcript) to restore into the explorer."""
+    """Fetch the full saved session (graph + transcript) to restore.
+
+    Args:
+        session_id: The saved session's id.
+
+    Returns:
+        The full session record as JSON; ``{error}`` with HTTP 404 when no
+        such session exists.
+    """
     record = sessions_service.get_session(session_id)
     if not record:
         return jsonify({"error": "no such session"}), 404
@@ -51,5 +73,12 @@ def api_sessions_get(session_id: str) -> Response:
 
 @bp.delete("/api/sessions/<session_id>")
 def api_sessions_delete(session_id: str) -> Response:
-    """Delete a saved session."""
+    """Delete a saved session.
+
+    Args:
+        session_id: The saved session's id.
+
+    Returns:
+        JSON ``{deleted: bool}`` — False when no such session existed.
+    """
     return jsonify({"deleted": sessions_service.delete_session(session_id)})

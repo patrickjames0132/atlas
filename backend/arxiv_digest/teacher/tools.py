@@ -7,6 +7,9 @@ citations / similar work), free-text SEARCHING Semantic Scholar (``search_papers
 for work not connected to the graph at all), and — when the user has a library —
 semantically SEARCHING their own uploaded sources (``search_sources``). Each has
 its own budget; the loop that drives them lives in ``agentic.py``.
+
+Every ``_run_*`` runner returns plain text for the tool result plus a ``trace``
+dict the route streams to the frontend, so the user watches the agent work.
 """
 
 from __future__ import annotations
@@ -14,8 +17,10 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from .. import config, fulltext, sources
-from .. import semantic_scholar as s2
+from .. import config
+from ..integrations import fulltext
+from ..integrations import semantic_scholar as s2
+from ..library import sources
 from .common import _CITED, _format_passages
 from .neighbors import _REL_TAG, _s2_neighbors, _s2_search, _search_scope
 
@@ -68,8 +73,16 @@ _AGENT_SYSTEM += _CITED_INSTRUCTION
 
 
 def _agent_system(has_sources: bool) -> str:
-    """The agent system prompt, with source-search guidance slotted in ahead of
-    the citation instruction when the user has a library."""
+    """Build the agent system prompt.
+
+    Args:
+        has_sources: True when the user has a searchable source library.
+
+    Returns:
+        The base agent prompt; with ``has_sources``, the source-search
+        guidance is slotted in ahead of the final-line citation instruction
+        (nothing may come after that line).
+    """
     if not has_sources:
         return _AGENT_SYSTEM
     return _AGENT_SYSTEM[: -len(_CITED_INSTRUCTION)] + _SOURCES_PARA + _CITED_INSTRUCTION
@@ -184,11 +197,27 @@ _SOURCE_TOOL = {
 
 
 def agentic_available() -> bool:
-    """True when we can run the tool-use agent (Anthropic API + key)."""
+    """Report whether the tool-use agent can run.
+
+    Returns:
+        True when the backend is the Anthropic API and a key is configured —
+        the claude CLI can't take our custom tools, so that backend falls
+        back to the non-agentic ``answer_stream``.
+    """
     return config.TEACHER_BACKEND == "api" and bool(config.ANTHROPIC_API_KEY)
 
 
 def _node_by_idx(numbered: list[dict], idx: object) -> Optional[dict]:
+    """Look up a numbered node by the index the model referenced.
+
+    Args:
+        numbered: The numbered node list (grows as the agent expands).
+        idx: Whatever the model passed as an index — non-integers (including
+            bools) resolve to None rather than raising.
+
+    Returns:
+        The node dict, or None when the index doesn't resolve.
+    """
     if not isinstance(idx, int) or isinstance(idx, bool):
         return None
     for n in numbered:
@@ -198,7 +227,23 @@ def _node_by_idx(numbered: list[dict], idx: object) -> Optional[dict]:
 
 
 def _paper_text(node: dict, detail: str) -> str:
-    """Assemble the text handed back to the agent for one paper read."""
+    """Assemble the text handed back to the agent for one paper read.
+
+    Neighbor nodes arrive without abstract/tldr, so those are hydrated from
+    S2 on demand. A ``detail='full'`` read pulls the ar5iv full text
+    (truncated to ``FULLTEXT_MAX_CHARS``) when the paper has an arXiv id and
+    a render; otherwise it degrades to the summary form.
+
+    Args:
+        node: The numbered node being read.
+        detail: ``"summary"`` (title + TL;DR + abstract) or ``"full"``.
+
+    Returns:
+        The formatted paper text for the tool result.
+
+    Raises:
+        s2.S2Error: When on-demand hydration fails after retries.
+    """
     title = node.get("title") or "(untitled)"
     year = node.get("year")
     arxiv_id = node.get("arxiv_id")
@@ -230,7 +275,25 @@ def _paper_text(node: dict, detail: str) -> str:
 
 
 def _run_read(block, numbered: list[dict], budgets: dict, read_cache: dict) -> tuple[str, dict, Optional[str]]:
-    """Execute a read_paper tool call. Returns (tool_result_text, trace, node_id)."""
+    """Execute a ``read_paper`` tool call.
+
+    A full read downgrades to summary when the full budget is spent; repeat
+    reads of the same (paper, detail) come from ``read_cache`` without
+    consuming budget.
+
+    Args:
+        block: The tool_use content block (its ``input`` carries ``index``
+            and ``detail``).
+        numbered: The numbered node list.
+        budgets: Mutable ``{"full": int, "summary": int}`` remaining-read
+            counters (decremented here).
+        read_cache: Mutable ``(node id, detail) -> text`` cache.
+
+    Returns:
+        ``(tool_result_text, trace, node_id)`` — ``node_id`` is the paper
+        that was (or was attempted to be) read, for the cited list; None for
+        an invalid index.
+    """
     inp = getattr(block, "input", None) or {}
     idx = inp.get("index")
     detail = "full" if inp.get("detail") == "full" else "summary"
@@ -266,13 +329,26 @@ def _run_expand(
     expanded: set[tuple[str, str]],
     hops: dict,
 ) -> tuple[str, dict, Optional[dict]]:
-    """Execute an expand_node tool call: pull one hop of neighbors for a paper
-    already numbered and append any new ones to `numbered` so the agent can
-    read_paper them next turn.
+    """Execute an ``expand_node`` tool call.
 
-    Returns (tool_result_text, trace, discovery), where `discovery` is
-    ``{"nodes": [...], "edges": [...]}`` for the frontend to merge into the live
-    graph, or None when nothing new came back.
+    Pulls one hop of neighbors for a paper already numbered and appends any
+    new ones to ``numbered`` (mutated in place) so the agent can read them
+    next turn. A visited (paper, relation) set kills repeat traversal.
+
+    Args:
+        block: The tool_use content block (``input`` carries ``index`` and
+            ``relation``).
+        numbered: The numbered node list (appended to in place).
+        known_ids: Mutable set of every node id already on the graph.
+        expanded: Mutable visited set of ``(paper_id, relation)`` pairs.
+        hops: Mutable ``{"left": int}`` expansion budget (decremented here).
+
+    Returns:
+        ``(tool_result_text, trace, discovery)`` — ``discovery`` is
+        ``{"nodes": [...], "edges": [...]}`` for the frontend to merge into
+        the live graph, or None when nothing new came back (invalid call,
+        budget spent, repeat expansion, or an S2 failure — all reported in
+        the text, never raised).
     """
     inp = getattr(block, "input", None) or {}
     idx = inp.get("index")
@@ -363,12 +439,26 @@ def _run_search(
     searched: set,
     searches: dict,
 ) -> tuple[str, dict, Optional[dict]]:
-    """Execute a search_papers tool call: run an ungrounded free-text S2 search
-    and append any papers not already numbered so the agent can read_paper them.
+    """Execute a ``search_papers`` tool call.
 
-    Returns (tool_result_text, trace, discovery). Discovery carries only nodes —
-    no edges — since a topic search links the hits to no specific paper; the
-    frontend anchors them near the seed so they don't fly in from the origin.
+    Runs an ungrounded free-text S2 search and appends any papers not already
+    numbered so the agent can read them. Repeat searches of the same
+    (query, year window) are short-circuited.
+
+    Args:
+        block: The tool_use content block (``input`` carries ``query`` and
+            optional ``year_from`` / ``year_to``).
+        numbered: The numbered node list (appended to in place).
+        known_ids: Mutable set of every node id already on the graph.
+        searched: Mutable visited set of ``(query, year_from, year_to)``.
+        searches: Mutable ``{"left": int}`` search budget (decremented here).
+
+    Returns:
+        ``(tool_result_text, trace, discovery)``. Discovery carries only
+        nodes — no edges — since a topic search links the hits to no specific
+        paper; the frontend anchors them near the seed so they don't fly in
+        from the origin. None discovery on an invalid/exhausted/repeat call
+        or an S2 failure (reported in the text, never raised).
     """
     inp = getattr(block, "input", None) or {}
     query = (inp.get("query") or "").strip()
@@ -442,8 +532,15 @@ def _run_search(
 
 
 def _sources_context(library: list[dict]) -> str:
-    """A compact listing of the user's uploaded sources for the agent's context,
-    so it knows what it can search and can scope search_sources by id."""
+    """Render the user's uploaded sources for the agent's context.
+
+    Args:
+        library: Source records from ``library.sources.list_sources``.
+
+    Returns:
+        A compact "Your library" listing (id, title, size) so the agent knows
+        what it can search and can scope ``search_sources`` by id.
+    """
     lines = []
     for s in library:
         loc = f"{s['pages']}pp" if s.get("pages") else s.get("kind", "")
@@ -452,9 +549,21 @@ def _sources_context(library: list[dict]) -> str:
 
 
 def _run_search_sources(block, source_searches: dict) -> tuple[str, dict]:
-    """Execute a search_sources tool call: semantic search over the user's own
-    uploaded library. Returns (tool_result_text, trace). No graph discovery —
-    source passages aren't graph nodes; the agent cites them inline by page."""
+    """Execute a ``search_sources`` tool call.
+
+    Semantic search over the user's own uploaded library. No graph discovery
+    — source passages aren't graph nodes; the agent cites them inline by
+    page.
+
+    Args:
+        block: The tool_use content block (``input`` carries ``query`` and
+            optional ``source_id``).
+        source_searches: Mutable ``{"left": int}`` budget (decremented here).
+
+    Returns:
+        ``(tool_result_text, trace)``. Failures (empty query, spent budget,
+        or a search exception) are reported in the text, never raised.
+    """
     inp = getattr(block, "input", None) or {}
     query = (inp.get("query") or "").strip()
     source_id = inp.get("source_id") or None

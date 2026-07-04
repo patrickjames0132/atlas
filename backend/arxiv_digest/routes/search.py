@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
-from .. import search as search_service
+from ..services import search as search_service
 
 bp = Blueprint("search", __name__)
 
@@ -18,8 +18,15 @@ bp = Blueprint("search", __name__)
 def arxiv_search_route() -> Response:
     """Live relevance search across all of arXiv to find a seed paper.
 
-    Query args: q (keywords, title, author, or an arXiv id/URL), optional limit
-    (default 25). Returns the matching papers; saves nothing."""
+    Query args:
+        q: Keywords, a title, an author, or an arXiv id/URL. Blank returns an
+            empty result rather than an error.
+        limit: Maximum papers (default 25, clamped to 1–100).
+
+    Returns:
+        JSON ``{q, count, papers}`` on success; ``{ok: False, error}`` with
+        HTTP 502 when the arXiv API fails. Saves nothing.
+    """
     q = (request.args.get("q") or "").strip()
     try:
         limit = max(1, min(int(request.args.get("limit", "25")), 100))
@@ -39,10 +46,19 @@ def arxiv_search_route() -> Response:
 def local_search_route() -> Response:
     """Instant seed search over papers already in the local snapshot cache.
 
-    Purely local (no arXiv / S2 calls) — the cache-first results shown while the
-    live arXiv search is still in flight, and the only results available when
-    Semantic Scholar is rate-limiting us. Never errors: a failure just means no
-    local hits."""
+    Purely local (no arXiv / S2 calls) — the cache-first results shown while
+    the live arXiv search is still in flight, and the only results available
+    when Semantic Scholar is rate-limiting us.
+
+    Query args:
+        q: The search text. Blank returns an empty result.
+        limit: Maximum hits (default 10, clamped to 1–50).
+
+    Returns:
+        JSON ``{q, count, papers}``. Never errors — a failure is logged and
+        degrades to zero local hits, since this must not block the live
+        search running alongside it.
+    """
     q = (request.args.get("q") or "").strip()
     try:
         limit = max(1, min(int(request.args.get("limit", "10")), 50))

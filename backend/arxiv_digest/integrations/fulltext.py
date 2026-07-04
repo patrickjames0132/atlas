@@ -15,7 +15,8 @@ from __future__ import annotations
 import logging
 from html.parser import HTMLParser
 
-from . import cache, figures
+from . import figures
+from ..storage import cache
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,11 @@ class _TextParser(HTMLParser):
     math / scripts / figures / citations dropped. Blocks join with blank lines."""
 
     def __init__(self) -> None:
+        """Set up empty block/depth accumulators.
+
+        Returns:
+            None.
+        """
         super().__init__(convert_charrefs=True)
         self.blocks: list[str] = []
         self._in_text = 0   # depth inside a kept block tag
@@ -38,12 +44,23 @@ class _TextParser(HTMLParser):
         self._cur: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
+        """Open a kept block or a skipped subtree.
+
+        Args:
+            tag: The tag name.
+            attrs: The tag's attributes (unused).
+        """
         if tag in _SKIP_TAGS:
             self._skip += 1
         elif tag in _TEXT_TAGS and not self._skip:
             self._in_text += 1
 
     def handle_endtag(self, tag: str) -> None:
+        """Close a scope; a completed block is flushed with whitespace collapsed.
+
+        Args:
+            tag: The tag name.
+        """
         if tag in _SKIP_TAGS and self._skip:
             self._skip -= 1
         elif tag in _TEXT_TAGS and self._in_text and not self._skip:
@@ -55,22 +72,50 @@ class _TextParser(HTMLParser):
                 self._cur = []
 
     def handle_data(self, data: str) -> None:
+        """Accumulate text while inside a kept block (and not a skipped subtree).
+
+        Args:
+            data: The raw character data.
+        """
         if self._in_text and not self._skip:
             self._cur.append(data)
 
 
 def html_to_text(html: str) -> str:
-    """Strip an HTML document down to readable body text (block-level elements,
-    with math / scripts / figures / citations dropped). Shared by the ar5iv paper
-    reader and the Phase 3d web-page source ingester."""
+    """Strip an HTML document down to readable body text.
+
+    Keeps block-level elements (paragraphs, headings, list items); drops math,
+    scripts, figures, and citations. Shared by the ar5iv paper reader and the
+    Phase 3d web-page source ingester.
+
+    Args:
+        html: The full HTML document.
+
+    Returns:
+        The extracted text, blocks joined by blank lines.
+    """
     parser = _TextParser()
     parser.feed(html)
     return "\n\n".join(parser.blocks)
 
 
 def get_fulltext(arxiv_id: str, *, refresh: bool = False) -> dict:
-    """Return ``{"available": bool, "text": str}`` — the paper's body text from
-    ar5iv, cached. ``available`` is false when ar5iv has no render for the paper."""
+    """Fetch a paper's readable body text from ar5iv, cached.
+
+    Args:
+        arxiv_id: The paper's arXiv id (a version suffix is stripped).
+        refresh: When True, bypass the cache and re-fetch from ar5iv.
+
+    Returns:
+        ``{"available": bool, "text": str}``. ``available`` is False (with
+        empty text) when ar5iv has no render for the paper or the id is
+        blank; misses are cached too. The text is cached whole — callers
+        truncate to their own char budget at read time.
+
+    Raises:
+        urllib.error.HTTPError: On non-404 ar5iv HTTP failures.
+        urllib.error.URLError: On network failures.
+    """
     arxiv_id = (arxiv_id or "").strip().split("v")[0]
     if not arxiv_id:
         return {"available": False, "text": ""}

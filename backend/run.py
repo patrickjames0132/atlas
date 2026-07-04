@@ -19,11 +19,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 @click.group(help="arXiv Atlas — interactive citation/similarity graph explorer.")
 def cli() -> None:
+    """The click command group; subcommands attach below.
+
+    Returns:
+        None.
+    """
     pass
 
 
 @cli.command(help="Run the Flask API + Atlas frontend.")
 def serve() -> None:
+    """Start the Flask dev server (API + built frontend).
+
+    Imports lazily so `--help` and the library commands never pay the app's
+    import cost.
+
+    Returns:
+        None (blocks until the server exits).
+    """
     from arxiv_digest import app as app_module
     app_module.main()
 
@@ -35,7 +48,20 @@ def serve() -> None:
 @click.argument("target")
 @click.option("--title", default=None, help="Override the source title.")
 def ingest(target: str, title: str | None) -> None:
-    from arxiv_digest import sources
+    """Ingest a PDF file or a URL into the local source library.
+
+    Args:
+        target: A filesystem path to a PDF, or an http(s) URL.
+        title: Optional display title (defaults to the filename / page title).
+
+    Returns:
+        None (prints the stored record).
+
+    Raises:
+        click.ClickException: When embeddings/sqlite-vec are unavailable.
+        SourceError: When extraction or ingestion fails.
+    """
+    from arxiv_digest.library import sources
     if not sources.available():
         raise click.ClickException("Embeddings/sqlite-vec unavailable — cannot ingest.")
     if target.startswith(("http://", "https://")):
@@ -49,7 +75,12 @@ def ingest(target: str, title: str | None) -> None:
 
 @cli.command("sources", help="List sources in the library.")
 def sources_list() -> None:
-    from arxiv_digest import sources
+    """Print every source in the library, one row per source.
+
+    Returns:
+        None.
+    """
+    from arxiv_digest.library import sources
     rows = sources.list_sources()
     if not rows:
         click.echo("No sources yet. Add one with:  ingest <pdf-or-url>")
@@ -64,7 +95,17 @@ def sources_list() -> None:
 @click.option("--source", default=None, help="Restrict to one source id.")
 @click.option("-k", "k", type=int, default=None, help="Number of passages.")
 def search_sources(query: str, source: str | None, k: int | None) -> None:
-    from arxiv_digest import sources
+    """Semantic-search the library and print the top passages.
+
+    Args:
+        query: What to look for — a concept or question.
+        source: Restrict retrieval to one source's id (optional).
+        k: Number of passages to return (defaults to config.SOURCE_SEARCH_K).
+
+    Returns:
+        None.
+    """
+    from arxiv_digest.library import sources
     hits = sources.search(query, k=k, source_id=source)
     if not hits:
         click.echo("No matches (library empty, or embeddings unavailable).")
@@ -79,7 +120,15 @@ def search_sources(query: str, source: str | None, k: int | None) -> None:
 @cli.command(help="Delete a source by id.")
 @click.argument("source_id")
 def forget(source_id: str) -> None:
-    from arxiv_digest import sources
+    """Delete a source (and its chunks/vectors) by id.
+
+    Args:
+        source_id: The source's id, as shown by the ``sources`` command.
+
+    Returns:
+        None.
+    """
+    from arxiv_digest.library import sources
     click.echo("Deleted." if sources.delete_source(source_id) else "No such source.")
 
 

@@ -34,11 +34,28 @@ def answer_stream(
     nodes: list[dict],
     history: Optional[list[dict]] = None,
 ) -> Iterator[tuple[str, object]]:
-    """Answer a question grounded in the visible graph.
+    """Answer a question grounded in the visible graph, streaming tokens.
 
-    Yields ``("token", text)`` events as the prose streams, then a final
-    ``("cited", node_ids)`` event. The ``<<CITED>>`` sentinel and everything after
-    it is stripped from the visible answer and parsed into node ids.
+    The graph context rides on the current question (not the history) so it
+    always reflects the latest on-screen neighborhood, even as the user pans
+    and expands between turns. The ``<<CITED>>`` sentinel and everything
+    after it is stripped from the visible answer and parsed into node ids —
+    a tail is held back on every emit so a sentinel split across chunks never
+    leaks to the user.
+
+    Args:
+        question: The user's question.
+        seed: The seed paper (heads the grounding context).
+        nodes: The visible graph nodes (the grounding scope).
+        history: Prior conversation turns as ``[{role, content}, ...]``;
+            malformed turns are skipped.
+
+    Yields:
+        ``("token", text)`` events as the prose streams, then one final
+        ``("cited", node_ids)`` event.
+
+    Raises:
+        RuntimeError: When every teacher backend failed to start.
     """
     numbered = _number_nodes(nodes)
     messages: list[dict] = []
