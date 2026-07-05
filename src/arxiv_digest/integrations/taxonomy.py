@@ -1,10 +1,13 @@
 """The full arXiv category taxonomy (loaded from taxonomy.json).
 
-Sourced from https://arxiv.org/category_taxonomy.
+Sourced from https://arxiv.org/category_taxonomy: the ~155 arXiv category codes
+(``cs.LG``, ``math.PR``, …) grouped into 8 top-level areas, each entry a
+``{code, name}`` pair (``cs.LG`` → "Machine Learning").
 
-NOTE: retained but currently DORMANT (no importers) after the v1.4.0 legacy
-teardown. Kept deliberately for near-term Atlas features — filtering the graph by
-field, the "bridge these topics" mode, or category-scoped seed discovery.
+arXiv-specific enrichment, kept for arXiv papers only — same spirit as the
+ar5iv package. This module only describes *what* categories exist; a given
+paper's own categories come from arXiv metadata, not Semantic Scholar. See the
+integrations README for who consumes it.
 """
 
 from __future__ import annotations
@@ -48,5 +51,7 @@ def valid_codes() -> frozenset[str]:
         A frozenset of all category codes, for validating user selections.
     """
     return frozenset(
-        cat["code"] for g in _data()["groups"] for cat in g["categories"]
+        category["code"]
+        for group in _data()["groups"]
+        for category in group["categories"]
     )

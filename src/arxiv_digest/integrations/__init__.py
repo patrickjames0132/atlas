@@ -3,14 +3,15 @@
 * ``semantic_scholar`` — the S2 Academic Graph + Recommendations client (the
   paper-data backbone).
 * ``arxiv_client``     — arXiv seed search (find the paper to map).
-* ``fulltext``         — full paper text from ar5iv for the Q&A agent.
-* ``figures``          — paper figures + captions from ar5iv.
+* ``ar5iv``            — a paper's figures + full body text from ar5iv
+  (arXiv's LaTeX→HTML renderer).
 * ``huggingface``      — code & artifact links (GitHub repo, models/datasets/
   Spaces) from Hugging Face Papers.
-* ``taxonomy``         — the arXiv category taxonomy (dormant; kept for future
-  category-scoped features).
+* ``taxonomy``         — the arXiv category taxonomy (arXiv-specific paper
+  enrichment; bundled JSON, no network).
 
-Modules here own their own HTTP plumbing (stdlib ``urllib`` / the ``arxiv``
-package), rate-limit etiquette, and caching keys; the ``services`` package
-composes them into domain logic.
+Clients here own their own transport (stdlib ``urllib``, the ``arxiv`` package,
+or ``huggingface_hub``), rate-limit etiquette, and caching keys; the
+``services`` package composes them into domain logic. (``taxonomy`` is the odd
+one out — static bundled data, no remote call.)
 """
