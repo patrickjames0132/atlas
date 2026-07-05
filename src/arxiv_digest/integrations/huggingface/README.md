@@ -14,11 +14,10 @@ the detail panel's "code & artifacts" section — one call to
 
 We use the **official `huggingface_hub` client** (`HfApi.paper_info`) rather
 than hand-rolling the HTTP call. It's already in the dependency tree via
-`sentence-transformers`, and — like `arxiv_client` wrapping the `arxiv`
-package — an official client buys us typed results and resilience to HF's API
-shape changing. A single-service, single-shape client, still split into a
-package with the same transport-vs-domain shape as `ar5iv` / `semantic_scholar`
-so all the `integrations` packages read alike:
+`sentence-transformers`, and an official client buys us typed results and
+resilience to HF's API shape changing. A single-service, single-shape client,
+still split into a package with the same transport-vs-domain shape as `arxiv` /
+`semantic_scholar` so all the `integrations` packages read alike:
 
 ```
 client.py     — fetch_paper: HfApi.paper_info + 404-as-None; BASE_URL, CODE_TTL

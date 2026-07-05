@@ -16,12 +16,10 @@ Two things live here, both arXiv-specific and both kept for arXiv papers only:
 
 This package was ``ar5iv`` until we consolidated all arXiv-derived code into one
 place (2026-07-05): the ar5iv renderer plus ``ID_RE``, which used to sit in the
-separate ``arxiv_client`` package. ``arxiv_client`` (arXiv *search*) is being
-retired in favour of Semantic Scholar, so its one still-needed piece — the id
-regex — moved here rather than disappearing with it. Note the package name
-``arxiv`` shadows the PyPI ``arxiv`` package only cosmetically: an absolute
-``import arxiv`` still resolves to the library, a relative ``from ..arxiv``
-resolves here.
+separate ``arxiv_client`` package. That package (arXiv *search*) was retired in
+favour of Semantic Scholar search and deleted, along with the PyPI ``arxiv``
+dependency it was the only user of — so ``ID_RE`` moved here rather than
+disappearing with it.
 """
 
 from __future__ import annotations
