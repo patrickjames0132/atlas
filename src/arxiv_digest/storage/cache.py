@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from ..config import settings
-from . import _sqlite
+from . import utils
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cache (
@@ -32,9 +32,9 @@ CREATE TABLE IF NOT EXISTS cache (
 """
 
 
-def _connect() -> _sqlite.ConnectionContext:
+def _connect() -> utils.ConnectionContext:
     """Open a connection to the cache table (data dir + schema ensured)."""
-    return _sqlite.connect(settings.storage.digest_db, _SCHEMA)
+    return utils.connect(settings.storage.digest_db, _SCHEMA)
 
 
 def get(key: str, max_age: float | None = None) -> Any | None:
