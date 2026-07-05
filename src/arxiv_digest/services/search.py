@@ -57,7 +57,7 @@ def live_search(
         year_from: Earliest publication year (inclusive), or None.
         year_to: Latest publication year (inclusive), or None.
         fields_of_study: S2 fields of study to restrict to (any-of), or None.
-            Values are S2's own field names (see ``taxonomy.fields``).
+            Values are S2's own field names (see ``taxonomy.s2``).
 
     Returns:
         Relevance-ranked node dicts (S2's node shape — the same shape a graph

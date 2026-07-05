@@ -1,28 +1,22 @@
-"""The app's controlled subject vocabularies — two, at two granularities.
+"""The app's controlled subject vocabularies — one submodule per source.
 
-* **arXiv categories** — the ~155 fine-grained arXiv codes (``cs.LG``,
-  ``math.PR``, …) in 8 areas, each a ``{code, name}`` pair. arXiv-specific, kept
-  for labelling an arXiv paper's own category tags (same spirit as the ar5iv
-  side of the ``arxiv`` package). Bundled as ``taxonomy.json``.
-* **S2 fields of study** — Semantic Scholar's own much coarser ~20 fields
-  (``Computer Science``, ``Mathematics``, …). This is what the S2 seed-search
-  filter uses; S2's ``/paper/search`` filters on exactly these.
+* ``arxiv`` — arXiv's ~155 fine-grained category codes (``groups()``,
+  ``valid_codes()``), bundled from ``taxonomy.json``. arXiv-specific; for
+  labelling an arXiv paper's own category tags.
+* ``s2``    — Semantic Scholar's ~20 coarse fields of study (``fields()``,
+  ``valid_fields()``), an inline list. What the live S2 seed-search filter uses.
 
-Modules:
+Access is namespaced by source — ``taxonomy.arxiv.groups()``,
+``taxonomy.s2.fields()`` — so the two vocabularies never blur together. (Note
+``taxonomy.arxiv`` is just the category list; the separate top-level
+``integrations.arxiv`` package is the ar5iv renderer + id regex. Different
+things, told apart by their full import path.)
 
-* ``loader``     — loads + memoizes the bundled ``taxonomy.json`` (arXiv data).
-* ``categories`` — the arXiv query API: ``groups()`` (the areas tree) and
-  ``valid_codes()`` (the validation set).
-* ``fields``     — the S2 fields-of-study list: ``all_fields()`` and
-  ``valid_fields()`` (a small inline vocabulary, no JSON).
-
-The odd one out among the integrations: static/inline data, no HTTP, no cache —
-but split into a package like its neighbours so they all read alike.
+The odd one out among the integrations: static/inline data, no HTTP, no cache.
 """
 
 from __future__ import annotations
 
-from .categories import groups, valid_codes
-from .fields import all_fields, valid_fields
+from . import arxiv, s2
 
-__all__ = ["all_fields", "groups", "valid_codes", "valid_fields"]
+__all__ = ["arxiv", "s2"]

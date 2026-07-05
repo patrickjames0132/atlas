@@ -1,11 +1,12 @@
 # `integrations.taxonomy`
 
-The app's controlled subject vocabularies — **two**, at two granularities:
+The app's controlled subject vocabularies — **two**, at two granularities, one
+submodule each:
 
-- **arXiv categories** — the ~155 fine-grained arXiv codes (`cs.LG`, `math.PR`,
-  …) grouped into 8 areas, each a `{code, name}` pair. arXiv-specific.
-- **S2 fields of study** — Semantic Scholar's own much coarser ~20 fields
-  (`Computer Science`, `Mathematics`, …).
+- **`arxiv`** — the ~155 fine-grained arXiv codes (`cs.LG`, `math.PR`, …)
+  grouped into 8 areas, each a `{code, name}` pair. arXiv-specific.
+- **`s2`** — Semantic Scholar's own much coarser ~20 fields (`Computer Science`,
+  `Mathematics`, …).
 
 ## Why it exists
 
@@ -17,64 +18,70 @@ Two different consumers want two different vocabularies:
 - The **detail panel** (planned) will label an arXiv paper's own category tags
   (`cs.LG` → "Machine Learning") — for arXiv papers only, the same
   arXiv-specific enrichment spirit as the `arxiv`/ar5iv package. A paper's *own*
-  categories come from arXiv metadata, not S2; this package only describes *what*
-  categories exist.
+  categories come from arXiv metadata, not S2; this package only describes
+  *what* categories exist.
 
 Keeping both here makes this the one home for "controlled subject vocabularies,"
 rather than scattering them.
 
 ## How it's structured
 
-The odd one out among the integrations — static/inline data, so no HTTP client
-and no cache table. Split into a package like its neighbours so they read alike:
+Namespaced by source, so the two vocabularies never blur together — you call
+`taxonomy.arxiv.groups()` or `taxonomy.s2.fields()`, never a flat mix. The odd
+one out among the integrations: static/inline data, no HTTP client, no cache.
 
 ```
-loader.py     — loads + memoizes the bundled taxonomy.json (arXiv data access)
-     ↓
-categories.py — arXiv query API: groups(), valid_codes()
-fields.py     — S2 fields of study: all_fields(), valid_fields()  (inline list)
+arxiv.py — arXiv categories: groups(), valid_codes()  (loads bundled taxonomy.json)
+s2.py    — S2 fields of study: fields(), valid_fields()  (inline tuple)
 ```
 
-- **`loader.py`** — `data()`, an `@lru_cache`'d parse of the bundled
-  `taxonomy.json` (arXiv). Public within the package because `categories`
-  queries it across the module boundary — the file-load analogue of the HTTP
-  packages' `client.fetch_*`.
-- **`categories.py`** — `groups()` (the arXiv areas-with-categories tree) and
-  `valid_codes()` (an `@lru_cache`'d `frozenset` of every code).
-- **`fields.py`** — `all_fields()` (S2's ~20 fields, alphabetical) and
-  `valid_fields()`. A small fixed vocabulary, inlined as a tuple — no bundled
-  JSON, since each value is already its own human-readable label. (`all_fields`,
-  not `fields`, so it doesn't shadow the `fields` module when re-exported.)
+- **`arxiv.py`** — `groups()` (the areas-with-categories tree) and
+  `valid_codes()` (an `@lru_cache`'d `frozenset` of every code), over a private
+  `@lru_cache`'d `_data()` that parses the bundled `taxonomy.json` once. All in
+  one module, so `_data()` is private again (single-file use).
+- **`s2.py`** — `fields()` (S2's ~20 fields, alphabetical) and `valid_fields()`,
+  over an inline `FIELDS` tuple. No bundled JSON — each value is already its own
+  human-readable label.
 
-`__init__.py` re-exports `groups`, `valid_codes`, `all_fields`, `valid_fields`.
+`__init__.py` exposes the two submodules (`from . import arxiv, s2`); consumers
+namespace through them.
+
+> **Naming note.** `taxonomy.arxiv` (this category list) is *not*
+> `integrations.arxiv` (the ar5iv renderer + id regex). Same word, different
+> full path — told apart by how you import them.
 
 ## Design decisions worth knowing
 
-- **arXiv data is a bundled file; S2 data is inline.** The arXiv taxonomy is 155
-  code+name pairs (worth a generated JSON); the S2 fields are ~20 plain strings
-  (a tuple is clearer than a file). Different shapes, different treatment.
+- **Namespaced, not flat.** An earlier cut re-exported `groups`/`valid_codes`/
+  `fields`/`valid_fields` flat at the package root, which both blurred the two
+  vocabularies and forced an awkward `all_fields()` (a bare `fields()` collided
+  with the `fields` module on re-export). Splitting into `arxiv`/`s2` submodules
+  fixes both — the source is explicit in every call, and `s2.fields()` gets its
+  natural name back.
+- **arXiv data is a bundled file; S2 data is inline.** 155 code+name pairs are
+  worth a generated JSON; ~20 plain strings are clearer as a tuple.
 - **No `code → name` lookup for arXiv yet.** The API answers "what areas exist"
-  and "is this code real", but not "what's the label for `cs.LG`". The planned
+  and "is this code real", not "what's the label for `cs.LG`". The planned
   detail-panel use needs that; it'll be added with that feature, not now.
 - **S2 field casing is Title Case** (`"Computer Science"`), matching what S2
   returns on paper objects and accepts in the `fieldsOfStudy` filter. If it ever
-  differs live, `S2_FIELDS` is the one tuple to edit.
+  differs live, `s2.FIELDS` is the one tuple to edit.
 
 ## Who uses it, and how/why (traced)
 
 - **`services/search.py`** (ported) — `live_search` forwards an S2 fields filter
-  to `s2.search_papers` (`fieldsOfStudy`); its values come from this package.
-- **`routes/search.py`** (not yet ported) — `GET /api/taxonomy` serves a picker,
-  and seed search validates a submitted filter against `valid_fields()` (S2
-  fields) — the arXiv `valid_codes()` path retires with the arXiv search bar.
-- **Detail panel (planned, not built)** — `groups()` / a future `code → name`
-  lookup to label an arXiv paper's own category tags in the detail window.
+  to `s2.search_papers` (`fieldsOfStudy`); its values come from
+  `taxonomy.s2.fields()`.
+- **`routes/search.py`** (not yet ported) — will serve a picker and validate a
+  submitted filter against `taxonomy.s2.valid_fields()`. The arXiv
+  `valid_codes()` path retires with the arXiv search bar.
+- **Detail panel (planned, not built)** — `taxonomy.arxiv.groups()` / a future
+  `code → name` lookup to label an arXiv paper's own category tags.
 
 ## Testing
 
-`test_loader.py` — `data()` returns the parsed arXiv document and is memoized.
-`test_categories.py` — 8 arXiv areas, a known code's label (`cs.LG` →
+`test_arxiv.py` — 8 arXiv areas, a known code's label (`cs.LG` →
 "Machine Learning"), `valid_codes()` covers exactly the codes in `groups()`,
-memoization. `test_fields.py` — the S2 vocabulary is the expected 23 fields in
+memoization. `test_s2.py` — the S2 vocabulary is the expected 23 fields in
 alphabetical order, and `valid_fields()` rejects junk (and arXiv codes). All
 offline (static/inline data).

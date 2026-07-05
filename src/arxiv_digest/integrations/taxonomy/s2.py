@@ -1,22 +1,21 @@
-"""Semantic Scholar's fields of study — the coarse subject vocabulary S2 filters by.
+"""Semantic Scholar's fields of study — S2's coarse subject vocabulary.
 
-Where ``categories.py`` holds arXiv's ~155 fine-grained codes (for arXiv papers),
-this holds S2's own much coarser list of ~20 top-level fields (Computer Science,
-Mathematics, …). It's what powers the S2 seed-search filter: S2's
-``/paper/search`` accepts a ``fieldsOfStudy`` filter over exactly these values.
+Where the sibling ``arxiv`` module holds arXiv's ~155 fine-grained codes, this
+holds S2's own much coarser ~20 top-level fields (Computer Science, Mathematics,
+…). It's what powers the S2 seed-search filter: S2's ``/paper/search`` filters
+on exactly these (``fieldsOfStudy``).
 
-Fixed, S2-defined vocabulary, and small enough to inline (no bundled JSON like
-the arXiv side). Each value is already human-readable — the field *is* its own
-label — so there's no ``code → name`` mapping here. The casing is Title Case
-with spaces, matching what S2 returns in a paper's ``fieldsOfStudy`` and accepts
-in the search filter (per the S2 Academic Graph API docs).
+Fixed, S2-defined vocabulary, small enough to inline (no bundled JSON like the
+arXiv side). Each value is already human-readable — the field *is* its own label
+— so there's no ``code → name`` mapping. Title Case with spaces, matching what
+S2 returns on a paper's ``fieldsOfStudy`` and accepts in the filter.
 """
 
 from __future__ import annotations
 
 # S2's fieldsOfStudy values, alphabetical. If S2 ever changes the vocabulary or
 # the casing turns out different live, this one tuple is the only thing to edit.
-S2_FIELDS: tuple[str, ...] = (
+FIELDS: tuple[str, ...] = (
     "Agricultural and Food Sciences",
     "Art",
     "Biology",
@@ -43,17 +42,14 @@ S2_FIELDS: tuple[str, ...] = (
 )
 
 
-def all_fields() -> list[str]:
+def fields() -> list[str]:
     """List the S2 fields of study.
-
-    Named ``all_fields`` (not ``fields``) so it doesn't shadow this ``fields``
-    module when re-exported at the package root.
 
     Returns:
         The fields in a stable (alphabetical) order, for populating the search
         filter's picker.
     """
-    return list(S2_FIELDS)
+    return list(FIELDS)
 
 
 def valid_fields() -> frozenset[str]:
@@ -63,4 +59,4 @@ def valid_fields() -> frozenset[str]:
         A frozenset of the field names, for validating a submitted filter (an
         unknown field can only come from a stale/forged client).
     """
-    return frozenset(S2_FIELDS)
+    return frozenset(FIELDS)

@@ -7,8 +7,9 @@
   renderer). (Was ``ar5iv``; renamed as the single home for arXiv code.)
 * ``huggingface``      — code & artifact links (GitHub repo, models/datasets/
   Spaces) from Hugging Face Papers.
-* ``taxonomy``         — the arXiv category taxonomy (arXiv-specific paper
-  enrichment; bundled JSON, no network).
+* ``taxonomy``         — the app's controlled subject vocabularies:
+  ``taxonomy.arxiv`` (arXiv category codes) and ``taxonomy.s2`` (S2 fields of
+  study). Static/inline data, no network.
 
 Clients here own their own transport (stdlib ``urllib``, the ``arxiv`` package,
 or ``huggingface_hub``), rate-limit etiquette, and caching keys; the

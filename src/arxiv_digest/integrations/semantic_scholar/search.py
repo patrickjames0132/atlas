@@ -49,7 +49,7 @@ def search_papers(
         year_to: Latest publication year (inclusive), or None.
         fields_of_study: S2 fields of study to restrict to (a paper matches when
             it carries any of them), or None/empty for no restriction. Values
-            must be S2's own field names (see ``taxonomy.fields``).
+            must be S2's own field names (see ``taxonomy.s2``).
 
     Returns:
         A list of ``{"node": <node dict>}`` entries, in the same shape as the

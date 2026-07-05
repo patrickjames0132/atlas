@@ -23,7 +23,7 @@ one, two complementary ways:
   (`s2.search_papers` → `/paper/search`). This replaced the app's earlier
   arXiv-only search: S2 covers 200M+ papers across venues, not just arXiv
   preprints. Optional **year** and **fields-of-study** filters (S2's own ~20
-  fields, from `taxonomy.fields` — not arXiv categories, which S2 doesn't use).
+  fields, from `taxonomy.s2` — not arXiv categories, which S2 doesn't use).
 - **`local_search`** — an instant search over the graph snapshots already in the
   SQLite cache. Purely local: it's the result you see while `live_search` is
   still in flight, and the *only* result available when S2 is rate-limiting us.
@@ -77,7 +77,7 @@ the call site doesn't move when that lands.
   `live_search`, catching `s2.S2Error` → HTTP 502; `GET /api/local_search` calls
   `local_search` and degrades to `[]` on any error (it must never block the live
   search running alongside it). The route validates a submitted fields filter
-  against `taxonomy.valid_fields()`.
+  against `taxonomy.s2.valid_fields()`.
 
 ### Testing
 

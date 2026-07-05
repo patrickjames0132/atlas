@@ -7,7 +7,6 @@ from __future__ import annotations
 from arxiv_digest.services import search as search_service
 from arxiv_digest.storage import cache
 
-
 # --- live_search (S2, mocked) ----------------------------------------------------
 
 
