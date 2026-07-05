@@ -5,7 +5,7 @@ client.fetch_html is faked directly — no network.
 
 from __future__ import annotations
 
-from arxiv_digest.integrations.ar5iv import client, figures
+from arxiv_digest.integrations.arxiv import client, figures
 
 
 def test_get_figures_extracts_image_and_caption(monkeypatch):

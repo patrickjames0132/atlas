@@ -7,6 +7,7 @@ import re
 
 import arxiv
 
+from ..arxiv import ID_RE  # the arXiv-id regex, now homed in the arxiv package
 from . import clauses, papers
 
 # One shared client for the whole process. The client enforces arXiv's polite
@@ -58,7 +59,7 @@ def search_arxiv(
     if not query:
         return []
 
-    id_match = clauses.ID_RE.fullmatch(query) or clauses.ID_RE.fullmatch(query.rstrip("/"))
+    id_match = ID_RE.fullmatch(query) or ID_RE.fullmatch(query.rstrip("/"))
     if id_match:
         search = arxiv.Search(id_list=[id_match.group(1)])
     else:

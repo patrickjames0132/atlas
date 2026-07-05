@@ -5,7 +5,7 @@ client.fetch_html is faked directly — no network.
 
 from __future__ import annotations
 
-from arxiv_digest.integrations.ar5iv import client, fulltext
+from arxiv_digest.integrations.arxiv import client, fulltext
 
 
 def test_html_to_text_keeps_block_level_text():

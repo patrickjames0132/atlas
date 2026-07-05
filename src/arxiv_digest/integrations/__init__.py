@@ -3,8 +3,9 @@
 * ``semantic_scholar`` — the S2 Academic Graph + Recommendations client (the
   paper-data backbone).
 * ``arxiv_client``     — arXiv seed search (find the paper to map).
-* ``ar5iv``            — a paper's figures + full body text from ar5iv
-  (arXiv's LaTeX→HTML renderer).
+* ``arxiv``            — arXiv-derived content: arXiv-id detection (``ID_RE``)
+  plus a paper's figures + full body text from ar5iv (arXiv's LaTeX→HTML
+  renderer). (Was ``ar5iv``; renamed as the single home for arXiv code.)
 * ``huggingface``      — code & artifact links (GitHub repo, models/datasets/
   Spaces) from Hugging Face Papers.
 * ``taxonomy``         — the arXiv category taxonomy (arXiv-specific paper

@@ -10,7 +10,7 @@ import urllib.error
 
 import pytest
 
-from arxiv_digest.integrations.ar5iv import client
+from arxiv_digest.integrations.arxiv import client
 
 
 class _FakeResponse(io.BytesIO):
