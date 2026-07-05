@@ -1,25 +1,15 @@
-"""Building the pieces of an arXiv query: id detection, date range, and
-category filter clauses.
+"""Building the filter clauses of an arXiv query: date range and category.
 
 Named ``clauses`` rather than ``query`` deliberately — ``search_arxiv``'s own
 parameter is named ``query`` (the search string), and a module of that name
 would shadow it right where both are needed.
+
+(arXiv-id detection used to live here too, as ``ID_RE``; it moved to the
+``integrations.arxiv`` package when we consolidated arXiv-derived code — see
+``search.py`` for the import.)
 """
 
 from __future__ import annotations
-
-import re
-
-# A bare arXiv id (new-style "2406.12345" / "2406.12345v2", or old-style
-# "hep-th/9901001"), optionally wrapped in an arxiv.org URL. Lets a search box
-# accept a pasted id or link and fetch that exact paper instead of a keyword
-# hunt. Also used by services/graph.py and routes/graph.py to detect an id
-# pasted directly into a re-seed action, outside of search entirely.
-ID_RE = re.compile(
-    r"(?:https?://)?(?:arxiv\.org/(?:abs|pdf)/)?"
-    r"(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)",
-    re.IGNORECASE,
-)
 
 
 def date_clause(year_from: int | None, year_to: int | None) -> str | None:

@@ -87,9 +87,8 @@ package needs to know it's a package internally.
   package's existence: one `get_paper()` to hydrate the seed's rich
   details, then `references()`/`citations()`/`recommendations()` to build
   the three relation types that make up the visible graph. Also uses
-  `arxiv_client.ID_RE` (not this package) to decide whether the seed
-  reference needs an `ARXIV:` prefix before hitting S2, or is already a raw
-  S2 paperId.
+  `arxiv.ID_RE` (not this package) to decide whether the seed reference
+  needs an `ARXIV:` prefix before hitting S2, or is already a raw S2 paperId.
 - **`teacher/lecture.py`** — walks backward through `references()` during
   the "How we got here" history backfill; catches `S2Error` per-hop so one
   failed hop skips that ancestor rather than aborting the whole lecture.
