@@ -2,7 +2,6 @@
 
 * ``semantic_scholar`` — the S2 Academic Graph + Recommendations client (the
   paper-data backbone).
-* ``arxiv_client``     — arXiv seed search (find the paper to map).
 * ``arxiv``            — arXiv-derived content: arXiv-id detection (``ID_RE``)
   plus a paper's figures + full body text from ar5iv (arXiv's LaTeX→HTML
   renderer). (Was ``ar5iv``; renamed as the single home for arXiv code.)

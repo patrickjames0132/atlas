@@ -21,12 +21,10 @@ to keep ar5iv rather than go pure-PDF):
 
 **This package was `ar5iv`, renamed to `arxiv` (2026-07-05) to be the single
 home for arXiv-derived code.** `ID_RE` moved in from the separate `arxiv_client`
-package — that package (arXiv *search*) is being retired in favour of Semantic
-Scholar, and rather than let its still-needed id regex vanish with it, we homed
-it here. The package name shadows the PyPI `arxiv` package only cosmetically:
-absolute `import arxiv` still resolves to the library, relative `from ..arxiv`
-resolves here. (`arxiv_client` is the only place both names coexist, and it's on
-its way out.)
+package — arXiv *search*, which was retired in favour of Semantic Scholar and
+deleted (along with the PyPI `arxiv` dependency it was the only user of). Its id
+regex was still needed elsewhere, so it was homed here rather than deleted with
+the rest.
 
 The ar5iv side itself merges what were two independent modules in the original
 app (`figures.py` + `fulltext.py`), which already shared a fetch and TTL via one
@@ -88,8 +86,6 @@ fulltext.py    — strips the render to readable body text
   `/api/figure_proxy` route (`is_ar5iv_url()` to allowlist, `fetch_image()` to
   relay) so the browser never talks to ar5iv directly and the proxy can't be
   abused as an open relay.
-- **`arxiv_client/search.py`** (retiring) — borrows `ID_RE` to fetch an exact
-  paper when the search box is handed an id instead of keywords.
 - **`teacher/tools.py`** — the agentic Q&A `read_paper` tool calls
   `get_fulltext()` for a paper's actual content beyond the abstract/TL;DR.
 - **`library/sources.py`** — calls `html_to_text()` directly (not

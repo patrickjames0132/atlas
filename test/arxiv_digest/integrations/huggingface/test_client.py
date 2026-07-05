@@ -6,8 +6,8 @@ The HfApi handle is faked directly — no network. Covers the happy path and the
 
 from __future__ import annotations
 
+import httpx
 import pytest
-import requests
 from huggingface_hub.utils import HfHubHTTPError
 
 from arxiv_digest.integrations.huggingface import client
@@ -29,8 +29,10 @@ class _FakeApi:
 
 
 def _http_error(status: int) -> HfHubHTTPError:
-    response = requests.Response()
-    response.status_code = status
+    # huggingface_hub 1.x speaks httpx, so its HfHubHTTPError carries an
+    # httpx.Response (which needs a request set on it to be well-formed).
+    request = httpx.Request("GET", "https://huggingface.co/api/papers/x")
+    response = httpx.Response(status_code=status, request=request)
     return HfHubHTTPError(f"HTTP {status}", response=response)
 
 
