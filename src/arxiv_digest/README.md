@@ -15,16 +15,16 @@ ambiguity about where a given setting comes from.
 ## How it's structured
 
 `config.json` (repo root, gitignored — holds real API keys) is parsed by
-Pydantic v2 models into one `settings` object, grouped by the part of the
+Pydantic v2 models into one `config` object, grouped by the part of the
 app that consumes it:
 
 ```
-settings.storage    — the three SQLite database paths
-settings.s2         — Semantic Scholar connection settings
-settings.graph      — how big a neighborhood one seed pulls onto the canvas
-settings.sources    — bring-your-own sources: embedding, chunking, retrieval
-settings.server     — Flask host/port/debug
-settings.llm        — providers (backend credentials) + agents (behavior)
+config.storage    — the three SQLite database paths
+config.s2         — Semantic Scholar connection settings
+config.graph      — how big a neighborhood one seed pulls onto the canvas
+config.sources    — bring-your-own sources: embedding, chunking, retrieval
+config.server     — Flask host/port/debug
+config.llm        — providers (backend credentials) + agents (behavior)
 ```
 
 A committed `config.example.json` is the template (copy it to start); the
@@ -69,10 +69,10 @@ README only covers the shape and the big decisions.
 - **`sources`, not `library`.** The bring-your-own-sources feature is
   called "Sources" everywhere else in the app (the Sources drawer,
   `/api/sources`) — "library" invited confusion with Python packages.
-- **Mutable on purpose.** The settings groups aren't frozen — the test
-  suite's autouse `_isolate` fixture overrides `settings.storage.data_dir`
-  and `settings.s2.min_interval` per test. Consumers should read
-  `settings.x.y` at call time, not bind it to a module-level constant at
+- **Mutable on purpose.** The config groups aren't frozen — the test
+  suite's autouse `_isolate` fixture overrides `config.storage.data_dir`
+  and `config.s2.min_interval` per test. Consumers should read
+  `config.x.y` at call time, not bind it to a module-level constant at
   import time, so those overrides are actually seen.
 
 ## Testing

@@ -2,7 +2,7 @@
 
 Every tunable — paths, API keys, model names, agent definitions — lives in
 one JSON file at the repo root, parsed by Pydantic into the nested
-``settings`` object below. There are **no defaults**: config.json must spell
+``config`` object below. There are **no defaults**: config.json must spell
 out every value (copy ``config.example.json`` to start), and any mistake —
 an unknown key, a negative limit, a misspelled literal — fails loudly at
 import time instead of silently becoming a default. Each field carries its
@@ -10,14 +10,14 @@ own ``description`` explaining what it does and why its example value is
 what it is; for cross-cutting rationale (why a config choice affects several
 fields at once) see docs/configuration.md.
 
-    from arxiv_digest.config import settings
-    settings.llm.providers.anthropic.api_key
-    settings.llm.agents[0].model  # "anthropic:claude-sonnet-4-6"
+    from arxiv_digest.config import config
+    config.llm.providers.anthropic.api_key
+    config.llm.agents[0].model  # "anthropic:claude-sonnet-4-6"
 
 The models are mutable on purpose: the test suite's autouse ``_isolate``
-fixture points ``settings.storage.data_dir`` at a per-test temp directory
-and zeroes ``settings.s2.min_interval`` so tests never touch real data or
-sleep. Keep field lookups late (``settings.x.y`` at call time, not a
+fixture points ``config.storage.data_dir`` at a per-test temp directory
+and zeroes ``config.s2.min_interval`` so tests never touch real data or
+sleep. Keep field lookups late (``config.x.y`` at call time, not a
 module-level ``from ... import y``) so those overrides are seen.
 """
 
@@ -378,4 +378,4 @@ def load_settings(path: Path = CONFIG_PATH) -> Config:
     return Config.model_validate_json(raw)
 
 
-settings = load_settings()
+config = load_settings()

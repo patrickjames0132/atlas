@@ -14,7 +14,7 @@ from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from ..config import settings
+from ..config import config
 
 
 @contextmanager
@@ -32,7 +32,7 @@ def connect(db_path: Path, schema: str) -> Iterator[sqlite3.Connection]:
     Raises:
         sqlite3.Error: On database failures (locked file, corrupt db, …).
     """
-    settings.storage.ensure_dirs()
+    config.storage.ensure_dirs()
     conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
     try:

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import urllib.parse
 
-from ...config import settings
+from ...config import config
 from . import client, nodes
 
 _BATCH_MAX = 500  # S2 caps /paper/batch at 500 ids per call.
@@ -34,7 +34,7 @@ def get_papers(paper_ids: list[str], fields: str = nodes.DETAIL_FIELDS) -> dict[
     if not paper_ids:
         return {}
     out: dict[str, dict] = {}
-    url = f"{settings.s2.graph_url}/paper/batch?fields={urllib.parse.quote(fields)}"
+    url = f"{config.s2.graph_url}/paper/batch?fields={urllib.parse.quote(fields)}"
     for start in range(0, len(paper_ids), _BATCH_MAX):
         chunk = paper_ids[start : start + _BATCH_MAX]
         data = client.request(url, method="POST", body={"ids": chunk})
@@ -80,7 +80,7 @@ def _neighbors(path: str, key: str, limit: int) -> list[dict]:
         client.S2Error: When the request fails after retries.
     """
     url = (
-        f"{settings.s2.graph_url}/paper/{path}"
+        f"{config.s2.graph_url}/paper/{path}"
         f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}"
     )
     data = client.request(url)
@@ -131,7 +131,7 @@ def recommendations(paper_id: str, limit: int, pool: str | None = None) -> list[
         paper_id: An S2 paperId or prefixed id.
         limit: Maximum recommendations to return.
         pool: The candidate set — ``"all-cs"`` or ``"recent"``. Defaults to
-            ``settings.graph.recs_pool`` (``all-cs``; the ``recent`` pool
+            ``config.graph.recs_pool`` (``all-cs``; the ``recent`` pool
             returns nothing for older seeds).
 
     Returns:
@@ -141,9 +141,9 @@ def recommendations(paper_id: str, limit: int, pool: str | None = None) -> list[
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    pool = pool or settings.graph.recs_pool
+    pool = pool or config.graph.recs_pool
     url = (
-        f"{settings.s2.recs_url}/papers/forpaper/{client.quote(paper_id)}"
+        f"{config.s2.recs_url}/papers/forpaper/{client.quote(paper_id)}"
         f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}&from={pool}"
     )
     data = client.request(url)

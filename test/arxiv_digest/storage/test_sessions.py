@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import sqlite3
 
-from arxiv_digest.config import settings
+from arxiv_digest.config import config
 from arxiv_digest.storage import sessions
 
 
 def _touch(session_id: str, updated_at: float) -> None:
     """Force a session's updated_at directly, to make list ordering deterministic."""
-    conn = sqlite3.connect(settings.storage.sessions_db)
+    conn = sqlite3.connect(config.storage.sessions_db)
     conn.execute(
         "UPDATE saved_sessions SET updated_at = ? WHERE id = ?", (updated_at, session_id)
     )
@@ -57,7 +57,7 @@ def test_get_session_returns_none_for_a_missing_id():
 
 def test_get_session_with_corrupt_blob_reports_empty_data():
     saved = sessions.save_session(_payload())
-    conn = sqlite3.connect(settings.storage.sessions_db)
+    conn = sqlite3.connect(config.storage.sessions_db)
     conn.execute("UPDATE saved_sessions SET data = 'not json' WHERE id = ?", (saved["id"],))
     conn.commit()
     conn.close()

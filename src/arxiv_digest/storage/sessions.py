@@ -19,7 +19,7 @@ import json
 import time
 from uuid import uuid4
 
-from ..config import settings
+from ..config import config
 from . import utils
 
 _SCHEMA = """
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS saved_sessions (
 
 def _connect() -> utils.ConnectionContext:
     """Open a connection to the sessions store (data dir + schema ensured)."""
-    return utils.connect(settings.storage.sessions_db, _SCHEMA)
+    return utils.connect(config.storage.sessions_db, _SCHEMA)
 
 
 def list_sessions() -> list[dict]:

@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from arxiv_digest.config import PROJECT_ROOT, Config, settings
+from arxiv_digest.config import PROJECT_ROOT, Config, config
 
 
 def example_config() -> dict:
@@ -34,17 +34,17 @@ def test_example_config_is_valid():
 
 def test_db_paths_follow_data_dir(tmp_path, monkeypatch):
     """All three databases live under data_dir — one override moves them all."""
-    monkeypatch.setattr(settings.storage, "data_dir", tmp_path)
-    assert settings.storage.digest_db == tmp_path / "digest.db"
-    assert settings.storage.sources_db == tmp_path / "sources.db"
-    assert settings.storage.sessions_db == tmp_path / "sessions.db"
+    monkeypatch.setattr(config.storage, "data_dir", tmp_path)
+    assert config.storage.digest_db == tmp_path / "digest.db"
+    assert config.storage.sources_db == tmp_path / "sources.db"
+    assert config.storage.sessions_db == tmp_path / "sessions.db"
 
 
 def test_ensure_dirs_creates_data_dir(tmp_path, monkeypatch):
     """A fresh checkout gets its data directory made on demand."""
     target = tmp_path / "nested" / "data"
-    monkeypatch.setattr(settings.storage, "data_dir", target)
-    settings.storage.ensure_dirs()
+    monkeypatch.setattr(config.storage, "data_dir", target)
+    config.storage.ensure_dirs()
     assert target.is_dir()
 
 

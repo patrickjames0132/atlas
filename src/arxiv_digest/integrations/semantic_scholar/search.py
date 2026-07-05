@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import urllib.parse
 
-from ...config import settings
+from ...config import config
 from . import client, nodes
 
 
@@ -55,7 +55,7 @@ def search_papers(
     year = _year_range(year_from, year_to)
     if year:
         params["year"] = year
-    url = f"{settings.s2.graph_url}/paper/search?{urllib.parse.urlencode(params)}"
+    url = f"{config.s2.graph_url}/paper/search?{urllib.parse.urlencode(params)}"
     data = client.request(url)
     papers = (data.get("data") or []) if isinstance(data, dict) else []
     return nodes.from_papers(papers)

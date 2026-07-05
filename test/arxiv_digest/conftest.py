@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from arxiv_digest.config import settings
+from arxiv_digest.config import config
 
 
 @pytest.fixture(autouse=True)
@@ -22,5 +22,5 @@ def _isolate(monkeypatch, tmp_path):
     The three DB paths derive from ``data_dir``, so one override relocates
     them all. Zeroing ``min_interval`` keeps tests from sleeping.
     """
-    monkeypatch.setattr(settings.storage, "data_dir", tmp_path)
-    monkeypatch.setattr(settings.s2, "min_interval", 0.0)
+    monkeypatch.setattr(config.storage, "data_dir", tmp_path)
+    monkeypatch.setattr(config.s2, "min_interval", 0.0)

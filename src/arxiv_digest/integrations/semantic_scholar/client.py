@@ -23,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from ...config import settings
+from ...config import config
 
 log = logging.getLogger(__name__)
 
@@ -48,10 +48,10 @@ def throttle() -> None:
         None.
     """
     global _last_request
-    if settings.s2.min_interval <= 0:
+    if config.s2.min_interval <= 0:
         return
     with _throttle_lock:
-        wait = settings.s2.min_interval - (time.monotonic() - _last_request)
+        wait = config.s2.min_interval - (time.monotonic() - _last_request)
         if wait > 0:
             time.sleep(wait)
         _last_request = time.monotonic()
@@ -65,8 +65,8 @@ def headers() -> dict:
         ``x-api-key`` when ``s2.api_key`` is configured.
     """
     request_headers = {"User-Agent": "arxiv-atlas/1.0", "Content-Type": "application/json"}
-    if settings.s2.api_key:
-        request_headers["x-api-key"] = settings.s2.api_key
+    if config.s2.api_key:
+        request_headers["x-api-key"] = config.s2.api_key
     return request_headers
 
 
@@ -93,7 +93,7 @@ def request(url: str, *, method: str = "GET", body: dict | None = None, tries: i
         throttle()
         http_request = urllib.request.Request(url, data=data, headers=headers(), method=method)
         try:
-            with urllib.request.urlopen(http_request, timeout=settings.s2.timeout) as response:
+            with urllib.request.urlopen(http_request, timeout=config.s2.timeout) as response:
                 return json.loads(response.read().decode())
         except urllib.error.HTTPError as exc:
             last_error = exc
