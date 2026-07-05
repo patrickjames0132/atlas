@@ -1,207 +1,381 @@
-"""Central configuration, loaded from environment / .env file.
+"""Central configuration for arXiv Atlas, loaded from config.json.
 
-Everything tunable lives here so you never have to hunt through the code to
-change a path, a model, or the arXiv categories you follow.
+Every tunable — paths, API keys, model names, agent definitions — lives in
+one JSON file at the repo root, parsed by Pydantic into the nested
+``settings`` object below. There are **no defaults**: config.json must spell
+out every value (copy ``config.example.json`` to start), and any mistake —
+an unknown key, a negative limit, a misspelled literal — fails loudly at
+import time instead of silently becoming a default. Each field carries its
+own ``description`` explaining what it does and why its example value is
+what it is; for cross-cutting rationale (why a config choice affects several
+fields at once) see docs/configuration.md.
+
+    from arxiv_digest.config import settings
+    settings.llm.providers.anthropic.api_key
+    settings.llm.agents[0].model  # "anthropic:claude-sonnet-4-6"
+
+The models are mutable on purpose: the test suite's autouse ``_isolate``
+fixture points ``settings.storage.data_dir`` at a per-test temp directory
+and zeroes ``settings.s2.min_interval`` so tests never touch real data or
+sleep. Keep field lookups late (``settings.x.y`` at call time, not a
+module-level ``from ... import y``) so those overrides are seen.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
+from typing import Any, Literal
 
-from dotenv import load_dotenv
-
-# Load a .env file sitting at the project root (two levels up from this file:
-# src/arxiv_digest/config.py -> arxiv-digest/).
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(PROJECT_ROOT / ".env")
-
-
-def _path(env_name: str, default: Path) -> Path:
-    """Read a filesystem path from the environment.
-
-    Args:
-        env_name: The environment variable to read.
-        default: The path to use when the variable is unset.
-
-    Returns:
-        The configured path with ``~`` expanded, or ``default``.
-    """
-    raw = os.getenv(env_name)
-    return Path(raw).expanduser() if raw else default
-
-
-# --- Storage -----------------------------------------------------------------
-DATA_DIR = _path("ARXIV_DATA_DIR", PROJECT_ROOT / "data")
-DB_PATH = DATA_DIR / "digest.db"
-# Bring-your-own sources (Phase 3d) live in their own DB — a persistent user
-# library with a different lifecycle than the 1-day graph cache in digest.db.
-SOURCES_DB_PATH = DATA_DIR / "sources.db"
-# Saved sessions & workspaces (Phase 4) — a saved graph + chat transcript the
-# user can reopen. Persistent, own lifecycle (never TTL-evicted), so its own DB
-# apart from the ephemeral graph cache in digest.db.
-SESSIONS_DB_PATH = DATA_DIR / "sessions.db"
-
-# --- Semantic Scholar (dynamic academic graph) -------------------------------
-# arXiv Atlas connects to Semantic Scholar dynamically instead of storing a paper
-# corpus locally — S2 is the same data backbone Connected Papers uses. The
-# unauthenticated pool is tight (the single-paper GET 429s almost immediately, so
-# we hydrate nodes through the far more lenient POST /paper/batch endpoint); set
-# S2_API_KEY for reliable, higher-rate access:
-# https://www.semanticscholar.org/product/api
-S2_API_KEY = os.getenv("S2_API_KEY", "")
-S2_GRAPH_URL = os.getenv("S2_GRAPH_URL", "https://api.semanticscholar.org/graph/v1")
-S2_RECS_URL = os.getenv(
-    "S2_RECS_URL", "https://api.semanticscholar.org/recommendations/v1"
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveInt,
+    field_validator,
+    model_validator,
 )
-S2_TIMEOUT = int(os.getenv("S2_TIMEOUT", "30"))
-# Minimum seconds between S2 requests. Even authenticated, the graph endpoints
-# allow ~1 req/sec per key, so we self-throttle to keep bursts (graph build, the
-# Phase 3e backfill, agent expansion) from tripping 429s — cheaper than eating a
-# 429 + exponential backoff. Set 0 to disable.
-S2_MIN_INTERVAL = float(os.getenv("S2_MIN_INTERVAL", "1.1"))
 
-# How many neighbors of each kind to pull into a paper's graph neighborhood.
-GRAPH_REF_LIMIT = int(os.getenv("ATLAS_GRAPH_REFS", "25"))
-GRAPH_CITE_LIMIT = int(os.getenv("ATLAS_GRAPH_CITES", "25"))
-GRAPH_SIMILAR_LIMIT = int(os.getenv("ATLAS_GRAPH_SIMILAR", "15"))
-# The recommendation candidate pool: "all-cs" (all of CS, good for older seminal
-# papers) or "recent". The default "recent" pool returns nothing for a 2017 seed.
-GRAPH_RECS_POOL = os.getenv("ATLAS_GRAPH_RECS_POOL", "all-cs")
-# Graph-snapshot cache TTL (seconds). S2 citation data changes slowly, so a day
-# keeps repeat exploration snappy while respecting the rate limit.
-GRAPH_CACHE_TTL = int(os.getenv("ATLAS_GRAPH_CACHE_TTL", "86400"))
-
-# --- Claude backend (shared defaults for the AI teacher) ---------------------
-# Backends:
-#   "api"        — call the Anthropic API directly (pay-as-you-go, needs a key).
-#   "claude_cli" — shell out to the `claude` CLI under your Claude Pro/Max
-#                  subscription (no API billing; local-only).
-# The AI teacher (below) inherits these as its default backend + fallback, but
-# can override them via TEACHER_BACKEND / TEACHER_FALLBACK_BACKEND.
-SUMMARY_BACKEND = os.getenv("SUMMARY_BACKEND", "api")
-SUMMARY_FALLBACK_BACKEND = os.getenv("SUMMARY_FALLBACK_BACKEND", "claude_cli")
-
-# -- api backend --
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-
-# -- claude_cli backend --
-# Path to the `claude` binary (or just "claude" if it's on PATH).
-CLAUDE_CLI_PATH = os.getenv("CLAUDE_CLI_PATH", "claude")
-
-# --- AI teacher (Phase 3) ----------------------------------------------------
-# The narration/Q&A engine reuses the same dual-backend idea as summaries (API
-# or the `claude` CLI under a Pro/Max subscription) but STREAMS its output so the
-# frontend can reveal the lecture beat-by-beat and light up graph nodes in sync.
-# Defaults inherit the summary backend choice; override independently if you want
-# (e.g. cheap Haiku for bulk summaries, smarter Sonnet for narration).
-TEACHER_BACKEND = os.getenv("TEACHER_BACKEND", SUMMARY_BACKEND)
-TEACHER_FALLBACK_BACKEND = os.getenv("TEACHER_FALLBACK_BACKEND", SUMMARY_FALLBACK_BACKEND)
-# Narration wants a stronger model than the bulk summarizer's Haiku.
-TEACHER_MODEL = os.getenv("TEACHER_MODEL", "claude-sonnet-4-6")
-TEACHER_CLI_MODEL = os.getenv("TEACHER_CLI_MODEL", "sonnet")
-# Token/latency budgets for a single lecture or answer.
-TEACHER_MAX_TOKENS = int(os.getenv("TEACHER_MAX_TOKENS", "3000"))
-TEACHER_CLI_TIMEOUT = int(os.getenv("TEACHER_CLI_TIMEOUT", "180"))
-# How many past turns of a Q&A session to keep as context (user+assistant pairs).
-TEACHER_HISTORY_TURNS = int(os.getenv("TEACHER_HISTORY_TURNS", "8"))
-
-# --- Agentic teacher (Phase 3b) ----------------------------------------------
-# The Q&A agent can pull full paper text into context via tool use, grounding its
-# answer in what it actually reads. Hard guardrails keep it from wandering: caps
-# on total tool-loop steps and on how many papers it may read (full vs summary),
-# plus a wall-clock ceiling. Agentic Q&A needs the Anthropic API (tool use); with
-# the claude CLI backend, Q&A falls back to the non-agentic grounded answer.
-AGENT_MODEL = os.getenv("AGENT_MODEL", TEACHER_MODEL)
-AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "12"))
-AGENT_MAX_FULL_READS = int(os.getenv("AGENT_MAX_FULL_READS", "4"))
-AGENT_MAX_SUMMARY_READS = int(os.getenv("AGENT_MAX_SUMMARY_READS", "12"))
-AGENT_WALLCLOCK = int(os.getenv("AGENT_WALLCLOCK", "90"))
-# Phase 3b.2 — expand_node lets the agent pull papers not yet on the graph (one
-# hop via references/citations/similar). AGENT_MAX_HOPS caps how many expand
-# calls a single question may make; AGENT_EXPAND_LIMIT caps how many neighbors
-# come back per hop (kept small — these land in the tool result, not just the
-# graph). A visited (paper, relation) set in teacher.py kills repeat traversal.
-AGENT_MAX_HOPS = int(os.getenv("AGENT_MAX_HOPS", "5"))
-AGENT_EXPAND_LIMIT = int(os.getenv("AGENT_EXPAND_LIMIT", "8"))
-# Phase 3c.2 — search_papers runs an UNGROUNDED free-text search against S2's
-# paper-search endpoint (optional year filter) to reach recent / topical work
-# that citation & similarity hops can't (those are lineage- and embedding-biased:
-# a 2026 paper citing a 2017 seed has no citations of its own yet). It gets its
-# OWN budget, separate from AGENT_MAX_HOPS, because open-ended search wanders more
-# freely than a graph hop. AGENT_SEARCH_LIMIT caps results per search.
-AGENT_MAX_SEARCHES = int(os.getenv("AGENT_MAX_SEARCHES", "3"))
-AGENT_SEARCH_LIMIT = int(os.getenv("AGENT_SEARCH_LIMIT", "8"))
-# Max characters of full text loaded per paper read (keeps the context bounded).
-FULLTEXT_MAX_CHARS = int(os.getenv("FULLTEXT_MAX_CHARS", "8000"))
-# Phase 3f — show_figure lets the agent attach a paper's own figure (from ar5iv)
-# to its answer to illustrate a point. Capped per question so an answer stays a
-# few illustrative figures, not a gallery.
-AGENT_MAX_FIGURES = int(os.getenv("AGENT_MAX_FIGURES", "3"))
-
-# Phase 3e — "How we got here" time travel. Before the history lecture narrates,
-# walk BACKWARD through references to surface a field's older roots, so the story
-# starts at the beginning even when the seed is modern. Bounded so it doesn't
-# hammer the rate limit: HOPS backward levels, PER_HOP most-cited ancestors added
-# each level, FRONTIER oldest of those carried into the next hop, and LOOKBACK
-# years back from the seed we aim to reach before stopping early.
-LECTURE_HISTORY_HOPS = int(os.getenv("LECTURE_HISTORY_HOPS", "3"))
-LECTURE_HISTORY_PER_HOP = int(os.getenv("LECTURE_HISTORY_PER_HOP", "6"))
-LECTURE_HISTORY_FRONTIER = int(os.getenv("LECTURE_HISTORY_FRONTIER", "2"))
-LECTURE_HISTORY_LOOKBACK = int(os.getenv("LECTURE_HISTORY_LOOKBACK", "40"))
-
-# --- Bring-your-own sources (Phase 3d) ---------------------------------------
-# Uploaded books/PDFs and fetched web pages are chunked, embedded LOCALLY (no
-# API, no key — the text never leaves the machine, which matters for copyrighted
-# books) and stored in a sqlite-vec index the teacher can semantic-search. All of
-# it degrades gracefully: if the embedding model can't load, `available()` is
-# False and ingestion/search report unavailable rather than crashing.
-SEMANTIC_ENABLED = os.getenv("ARXIV_SEMANTIC", "1").lower() not in ("0", "false", "no")
-EMBED_MODEL = os.getenv("ARXIV_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-EMBED_DIM = int(os.getenv("ARXIV_EMBED_DIM", "384"))
-# Optional instruction prepended to SEARCH QUERIES only (not stored passages).
-# Asymmetric-retrieval models want one, e.g. BAAI/bge-small-en-v1.5:
-# ARXIV_EMBED_QUERY_PREFIX="Represent this sentence for searching relevant passages: "
-# Empty for symmetric models like all-MiniLM-L6-v2 (the default).
-EMBED_QUERY_PREFIX = os.getenv("ARXIV_EMBED_QUERY_PREFIX", "")
-# Chunking is char-based (cheap, model-agnostic). all-MiniLM-L6-v2 truncates at
-# ~256 word-pieces, so keep a chunk under ~1000 chars (~250 tokens) or its tail
-# is embedded into nothing. Overlap preserves context across chunk boundaries.
-SOURCE_CHUNK_CHARS = int(os.getenv("SOURCE_CHUNK_CHARS", "900"))
-SOURCE_CHUNK_OVERLAP = int(os.getenv("SOURCE_CHUNK_OVERLAP", "150"))
-# How many passages a single source search returns, and how many such searches
-# the agent may run per question (its own budget, separate from S2 search).
-SOURCE_SEARCH_K = int(os.getenv("SOURCE_SEARCH_K", "6"))
-AGENT_MAX_SOURCE_SEARCHES = int(os.getenv("AGENT_MAX_SOURCE_SEARCHES", "5"))
-# Hybrid retrieval (Phase 3d.3): fuse the semantic ranking (vector KNN) with a
-# lexical one (FTS5 BM25) via Reciprocal Rank Fusion, so exact terms and proper
-# nouns the embedder blurs together still surface. RRF_K damps the rank tail
-# (60 is the paper's standard). Set ARXIV_SOURCE_HYBRID=0 to fall back to pure
-# vector search; lexical is skipped automatically when FTS5 isn't compiled in.
-SOURCE_HYBRID = os.getenv("ARXIV_SOURCE_HYBRID", "1").lower() not in ("0", "false", "no")
-SOURCE_RRF_K = int(os.getenv("ARXIV_SOURCE_RRF_K", "60"))
-# Offline library chat (Phase 3d): a graph-free RAG chat straight over the local
-# library. Retrieve a few more passages than a single agent search, since this is
-# the answer's only grounding (no paper reading, no follow-up searches).
-SOURCES_CHAT_K = int(os.getenv("SOURCES_CHAT_K", "8"))
-
-# --- Server ------------------------------------------------------------------
-FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")
-FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
-# Verbose logging (DEBUG level, incl. the arXiv client's per-page requests).
-DEBUG = os.getenv("ARXIV_DEBUG", "").lower() in ("1", "true", "yes")
+# This file lives at src/arxiv_digest/config.py; the repo root is 3 levels up.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-def ensure_dirs() -> None:
-    """Create the data directory if it doesn't exist yet.
+class ConfigModel(BaseModel):
+    """Base for every settings group: unknown keys in config.json are typos,
+    so reject them instead of ignoring them."""
 
-    Called by every storage module before opening its database, so a fresh
-    checkout works without any setup step.
+    model_config = ConfigDict(extra="forbid")
 
-    Returns:
-        None.
 
-    Raises:
-        OSError: When the directory can't be created (permissions, etc.).
+class StorageConfig(ConfigModel):
+    """Where the app keeps its three SQLite databases.
+
+    Three separate files because three lifecycles: the graph cache is
+    disposable (short TTL), the sources collection is expensive to rebuild
+    (re-embedding your PDFs), and saved sessions are precious (never
+    auto-evicted). Clearing one can never destroy another.
     """
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    data_dir: Path = Field(
+        description="Directory holding all three SQLite databases. A relative "
+        "path is anchored to the repo root, not the process's cwd."
+    )
+
+    @field_validator("data_dir")
+    @classmethod
+    def _anchor_to_repo_root(cls, v: Path) -> Path:
+        """A relative path in config.json means "relative to the repo root"."""
+        v = v.expanduser()
+        return v if v.is_absolute() else PROJECT_ROOT / v
+
+    # The DB paths derive from data_dir, so overriding that one field (as the
+    # tests do) relocates all storage at once.
+
+    @property
+    def digest_db(self) -> Path:
+        """The ephemeral cache: graph snapshots, figures, code links."""
+        return self.data_dir / "digest.db"
+
+    @property
+    def sources_db(self) -> Path:
+        """The bring-your-own sources: chunks + local embeddings."""
+        return self.data_dir / "sources.db"
+
+    @property
+    def sessions_db(self) -> Path:
+        """Saved workspaces: a graph + its chat transcript, reopenable later."""
+        return self.data_dir / "sessions.db"
+
+    def ensure_dirs(self) -> None:
+        """Create ``data_dir`` if missing.
+
+        Called before every database open, so a fresh checkout works without
+        any setup step.
+        """
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
+
+class SemanticScholarConfig(ConfigModel):
+    """Connection settings for the Semantic Scholar API — Atlas's academic-
+    graph backbone.
+
+    Atlas stores no paper corpus; it asks S2 on demand (the same data
+    backbone Connected Papers uses). See docs/configuration.md for why
+    ``min_interval`` and unauthenticated rate limits matter here.
+    """
+
+    api_key: str = Field(
+        description="Free key from https://www.semanticscholar.org/product/api. "
+        "Empty string works (keyless) but is rate-limited much harder."
+    )
+    graph_url: str = Field(description="Base URL of the Academic Graph API.")
+    recs_url: str = Field(description="Base URL of the Recommendations API.")
+    timeout: PositiveInt = Field(description="HTTP timeout in seconds for S2 requests.")
+    min_interval: NonNegativeFloat = Field(
+        description="Minimum seconds between S2 requests (self-imposed throttle, "
+        "since even authenticated callers get ~1 req/sec). 0 disables it — tests do."
+    )
+
+
+class GraphConfig(ConfigModel):
+    """How big a neighborhood one seed paper pulls onto the canvas.
+
+    See docs/configuration.md for the node-count math behind the example
+    limits and why ``recs_pool`` must stay "all-cs".
+    """
+
+    ref_limit: PositiveInt = Field(description="Max references (papers it cites) to pull in.")
+    cite_limit: PositiveInt = Field(description="Max citations (papers citing it) to pull in.")
+    similar_limit: PositiveInt = Field(
+        description="Max SPECTER2-embedding neighbors to pull in as 'similar' nodes."
+    )
+    recs_pool: Literal["all-cs", "recent"] = Field(
+        description="Candidate pool for similar-paper recommendations. 'recent' "
+        "returns nothing for older seeds — keep 'all-cs' unless you only explore "
+        "brand-new papers."
+    )
+    cache_ttl: NonNegativeInt = Field(
+        description="Seconds a graph snapshot stays cached before rebuilding. "
+        "Citation data changes slowly, so a day keeps repeat exploration instant."
+    )
+
+
+class AnthropicConfig(ConfigModel):
+    """Credentials for the Anthropic API.
+
+    Mirrors ``pydantic_ai.providers.anthropic.AnthropicProvider(api_key=...)``
+    directly — this value is passed straight through when an agent factory
+    builds a real PydanticAI provider, rather than relying on PydanticAI's
+    own environment-variable fallback.
+    """
+
+    api_key: str = Field(description="Key from https://console.anthropic.com.")
+
+
+class ProvidersConfig(ConfigModel):
+    """Backend LLM providers this app can reach, keyed by vendor name.
+
+    One sub-object per vendor — mirrors PydanticAI's own per-vendor
+    ``Provider`` classes (``AnthropicProvider``, ``OpenAIProvider``, ...).
+    Only Anthropic is wired up today (that's what we're testing against),
+    but adding a vendor later is purely additive: a new field here, no
+    redesign. Every ``AgentConfig.model``'s ``"<provider>:<model>"`` prefix
+    must name a vendor configured here (``LLMConfig`` validates this).
+    """
+
+    anthropic: AnthropicConfig
+
+
+class AgentConfig(ConfigModel):
+    """One configured Claude agent, built (eventually) into a real
+    ``pydantic_ai.Agent``.
+
+    Today there's a single entry — the teaching assistant — but ``agents``
+    is a list because more are planned (see OnePager.md), potentially on
+    different providers. ``extras`` is a deliberate escape hatch for
+    settings that don't have a permanent home yet (e.g. tool-call budgets,
+    retrieval knobs): stash them there while building, then promote
+    anything that earns its keep to a proper typed field once its shape has
+    settled.
+    """
+
+    id: str = Field(
+        min_length=1, description="Unique key other code uses to look this agent up."
+    )
+    model: str = Field(
+        description="Which model this agent runs, as PydanticAI's own "
+        "'<provider>:<model_name>' string (e.g. 'anthropic:claude-sonnet-4-6'). The "
+        "prefix must name a vendor configured under `providers`."
+    )
+    system_prompt: str = Field(
+        description="This agent's system prompt. Empty is valid — not written yet."
+    )
+    tools: list[str] = Field(
+        description="Names of tools this agent may call. Empty means no tool use."
+    )
+    extras: dict[str, Any] = Field(
+        description="Free-form bag for agent-specific settings not yet promoted to "
+        "a first-class field."
+    )
+
+    @field_validator("model")
+    @classmethod
+    def _model_has_provider_prefix(cls, v: str) -> str:
+        """Catch a bare model name early — PydanticAI needs the vendor prefix."""
+        if ":" not in v:
+            raise ValueError(
+                f"model {v!r} must be '<provider>:<model_name>', e.g. "
+                "'anthropic:claude-sonnet-4-6'"
+            )
+        return v
+
+    @property
+    def provider(self) -> str:
+        """The vendor name parsed from ``model``'s '<provider>:<model_name>' prefix."""
+        return self.model.split(":", 1)[0]
+
+
+class LLMConfig(ConfigModel):
+    """Everything about talking to LLMs: which backend vendors we can reach
+    (``providers``) and which agents are configured to use them (``agents``).
+
+    Grouped together because an agent is meaningless without a provider to
+    run it on, and this is a different concern from ``sources.embedding`` —
+    that's a local embedding model for search, not a chat/tool-use LLM.
+    """
+
+    providers: ProvidersConfig
+    agents: list[AgentConfig] = Field(min_length=1, description="Every agent the app can run.")
+
+    @model_validator(mode="after")
+    def _agent_ids_are_unique(self) -> LLMConfig:
+        """Other code will look agents up by id — a duplicate would be ambiguous."""
+        ids = [a.id for a in self.agents]
+        dupes = {i for i in ids if ids.count(i) > 1}
+        if dupes:
+            raise ValueError(f"duplicate agent id(s): {sorted(dupes)}")
+        return self
+
+    @model_validator(mode="after")
+    def _agent_providers_are_configured(self) -> LLMConfig:
+        """An agent naming an unconfigured vendor would fail at first request,
+        not at load — catch it here instead."""
+        configured = ProvidersConfig.model_fields.keys()
+        for agent in self.agents:
+            if agent.provider not in configured:
+                raise ValueError(
+                    f"agent {agent.id!r} wants provider {agent.provider!r}, but only "
+                    f"{sorted(configured)} are configured under `providers`"
+                )
+        return self
+
+
+class Embedding(ConfigModel):
+    """The local embedding model used to make uploaded sources searchable."""
+
+    model: str = Field(
+        min_length=1,
+        description="sentence-transformers model id. Changing this requires "
+        "re-ingesting existing sources — their vectors were made by the old model.",
+    )
+    dim: PositiveInt = Field(description="Embedding vector size. Must match the model.")
+    query_prefix: str = Field(
+        description="Instruction prepended to SEARCH QUERIES only (never to stored "
+        "passages). Asymmetric-retrieval models want one; symmetric models like the "
+        "default MiniLM leave it empty."
+    )
+
+
+class Chunking(ConfigModel):
+    """How uploaded text is split into embeddable, searchable passages."""
+
+    chars: PositiveInt = Field(
+        description="Characters per chunk. Character-based chunking is cheap and "
+        "model-agnostic, but must respect the embedding model's token limit — "
+        "MiniLM truncates at ~256 word-pieces (~1000 chars), so anything longer has "
+        "its tail embedded into nothing, i.e. unsearchable text."
+    )
+    overlap: NonNegativeInt = Field(
+        description="Characters shared between consecutive chunks, so a sentence "
+        "straddling a boundary stays findable from either side. Must be smaller "
+        "than 'chars'."
+    )
+
+    @model_validator(mode="after")
+    def _overlap_fits_inside_chunk(self) -> Chunking:
+        """An overlap as big as the chunk would make chunking loop forever."""
+        if self.overlap >= self.chars:
+            raise ValueError(f"overlap ({self.overlap}) must be smaller than chars ({self.chars})")
+        return self
+
+
+class Retrieval(ConfigModel):
+    """Search over the local sources: hybrid semantic + lexical retrieval.
+
+    Semantic ranking (vector KNN) is fused with lexical ranking (FTS5 BM25)
+    via Reciprocal Rank Fusion, so exact terms and proper nouns the embedder
+    blurs together still surface.
+    """
+
+    search_k: PositiveInt = Field(
+        description="Passages returned by a single search — used by both the "
+        "teaching assistant's search_sources tool and the graph-free sources chat."
+    )
+    hybrid: bool = Field(
+        description="Fuse semantic + lexical ranking via RRF. When false, falls "
+        "back to pure vector search; lexical is skipped automatically if the "
+        "SQLite build lacks FTS5."
+    )
+    rrf_k: PositiveInt = Field(
+        description="RRF rank-damping constant. 60 is the standard value from the "
+        "Reciprocal Rank Fusion paper."
+    )
+    chat_k: PositiveInt = Field(
+        description="Passages retrieved for the graph-free sources chat — higher "
+        "than search_k because it's the answer's only grounding (no paper reading, "
+        "no follow-up searches)."
+    )
+
+
+class SourcesConfig(ConfigModel):
+    """Bring-your-own sources: local ingestion, embedding, and retrieval.
+
+    Named ``sources`` (not ``library``) to match what this feature is
+    actually called everywhere else in the app — the Sources drawer, the
+    `/api/sources` routes — and to avoid the ambiguity with Python packages
+    that "library" invites.
+
+    Uploaded PDFs and fetched web pages are chunked and embedded LOCALLY —
+    no API, no key; the text never leaves the machine (which matters for
+    copyrighted books). If the embedding model can't load, everything
+    degrades gracefully: ingestion and search report "unavailable" instead
+    of crashing the app.
+    """
+
+    semantic_enabled: bool = Field(
+        description="Master switch for the whole bring-your-own-sources feature."
+    )
+    embedding: Embedding
+    chunking: Chunking
+    retrieval: Retrieval
+
+
+class ServerConfig(ConfigModel):
+    """Where the Flask app listens, and how loudly it logs."""
+
+    host: str = Field(min_length=1, description="Interface Flask binds to.")
+    port: int = Field(ge=1, le=65535, description="TCP port Flask listens on.")
+    debug: bool = Field(
+        description="Verbose (DEBUG-level) logging, including the arXiv client's "
+        "per-page requests."
+    )
+
+
+class Config(ConfigModel):
+    """All configuration, grouped by the part of the app that consumes it."""
+
+    storage: StorageConfig
+    s2: SemanticScholarConfig
+    graph: GraphConfig
+    sources: SourcesConfig
+    server: ServerConfig
+    llm: LLMConfig
+
+
+CONFIG_PATH = PROJECT_ROOT / "config.json"
+
+
+def load_settings(path: Path = CONFIG_PATH) -> Config:
+    """Parse and validate a config file into a Settings object."""
+    try:
+        raw = path.read_text()
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"{path} not found — copy config.example.json to config.json "
+            "and fill in your values."
+        ) from None
+    return Config.model_validate_json(raw)
+
+
+settings = load_settings()

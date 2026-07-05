@@ -1,5 +1,8 @@
 # Secrets & credentials — NEVER commit these
+# .env: the not-yet-rewritten parts of the app still read it during the v2
+# rewrite; config.json: the new settings file for already-rewritten parts.
 .env
+config.json
 
 # Data
 data/

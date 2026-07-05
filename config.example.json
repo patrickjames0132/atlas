@@ -1,0 +1,58 @@
+{
+  "storage": {
+    "data_dir": "data"
+  },
+  "s2": {
+    "api_key": "",
+    "graph_url": "https://api.semanticscholar.org/graph/v1",
+    "recs_url": "https://api.semanticscholar.org/recommendations/v1",
+    "timeout": 30,
+    "min_interval": 1.1
+  },
+  "graph": {
+    "ref_limit": 25,
+    "cite_limit": 25,
+    "similar_limit": 15,
+    "recs_pool": "all-cs",
+    "cache_ttl": 86400
+  },
+  "sources": {
+    "semantic_enabled": true,
+    "embedding": {
+      "model": "sentence-transformers/all-MiniLM-L6-v2",
+      "dim": 384,
+      "query_prefix": ""
+    },
+    "chunking": {
+      "chars": 900,
+      "overlap": 150
+    },
+    "retrieval": {
+      "search_k": 6,
+      "hybrid": true,
+      "rrf_k": 60,
+      "chat_k": 8
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 5000,
+    "debug": false
+  },
+  "llm": {
+    "providers": {
+      "anthropic": {
+        "api_key": "sk-ant-..."
+      }
+    },
+    "agents": [
+      {
+        "id": "teaching_assistant",
+        "model": "anthropic:claude-sonnet-4-6",
+        "system_prompt": "",
+        "tools": [],
+        "extras": {}
+      }
+    ]
+  }
+}

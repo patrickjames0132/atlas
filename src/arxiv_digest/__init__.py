@@ -1,3 +1,7 @@
-"""arXiv Digest — turn arXiv email subscriptions into an AI-summarized dashboard."""
+"""arXiv Atlas — an interactive citation/similarity graph explorer with an AI
+teacher that narrates a field's history over the graph.
 
-__version__ = "0.1.0"
+The package name predates the "Atlas" rename: the repo began life as a daily
+arXiv digest app, and that era is retired. The single source of truth for the
+version is ``pyproject.toml``.
+"""
