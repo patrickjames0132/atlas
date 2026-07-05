@@ -75,6 +75,39 @@ README only covers the shape and the big decisions.
   `config.x.y` at call time, not bind it to a module-level constant at
   import time, so those overrides are actually seen.
 
+## Who uses it, and how/why
+
+Nearly every backend module reads `config` — it's the app's one source of
+truth, not a per-feature dependency. By subsystem:
+
+- **Storage** (`storage/cache.py`, `storage/sessions.py`, `storage/utils.py`)
+  read `config.storage.*` for where each SQLite file lives, and call
+  `ensure_dirs()` before first use so a fresh checkout needs no setup step.
+- **Semantic Scholar client** (`integrations/semantic_scholar/`) reads
+  `config.s2.*` (api key, URLs, timeout, throttle interval) to build every
+  HTTP request and self-throttle, and `config.graph.recs_pool` to pick the
+  recommendation candidate pool.
+- **Graph assembly** (`services/graph.py`, `teacher/neighbors.py` — not yet
+  ported) will read `config.graph.ref_limit/cite_limit/similar_limit` and
+  `config.graph.cache_ttl` to decide how big a neighborhood to build and how
+  long to trust a cached snapshot.
+- **Bring-your-own sources** (`library/embeddings.py`, `library/sources.py`
+  — not yet ported) will read `config.sources.*` for the embedding model,
+  chunk size/overlap, and the hybrid-retrieval toggle.
+- **The AI teacher** (`teacher/*`, `routes/teacher.py` — not yet ported)
+  will read `config.llm.*` for the Anthropic key and model.
+- **App wiring** (`app.py`, `cli.py` — not yet ported) will read
+  `config.server.*` to start Flask, plus `PROJECT_ROOT` to locate the built
+  frontend.
+
+**Every not-yet-ported file above still references the *old* flat names**
+(`config.AGENT_MAX_STEPS`, `config.EMBED_DIM`, `config.TEACHER_MODEL`,
+`config.SOURCES_DB_PATH`, ...) — none of those exist anymore post-rewrite.
+Each will need its config references re-mapped to the new nested groups
+(and, per the `llm.agents[].extras` decision above, several of the old
+per-tool-call budget fields won't come back as first-class fields at all)
+when its phase comes up.
+
 ## Testing
 
 `test_config.py` — 19 tests: the example template always validates,

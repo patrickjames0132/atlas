@@ -82,6 +82,21 @@ search.py   — the shared arxiv.Client + the public entry point, search_arxiv
   Fixed by making the scheme optional in the pattern; verified against
   every id format plus a non-id control case before applying it.
 
+## Who uses it, and how/why (traced, not yet ported)
+
+- **`services/search.py`** — `arxiv_search()` is a direct passthrough to
+  `search_arxiv()`. This is the live (non-cached) half of seed search:
+  "type a title, get arXiv hits ranked by relevance."
+- **`services/graph.py`** — reaches into `ID_RE` directly (not
+  `search_arxiv`), via a `_looks_arxiv()` helper, to decide whether a
+  re-seed reference is an arXiv id (needs an `ARXIV:` prefix before
+  Semantic Scholar will accept it) or a raw S2 paperId.
+- **`routes/graph.py`** — also reaches into `ID_RE` directly, in
+  `_normalize_arxiv_id()`, to strip a pasted arxiv.org URL or version
+  suffix down to a bare id before using it as the seed reference. This is
+  what makes "paste a link and hit enter" work for *re-seeding* the graph
+  from a node, not just the initial search box.
+
 ## Testing
 
 Split to mirror the source layout: `test_papers.py`, `test_clauses.py`,

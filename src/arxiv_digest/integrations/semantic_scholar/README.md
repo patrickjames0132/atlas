@@ -81,15 +81,29 @@ package needs to know it's a package internally.
   `http_request`/`response` not `req`/`resp`, `year_from`/`year_to` not
   `lo`/`hi`.
 
-## Who uses it (traced, not yet ported)
+## Who uses it, and how/why (traced, not yet ported)
 
-- `services/graph.py` — assembles a whole graph from a seed paper (Phase 3)
-- `teacher/neighbors.py`, `teacher/lecture.py` — the "How we got here"
-  lecture's backward walk through references (Phase 4)
-- `teacher/tools.py` — the agentic Q&A loop's `expand_node`/`search_papers`
-  tools (Phase 4)
-- `routes/graph.py` — the Flask endpoint serving the frontend, catches
-  `S2Error` → HTTP 502 (Phase 5)
+- **`services/graph.py`** — `build_graph()` is the whole point of this
+  package's existence: one `get_paper()` to hydrate the seed's rich
+  details, then `references()`/`citations()`/`recommendations()` to build
+  the three relation types that make up the visible graph. Also uses
+  `arxiv_client.ID_RE` (not this package) to decide whether the seed
+  reference needs an `ARXIV:` prefix before hitting S2, or is already a raw
+  S2 paperId.
+- **`teacher/lecture.py`** — walks backward through `references()` during
+  the "How we got here" history backfill; catches `S2Error` per-hop so one
+  failed hop skips that ancestor rather than aborting the whole lecture.
+- **`teacher/neighbors.py`** — wraps `references()`/`citations()`/
+  `recommendations()`/`search_papers()` behind its own day-long cache (see
+  `storage/README.md`) — this *is* the mechanism behind the agentic Q&A
+  tools `expand_node` and `search_papers`.
+- **`teacher/tools.py`** — calls `get_paper()` to lazily hydrate a neighbor
+  node's abstract/tldr on demand, only when the agent's `read_paper` tool
+  needs detail that a light-field neighbor node doesn't carry.
+- **`routes/graph.py`** — two HTTP entry points: `/api/graph` (via
+  `services/graph.py`) and `/api/paper/<id>` (calls `get_paper()` directly
+  to hydrate a clicked node's detail panel). Both catch `S2Error` and turn
+  it into an HTTP 502 for the frontend.
 
 None of these are ported yet, but because the public API is unchanged,
 none of them will need a single import edit when we get there.
