@@ -1,39 +1,23 @@
-"""Pull a paper's code & artifact links from Hugging Face Papers.
+"""Normalize a paper's Hugging Face Papers record into the detail-panel envelope.
 
-Papers with Code sunset into Hugging Face Papers, so HF is now the place that
-maps an arXiv id to runnable implementations: a community-linked GitHub repo
-plus the models, datasets, and Spaces that cite the paper. One call to
-``https://huggingface.co/api/papers/{arxiv_id}`` returns all of it — the
-``linkedModels`` / ``linkedDatasets`` / ``linkedSpaces`` samples, their
-``numTotal*`` counts, upvotes, and (when someone linked one) ``githubRepo``.
-
-We normalize that into a small ``{available, github, models, datasets, spaces,
-totals, …}`` envelope for the detail panel and cache it in SQLite (same thin
-cache as graph snapshots and figures). Papers HF has never indexed 404 — that
-miss is cached too, so unindexed papers cost one request a day, not one per
-panel open.
+HF's ``/api/papers`` response is sprawling and loosely-typed — ``linkedModels``
+/ ``linkedDatasets`` / ``linkedSpaces`` samples, their ``numTotal*`` counts,
+upvotes, and (when someone linked one) ``githubRepo``. We flatten that into a
+small ``{available, github, models, datasets, spaces, totals, …}`` envelope for
+the "code & artifacts" section of the detail panel and cache it in SQLite (same
+thin cache as graph snapshots and figures). Papers HF has never indexed 404 —
+``client.fetch_paper`` returns None for those, and that miss is cached too, so
+an unindexed paper costs one request a day, not one per panel open.
 """
 
 from __future__ import annotations
 
-import json
-import logging
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any
 
-from ..config import config
-from ..storage import cache
+from ...storage import cache
+from . import client
 
-log = logging.getLogger(__name__)
-
-_HF_HOST = "huggingface.co"
-_HF_BASE = f"https://{_HF_HOST}"
-_USER_AGENT = {"User-Agent": "arxiv-atlas/1.1 (https://github.com/patrickjames0132/arxiv-digest)"}
-# Fresh papers accrete repos/models quickly, so re-check daily (matches the
-# graph snapshot TTL). Misses (paper not on HF) share the same TTL.
-_CODE_TTL = 60 * 60 * 24
 _MAX_ITEMS = 5
 
 
@@ -60,33 +44,6 @@ def empty_result(available: bool = False) -> dict:
         "spaces": [],
         "totals": {"models": 0, "datasets": 0, "spaces": 0},
     }
-
-
-def _fetch_paper(arxiv_id: str) -> dict | None:
-    """Fetch the raw HF Papers record for an arXiv id.
-
-    Args:
-        arxiv_id: A bare arXiv id (version already stripped).
-
-    Returns:
-        The parsed JSON record, or None when HF has no page for the paper
-        (HTTP 404 — most pre-2023 or niche papers).
-
-    Raises:
-        urllib.error.HTTPError: On non-404 HTTP failures.
-        urllib.error.URLError: On network failures.
-        ValueError: When the response isn't valid JSON.
-    """
-    url = f"{_HF_BASE}/api/papers/{urllib.parse.quote(arxiv_id, safe='')}"
-    request = urllib.request.Request(url, headers=_USER_AGENT)
-    try:
-        with urllib.request.urlopen(request, timeout=config.s2.timeout) as response:
-            data = json.loads(response.read().decode("utf-8", "replace"))
-            return data if isinstance(data, dict) else None
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return None
-        raise
 
 
 def _as_int(value: Any) -> int:
@@ -122,7 +79,7 @@ def _repo_items(raw: Any, kind: str) -> list[dict]:
         repo_id = str(entry["id"])
         item: dict = {
             "id": repo_id,
-            "url": f"{_HF_BASE}/{prefix}{repo_id}",
+            "url": f"{client.BASE_URL}/{prefix}{repo_id}",
             "likes": _as_int(entry.get("likes")),
         }
         if kind in ("model", "dataset"):
@@ -160,18 +117,18 @@ def get_code_links(arxiv_id: str, *, refresh: bool = False) -> dict:
 
     key = f"hf_code:{arxiv_id}"
     if not refresh:
-        cached = cache.get(key, _CODE_TTL)
+        cached = cache.get(key, client.CODE_TTL)
         if cached is not None:
             return cached
 
-    raw = _fetch_paper(arxiv_id)
+    raw = client.fetch_paper(arxiv_id)
     if raw is None:
         result = empty_result()
         cache.set(key, result)
         return result
 
     result = empty_result(available=True)
-    result["paper_url"] = f"{_HF_BASE}/papers/{urllib.parse.quote(arxiv_id, safe='')}"
+    result["paper_url"] = f"{client.BASE_URL}/papers/{urllib.parse.quote(arxiv_id, safe='')}"
     result["upvotes"] = _as_int(raw.get("upvotes"))
     github = raw.get("githubRepo")
     if isinstance(github, str) and github.startswith("https://github.com/"):
