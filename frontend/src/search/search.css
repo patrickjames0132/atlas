@@ -1,0 +1,296 @@
+/* Seed search: the form (rendered in the header) and the results panel
+   (HitList, floating over the canvas). */
+
+/* The wrapper carries the header-row sizing so the filter popover can anchor
+   to it (position: relative); the form itself just lays out its children. */
+.search-box {
+  position: relative;
+  flex: 1;
+  max-width: 640px;
+}
+.seed-search {
+  display: flex;
+  gap: 8px;
+}
+.seed-search input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-strong);
+  font-size: 14px;
+}
+.seed-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.seed-search button {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent-strong);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+.seed-search button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- results panel --- */
+.hit-list {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  width: 380px;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.hit-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 4px 6px 8px;
+}
+.hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.hit:hover {
+  background: var(--chip);
+}
+.hit-title {
+  font-size: 14px;
+  color: var(--text-strong);
+  margin-bottom: 3px;
+}
+.hit-meta {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hit-sub {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 8px 6px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.hit-sub:first-of-type {
+  border-top: none;
+  margin-top: 0;
+}
+.hit-note {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 6px;
+  font-style: italic;
+}
+.hit-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  vertical-align: 2px;
+}
+
+/* --- optional pre-submit filters (year window + category picker) --- */
+.filter-toggle {
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filter-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+.filter-toggle.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.filter-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filter-label {
+  width: 72px;
+  flex-shrink: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+/* Dual-handle publication-year slider: two range inputs stacked over one shared
+   track, with a coloured fill spanning the selected window. */
+.year-row {
+  gap: 12px;
+}
+.year-slider {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+.year-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.year-fill {
+  position: absolute;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+/* The inputs are invisible tracks; only their thumbs show and take pointers,
+   so both handles stay grabbable where they overlap. */
+.year-range {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.year-range:focus {
+  outline: none;
+}
+.year-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.year-range::-moz-range-thumb {
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.year-range::-moz-range-track {
+  background: transparent;
+}
+.year-readout {
+  width: 92px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.cat-select {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.cat-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.filter-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 80px;
+}
+.cat-chip {
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.cat-chip:hover {
+  background: rgba(255, 209, 102, 0.12);
+}
+.filter-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.filter-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* Publication date on an arXiv hit's meta line. */
+.hit-date {
+  color: var(--text);
+}
