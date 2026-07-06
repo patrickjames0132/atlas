@@ -1,17 +1,14 @@
-"""Shared fixture for route tests: a Flask test client over the real
-blueprint registry, so every test exercises the app the way `app.py` will
-wire it."""
+"""Shared fixture for route tests: a test client over the real app factory,
+so every test exercises the app exactly as `create_app` wires it (CORS,
+health, blueprints, SPA catch-all included)."""
 
 from __future__ import annotations
 
 import pytest
-from flask import Flask
 
-from arxiv_digest.routes import register_blueprints
+from arxiv_digest.app import create_app
 
 
 @pytest.fixture
 def client():
-    app = Flask(__name__)
-    register_blueprints(app)
-    return app.test_client()
+    return create_app().test_client()

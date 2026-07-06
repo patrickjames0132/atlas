@@ -3,6 +3,9 @@
 Usage:
     uv run arxiv-atlas serve      # start the API + Atlas frontend
     uv run arxiv-atlas --help     # see all commands
+
+Every command imports lazily so ``--help`` (and each command) never pays
+the import cost of the parts it doesn't touch.
 """
 
 from __future__ import annotations
@@ -12,29 +15,22 @@ import click
 
 @click.group(help="arXiv Atlas — interactive citation/similarity graph explorer.")
 def cli() -> None:
-    """The click command group; subcommands attach below.
-
-    Returns:
-        None.
-    """
-    pass
+    """The click command group; subcommands attach below."""
 
 
 @cli.command(help="Run the Flask API + Atlas frontend.")
 def serve() -> None:
     """Start the Flask dev server (API + built frontend).
 
-    Imports lazily so `--help` and the library commands never pay the app's
-    import cost.
-
     Returns:
         None (blocks until the server exits).
     """
     from arxiv_digest import app as app_module
+
     app_module.main()
 
 
-# --- Phase 3d — bring-your-own sources (local semantic library) --------------
+# --- Bring-your-own sources (the local semantic library) ---------------------
 
 
 @cli.command(help="Ingest a PDF file or URL into the source library.")
@@ -47,20 +43,20 @@ def ingest(target: str, title: str | None) -> None:
         target: A filesystem path to a PDF, or an http(s) URL.
         title: Optional display title (defaults to the filename / page title).
 
-    Returns:
-        None (prints the stored record).
-
     Raises:
-        click.ClickException: When embeddings/sqlite-vec are unavailable.
-        SourceError: When extraction or ingestion fails.
+        click.ClickException: When ingestion fails — the ``SourceError``
+            text is the message (unavailable embeddings, scanned PDF,
+            unreachable URL), shown cleanly instead of a traceback.
     """
-    from arxiv_digest.library import sources
-    if not sources.available():
-        raise click.ClickException("Embeddings/sqlite-vec unavailable — cannot ingest.")
-    if target.startswith(("http://", "https://")):
-        src = sources.ingest_url(target, title=title)
-    else:
-        src = sources.ingest_pdf(target, title=title)
+    from arxiv_digest.services import sources
+
+    try:
+        if target.startswith(("http://", "https://")):
+            src = sources.ingest_url(target, title=title)
+        else:
+            src = sources.ingest_pdf(target, title=title)
+    except sources.SourceError as exc:
+        raise click.ClickException(str(exc)) from exc
     pages = f", {src['pages']} pages" if src.get("pages") else ""
     click.echo(f"Ingested [{src['kind']}] “{src['title']}” — {src['n_chunks']} chunks{pages}")
     click.echo(f"  id: {src['id']}")
@@ -68,19 +64,19 @@ def ingest(target: str, title: str | None) -> None:
 
 @cli.command("sources", help="List sources in the library.")
 def sources_list() -> None:
-    """Print every source in the library, one row per source.
+    """Print every source in the library, one row per source."""
+    from arxiv_digest.services import sources
 
-    Returns:
-        None.
-    """
-    from arxiv_digest.library import sources
     rows = sources.list_sources()
     if not rows:
         click.echo("No sources yet. Add one with:  ingest <pdf-or-url>")
         return
-    for s in rows:
-        pages = f"{s['pages']}p" if s.get("pages") else "—"
-        click.echo(f"{s['id']}  [{s['kind']:3}] {pages:>5} {s['n_chunks']:>5}ch  {s['title']}")
+    for source in rows:
+        pages = f"{source['pages']}p" if source.get("pages") else "—"
+        click.echo(
+            f"{source['id']}  [{source['kind']:3}] {pages:>5} "
+            f"{source['n_chunks']:>5}ch  {source['title']}"
+        )
 
 
 @cli.command("search-sources", help="Semantic search over the library.")
@@ -93,20 +89,18 @@ def search_sources(query: str, source: str | None, k: int | None) -> None:
     Args:
         query: What to look for — a concept or question.
         source: Restrict retrieval to one source's id (optional).
-        k: Number of passages to return (defaults to config.SOURCE_SEARCH_K).
-
-    Returns:
-        None.
+        k: Number of passages (defaults to ``config.sources.retrieval.search_k``).
     """
-    from arxiv_digest.library import sources
+    from arxiv_digest.services import sources
+
     hits = sources.search(query, k=k, source_ids=[source] if source else None)
     if not hits:
         click.echo("No matches (library empty, or embeddings unavailable).")
         return
-    for i, h in enumerate(hits, 1):
-        loc = f"p.{h['page']}" if h.get("page") else "web"
-        snippet = " ".join(h["text"].split())[:280]
-        click.echo(f"\n[{i}] {h['source_title']} · {loc} · score={h['score']:.3f}")
+    for number, hit in enumerate(hits, 1):
+        location = f"p.{hit['page']}" if hit.get("page") else "web"
+        snippet = " ".join(hit["text"].split())[:280]
+        click.echo(f"\n[{number}] {hit['source_title']} · {location} · score={hit['score']:.3f}")
         click.echo(f"    {snippet}…")
 
 
@@ -117,11 +111,9 @@ def forget(source_id: str) -> None:
 
     Args:
         source_id: The source's id, as shown by the ``sources`` command.
-
-    Returns:
-        None.
     """
-    from arxiv_digest.library import sources
+    from arxiv_digest.services import sources
+
     click.echo("Deleted." if sources.delete_source(source_id) else "No such source.")
 
 
