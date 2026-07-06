@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from arxiv_digest.services import graph as graph_service
-from arxiv_digest.services.graph import Counts, Edge, Graph, Seed
+from arxiv_digest.services.model import Counts, Edge, Graph, Seed
 
 
 def make_node(paper_id: str, **extra) -> dict:

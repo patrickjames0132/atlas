@@ -22,7 +22,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from ..config import config
+from ...config import config
 from . import embeddings
 
 log = logging.getLogger(__name__)

@@ -8,9 +8,10 @@ papers S2 suggests). Nodes are deduped by S2 ``paperId``; edges are tagged
 The whole snapshot is cached (see ``storage/cache.py``) so re-exploring a paper
 doesn't re-hit the rate-limited S2 API.
 
-The graph is a typed **Pydantic** ``Graph`` (not a bare dict), so producers and
-consumers agree on its shape and it validates on the way in and out of the
-cache. Callers that need JSON (the routes) serialize with ``graph.model_dump()``
+The graph is a typed **Pydantic** ``Graph`` (not a bare dict — the models live
+in ``model.py``), so producers and consumers agree on its shape and it validates
+on the way in and out of the cache. Callers that need JSON (the routes) serialize
+with ``graph.model_dump()``
 / ``graph.model_dump_json()``. The cost is a validate/deserialize on every cache
 hit — a deliberate trade for a schema that can't silently drift.
 
@@ -23,91 +24,14 @@ citation points) and easy to get subtly wrong.
 from __future__ import annotations
 
 import logging
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict
 
 from ..config import config
 from ..integrations import arxiv
 from ..integrations import semantic_scholar as s2
 from ..storage import cache
+from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
-
-
-class Node(BaseModel):
-    """A paper in the graph: the normalized S2 node plus its graph annotations.
-
-    The first eleven fields mirror ``semantic_scholar.nodes.node()`` exactly
-    (``extra="forbid"`` keeps them in lockstep — if that shape drifts, node
-    construction fails loudly rather than silently dropping data). ``rels`` and
-    ``is_seed`` are added here during assembly.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    arxiv_id: str | None
-    title: str
-    abstract: str | None
-    tldr: str | None
-    year: int | None
-    month: int | None
-    pub_date: str | None
-    citation_count: int | None
-    authors: str | None
-    url: str
-    rels: list[str]
-    is_seed: bool
-
-
-class Edge(BaseModel):
-    """A directed edge between two nodes, tagged by relation.
-
-    Direction encodes citation semantics: an edge always points from the citing
-    paper to the cited one. ``influential`` (S2's "highly influential citation"
-    flag) is carried on ``reference``/``citation`` edges and is ``None`` on
-    ``similar`` edges, which aren't citations.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    source: str
-    target: str
-    type: Literal["reference", "citation", "similar"]
-    influential: bool | None = None
-
-
-class Seed(BaseModel):
-    """A compact summary of the seed paper, for the graph header."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    arxiv_id: str | None
-    id: str
-    title: str
-
-
-class Counts(BaseModel):
-    """Per-relation traversal sizes plus the final deduped node count."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    references: int
-    citations: int
-    similar: int
-    nodes: int
-
-
-class Graph(BaseModel):
-    """A seed paper's assembled neighborhood graph — the app's central object."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    seed: Seed
-    nodes: list[Node]
-    edges: list[Edge]
-    counts: Counts
 
 
 def _looks_arxiv(ref: str) -> bool:

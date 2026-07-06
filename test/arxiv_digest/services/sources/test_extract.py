@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from arxiv_digest import sources
-from arxiv_digest.sources import extract
-
+from arxiv_digest.services import sources
+from arxiv_digest.services.sources import extract
 
 # --- chunk_text -----------------------------------------------------------------
 

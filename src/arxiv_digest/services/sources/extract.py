@@ -12,8 +12,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from ..config import config
-from ..integrations.arxiv import html_to_text
+from ...config import config
+from ...integrations.arxiv import html_to_text
 from .errors import SourceError
 
 

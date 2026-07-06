@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from arxiv_digest import sources
-from arxiv_digest.sources import embeddings, retrieval, store
+from arxiv_digest.services import sources
+from arxiv_digest.services.sources import embeddings, retrieval, store
 
 
 def test_fts_match_query_sanitizes() -> None:

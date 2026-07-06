@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from ..config import config
+from ...config import config
 from . import embeddings, store
 
 # FTS5 treats bare punctuation and words like AND/OR/NEAR as query syntax, so a
