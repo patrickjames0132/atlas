@@ -1,34 +1,34 @@
 /**
  * Seed-search state for the explorer: the query box, the optional
- * date/category filters, cache-first local hits, live arXiv hits, and the
- * in-flight / failure flags HitList renders.
+ * date/field filters, cache-first local hits, live Semantic Scholar hits,
+ * and the in-flight / failure flags HitList renders.
  *
  * The two searches race deliberately: local hits resolve near-instantly and
- * render while the live arXiv search is still in flight (or failing, when
- * we're rate-limited).
+ * render while the live search is still in flight (or failing, when we're
+ * rate-limited).
  */
 
 import { useCallback, useState } from 'react'
-import { EMPTY_FILTERS, searchArxiv, searchLocal } from '../api'
-import type { ArxivHit, LocalHit, SearchFilters } from '../api'
+import { EMPTY_FILTERS, searchLive, searchLocal } from '../api'
+import type { GraphNode, LocalHit, SearchFilters } from '../api'
 
 /** What {@link useSeedSearch} returns for Atlas to wire up. */
 export interface SeedSearchApi {
   /** The controlled value of the search box. */
   query: string
   setQuery: (q: string) => void
-  /** The active (pre-submit, always optional) date/category filters. */
+  /** The active (pre-submit, always optional) date/field filters. */
   filters: SearchFilters
   setFilters: (f: SearchFilters) => void
-  /** Live arXiv results (null until a search lands / after clearHits). */
-  hits: ArxivHit[] | null
+  /** Live S2 results (null until a search lands / after clearHits). */
+  hits: GraphNode[] | null
   /** Cache-first results from previously seen graphs (null when none). */
   localHits: LocalHit[] | null
-  /** The live arXiv search is still in flight. */
+  /** The live search is still in flight. */
   searching: boolean
-  /** The live arXiv search failed (rate limit / outage) — cache-only mode. */
-  arxivFailed: boolean
-  /** Run both searches for a query (local first, arXiv alongside). */
+  /** The live search failed (rate limit / outage) — cache-only mode. */
+  liveFailed: boolean
+  /** Run both searches for a query (local first, live alongside). */
   runSearch: (q: string) => Promise<void>
   /** Dismiss all results (picking a hit, closing the panel, re-seeding). */
   clearHits: () => void
@@ -45,9 +45,9 @@ export function useSeedSearch(
 ): SeedSearchApi {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<SearchFilters>(EMPTY_FILTERS)
-  const [hits, setHits] = useState<ArxivHit[] | null>(null)
+  const [hits, setHits] = useState<GraphNode[] | null>(null)
   const [localHits, setLocalHits] = useState<LocalHit[] | null>(null)
-  const [arxivFailed, setArxivFailed] = useState(false)
+  const [liveFailed, setLiveFailed] = useState(false)
   const [searching, setSearching] = useState(false)
 
   const clearHits = useCallback(() => {
@@ -56,9 +56,9 @@ export function useSeedSearch(
   }, [])
 
   /**
-   * Run the seed search: local cache first (instant), live arXiv alongside,
+   * Run the seed search: local cache first (instant), live S2 alongside,
    * both under the active filters. "Nothing matched" only surfaces as an
-   * error when BOTH sources come back empty; an arXiv failure degrades to
+   * error when BOTH sources come back empty; a live failure degrades to
    * cache-only rather than erroring while local hits exist.
    */
   const runSearch = useCallback(
@@ -67,18 +67,18 @@ export function useSeedSearch(
       onError(null)
       setHits(null)
       setLocalHits(null)
-      setArxivFailed(false)
+      setLiveFailed(false)
       // Cache-first: local hits resolve near-instantly and render while the
-      // live arXiv search is still in flight (or failing, when rate-limited).
+      // live search is still in flight (or failing, when rate-limited).
       const localP = searchLocal(q, 10, filters)
       localP.then((l) => setLocalHits(l.length ? l : null))
       try {
-        const res = await searchArxiv(q, 12, filters)
+        const res = await searchLive(q, 12, filters)
         setHits(res.papers)
         if (res.papers.length === 0 && (await localP).length === 0)
-          onError(`Nothing matched "${q}" — not on arXiv, not in your cache.`)
+          onError(`Nothing matched "${q}" — not on Semantic Scholar, not in your cache.`)
       } catch (e) {
-        setArxivFailed(true)
+        setLiveFailed(true)
         if ((await localP).length === 0)
           onError(e instanceof Error ? e.message : String(e))
       } finally {
@@ -90,6 +90,6 @@ export function useSeedSearch(
 
   return {
     query, setQuery, filters, setFilters,
-    hits, localHits, searching, arxivFailed, runSearch, clearHits,
+    hits, localHits, searching, liveFailed, runSearch, clearHits,
   }
 }

@@ -1,7 +1,7 @@
 /**
  * The seed-search form: the query box + Explore button, plus the optional
- * (never required) pre-submit filters — a publication-year window and an
- * arXiv category picker fed by the backend's taxonomy endpoint.
+ * (never required) pre-submit filters — a publication-year window and a
+ * field-of-study picker fed by the backend's S2 vocabulary endpoint.
  *
  * Rendered inside AtlasHeader, but it belongs to the search concern — its
  * results (HitList) and state (useSeedSearch) live alongside it here. Filter
@@ -11,8 +11,8 @@
 
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { getTaxonomy } from '../api'
-import type { SearchFilters, TaxonomyGroup } from '../api'
+import { getFields } from '../api'
+import type { SearchFilters } from '../api'
 import './search.css'
 
 /** Props for {@link Search}. */
@@ -31,8 +31,12 @@ export interface SearchProps {
   onFilters: (f: SearchFilters) => void
 }
 
-/** arXiv's first year — the year slider's floor. */
-const MIN_YEAR = 1991
+/**
+ * The year slider's floor. Semantic Scholar's corpus reaches back to the
+ * 1800s and the slider spans all of it — full access beats track precision
+ * (a handle parked at the floor reads as "no bound" anyway).
+ */
+const MIN_YEAR = 1800
 
 /** Props for {@link YearRange}. */
 interface YearRangeProps {
@@ -47,8 +51,8 @@ interface YearRangeProps {
  * "no bound": a floor at {@link MIN_YEAR} folds to `yearFrom = null` and a
  * ceiling at the current year folds to `yearTo = null`. That keeps a full-width
  * slider identical to the no-op {@link EMPTY_FILTERS} state (and off the
- * active-filter badge), while losing nothing — 1991 and the current year are
- * the widest bounds arXiv can return anyway.
+ * active-filter badge), while losing nothing — the endpoints are the widest
+ * bounds the corpus can answer anyway.
  *
  * @param filters   The active filter set (its year window is read + written).
  * @param onFilters Commit a new filter set upward.
@@ -117,27 +121,28 @@ export default function Search({
   onFilters,
 }: SearchProps) {
   const [open, setOpen] = useState(false)
-  // The taxonomy loads lazily the first time the filter popover opens, so the
-  // common no-filter path never pays the fetch. null = not yet loaded.
-  const [groups, setGroups] = useState<TaxonomyGroup[] | null>(null)
+  // The field vocabulary loads lazily the first time the filter popover
+  // opens, so the common no-filter path never pays the fetch. null = not
+  // yet loaded.
+  const [fieldOptions, setFieldOptions] = useState<string[] | null>(null)
   useEffect(() => {
-    if (open && groups === null) getTaxonomy().then(setGroups)
-  }, [open, groups])
+    if (open && fieldOptions === null) getFields().then(setFieldOptions)
+  }, [open, fieldOptions])
 
   const activeCount =
     (filters.yearFrom != null ? 1 : 0) +
     (filters.yearTo != null ? 1 : 0) +
-    filters.categories.length
+    filters.fields.length
 
-  /** Add a category code to the filter (deduped). */
-  const addCategory = (code: string) => {
-    if (!code || filters.categories.includes(code)) return
-    onFilters({ ...filters, categories: [...filters.categories, code] })
+  /** Add a field of study to the filter (deduped). */
+  const addField = (field: string) => {
+    if (!field || filters.fields.includes(field)) return
+    onFilters({ ...filters, fields: [...filters.fields, field] })
   }
 
-  /** Remove one category code from the filter. */
-  const removeCategory = (code: string) => {
-    onFilters({ ...filters, categories: filters.categories.filter((c) => c !== code) })
+  /** Remove one field of study from the filter. */
+  const removeField = (field: string) => {
+    onFilters({ ...filters, fields: filters.fields.filter((f) => f !== field) })
   }
 
   return (
@@ -159,7 +164,7 @@ export default function Search({
           type="button"
           className={`filter-toggle ${activeCount ? 'on' : ''}`}
           onClick={() => setOpen((o) => !o)}
-          title="Optional filters: publication year and arXiv category"
+          title="Optional filters: publication year and field of study"
         >
           Filters{activeCount ? ` · ${activeCount}` : ''}
         </button>
@@ -172,37 +177,33 @@ export default function Search({
         <div className="filter-pop">
           <YearRange filters={filters} onFilters={onFilters} />
           <div className="filter-row">
-            <span className="filter-label">Category</span>
+            <span className="filter-label">Field</span>
             <select
               className="cat-select"
               value=""
-              aria-label="Add an arXiv category filter"
-              onChange={(e) => addCategory(e.target.value)}
+              aria-label="Add a field-of-study filter"
+              onChange={(e) => addField(e.target.value)}
             >
               <option value="">
-                {groups === null ? 'Loading categories…' : 'Add a category…'}
+                {fieldOptions === null ? 'Loading fields…' : 'Add a field…'}
               </option>
-              {groups?.map((g) => (
-                <optgroup key={g.group} label={g.group}>
-                  {g.categories.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.code} — {c.name}
-                    </option>
-                  ))}
-                </optgroup>
+              {fieldOptions?.map((field) => (
+                <option key={field} value={field}>
+                  {field}
+                </option>
               ))}
             </select>
           </div>
-          {filters.categories.length > 0 && (
+          {filters.fields.length > 0 && (
             <div className="filter-cats">
-              {filters.categories.map((code) => (
+              {filters.fields.map((field) => (
                 <button
-                  key={code}
+                  key={field}
                   className="cat-chip"
-                  onClick={() => removeCategory(code)}
-                  title="Remove this category filter"
+                  onClick={() => removeField(field)}
+                  title="Remove this field filter"
                 >
-                  {code} ✕
+                  {field} ✕
                 </button>
               ))}
             </div>
@@ -214,7 +215,7 @@ export default function Search({
             {activeCount > 0 && (
               <button
                 className="link-btn"
-                onClick={() => onFilters({ yearFrom: null, yearTo: null, categories: [] })}
+                onClick={() => onFilters({ yearFrom: null, yearTo: null, fields: [] })}
               >
                 Clear all
               </button>
