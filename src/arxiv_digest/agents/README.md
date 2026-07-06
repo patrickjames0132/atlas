@@ -5,28 +5,96 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 `Agent`s wired from `config.llm.agents` entries) instead of the old repo's
 hand-rolled Anthropic SDK loops.
 
-**Status: workflow definitions only.** This README and the `skills/` drafts
-define every workflow *before* any agent code is written. The sub-agent
-packages land next, one at a time.
+**Status: shared infrastructure built** (`events.py`, `traversal.py`, the
+`skills/` drafts); the sub-agent packages land next, one at a time.
 
-## Where this came from — the old `teacher/` package, mapped
+## `events.py` — the typed event stream
 
-Every LLM workflow in the old repo lived in `teacher/` (nothing else in the
-app talked to a model). Here's where each piece goes:
+A workflow (a lecture, a Q&A turn, a library chat) doesn't return one value —
+it *streams*: narration arrives beat by beat, an agent's tool steps surface as
+they happen, discovered papers merge into the live graph mid-answer.
+`events.py` is that stream's vocabulary, as Pydantic models: every agent
+yields these, the routes layer (Phase 5) serializes each one to an SSE frame
+named by its `type` tag, and the frontend switches on the same tag. One
+protocol for every workflow, declared in one file.
 
-| Old (`teacher/`)                        | New (`agents/`)                                   |
-| --------------------------------------- | ------------------------------------------------- |
-| `lecture.py` — `lecture_beats`          | `lecturer/` sub-agent                             |
-| `lecture.py` — `history_backfill`       | orchestrator tool (deterministic, no LLM)         |
-| `agentic.py` + `tools.py`               | `tutor/` sub-agent                                |
-| `qa.py` — non-agentic grounded Q&A      | **deleted** — the tutor is always available now   |
-| `sources_chat.py`                       | `librarian/` sub-agent                            |
-| *(new — the `_expand_query` seam)*      | `query_analyst/` sub-agent                        |
-| `neighbors.py` — cached S2 hops/search  | `traversal.py` (shared, root level)               |
-| `common.py` — numbered-papers plumbing  | `events.py` + the `numbered-papers` skill         |
-| `common.py` — `<<CITED>>` sentinel      | **deleted** — citations are structured output     |
-| `backends.py` — API/CLI + fallback      | **deleted** — API-only through PydanticAI         |
-| `routes/teacher.py` — session history   | stays in the routes layer (Phase 5), passed in    |
+| Event       | Emitted by            | Meaning                                                        |
+| ----------- | --------------------- | -------------------------------------------------------------- |
+| `Beat`      | lecturer              | one narration paragraph + heading + nodes to light up          |
+| `Token`     | tutor, librarian      | a chunk of streamed answer prose                               |
+| `Trace`     | tutor, orchestrator, librarian | "watch the agent work" — one variant per action (below) |
+| `Discovery` | tutor, orchestrator   | papers + edges to merge into the live graph                    |
+| `Figure`    | tutor                 | a real paper figure attached to the answer                     |
+| `Cited`     | tutor                 | final event: the node ids the answer draws on                  |
+| `Done`      | every workflow        | clean finish — always last on success                          |
+| `Error`     | every workflow        | failure — always last, so the frontend never hangs             |
+
+Design points worth knowing:
+
+- **Two nested discriminated unions.** `Event` discriminates on `type`;
+  its trace member is itself a union of seven variants (`ReadTrace`,
+  `ExpandTrace`, `SearchTrace`, `SourceSearchTrace`, `FigureTrace`,
+  `BackfillTrace`, `RetrievalTrace`) discriminating on `action`. One
+  `validate_python` call resolves both levels — a raw
+  `{"type": "trace", "action": "read", ...}` dict comes back as a
+  `ReadTrace`. The old teacher passed loose `{"action": ..., ...}` dicts
+  whose shapes you had to reverse-engineer from five `_run_*` functions.
+- **`Discovery` reuses the graph's own models.** `DiscoveredNode`
+  *inherits* `services.graph.Node`, adding only `discovered: Literal[True]`
+  and `idx` — the number the model knows the paper by (`None` when the
+  history backfill found it, since backfill runs before the lecturer
+  numbers anything). Because `extra="forbid"` is inherited, an agent-found
+  paper is guaranteed to have exactly the shape `build_graph` produces:
+  the frontend merges both into one canvas and can't tell the difference,
+  and a drifted node shape fails loudly at the event boundary instead of
+  rendering a half-empty node. Edges are `services.graph.Edge`, unchanged.
+- **Each workflow's legal event sequence** (its "event grammar") is spelled
+  out in its `skills/workflows/` playbook — e.g. the lecture's
+  `[Trace* Discovery*] Beat+ Done | Error`.
+- **Two wire renames from the old protocol** (frontend adapts in Phase 6):
+  the old `nodes` SSE event is now `discovery` (a `Discovery` model
+  emitting an event called "nodes" read wrong), and `Error` carries
+  `message` (the old event named "error" with a field named "error"
+  stuttered).
+
+## `traversal.py` — day-cached S2 hops and search
+
+The shared plumbing under every "bring in a paper that isn't on screen"
+move: `neighbors(paper_id, relation, limit)` pulls one hop of
+references / citations / similar work, `search(query, limit, year_from,
+year_to)` runs a free-text S2 search, and both cache their results for
+`config.graph.cache_ttl` (the same day-long TTL as a graph snapshot —
+citation data changes slowly).
+
+Two consumers, using it differently:
+
+- **The orchestrator's `history_backfill`** loops over
+  `neighbors(..., "references", ...)` raw, hop after hop, walking toward a
+  field's roots before a history lecture.
+- **The tutor's `expand_node` / `search_papers` tools** wrap `neighbors` /
+  `search` with everything agentic: budgets, visited-sets, numbering the
+  finds, building `Discovery` events.
+
+Design points worth knowing:
+
+- **The cache is the point.** Both consumers re-hit the same hops
+  constantly within a session (the agent re-expands, the user re-lectures),
+  and the rate-limited S2 API must not pay for each repeat. This is the
+  *cached, agent-tuned* layer over `integrations.semantic_scholar.traversal`
+  — the deliberate name-cousin that talks to the live API and caches
+  nothing.
+- **Limits are explicit arguments, and part of the cache key.** The old
+  `AGENT_*_LIMIT` globals died in the Phase-1 config purge; each caller's
+  own config supplies its limit, and a hop cached at one limit is never
+  reused for another.
+- **`Relation` is a `Literal`** (`"references" | "citations" | "similar"`)
+  and `REL_TAG` maps it to the `Edge.type` tag — so when the tutor builds
+  `Edge(type=REL_TAG[relation])`, mypy verifies the whole chain from tool
+  argument to graph edge.
+- **Plumbing, not tools.** No model ever calls these directly (see the
+  layout rules below), and `S2Error` propagates uncaught — deciding what a
+  failed hop means (skip the ancestor, tell the model, spend no budget) is
+  the callers' job, not the plumbing's.
 
 ## Decisions log (locked before design)
 
@@ -201,21 +269,6 @@ it).
   through the orchestrator — it's infrastructure for search, not a teacher
   workflow. It must degrade to a passthrough on any failure: search can
   never break because the LLM hiccuped.
-
-## Shared modules
-
-- **`events.py`** — the typed event stream (Pydantic models): `Beat`,
-  `Token`, `Trace`, `Discovery`, `Figure`, `Cited`, `Done`, `Error`.
-  Replaces the old ad-hoc `("kind", data)` tuples; the routes layer
-  serializes these to SSE frames. One vocabulary for every workflow, so the
-  frontend speaks a single protocol.
-- **`traversal.py`** — day-cached S2 hops (`references` / `citations` /
-  `similar`) and free-text search, shared by the orchestrator's backfill
-  and the tutor's `expand_node` / `search_papers` tools. This is the
-  *cached, agent-budget-tuned* layer over
-  `integrations.semantic_scholar.traversal` (which talks to the live API and
-  caches nothing) — same name, different job, and the cache is the point:
-  repeated expansion within a session must not hammer the rate-limited API.
 
 ## Testing
 
