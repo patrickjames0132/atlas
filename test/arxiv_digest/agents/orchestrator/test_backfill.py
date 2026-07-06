@@ -74,7 +74,11 @@ def test_ranks_by_citations_caps_per_hop_and_keeps_known_edges(monkeypatch):
         hit("anc-mid", 1975, citations=900),
         {"node": {**hit("recent", 2019, 1)["node"]}},  # already on the graph
     ]
-    monkeypatch.setattr(backfill.traversal, "neighbors", lambda p, r, l: hits if p == "mid90s" else [])
+    monkeypatch.setattr(
+        backfill.traversal,
+        "neighbors",
+        lambda paper_id, relation, limit: hits if paper_id == "mid90s" else [],
+    )
 
     out = list(backfill.history_backfill(SEED, NODES))
     trace, discovery = out
@@ -119,6 +123,8 @@ def test_nothing_found_reports_once_with_the_error_flag(monkeypatch):
 
 
 def test_clean_empty_walk_has_no_error_flag(monkeypatch):
-    monkeypatch.setattr(backfill.traversal, "neighbors", lambda p, r, l: [])
+    monkeypatch.setattr(
+        backfill.traversal, "neighbors", lambda paper_id, relation, limit: []
+    )
     out = list(backfill.history_backfill(SEED, NODES))
     assert out == [events.BackfillTrace(hop=1, found=0, oldest=None, error=False)]
