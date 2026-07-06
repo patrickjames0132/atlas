@@ -10,14 +10,30 @@ graph/
   model.ts          — view-model types (VNode/VLink/Base) + pure helpers
   theme.ts          — the relation color scheme + layout geometry constants
   hooks/
-    useDiscovery.ts — mid-conversation graph growth, merged in place
+    useDiscovery.ts — the sim-side discovery merge, in place
     usePinning.ts   — user pins (drag / toggle / release), timeline-aware
     useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
+  GraphExplorer.tsx — the composition root of the graph area (see below)
   GraphCanvas.tsx   — the ForceGraph2D wrapper: every canvas painter
   GraphControls.tsx — layout toggle, filter chips, year slider, pin/fit
   Legend.tsx        — the color legend (agent entries appear on first use)
   graph.css         — styles (ported light-touch)
 ```
+
+## `GraphExplorer` — where the mutable world lives
+
+The graph area's composition root (canvas + controls + legend + the detail
+panel), moved here from the old Atlas because it's a graph concern. It owns
+everything sim-side and canvas-local: the `base` dataset (derived from the
+store's raw `GraphResponse`), declutter filters, hover, selection wiring,
+canvas size, and the filtered `view`. From the store it reads the graph,
+the discovery arrays (fed into `useDiscovery`'s in-place merge — the hook
+dedupes, so re-feeding full arrays is safe), the layout, and the highlight
+ids. The shell passes its overlays (hit list, loading/error/hint) as
+`children`, rendered inside the canvas wrap without this component knowing
+them. Note the discovery data flow is one-way: teacher → store → explorer
+→ `base` — the discovery *lists* live in the workspace slice (grounding,
+Save, and the legend read them there); this folder owns only the sim merge.
 
 (`model.ts`/`theme.ts` stay at the root: components, hooks, AND outside
 consumers — `search/HitList` uses `formatPubDate`, Atlas uses `ID_RE` —
