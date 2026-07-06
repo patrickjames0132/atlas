@@ -1,28 +1,26 @@
-"""Seed-search routes: a live relevance search across arXiv (with optional
-date/category filters), an instant search over the local snapshot cache, and
-the arXiv category taxonomy that powers the category picker.
+"""Seed-search routes: a live relevance search across Semantic Scholar (with
+optional date/field filters), an instant search over the local snapshot
+cache, and the subject vocabularies that power the search filter pickers.
 
-GET /api/arxiv_search?q=&limit=&year_from=&year_to=&categories=
-                                 -> live seed search across arXiv
+GET /api/search?q=&limit=&year_from=&year_to=&fields=
+                                 -> live seed search across Semantic Scholar
 GET /api/local_search?q=&limit=&year_from=&year_to=
                                  -> instant seed search over the local cache
-GET /api/taxonomy                -> the arXiv category taxonomy (for the picker)
+GET /api/taxonomy/<provider>     -> a provider's subject vocabulary
 """
 
 from __future__ import annotations
 
-from typing import Optional
-
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from ..integrations import taxonomy
+from ..integrations import arxiv, semantic_scholar
 from ..services import search as search_service
 
 bp = Blueprint("search", __name__)
 
 
-def _opt_year(name: str) -> Optional[int]:
+def _opt_year(name: str) -> int | None:
     """Parse an optional year query arg.
 
     Args:
@@ -42,40 +40,40 @@ def _opt_year(name: str) -> Optional[int]:
         return None
 
 
-def _opt_categories() -> Optional[list[str]]:
-    """Parse and validate the optional ``categories`` query arg.
+def _opt_fields() -> list[str] | None:
+    """Parse and validate the optional ``fields`` query arg.
 
     Returns:
-        The comma-separated category codes that exist in the arXiv taxonomy
-        (unknown codes are silently dropped — they can only come from a
-        stale/forged client), or None when none survive.
+        The comma-separated S2 fields of study that exist in the S2
+        vocabulary (unknown values are silently dropped — they can only come
+        from a stale/forged client), or None when none survive.
     """
-    raw = (request.args.get("categories") or "").strip()
+    raw = (request.args.get("fields") or "").strip()
     if not raw:
         return None
-    valid = taxonomy.valid_codes()
-    cats = [c.strip() for c in raw.split(",") if c.strip() in valid]
-    return cats or None
+    valid = semantic_scholar.vocab.valid_fields()
+    fields = [field.strip() for field in raw.split(",") if field.strip() in valid]
+    return fields or None
 
 
-@bp.get("/api/arxiv_search")
-def arxiv_search_route() -> ResponseReturnValue:
-    """Live relevance search across all of arXiv to find a seed paper.
+@bp.get("/api/search")
+def api_search() -> ResponseReturnValue:
+    """Live relevance search across Semantic Scholar to find a seed paper.
 
     Query args:
-        q: Keywords, a title, an author, or an arXiv id/URL. Blank returns an
-            empty result rather than an error.
+        q: Keywords, a title, an author, or an arXiv id/URL (a pasted id
+            resolves to exactly that paper; filters don't apply to it).
+            Blank returns an empty result rather than an error.
         limit: Maximum papers (default 25, clamped to 1–100).
-        year_from: Earliest submission year (inclusive; optional).
-        year_to: Latest submission year (inclusive; optional).
-        categories: Comma-separated arXiv category codes (optional; a paper
-            matches when it carries any of them). Filters never apply to an
-            explicit id/URL lookup.
+        year_from: Earliest publication year (inclusive; optional).
+        year_to: Latest publication year (inclusive; optional).
+        fields: Comma-separated S2 fields of study (optional; a paper
+            matches when it carries any of them).
 
     Returns:
-        JSON ``{q, count, papers}`` on success (each paper carries its
-        ``published`` date); ``{ok: False, error}`` with HTTP 502 when the
-        arXiv API fails. Saves nothing.
+        JSON ``{q, count, papers}`` on success (papers are S2 node dicts —
+        the same shape as graph nodes); ``{error}`` with HTTP 502 when
+        Semantic Scholar is unavailable. Saves nothing.
     """
     q = (request.args.get("q") or "").strip()
     try:
@@ -85,14 +83,16 @@ def arxiv_search_route() -> ResponseReturnValue:
     if not q:
         return jsonify({"q": q, "count": 0, "papers": []})
     try:
-        papers = search_service.arxiv_search(
-            q, limit=limit,
-            year_from=_opt_year("year_from"), year_to=_opt_year("year_to"),
-            categories=_opt_categories(),
+        papers = search_service.live_search(
+            q,
+            limit=limit,
+            year_from=_opt_year("year_from"),
+            year_to=_opt_year("year_to"),
+            fields_of_study=_opt_fields(),
         )
-    except Exception as exc:
-        current_app.logger.exception("arxiv search failed for %r", q)
-        return jsonify({"ok": False, "error": str(exc)}), 502
+    except semantic_scholar.S2Error as exc:
+        current_app.logger.warning("live search failed for %r: %s", q, exc)
+        return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
     return jsonify({"q": q, "count": len(papers), "papers": papers})
 
 
@@ -100,16 +100,16 @@ def arxiv_search_route() -> ResponseReturnValue:
 def local_search_route() -> Response:
     """Instant seed search over papers already in the local snapshot cache.
 
-    Purely local (no arXiv / S2 calls) — the cache-first results shown while
-    the live arXiv search is still in flight, and the only results available
-    when Semantic Scholar is rate-limiting us.
+    Purely local (no S2 calls) — the cache-first results shown while the
+    live search is still in flight, and the only results available when
+    Semantic Scholar is rate-limiting us.
 
     Query args:
         q: The search text. Blank returns an empty result.
         limit: Maximum hits (default 10, clamped to 1–50).
         year_from: Earliest publication year (inclusive; optional).
-        year_to: Latest publication year (inclusive; optional). No category
-            filter — S2 nodes don't carry arXiv categories.
+        year_to: Latest publication year (inclusive; optional). No field
+            filter — cached nodes are matched purely on text.
 
     Returns:
         JSON ``{q, count, papers}``. Never errors — a failure is logged and
@@ -125,8 +125,10 @@ def local_search_route() -> Response:
         return jsonify({"q": q, "count": 0, "papers": []})
     try:
         papers = search_service.local_search(
-            q, limit=limit,
-            year_from=_opt_year("year_from"), year_to=_opt_year("year_to"),
+            q,
+            limit=limit,
+            year_from=_opt_year("year_from"),
+            year_to=_opt_year("year_to"),
         )
     except Exception:
         current_app.logger.exception("local search failed for %r", q)
@@ -134,12 +136,23 @@ def local_search_route() -> Response:
     return jsonify({"q": q, "count": len(papers), "papers": papers})
 
 
-@bp.get("/api/taxonomy")
-def api_taxonomy() -> Response:
-    """The arXiv category taxonomy, for the search filter's category picker.
+@bp.get("/api/taxonomy/<provider>")
+def api_taxonomy(provider: str) -> ResponseReturnValue:
+    """A provider's subject vocabulary, for the search filter pickers.
+
+    Each provider returns its natural shape rather than a forced common
+    envelope — the pickers they feed are different controls.
+
+    Args:
+        provider: ``s2`` (the ~20 fields of study filtering live search) or
+            ``arxiv`` (the ~155 arXiv categories, grouped by area).
 
     Returns:
-        JSON ``{groups: [{group, categories: [{code, name}]}]}`` — the full
-        taxonomy grouped by top-level area (8 areas, ~155 categories).
+        ``{"fields": [...]}`` for s2; ``{"groups": [{group, categories}]}``
+        for arxiv; ``{error}`` with HTTP 404 for an unknown provider.
     """
-    return jsonify({"groups": taxonomy.groups()})
+    if provider == "s2":
+        return jsonify({"fields": semantic_scholar.vocab.fields()})
+    if provider == "arxiv":
+        return jsonify({"groups": arxiv.vocab.groups()})
+    return jsonify({"error": f"unknown taxonomy provider {provider!r}"}), 404

@@ -58,18 +58,82 @@ Design decisions worth knowing:
   same-origin contract behind both the detail panel's figure strip and the
   tutor's `show_figure` payloads.
 
+## `search.py` — finding a seed paper
+
+| Endpoint | Job |
+| --- | --- |
+| `GET /api/search?q=&limit=&year_from=&year_to=&fields=` | live seed search across Semantic Scholar |
+| `GET /api/local_search?q=&limit=&year_from=&year_to=` | instant search over the local snapshot cache |
+| `GET /api/taxonomy/<provider>` | a provider's subject vocabulary (`s2` fields / `arxiv` categories) |
+
+Design decisions worth knowing:
+
+- **`/api/search` replaced `/api/arxiv_search`** when seed search moved to
+  S2 (wider coverage: 200M+ papers across venues, not just arXiv
+  preprints). Papers come back as S2 node dicts — the same shape as graph
+  nodes, and the same shape `local_search` returns.
+- **A pasted arXiv id/URL short-circuits inside the service** (`live_search`):
+  detected id → exact `ARXIV:<id>` lookup, skipping query expansion (an id
+  isn't vocabulary — an "improved" id could only be a wrong one) *and* the
+  filters (they never apply to an explicit lookup). The query analyst fires
+  only on real free-text queries. An id S2 doesn't know returns nothing
+  rather than falling through to a junk lexical search of the id text.
+- **Filters degrade, never error.** A non-numeric year becomes "no filter";
+  unknown `fields` values are silently dropped against
+  `semantic_scholar.vocab.valid_fields()` (they can only come from a
+  stale/forged client). Blank queries return an empty 200 — the box starts
+  empty; that's not an error.
+- **Two error philosophies again:** `/api/search` maps S2 failure to a
+  canned 502 (details in the log, matching `graph.py` — the old route
+  leaked `str(exc)` to the client); `/api/local_search` **never errors** —
+  it degrades to zero hits, because the instant local results must not
+  block the live search running alongside them.
+- **`/api/taxonomy/<provider>` returns each provider's natural shape** —
+  `{fields: [...]}` for s2 (~20 fields of study, the live-search filter),
+  `{groups: [...]}` for arxiv (~155 categories in 8 areas, reserved for the
+  future detail-panel tags) — rather than forcing a common envelope; the
+  pickers they feed are different controls. Unknown provider → 404.
+
+### Planned: LLM title resolution (not yet built)
+
+Query expansion fixes the *vocabulary* gap ("DQN" → "…deep Q-network…"),
+but there's a stronger play for famous papers. Google resolves "DQN"
+straight to the Mnih et al. paper because the web is full of pages that say
+"DQN" and link to it — Google resolves the *association*, not the string.
+Claude internalized those same associations in training: asked what paper
+"DQN" refers to, it names the exact titles from parametric knowledge — no
+retrieval, no built-in RAG needed (a bare API call retrieves nothing;
+Anthropic's opt-in web-search tool would be real grounding but is
+latency/cost overkill per keystroke). And S2 has the perfect receiving end:
+a **title-match endpoint** (`/paper/search/match`) that resolves a
+near-exact title to a paper. So the plan: grow the analyst's structured
+output to `Expansion{expanded_query, known_titles}` ("name the papers this
+query most likely refers to *only if confident*") — still one Haiku call —
+then `live_search` becomes: pasted id? → exact lookup → **known titles? →
+S2 title-match, prepend verified hits** → expanded lexical search. The
+hallucination risk defuses itself: an invented title simply doesn't match
+on S2 and we fall back to the lexical search we'd have run anyway — the
+failure mode is "no better than today," never worse. Post-cutoff papers
+degrade to plain expansion the same way.
+
 ## Who uses it, and how/why
 
 The React frontend (Phase 6) is the only caller: the search/seed flow hits
 `/api/graph`, clicking a node hydrates via `/api/paper/<ref>`, and the
 detail panel lazily loads `/figures` and `/code`. `<img>` tags point at
 `/api/figure_proxy` URLs (both panel figures and the tutor's inline answer
-figures use it).
+figures use it). The search box fans out to `/api/local_search` (instant)
+and `/api/search` (live) in parallel; the filter picker loads
+`/api/taxonomy/s2` once.
 
 ## Testing
 
-`test_graph.py` drives every endpoint through a real test client built from
-`register_blueprints` (`conftest.py`), with services/integrations
-monkeypatched at the route module's seams: URL/version normalization
-reaching the service, the 400/404/502 taxonomy, prefix-vs-raw paperId
-lookups, proxy rewriting + degradation of the niceties, and the SSRF lock.
+`test_graph.py` and `test_search.py` drive every endpoint through a real
+test client built from `register_blueprints` (`conftest.py`), with
+services/integrations monkeypatched at the route module's seams: URL/version
+normalization reaching the service, the 400/404/502 taxonomy,
+prefix-vs-raw paperId lookups, proxy rewriting + degradation of the
+niceties, the SSRF lock, filter parsing/validation and clamps, the
+never-error local search, and the taxonomy providers' shapes. The pasted-id
+short-circuit is service-level behavior, tested in
+`services/test_search.py`.

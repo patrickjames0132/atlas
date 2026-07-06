@@ -1,4 +1,5 @@
-"""ID_RE: recognizing a bare or URL-wrapped arXiv id (now homed in the arxiv package)."""
+"""Recognizing arXiv ids: ID_RE, extraction from pasted text (extract_id),
+and whole-string discrimination (looks_arxiv)."""
 
 from __future__ import annotations
 
@@ -24,3 +25,17 @@ def test_id_re_matches_bare_and_wrapped_ids(text, expected_id):
 
 def test_id_re_does_not_match_keywords():
     assert arxiv.ID_RE.fullmatch("attention is all you need") is None
+
+
+def test_extract_id_strips_url_wrapping_and_version():
+    assert arxiv.extract_id("https://arxiv.org/abs/1312.5602v2") == "1312.5602"
+    assert arxiv.extract_id("  1312.5602  ") == "1312.5602"
+    assert arxiv.extract_id("attention is all you need") is None
+    assert arxiv.extract_id("") is None
+
+
+def test_looks_arxiv_discriminates_ids_from_paperids():
+    assert arxiv.looks_arxiv("1312.5602") is True
+    assert arxiv.looks_arxiv("1312.5602v2") is True
+    assert arxiv.looks_arxiv("649def34f8be52c8b66281af98ae884c09aef38b") is False
+    assert arxiv.looks_arxiv("https://arxiv.org/abs/1312.5602") is True

@@ -60,6 +60,36 @@ def test_the_seam_delegates_to_the_query_analyst(monkeypatch):
     assert discovery._expand_query("dqn") == "dqn deep q-network"
 
 
+def test_a_pasted_arxiv_url_skips_search_and_expansion_entirely(monkeypatch):
+    def explode(*args, **kwargs):
+        raise AssertionError("a pasted id must not reach expansion or lexical search")
+
+    monkeypatch.setattr(discovery, "_expand_query", explode)
+    monkeypatch.setattr(discovery.s2, "search_papers", explode)
+    lookups = []
+
+    def fake_get_paper(ref):
+        lookups.append(ref)
+        return {"id": "s2id01", "title": "Playing Atari"}
+
+    monkeypatch.setattr(discovery.s2, "get_paper", fake_get_paper)
+    out = discovery.live_search(
+        "https://arxiv.org/abs/1312.5602v2", fields_of_study=["Computer Science"]
+    )
+    assert out == [{"id": "s2id01", "title": "Playing Atari"}]
+    assert lookups == ["ARXIV:1312.5602"]  # bare, version-stripped, prefixed
+
+
+def test_a_pasted_id_s2_does_not_know_returns_nothing(monkeypatch):
+    monkeypatch.setattr(discovery.s2, "get_paper", lambda ref: None)
+
+    def explode(*args, **kwargs):
+        raise AssertionError("an unknown id must not fall through to lexical search")
+
+    monkeypatch.setattr(discovery.s2, "search_papers", explode)
+    assert discovery.live_search("2406.99999") == []
+
+
 # --- local_search (cache-first) --------------------------------------------------
 
 

@@ -19,6 +19,7 @@ import time
 
 from ...agents import query_analyst
 from ...config import config
+from ...integrations import arxiv
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
 
@@ -62,7 +63,9 @@ def live_search(
 
     Returns:
         Relevance-ranked node dicts (S2's node shape — the same shape a graph
-        neighbor has). Empty list for a blank query. Saves nothing.
+        neighbor has). Empty list for a blank query. A pasted arXiv id/URL
+        returns exactly that paper (or nothing when S2 doesn't know it).
+        Saves nothing.
 
     Raises:
         s2.S2Error: When the Semantic Scholar request fails after retries.
@@ -70,6 +73,15 @@ def live_search(
     query = (query or "").strip()
     if not query:
         return []
+    # A pasted arXiv id/URL is a statement of intent, not a query: skip
+    # expansion (nothing to expand — an "improved" id could only be a wrong
+    # one) and filters (they never apply to an explicit lookup), and land on
+    # that exact paper. An id S2 doesn't know returns nothing — falling
+    # through to a lexical search of the id text could only produce junk.
+    pasted_id = arxiv.extract_id(query)
+    if pasted_id:
+        paper = s2.get_paper(f"ARXIV:{pasted_id}")
+        return [paper] if paper else []
     hits = s2.search_papers(
         _expand_query(query),
         limit=limit,

@@ -13,10 +13,11 @@ from __future__ import annotations
 from flask import Flask
 
 from .graph import bp as graph_bp
+from .search import bp as search_bp
 
 # Order is cosmetic — every route carries its own full /api/... path, so
 # there's no prefix overlap between blueprints.
-ALL_BLUEPRINTS = [graph_bp]
+ALL_BLUEPRINTS = [graph_bp, search_bp]
 
 
 def register_blueprints(app: Flask) -> None:

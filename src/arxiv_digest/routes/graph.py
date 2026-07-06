@@ -29,23 +29,15 @@ bp = Blueprint("graph", __name__)
 def normalize_arxiv_id(raw: str) -> str:
     """Pull a bare arXiv id out of a pasted id / abs-or-pdf URL.
 
-    ``arxiv.ID_RE.search`` (not ``fullmatch``) — this is extraction from
-    whatever the client pasted, so an id wrapped in a URL still resolves;
-    ``https://arxiv.org/abs/1706.03762v5`` and ``1706.03762`` both become
-    ``1706.03762``.
-
     Args:
         raw: Whatever the client sent as a seed/paper reference.
 
     Returns:
-        The bare id with any version suffix stripped; falls back to the
-        stripped input when it doesn't look like an arXiv id at all (it may
-        be a raw S2 paperId).
+        The bare, version-stripped id (via ``arxiv.extract_id``); falls back
+        to the stripped input when it doesn't look like an arXiv id at all
+        (it may be a raw S2 paperId).
     """
-    match = arxiv.ID_RE.search(raw or "")
-    if match:
-        return match.group(1).split("v")[0]
-    return (raw or "").strip()
+    return arxiv.extract_id(raw) or (raw or "").strip()
 
 
 @bp.get("/api/graph")

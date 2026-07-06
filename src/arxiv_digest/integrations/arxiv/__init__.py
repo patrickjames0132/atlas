@@ -45,6 +45,26 @@ ID_RE = re.compile(
     re.IGNORECASE,
 )
 
+def extract_id(text: str) -> str | None:
+    """Pull a bare arXiv id out of free text (a pasted id or abs/pdf URL).
+
+    Extraction, not discrimination — ``ID_RE.search``, so an id wrapped in a
+    URL (or trailing whitespace) still resolves. The version suffix is
+    stripped: ``v5`` and ``v2`` are the same paper to S2 and to our caches.
+
+    Args:
+        text: Whatever the user pasted.
+
+    Returns:
+        The bare, version-stripped id — or None when no id appears (the text
+        is a keyword query or a raw S2 paperId).
+    """
+    match = ID_RE.search(text or "")
+    if match:
+        return match.group(1).split("v")[0]
+    return None
+
+
 def looks_arxiv(ref: str) -> bool:
     """Distinguish an arXiv id from a raw Semantic Scholar paperId.
 
@@ -66,6 +86,7 @@ def looks_arxiv(ref: str) -> bool:
 
 __all__ = [
     "ID_RE",
+    "extract_id",
     "fetch_image",
     "get_figures",
     "get_fulltext",
