@@ -34,7 +34,17 @@ _last_request = 0.0
 
 class S2Error(RuntimeError):
     """A Semantic Scholar request failed (network, HTTP error, or exhausted
-    retries). Routes surface this as a 502."""
+    retries). Routes surface this as a 502.
+
+    ``status`` carries the HTTP status code when the failure was an HTTP
+    error (None for network failures / exhausted retries) — so a caller can
+    treat an endpoint's meaningful status as data, e.g. the title-match
+    endpoint's 404-means-no-close-match.
+    """
+
+    def __init__(self, message: str, *, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 def throttle() -> None:
@@ -102,7 +112,7 @@ def request(url: str, *, method: str = "GET", body: dict | None = None, tries: i
                 log.warning("S2 429 on %s; backing off %ss", url, wait)
                 time.sleep(wait)
                 continue
-            raise S2Error(f"S2 {method} {url} -> HTTP {exc.code}") from exc
+            raise S2Error(f"S2 {method} {url} -> HTTP {exc.code}", status=exc.code) from exc
         except urllib.error.URLError as exc:
             raise S2Error(f"S2 {method} {url} -> {exc.reason}") from exc
     raise S2Error(f"S2 {method} {url} -> gave up after {tries} tries") from last_error

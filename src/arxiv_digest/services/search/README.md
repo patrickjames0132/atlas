@@ -26,17 +26,31 @@ is how you find one, two complementary ways:
   still in flight, and the *only* result available when S2 is rate-limiting us.
   "If you've seen a paper on a graph before, you can find it again offline."
 
-## `live_search`, and the query-expansion seam
+## `live_search`, and the query-analysis seam
 
-`live_search` strips the query, routes it through `_expand_query`, calls
-`s2.search_papers`, and unwraps S2's `{"node": …}` into bare node dicts (so live
-and local search return the same shape).
+`live_search` strips the query, then runs three gates in order:
 
-`_expand_query` delegates to the **query analyst agent**
-(`agents.query_analyst.expand_query`). The problem it solves: S2 search is
+1. **A pasted arXiv id/URL** (`arxiv.extract_id`) resolves directly via an
+   `ARXIV:<id>` lookup — no expansion (an id isn't vocabulary; an "improved"
+   id could only be a wrong one), no filters (they never apply to an
+   explicit lookup). An id S2 doesn't know returns nothing rather than
+   falling through to a junk lexical search of the id text.
+2. Otherwise the query goes through `_analyze`, and the analyst's
+   **confidently recalled titles** are verified against `s2.match_title`
+   (S2's `/paper/search/match`; a match failure — including an S2 error —
+   skips that title, never the search). Verified papers lead the results.
+3. The **expanded query** runs through `s2.search_papers`, unwrapped into
+   bare node dicts (so live and local search return the same shape),
+   deduped against the verified hits, capped at `limit` together.
+
+`_analyze` delegates to the **query analyst agent**
+(`agents.query_analyst.analyze`). The problem it solves: S2 search is
 *lexical*, so a query like "DQN" misses the seminal papers that never spell
-out the acronym in their title/abstract; expansion ("DQN" → "DQN deep
-Q-network deep Q-learning") lets the search meet them halfway. The analyst
+out the acronym in their title/abstract. Expansion ("DQN" → "DQN deep
+Q-network deep Q-learning") lets the search meet them halfway — and for
+famous papers the analyst goes further, naming their exact titles from
+parametric knowledge, which the title match verifies (an invented title
+matches nothing and costs nothing beyond one lookup). The analyst
 **degrades to a passthrough on any failure** (no key, network down, rate
 limit), so search never breaks because the LLM hiccuped — see
 `agents/query_analyst/README.md`. (Historical note: this seam spent Phase 3
@@ -71,9 +85,9 @@ the agent landed — and it didn't.)
 - **No field filter on `local_search`.** Cached nodes are matched purely on text;
   the S2 fields filter is a `live_search`-only, server-side thing.
 
-## Who uses it, and how/why (traced, not yet ported)
+## Who uses it, and how/why
 
-- **`routes/search.py`** — `GET /api/search` (was `/api/arxiv_search`) calls
+- **`routes/search.py`** (ported) — `GET /api/search` (was `/api/arxiv_search`) calls
   `live_search`, catching `s2.S2Error` → HTTP 502; `GET /api/local_search` calls
   `local_search` and degrades to `[]` on any error (it must never block the live
   search running alongside it). The route validates a submitted fields filter
@@ -81,8 +95,9 @@ the agent landed — and it didn't.)
 
 ## Testing
 
-`test_search.py` — `live_search` with `s2.search_papers` mocked (unwrapping,
-filter forwarding, blank short-circuit, and that the query routes through the
-`_expand_query` seam), and `local_search` against the real SQLite cache on the
+`test_search.py` — `live_search` with the S2 calls mocked (unwrapping,
+filter forwarding, blank short-circuit, the pasted-id front door, verified
+titles leading + dedupe + match-failure tolerance, and that the query routes
+through the `_analyze` seam), and `local_search` against the real SQLite cache on the
 per-test temp DB (token matching + `has_graph`, dedupe-keeps-richer, the year
 filter, and the phrase/seed/citation ranking).

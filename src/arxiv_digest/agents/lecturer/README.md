@@ -63,7 +63,7 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 
 ## Who uses it, and how/why
 
-- **`agents/orchestrator` (Phase 4d, not yet built).** The `lecture` intent
+- **`agents/orchestrator` (Phase 4d).** The `lecture` intent
   per `skills/workflows/lecture.md`: in history mode it runs its
   deterministic `history_backfill` tool first (streaming `Trace`/`Discovery`
   events), then calls `lecture(...)` with the ancestor-enriched node set and

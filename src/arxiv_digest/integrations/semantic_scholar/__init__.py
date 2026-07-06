@@ -16,7 +16,8 @@ Split by concern:
   walking the citation graph from a seed (``references``/``citations``/
   ``recommendations``).
 * ``search``    — ungrounded free-text search across all of Semantic Scholar
-  (``search_papers``), for recent/topical work citation hops can't reach.
+  (``search_papers``), for recent/topical work citation hops can't reach;
+  plus exact-title resolution (``match_title``, S2's ``/paper/search/match``).
 * ``vocab``     — S2's fields of study (``fields`` / ``valid_fields``): the ~20
   coarse subjects the seed-search filter uses. (arXiv's parallel finer
   vocabulary is ``arxiv.vocab``.)
@@ -31,7 +32,7 @@ from __future__ import annotations
 
 from . import vocab
 from .client import S2Error
-from .search import search_papers
+from .search import match_title, search_papers
 from .traversal import citations, get_paper, get_papers, recommendations, references
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "citations",
     "get_paper",
     "get_papers",
+    "match_title",
     "recommendations",
     "references",
     "search_papers",

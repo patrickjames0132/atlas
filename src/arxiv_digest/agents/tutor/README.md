@@ -81,7 +81,7 @@ tutor.answer(question, seed, nodes, history, source_ids)      main.py
 
 ## Who uses it, and how/why
 
-- **`agents/orchestrator` (Phase 4d, not yet built).** The `q&a` intent per
+- **`agents/orchestrator` (Phase 4d).** The `q&a` intent per
   `skills/workflows/q&a.md`: a pure delegation to `answer(...)`, relaying
   its event stream and appending `Done`/`Error`.
 - **Old repo, traced (not yet ported):** `routes/teacher.py`'s

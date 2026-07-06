@@ -68,3 +68,34 @@ def search_papers(
     data = client.request(url)
     papers = (data.get("data") or []) if isinstance(data, dict) else []
     return nodes.from_papers(papers)
+
+
+def match_title(title: str) -> dict | None:
+    """Resolve a near-exact paper title to its S2 paper.
+
+    S2's ``/paper/search/match`` endpoint returns its single best title
+    match — used to verify an LLM-suggested title against the real corpus
+    (see ``services/search``'s title resolution). The endpoint answers 404
+    when nothing matches closely; that's data, not an error.
+
+    Args:
+        title: The (near-)exact paper title to resolve.
+
+    Returns:
+        The matched paper's node dict, or None when S2 has no close match.
+
+    Raises:
+        client.S2Error: When the request fails after retries (any failure
+            other than the no-match 404).
+    """
+    params = {"query": title, "fields": nodes.NEIGHBOR_FIELDS}
+    url = f"{config.s2.graph_url}/paper/search/match?{urllib.parse.urlencode(params)}"
+    try:
+        data = client.request(url)
+    except client.S2Error as exc:
+        if exc.status == 404:
+            return None
+        raise
+    papers = (data.get("data") or []) if isinstance(data, dict) else []
+    matched = nodes.from_papers(papers)
+    return matched[0]["node"] if matched else None
