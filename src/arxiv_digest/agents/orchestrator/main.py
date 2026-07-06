@@ -26,7 +26,7 @@ import logging
 from typing import Iterator, Literal
 
 from ...services.graph import Node
-from .. import events, librarian, lecturer, tutor
+from .. import events, lecturer, librarian, tutor
 from ..lecturer.main import Mode
 from . import backfill
 
