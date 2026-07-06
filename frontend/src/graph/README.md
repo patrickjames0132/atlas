@@ -1,0 +1,117 @@
+# `src/graph`
+
+The graph explorer's engine room: the view-model types, the visual
+constants, and the three hooks that manage a live force simulation without
+fighting it. (The canvas/controls/legend *components* live here too and are
+documented below as they land.)
+
+```
+graph/
+  model.ts        — view-model types (VNode/VLink/Base) + pure helpers
+  theme.ts        — the relation color scheme + layout geometry constants
+  useDiscovery.ts — mid-conversation graph growth, merged in place
+  usePinning.ts   — user pins (drag / toggle / release), timeline-aware
+  useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
+```
+
+## The core constraint: react-force-graph MUTATES your objects
+
+Everything in this folder is shaped by one fact. The simulation writes
+`x`/`y` onto every node object each tick; pins are `fx`/`fy` fields on those
+same objects; and RFG even **replaces a link's `source`/`target` ids with
+node object references** once the simulation binds them. Three consequences:
+
+- **`VNode` / `VLink` make the mutation typed.** `VNode` is a `GraphNode`
+  plus the sim fields; `VLink` carries `_s`/`_t` copies of the raw endpoint
+  ids, because after binding, `source`/`target` no longer *are* ids —
+  filtering and persistence read `_s`/`_t`.
+- **`Base` must keep object identity.** The per-graph dataset (nodes, links,
+  year range, counts) is built once per graph and then only ever *mutated in
+  place* — rebuild it (or `.map()` it) and every position and pin evaporates,
+  because the state lives ON the objects. Filtered views derive from `Base`
+  without cloning its nodes.
+- **Changes signal by version, not identity.** `useDiscovery` bumps a
+  `graphVersion` counter whenever it appends to `base.nodes`/`links`, so
+  React dependents recompute even though `base` is the same object. This is
+  deliberate, load-bearing, and the opposite of idiomatic-React immutability
+  — the immutable-copy style is exactly what RFG's ownership of the objects
+  rules out.
+
+**A state-directive note (Phase 6 rule):** simulation state is inherently
+canvas-local *mutable object* state — it must never move into Redux. The
+store question applies to app-level state (selection, chat, filters), not
+to anything in this folder.
+
+## `useDiscovery` — the graph grows mid-conversation
+
+Merges the papers a workflow pulls in (the tutor's expand/search tools, the
+lecture's backward walk) into the live graph:
+
+- **In-place append** with id/edge-key dedupe (an edge key is
+  `source|target|type`).
+- **Anchored spawning:** a new paper starts near the paper it was discovered
+  from, so it doesn't fly in from the canvas origin when the sim reheats;
+  ungrounded topic-search hits (no edge) anchor on the seed with a wider
+  scatter so they settle into a loose cluster instead of stacking.
+- **Year-range widening:** a discovery older/newer than anything visible
+  widens both the base range and the active year filter — a discovered
+  paper must never arrive invisible.
+- **Reheat without camera yank:** `d3ReheatSimulation`, never `zoomToFit` —
+  the user may be reading the chat, not watching the graph.
+- `discoveredNodes` mirrors what was merged, kept separately so follow-up
+  questions can extend the tutor's grounding without rebuilding `base`; on
+  a restored session it's re-collected from the saved nodes' `discovered`
+  flags.
+
+## `usePinning` + `useTimeline` — two layouts, one pin vocabulary
+
+Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
+
+- **Force mode:** drag pins where dropped; unpin frees the node entirely.
+- **Timeline mode:** a node's x is ALWAYS its date column — dragging only
+  sets height, unpinning restores the column pin, and `releaseAll` keeps the
+  date structure. `nodeTimelineX` maps year + month fraction to x (papers
+  sit *between* year gridlines by publication month; no-year papers get an
+  "n.d." lane left of the earliest year).
+- Timeline physics: pin every x, add a radius-sized collide force so a year
+  column spreads out instead of clumping; `freezeSettledY` freezes heights
+  once the sim settles so dragging one node can't re-relax the rest. The
+  axis painter draws year gridlines/labels in graph coordinates, thinning
+  labels when zoom would crowd them (≥28px apart on screen).
+
+## `model.ts` helpers & `theme.ts`
+
+- `primaryRel`: the one relation that colors a node — seed wins, then
+  reference/citation/similar in priority order, then topic-search hits get
+  their own color.
+- `nodeRadius`: seed fixed-large; others scale with √citations, capped so
+  megahits don't swallow the canvas.
+- `formatPubDate`: parsed by hand, not `new Date` — date-only strings parse
+  as UTC and can render a day off in western timezones.
+- `cleanNode`: strips a live node back to persistable fields — sim x/y,
+  pins, and the tutor's per-conversation `idx` all deliberately dropped.
+- `ID_RE`: the client-side twin of the backend's arXiv-id regex — a pasted
+  id/URL jumps straight to a graph, skipping a search round-trip. Deliberate
+  duplication; the backend stays authoritative.
+- `theme.ts` is the single source of visual truth (node/edge colors, dim
+  states, `YEAR_SPACING`, filter labels) so the canvas painting and the DOM
+  chrome can never disagree about what "a reference" looks like.
+
+## Who uses it, and how/why (traced from the old app; components port next)
+
+- **`GraphCanvas.tsx`** — renders `Base` through ForceGraph2D with
+  `theme.ts` colors, `nodeRadius`, `drawAxis`, and the pin handlers.
+- **`GraphControls.tsx`** — the layout toggle calls `applyLayoutPhysics`;
+  filter chips read `REL_LABEL`/`REL_COLOR`; the year slider feeds
+  `yearLo`/`yearHi`.
+- **`Atlas.tsx`** (the shell, for now) — owns `base`, wires the three hooks
+  together, feeds `onDiscovery` into the agent streams' handlers, and uses
+  `cleanNode`/`countRels` for session save/restore.
+- **`search/`** — `ID_RE` for the pasted-id fast path.
+
+## How it's verified
+
+`tsc --noEmit` strict + oxlint (`d3-force-3d` ships no types — its import
+keeps a `@ts-expect-error`). The mutation-heavy behavior (pins surviving
+filters, discoveries settling near anchors, timeline freezing) is exactly
+what the end-of-phase browser milestone exercises by hand.
