@@ -40,9 +40,6 @@ class Expansion(BaseModel):
 agent: Agent[None, Expansion] = Agent(
     factory.build_model(AGENT_ID),
     output_type=Expansion,
-    # instructions=, never system_prompt=: PydanticAI drops a system_prompt
-    # whenever message_history is passed — house rule so no agent can lose
-    # its persona on follow-up turns.
     instructions=SYSTEM_PROMPT,
 )
 
