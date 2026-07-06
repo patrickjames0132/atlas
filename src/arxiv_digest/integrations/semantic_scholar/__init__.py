@@ -17,14 +17,19 @@ Split by concern:
   ``recommendations``).
 * ``search``    — ungrounded free-text search across all of Semantic Scholar
   (``search_papers``), for recent/topical work citation hops can't reach.
+* ``vocab``     — S2's fields of study (``fields`` / ``valid_fields``): the ~20
+  coarse subjects the seed-search filter uses. (arXiv's parallel finer
+  vocabulary is ``arxiv.vocab``.)
 
 Everything callers need is re-exported here, so ``from ..integrations import
 semantic_scholar as s2`` and ``s2.get_papers(...)`` etc. work exactly as if
-this were still one file.
+this were still one file. (The ``vocab`` submodule is accessed as
+``s2.vocab.fields()``.)
 """
 
 from __future__ import annotations
 
+from . import vocab
 from .client import S2Error
 from .search import search_papers
 from .traversal import citations, get_paper, get_papers, recommendations, references
@@ -37,4 +42,5 @@ __all__ = [
     "recommendations",
     "references",
     "search_papers",
+    "vocab",
 ]

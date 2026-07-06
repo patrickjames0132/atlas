@@ -1,7 +1,13 @@
-"""The Semantic Scholar fields-of-study list and its accessors.
+"""Semantic Scholar's fields of study — S2's coarse subject vocabulary.
 
-The implementation behind the ``taxonomy.s2`` package. See the package
-``__init__`` for the what/why.
+S2's own ~20 top-level fields (Computer Science, Mathematics, …) — what the S2
+seed-search filter uses: ``/paper/search`` filters on exactly these
+(``fieldsOfStudy``). A fixed, S2-defined vocabulary, small enough to inline as a
+tuple (no data file); each value is already its own human-readable label. Title
+Case, matching what S2 returns on paper objects and accepts in the filter.
+
+Lives in the ``semantic_scholar`` package because it's S2's vocabulary; arXiv's
+parallel (finer) one is ``arxiv.vocab``. See the package README for details.
 """
 
 from __future__ import annotations

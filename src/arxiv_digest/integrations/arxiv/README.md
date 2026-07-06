@@ -92,10 +92,39 @@ fulltext.py    — strips the render to readable body text
   `get_fulltext()`) to turn an ingested web page into searchable text — the one
   caller with nothing to do with ar5iv or arXiv (see the layering note).
 
+## Category taxonomy — `vocab.py`
+
+The arXiv **category taxonomy**: the ~155 arXiv codes (`cs.LG`, `math.PR`, …)
+grouped into 8 top-level areas, each a `{code, name}` pair
+(`cs.LG` → "Machine Learning"). Sourced once from
+<https://arxiv.org/category_taxonomy> and bundled here as `taxonomy.json`.
+
+It lives in *this* package (rather than a separate taxonomy package) because
+it's arXiv-specific, the same reason `ID_RE` and ar5iv do — each provider owns
+its own controlled vocabulary. Semantic Scholar's parallel (coarser) one is
+`semantic_scholar.vocab`.
+
+- **`vocab.groups()`** — the areas-with-categories tree, for a picker or for
+  labelling a paper's tags.
+- **`vocab.valid_codes()`** — an `@lru_cache`'d `frozenset` of every code, for
+  validating a submitted filter.
+- Both read a private `@lru_cache`'d `_data()` that parses `taxonomy.json` once.
+
+Design notes:
+- **Static bundled data**, not a runtime fetch — the taxonomy changes maybe once
+  a year, so shipping the file means no network call and no cache to reason about.
+- **No `code → name` lookup yet.** The API answers "what exists" and "is this
+  real", not "what's the label for `cs.LG`". The planned detail-panel feature
+  (labelling an arXiv paper's own category tags) needs that; it'll be added then.
+- A paper's *own* categories come from arXiv metadata, not S2 — `vocab` only
+  describes what categories exist.
+
 ## Testing
 
 This package contributes `test_ids.py` (`ID_RE` against bare/versioned/old-style
-/URL-wrapped ids and a keyword non-match), plus `test_client.py`,
-`test_figures.py`, `test_fulltext.py`. `client.fetch_html` is faked at the
-module boundary so `figures`/`fulltext` tests never touch real HTTP;
-`test_client.py` itself fakes `urllib.request.urlopen`.
+/URL-wrapped ids and a keyword non-match), `test_vocab.py` (the taxonomy: 8
+areas, `cs.LG` → "Machine Learning", `valid_codes()` covers exactly the codes in
+`groups()`, memoization), plus `test_client.py`, `test_figures.py`,
+`test_fulltext.py`. `client.fetch_html` is faked at the module boundary so
+`figures`/`fulltext` tests never touch real HTTP; `test_client.py` itself fakes
+`urllib.request.urlopen`.
