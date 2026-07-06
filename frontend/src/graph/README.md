@@ -7,12 +7,40 @@ documented below as they land.)
 
 ```
 graph/
-  model.ts        — view-model types (VNode/VLink/Base) + pure helpers
-  theme.ts        — the relation color scheme + layout geometry constants
-  useDiscovery.ts — mid-conversation graph growth, merged in place
-  usePinning.ts   — user pins (drag / toggle / release), timeline-aware
-  useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
+  model.ts          — view-model types (VNode/VLink/Base) + pure helpers
+  theme.ts          — the relation color scheme + layout geometry constants
+  useDiscovery.ts   — mid-conversation graph growth, merged in place
+  usePinning.ts     — user pins (drag / toggle / release), timeline-aware
+  useTimeline.ts    — the Timeline layout: year pinning, collide, axis painting
+  GraphCanvas.tsx   — the ForceGraph2D wrapper: every canvas painter
+  GraphControls.tsx — layout toggle, filter chips, year slider, pin/fit
+  Legend.tsx        — the color legend (agent entries appear on first use)
+  graph.css         — styles (ported light-touch)
 ```
+
+## The components: purely presentational, by design
+
+All three components own NO state — every set, id, and count arrives as a
+prop, and every interaction fires a callback upward. That's the Phase 6
+state directive in its oldest corner: the canvas paints, the shell decides.
+Points worth knowing:
+
+- **`GraphCanvas`'s ring vocabulary**: gold glow + ring = the teacher is
+  talking about it; dashed ring = agent-discovered mid-chat; pale ring =
+  user-pinned; bright ring = selected. Labels are zoom-gated (seed /
+  selected / highlighted always; everyone else past 1.6× zoom, truncated
+  at 42 chars). Influential citations draw heavier; `similar` edges get no
+  arrowhead — they aren't citations, mirroring the backend's
+  `influential=null` semantics.
+- **It must never copy `data`** — the nodes are the live objects the sim
+  mutates (the `Base` identity contract above). The lib's generic prop
+  typings fight our accessor signatures, so it renders through an untyped
+  alias (kept, with its comment).
+- **`GraphControls`** renders the year slider only when the graph spans
+  more than one year, and its hint line teaches per-layout gestures.
+- **`Legend`** shows the two agent-related entries only after the agent
+  has actually discovered papers — it never explains marks that aren't on
+  screen.
 
 ## The core constraint: react-force-graph MUTATES your objects
 

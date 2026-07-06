@@ -87,7 +87,7 @@ export default function GraphCanvas({
           ? DIM_EDGE
           : EDGE_COLOR[l.type]
       }
-      linkWidth={(l: { influential?: boolean }) => (l.influential ? 1.6 : 0.6)}
+      linkWidth={(l: { influential?: boolean | null }) => (l.influential ? 1.6 : 0.6)}
       linkDirectionalArrowLength={(l: VLink) => (l.type === 'similar' ? 0 : 2.4)}
       linkDirectionalArrowRelPos={1}
       nodeCanvasObject={(
