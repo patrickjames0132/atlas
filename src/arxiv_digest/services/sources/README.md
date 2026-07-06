@@ -1,13 +1,16 @@
-# `sources`
+# `services.sources`
 
 Bring-your-own sources: the user's persistent, semantically-searchable library
 of their own material — uploaded PDFs/books and fetched web pages. Upload a
 textbook and the teaching assistant can search it through tool use, the same way
 it searches Semantic Scholar, effectively becoming an expert in that subject.
 
-> **Naming.** This package is `sources`, matching the config group
-> (`config.sources`), the `/api/sources` routes, and the "Sources" drawer in the
-> UI. It was `library/` in the original app; renamed so one word means one thing.
+> **Naming & placement.** It's `services.sources` — a domain service (it's what
+> the `/api/sources` routes and the teacher call), living beside `graph` and
+> `search`. The name matches the config group (`config.sources`), the routes,
+> and the "Sources" drawer. It was a top-level `library/` in the original app;
+> renamed so one word means one thing, and nested under `services` where it
+> belongs.
 
 ## The pipeline
 
@@ -58,6 +61,46 @@ matching:
   `AdamW`) that a semantic model blurs together with their neighbours.
 
 Neither is strictly better, so we run both and fuse the results (RRF, below).
+
+### Semantic search — the vector (meaning) half
+
+**What it is.** Semantic search matches on *meaning* rather than words. The idea:
+a neural **embedding model** turns a piece of text into a vector — a fixed-length
+list of numbers (ours is 384-long) — positioned so that texts with similar
+meaning land near each other in that 384-dimensional space, even if they share no
+words. "How do I stop overfitting" and "regularization and dropout reduce
+generalization error" end up close together. So "find relevant passages" becomes
+"find the chunk vectors nearest the query vector."
+
+**How "nearest" is measured — cosine similarity.** Closeness here is the *angle*
+between two vectors, not the distance between their tips: two vectors pointing the
+same direction are maximally similar (cosine = 1) regardless of length. We
+sidestep the cosine arithmetic with a trick: every vector is **L2-normalized**
+(scaled to length 1) at embed time, and for unit vectors the plain dot product
+*equals* the cosine. So the index only has to do fast dot products. (`embeddings`
+normalizes; the table below is told the metric is cosine to match.)
+
+**How it works here.**
+
+- **The model runs locally** (`embeddings.py`, sentence-transformers /
+  MiniLM) — no API, no key, the text never leaves the machine. It's loaded lazily
+  and degrades gracefully (`store.HAS_VEC` / `embeddings.available()`); if it
+  can't load, semantic search is simply skipped.
+- **Vectors live in sqlite-vec.** `chunks_vec` is a `vec0` virtual table (from the
+  **sqlite-vec** extension) declared `float[384] distance_metric=cosine`, holding
+  one embedding per chunk. sqlite-vec is a *loadable* extension — reloaded on
+  every connection (see `store.connect`), and skipped if unavailable.
+- **The query gets the same treatment**, then a **KNN** (k-nearest-neighbours)
+  lookup pulls the `k` closest chunk vectors: `WHERE embedding MATCH ? AND k = ?`,
+  ordered by distance. Those chunk ids join back to `chunks`/`sources` for the
+  text. (`retrieval._vector_search`.)
+- **Asymmetric models** (not our default) want a query prefixed with an
+  instruction while stored passages stay bare — `embed_query` prepends
+  `config.sources.embedding.query_prefix` (empty for MiniLM) to cover that.
+
+The weakness this has — exact terms, proper nouns, and rare symbols that the
+model blurs into their neighbours — is exactly FTS5's strength, which is why we
+run both.
 
 ### FTS5 — the lexical (keyword) search
 

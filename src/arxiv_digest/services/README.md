@@ -118,12 +118,20 @@ to the seed.
         citations (papers that cite the seed — its descendants)
 ```
 
-`build_graph()` returns `{"seed", "nodes", "edges", "counts"}`:
-- **`seed`** — `{arxiv_id, id, title}`, a compact summary for the header.
-- **`nodes`** — deduped paper dicts, each carrying a `rels` list (which
-  relations surfaced it) and an `is_seed` flag.
-- **`edges`** — `{source, target, type}` (+ `influential` for citation edges).
-- **`counts`** — raw traversal sizes plus the final deduped node count.
+`build_graph()` returns a typed **Pydantic `Graph`** (not a bare dict), with:
+- **`seed`** (`Seed`) — `{arxiv_id, id, title}`, a compact summary for the header.
+- **`nodes`** (`list[Node]`) — deduped papers, each the normalized S2 node fields
+  plus a `rels` list (which relations surfaced it) and an `is_seed` flag.
+- **`edges`** (`list[Edge]`) — `{source, target, type, influential}`;
+  `influential` is `None` on `similar` edges (it's a citation-only flag).
+- **`counts`** (`Counts`) — raw traversal sizes plus the final deduped node count.
+
+The models (`Graph`/`Node`/`Edge`/`Seed`/`Counts`) live in `graph.py` beside
+`build_graph`. Callers that need JSON serialize with `graph.model_dump()` /
+`graph.model_dump_json()` — the routes hand `model_dump()` to `jsonify`. The
+model is also what goes in and out of the cache (stored as JSON, re-validated on
+read), so the shape can't silently drift — at the cost of a validate on each
+cache hit, a deliberate trade.
 
 ### How it works, step by step
 

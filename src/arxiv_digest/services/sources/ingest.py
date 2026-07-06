@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from uuid import uuid4
 
-from ..config import config
+from ...config import config
 from . import embeddings, extract, store
 from .errors import SourceError
 

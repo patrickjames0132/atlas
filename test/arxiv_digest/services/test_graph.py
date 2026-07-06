@@ -1,8 +1,8 @@
-"""Neighborhood-graph assembly (services/graph.py): dedupe, relation
-accumulation, edge directions, counts, and the snapshot cache.
+"""Neighborhood-graph assembly (services/graph.py): the typed Graph model —
+dedupe, relation accumulation, edge directions, counts, and the snapshot cache.
 
-S2 traversals are monkeypatched with canned nodes; the cache is real SQLite on
-the per-test temp DB (see conftest ``_isolate``).
+S2 traversals are monkeypatched with canned node dicts; the cache is real SQLite
+on the per-test temp DB (see conftest ``_isolate``).
 """
 
 from __future__ import annotations
@@ -10,10 +10,11 @@ from __future__ import annotations
 import pytest
 
 from arxiv_digest.services import graph as graph_service
+from arxiv_digest.services.model import Counts, Edge, Graph, Seed
 
 
 def make_node(paper_id: str, **extra) -> dict:
-    """A minimal normalized S2 node."""
+    """A minimal normalized S2 node dict (the shape build_graph consumes)."""
     return {
         "id": paper_id, "arxiv_id": None, "title": f"Paper {paper_id}", "abstract": None,
         "tldr": None, "year": 2020, "month": None, "pub_date": None,
@@ -44,21 +45,33 @@ def fake_s2(monkeypatch):
 
 def test_build_graph_shape(fake_s2):
     graph = graph_service.build_graph("1706.03762")
-    assert graph["seed"] == {"arxiv_id": None, "id": "seed", "title": "The Seed"}
+    assert isinstance(graph, Graph)
+    assert graph.seed == Seed(arxiv_id=None, id="seed", title="The Seed")
     # arXiv-looking seeds are looked up with the ARXIV: prefix.
     assert fake_s2["lookup"] == "ARXIV:1706.03762"
 
-    by_id = {node["id"]: node for node in graph["nodes"]}
-    assert by_id["seed"]["is_seed"] is True and by_id["seed"]["rels"] == ["seed"]
+    by_id = {node.id: node for node in graph.nodes}
+    assert by_id["seed"].is_seed is True and by_id["seed"].rels == ["seed"]
     # ref1 was surfaced by both references and recommendations — one node, both rels.
-    assert by_id["ref1"]["rels"] == ["reference", "similar"]
-    assert len(graph["nodes"]) == 4  # seed, ref1, cite1, sim1 — deduped
+    assert by_id["ref1"].rels == ["reference", "similar"]
+    assert len(graph.nodes) == 4  # seed, ref1, cite1, sim1 — deduped
 
     # Edge directions: seed cites ref (seed->ref); citer cites seed (cite->seed).
-    assert {"source": "seed", "target": "ref1", "type": "reference", "influential": True} in graph["edges"]
-    assert {"source": "cite1", "target": "seed", "type": "citation", "influential": False} in graph["edges"]
-    assert {"source": "seed", "target": "sim1", "type": "similar"} in graph["edges"]
-    assert graph["counts"] == {"references": 1, "citations": 1, "similar": 2, "nodes": 4}
+    assert Edge(source="seed", target="ref1", type="reference", influential=True) in graph.edges
+    assert Edge(source="cite1", target="seed", type="citation", influential=False) in graph.edges
+    # similar edges carry no influential (None).
+    assert Edge(source="seed", target="sim1", type="similar") in graph.edges
+    assert graph.counts == Counts(references=1, citations=1, similar=2, nodes=4)
+
+
+def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):
+    graph = graph_service.build_graph("1706.03762")
+    dumped = graph.model_dump()
+    # A callable-to-JSON shape the routes can hand to jsonify.
+    assert dumped["seed"] == {"arxiv_id": None, "id": "seed", "title": "The Seed"}
+    assert {"source": "seed", "target": "sim1", "type": "similar", "influential": None} in dumped["edges"]
+    # Re-validating the dump reproduces the object (the cache-hit path).
+    assert Graph.model_validate(dumped) == graph
 
 
 def test_raw_paperid_seed_skips_arxiv_prefix(fake_s2):
@@ -70,7 +83,7 @@ def test_snapshot_cache_round_trip(fake_s2):
     first = graph_service.build_graph("1706.03762")
     again = graph_service.build_graph("1706.03762")
     assert fake_s2["get_paper"] == 1  # second call served from cache — zero S2 hits
-    assert again == first
+    assert again == first  # a Graph rebuilt from the cached JSON equals the original
 
 
 def test_refresh_bypasses_cache(fake_s2):

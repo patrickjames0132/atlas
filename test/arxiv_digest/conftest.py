@@ -18,7 +18,7 @@ import math
 import pytest
 
 from arxiv_digest.config import config
-from arxiv_digest.sources import embeddings
+from arxiv_digest.services.sources import embeddings
 
 
 @pytest.fixture(autouse=True)

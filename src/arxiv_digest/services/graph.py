@@ -8,8 +8,15 @@ papers S2 suggests). Nodes are deduped by S2 ``paperId``; edges are tagged
 The whole snapshot is cached (see ``storage/cache.py``) so re-exploring a paper
 doesn't re-hit the rate-limited S2 API.
 
+The graph is a typed **Pydantic** ``Graph`` (not a bare dict — the models live
+in ``model.py``), so producers and consumers agree on its shape and it validates
+on the way in and out of the cache. Callers that need JSON (the routes) serialize
+with ``graph.model_dump()``
+/ ``graph.model_dump_json()``. The cost is a validate/deserialize on every cache
+hit — a deliberate trade for a schema that can't silently drift.
+
 This module is the domain core of the app — ``routes/graph.py``'s ``/api/graph``
-is a thin HTTP wrapper over ``build_graph`` — so it's commented heavily; the
+is a thin wrapper over ``build_graph`` — so it's commented heavily; the
 edge-direction rules in particular are load-bearing (they encode which way a
 citation points) and easy to get subtly wrong.
 """
@@ -22,6 +29,7 @@ from ..config import config
 from ..integrations import arxiv
 from ..integrations import semantic_scholar as s2
 from ..storage import cache
+from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
 
@@ -40,13 +48,12 @@ def _looks_arxiv(ref: str) -> bool:
     Returns:
         True when ``ref`` is *entirely* an arXiv id (new- or old-style, with or
         without a version suffix). ``fullmatch`` — not ``search`` — because a
-        bare S2 paperId must NOT be mistaken for one; we only want a clean,
-        whole-string arXiv id here.
+        bare S2 paperId must NOT be mistaken for one.
     """
     return bool(arxiv.ID_RE.fullmatch(ref))
 
 
-def build_graph(seed_ref: str, *, refresh: bool = False) -> dict | None:
+def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     """Build (or load from cache) the neighborhood graph for a seed paper.
 
     Args:
@@ -58,10 +65,9 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> dict | None:
         refresh: When True, bypass the cached snapshot and rebuild from S2.
 
     Returns:
-        ``{"seed", "nodes", "edges", "counts"}`` — the seed summary, deduped
-        node dicts (each carrying its ``rels`` list and ``is_seed`` flag), typed
-        edges, and per-relation counts. None when ``seed_ref`` is blank or S2
-        has no paper for it.
+        A ``Graph`` — the seed summary, deduped nodes (each carrying its
+        ``rels`` and ``is_seed``), typed edges, and per-relation counts. None
+        when ``seed_ref`` is blank or S2 has no paper for it.
 
     Raises:
         s2.S2Error: When a Semantic Scholar request fails after retries
@@ -72,22 +78,22 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> dict | None:
         return None
 
     # --- Cache: the whole assembled snapshot, keyed by the raw seed reference.
-    # An arXiv id and the S2 paperId it resolves to are different keys on
-    # purpose — either can be pasted, and we'd rather cache both entry points
-    # than pay a resolution round-trip to normalize the key.
+    # It's stored as JSON (model_dump), so a hit costs a Graph.model_validate to
+    # rebuild the typed object — the deserialization price we accept for a
+    # schema that validates instead of trusting a loose dict.
     cache_key = f"graph:{seed_ref}"
     if not refresh:
         cached = cache.get(cache_key, config.graph.cache_ttl)
         if cached:
-            return cached
+            return Graph.model_validate(cached)
 
     # --- Resolve the seed. An arXiv id has to be handed to S2 as ``ARXIV:<id>``
     # (its external-id syntax); a raw paperId is passed through untouched.
     lookup = f"ARXIV:{seed_ref}" if _looks_arxiv(seed_ref) else seed_ref
-    seed = s2.get_paper(lookup)
-    if not seed:  # S2 knows no paper for this reference — a dead link.
+    seed_paper = s2.get_paper(lookup)
+    if not seed_paper:  # S2 knows no paper for this reference — a dead link.
         return None
-    seed_id = seed["id"]
+    seed_id = seed_paper["id"]
 
     # --- One detail call (above) + three traversals. The neighbors come back
     # already hydrated with light display fields, so there's no extra batch
@@ -100,92 +106,82 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> dict | None:
     # paper can surface through more than one relation (e.g. it's both a
     # reference AND a recommendation); we want ONE node carrying BOTH relation
     # tags, not two nodes.
-    nodes: dict[str, dict] = {}
+    nodes: dict[str, Node] = {}
 
-    def add_neighbor(node: dict, rel: str) -> None:
+    def add_neighbor(node_data: dict, rel: str) -> None:
         """Merge a neighbor into ``nodes``, accumulating its relation tags.
 
-        First sighting wins for the node body; every later sighting just
-        appends its relation to the existing node's ``rels`` list (deduped),
-        so a paper reached three ways ends up ``rels: [...]`` with three tags
-        rather than three separate nodes.
+        First sighting builds the ``Node``; every later sighting just appends
+        its relation to the existing node's ``rels`` (deduped), so a paper
+        reached three ways ends up one node with three tags.
 
         Args:
-            node: The normalized S2 node dict.
+            node_data: The normalized S2 node dict.
             rel: The relation that surfaced it (``reference | citation |
                 similar``).
         """
-        existing = nodes.get(node["id"])
+        existing = nodes.get(node_data["id"])
         if existing is None:
-            node = dict(node)  # copy — don't mutate the caller's dict
-            node["rels"] = [rel]
-            node["is_seed"] = False
-            nodes[node["id"]] = node
-        elif rel not in existing["rels"]:
-            existing["rels"].append(rel)
+            nodes[node_data["id"]] = Node(**node_data, rels=[rel], is_seed=False)
+        elif rel not in existing.rels:
+            existing.rels.append(rel)
 
     # The seed goes in first, flagged so the frontend can render it distinctly.
-    seed = dict(seed)
-    seed["rels"] = ["seed"]
-    seed["is_seed"] = True
-    nodes[seed_id] = seed
+    seed_node = Node(**seed_paper, rels=["seed"], is_seed=True)
+    nodes[seed_id] = seed_node
 
     # --- Build the typed edges. The DIRECTION differs per relation and encodes
     # citation semantics — an edge always points from the citing paper to the
     # cited one:
-    edges: list[dict] = []
+    edges: list[Edge] = []
 
     # References: papers the SEED cites. The seed is the citer, so the arrow
     # runs seed -> ancestor. ``influential`` flags S2's "highly influential
     # citation" (the frontend can weight the edge).
     for reference in refs:
         add_neighbor(reference["node"], "reference")
-        edges.append({
-            "source": seed_id,
-            "target": reference["node"]["id"],
-            "type": "reference",
-            "influential": reference["influential"],
-        })
+        edges.append(Edge(
+            source=seed_id,
+            target=reference["node"]["id"],
+            type="reference",
+            influential=reference["influential"],
+        ))
 
     # Citations: papers that cite the SEED. Now the neighbor is the citer, so
     # the arrow runs descendant -> seed (the opposite direction from above).
     for citation in cites:
         add_neighbor(citation["node"], "citation")
-        edges.append({
-            "source": citation["node"]["id"],
-            "target": seed_id,
-            "type": "citation",
-            "influential": citation["influential"],
-        })
+        edges.append(Edge(
+            source=citation["node"]["id"],
+            target=seed_id,
+            type="citation",
+            influential=citation["influential"],
+        ))
 
     # Recommendations: embedding-similar papers. These are NOT citations, so
-    # there's no natural direction and no ``influential`` flag; we draw seed ->
-    # neighbor just to anchor them to the seed visually.
+    # there's no direction meaning and no ``influential`` (left None); we draw
+    # seed -> neighbor just to anchor them to the seed visually.
     for recommendation in similar:
         add_neighbor(recommendation["node"], "similar")
-        edges.append({
-            "source": seed_id,
-            "target": recommendation["node"]["id"],
-            "type": "similar",
-        })
+        edges.append(Edge(
+            source=seed_id,
+            target=recommendation["node"]["id"],
+            type="similar",
+        ))
 
-    result = {
-        "seed": {
-            "arxiv_id": seed.get("arxiv_id"),
-            "id": seed_id,
-            "title": seed["title"],
-        },
-        "nodes": list(nodes.values()),
-        "edges": edges,
+    graph = Graph(
+        seed=Seed(arxiv_id=seed_node.arxiv_id, id=seed_id, title=seed_node.title),
+        nodes=list(nodes.values()),
+        edges=edges,
         # Raw traversal sizes (not deduped) plus the final node count. Note
         # ``nodes`` < references + citations + similar whenever a paper appeared
         # in more than one relation and got merged above.
-        "counts": {
-            "references": len(refs),
-            "citations": len(cites),
-            "similar": len(similar),
-            "nodes": len(nodes),
-        },
-    }
-    cache.set(cache_key, result)
-    return result
+        counts=Counts(
+            references=len(refs),
+            citations=len(cites),
+            similar=len(similar),
+            nodes=len(nodes),
+        ),
+    )
+    cache.set(cache_key, graph.model_dump(mode="json"))
+    return graph

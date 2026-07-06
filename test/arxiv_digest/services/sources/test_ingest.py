@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from arxiv_digest import sources
-from arxiv_digest.sources import embeddings, extract
+from arxiv_digest.services import sources
+from arxiv_digest.services.sources import embeddings, extract
 
 
 def make_pdf(path, page_texts: list[str]):
