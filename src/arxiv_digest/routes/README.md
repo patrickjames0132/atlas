@@ -135,6 +135,31 @@ returns `{deleted: false}` rather than 404 (idempotent); a store failure is
 a canned 500 with details in the log. Phase 6 note: a restored `hist_trace`
 now replays typed `BackfillTrace` shapes.
 
+## `sources.py` — the local library
+
+| Endpoint | Job |
+| --- | --- |
+| `GET /api/sources` | list the library + the `available` flag |
+| `POST /api/sources` | ingest a PDF upload or a `{url}` (synchronous) |
+| `DELETE /api/sources/<id>` | remove a source — `{deleted: bool}`, idempotent |
+
+Thin wrappers over `services/sources`. Points worth knowing:
+
+- **`available` explains a disabled state.** The list response reports
+  whether local embeddings + sqlite-vec loaded, so the UI can say *why*
+  semantic search is off; the check itself degrades to `False` on any
+  error. This endpoint is where the lazy torch load happens — deliberate:
+  the sources drawer is the UI's "is semantic search on" indicator (the
+  tutor, by contrast, never probes).
+- **Two-tier error contract.** `SourceError` text goes to the client
+  verbatim as a 400 — those messages are *written for users* by the
+  ingestion layer ("no extractable text — is it scanned?"). Anything
+  unexpected is a canned 500, details in the log only.
+- **Temp-file hygiene on upload:** `mkstemp` + close the fd *before*
+  `upload.save()` (on Windows an open handle holds an exclusive lock),
+  removal in a `finally`. Ingestion is synchronous — a big book chunks and
+  embeds for a while; the frontend shows a spinner, not a job queue.
+
 ## Who uses it, and how/why
 
 The React frontend (Phase 6) is the only caller: the search/seed flow hits

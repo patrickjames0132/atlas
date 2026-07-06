@@ -15,10 +15,11 @@ from flask import Flask
 from .graph import bp as graph_bp
 from .search import bp as search_bp
 from .sessions import bp as sessions_bp
+from .sources import bp as sources_bp
 
 # Order is cosmetic — every route carries its own full /api/... path, so
 # there's no prefix overlap between blueprints.
-ALL_BLUEPRINTS = [graph_bp, search_bp, sessions_bp]
+ALL_BLUEPRINTS = [graph_bp, search_bp, sessions_bp, sources_bp]
 
 
 def register_blueprints(app: Flask) -> None:
