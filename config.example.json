@@ -10,6 +10,13 @@
     "min_interval": 1.1
   },
   "graph": {
+    "backfill": {
+      "hops": 3,
+      "per_hop": 6,
+      "frontier": 2,
+      "lookback_years": 40,
+      "fetch_limit": 8
+    },
     "ref_limit": 25,
     "cite_limit": 25,
     "similar_limit": 15,
