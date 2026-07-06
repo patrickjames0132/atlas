@@ -26,12 +26,75 @@ orchestrator.run(intent, **payload)                    main.py
 ```
 
 - **`main.py`** — `run`, the dispatcher (and the documented model seam).
-- **`backfill.py`** — the "How we got here" walk: launch from the oldest
-  visible papers (never the seed — its references are already on screen),
-  each hop pull the frontier's references (day-cached via
-  `agents.traversal`), keep the most-cited new ancestors, carry the oldest
-  additions into the next hop; stop at the hop budget, an empty frontier,
-  or `lookback_years` before the seed. Knobs in `config.graph.backfill`.
+- **`backfill.py`** — the "How we got here" walk, below.
+
+## The backfill algorithm
+
+The problem: a modern seed's graph almost never shows the foundational
+work. Seed on a 2020 paper and the canvas holds its direct references —
+2015-2019, mostly — while the ideas actually start in the 1980s. A history
+lecture that opens mid-stream tells half the story. The walk's job is to
+extend the graph backward to the roots *before* the lecturer speaks, so the
+oldest beats have real papers to light up.
+
+Every knob referenced below lives in `config.graph.backfill` (defaults in
+parentheses; per-value rationale in `docs/configuration.md`).
+
+**0. Setup — the ledger and the stopping line.** `known` starts as every
+visible node id plus the seed: the dedup ledger that decides both "is this
+paper a new discovery?" and "do both of this edge's endpoints exist on the
+graph?". The `year_floor` is the seed's year minus `lookback_years` (40) —
+the line where the story stops being this paper's prehistory. (Seed year
+falls back to the newest visible year; the seed is almost always the most
+recent paper on the graph.)
+
+**1. Launch from the oldest visible papers — never the seed.** Expanding
+the seed can only re-find its own references, which are by definition
+already on screen. The oldest visible papers sit closest to the roots, so
+*their* references are the first papers the graph hasn't shown. The
+`frontier` (2) oldest non-seed papers become hop 1's launch points (the
+seed is only the degenerate fallback for a one-node graph).
+
+**2. Fetch.** Each hop pulls every frontier paper's references — one
+day-cached S2 call each (`agents.traversal`), `fetch_limit` (8) references
+per paper, so a full walk is bounded at `hops × frontier × fetch_limit`
+(~48) lookups, most of them cache hits within a session. Two things
+accumulate: `candidates` (papers not in `known`, first-seen wins) and
+`edges` — **every** reference edge seen, even to papers that may not
+survive selection, because keep-or-drop can't be decided until ranking
+runs. Edge direction follows the same rule as `build_graph`: a reference
+edge points citing → cited, and the frontier paper is always the citer.
+An `S2Error` on one frontier paper sets a flag and skips it — the lecture
+happens with or without that hop.
+
+**3. Select — most-cited first, capped.** Candidates are ranked by
+citation count and the top `per_hop` (6) become `DiscoveredNode`s. Citation
+count is the proxy for *seminal*: the walk exists to surface the papers a
+field's story opens with, not every stray reference. The cap keeps each
+hop's canvas growth digestible (≤ `hops × per_hop` = 18 nodes per walk).
+Discovered nodes carry `idx=None` — numbering is positional and happens
+later, when the enriched node set reaches the lecturer.
+
+**4. Filter edges against the ledger.** Only edges with BOTH endpoints in
+`known` are emitted; a candidate that lost the ranking never became a
+node, and its edges would dangle. Then the hop yields its two events:
+`BackfillTrace(hop, found, oldest)` first (the "watch it work" line), then
+`Discovery(nodes, edges)` (the payload the frontend merges).
+
+**5. March backward.** The `frontier` (2) *oldest* additions become the
+next hop's launch points — each hop starts from the furthest-back papers
+found so far, so the walk moves monotonically toward the roots instead of
+wandering sideways through contemporaries. The loop ends at whichever
+comes first: the hop budget (`hops` = 3), an empty candidate set (every
+reachable reference already on the graph), or the year floor (`oldest ≤
+year_floor` — the story has its roots).
+
+**6. Report an empty walk honestly.** Zero additions across all hops
+yields one explicit `BackfillTrace(found=0, error=errored)` instead of
+silence — and the `error` flag distinguishes "the graph already reaches
+its roots" (fine) from "S2 was down and we couldn't look" (suspect). The
+frontend can phrase those differently; failing silently was never an
+option.
 
 ## Design decisions worth knowing
 
