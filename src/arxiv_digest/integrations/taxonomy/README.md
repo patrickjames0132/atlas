@@ -1,7 +1,7 @@
 # `integrations.taxonomy`
 
 The app's controlled subject vocabularies — **two**, at two granularities, one
-submodule each:
+sub-package each:
 
 - **`arxiv`** — the ~155 fine-grained arXiv codes (`cs.LG`, `math.PR`, …)
   grouped into 8 areas, each a `{code, name}` pair. arXiv-specific.
@@ -27,24 +27,29 @@ rather than scattering them.
 ## How it's structured
 
 Namespaced by source, so the two vocabularies never blur together — you call
-`taxonomy.arxiv.groups()` or `taxonomy.s2.fields()`, never a flat mix. The odd
-one out among the integrations: static/inline data, no HTTP client, no cache.
+`taxonomy.arxiv.groups()` or `taxonomy.s2.fields()`, never a flat mix. Each
+source is its own **sub-package** so it can own its own data — the arXiv JSON
+lives *inside* `arxiv/`, not at the shared root. The odd one out among the
+integrations: static/inline data, no HTTP client, no cache.
 
 ```
-arxiv.py — arXiv categories: groups(), valid_codes()  (loads bundled taxonomy.json)
-s2.py    — S2 fields of study: fields(), valid_fields()  (inline tuple)
+arxiv/               — arXiv categories
+  __init__.py          groups(), valid_codes()
+  taxonomy.json        the ~155 codes (arXiv-specific data, kept with its package)
+s2/                  — S2 fields of study
+  __init__.py          fields(), valid_fields()  (inline FIELDS tuple, no data file)
 ```
 
-- **`arxiv.py`** — `groups()` (the areas-with-categories tree) and
-  `valid_codes()` (an `@lru_cache`'d `frozenset` of every code), over a private
-  `@lru_cache`'d `_data()` that parses the bundled `taxonomy.json` once. All in
-  one module, so `_data()` is private again (single-file use).
-- **`s2.py`** — `fields()` (S2's ~20 fields, alphabetical) and `valid_fields()`,
-  over an inline `FIELDS` tuple. No bundled JSON — each value is already its own
+- **`arxiv/`** — `groups()` (the areas-with-categories tree) and `valid_codes()`
+  (an `@lru_cache`'d `frozenset` of every code), over a private `@lru_cache`'d
+  `_data()` that parses the package's bundled `taxonomy.json` once. All in one
+  `__init__.py`, so `_data()` is private (single-file use).
+- **`s2/`** — `fields()` (S2's ~20 fields, alphabetical) and `valid_fields()`,
+  over an inline `FIELDS` tuple. No data file — each value is already its own
   human-readable label.
 
-`__init__.py` exposes the two submodules (`from . import arxiv, s2`); consumers
-namespace through them.
+`taxonomy/__init__.py` exposes the two sub-packages (`from . import arxiv, s2`);
+consumers namespace through them.
 
 > **Naming note.** `taxonomy.arxiv` (this category list) is *not*
 > `integrations.arxiv` (the ar5iv renderer + id regex). Same word, different
@@ -55,7 +60,7 @@ namespace through them.
 - **Namespaced, not flat.** An earlier cut re-exported `groups`/`valid_codes`/
   `fields`/`valid_fields` flat at the package root, which both blurred the two
   vocabularies and forced an awkward `all_fields()` (a bare `fields()` collided
-  with the `fields` module on re-export). Splitting into `arxiv`/`s2` submodules
+  with the `fields` module on re-export). Splitting into `arxiv`/`s2` sub-packages
   fixes both — the source is explicit in every call, and `s2.fields()` gets its
   natural name back.
 - **arXiv data is a bundled file; S2 data is inline.** 155 code+name pairs are
