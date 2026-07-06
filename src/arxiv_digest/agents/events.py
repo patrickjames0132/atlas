@@ -23,7 +23,7 @@ canvas and can't tell the difference.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -232,7 +232,7 @@ class RetrievalTrace(BaseModel):
     sources: list[str]
 
 
-Trace = Annotated[
+Trace: TypeAlias = Annotated[
     ReadTrace
     | ExpandTrace
     | SearchTrace
@@ -244,7 +244,7 @@ Trace = Annotated[
 ]
 """Any "watch the agent work" event, discriminated by ``action``."""
 
-Event = Annotated[
+Event: TypeAlias = Annotated[
     Beat | Token | Discovery | Figure | Cited | Done | Error | Trace,
     Field(discriminator="type"),
 ]

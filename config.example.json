@@ -60,6 +60,22 @@
         "id": "lecturer",
         "model": "anthropic:claude-sonnet-4-6",
         "extras": {}
+      },
+      {
+        "id": "tutor",
+        "model": "anthropic:claude-sonnet-4-6",
+        "extras": {
+          "max_steps": 12,
+          "full_reads": 4,
+          "summary_reads": 12,
+          "hops": 5,
+          "expand_limit": 8,
+          "searches": 3,
+          "search_limit": 8,
+          "source_searches": 5,
+          "figures": 3,
+          "fulltext_max_chars": 8000
+        }
       }
     ]
   }

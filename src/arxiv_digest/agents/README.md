@@ -6,9 +6,9 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 hand-rolled Anthropic SDK loops.
 
 **Status: shared infrastructure built** (`events.py`, `traversal.py`,
-`factory.py`, `prompts.py`, the `skills/` drafts) **plus three agents:
-`query_analyst`, `librarian`, and `lecturer`**; tutor and orchestrator land
-next.
+`factory.py`, `prompts.py`, the `skills/` drafts) **plus four agents:
+`query_analyst`, `librarian`, `lecturer`, and `tutor`**; the orchestrator
+lands last.
 
 ## `events.py` — the typed event stream
 
@@ -248,7 +248,7 @@ no LLM ever touches it.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
 - **Config:** the three mode-intent paragraphs; beat count bounds (5–9).
 
-### `tutor` — agentic Q&A over the graph
+### `tutor` — agentic Q&A over the graph *(built)*
 
 The flagship. Reads, expands, and searches via tool use, then answers
 grounded in what it actually read.
