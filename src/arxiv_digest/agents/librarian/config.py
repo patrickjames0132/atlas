@@ -20,5 +20,3 @@ NO_HITS_ANSWER = (
     "I couldn't find anything in your library about that. Try rephrasing, "
     "or upload a source that covers it."
 )
-"""Streamed instead of engaging the model when retrieval finds nothing —
-an answer, not an error."""
