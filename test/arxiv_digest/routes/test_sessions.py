@@ -23,9 +23,11 @@ def test_save_list_get_delete_round_trip(client):
     assert [row["id"] for row in listed] == [session_id]
     assert "nodes" not in listed[0]  # metadata only, no payload
 
+    # The store returns metadata + the blob nested under "data".
     full = client.get(f"/api/sessions/{session_id}").json
-    assert full["nodes"] == BLOB["nodes"]
-    assert full["chat"] == BLOB["chat"]
+    assert full["data"]["nodes"] == BLOB["nodes"]
+    assert full["data"]["chat"] == BLOB["chat"]
+    assert full["n_nodes"] == 2
 
     assert client.delete(f"/api/sessions/{session_id}").json == {"deleted": True}
     assert client.get("/api/sessions").json == {"sessions": []}
