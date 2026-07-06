@@ -1,6 +1,6 @@
 """Semantic Scholar's fields of study — S2's coarse subject vocabulary.
 
-Where the sibling ``arxiv`` module holds arXiv's ~155 fine-grained codes, this
+Where the sibling ``arxiv`` package holds arXiv's ~155 fine-grained codes, this
 holds S2's own much coarser ~20 top-level fields (Computer Science, Mathematics,
 …). It's what powers the S2 seed-search filter: S2's ``/paper/search`` filters
 on exactly these (``fieldsOfStudy``).

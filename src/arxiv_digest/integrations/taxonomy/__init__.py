@@ -1,8 +1,9 @@
-"""The app's controlled subject vocabularies — one submodule per source.
+"""The app's controlled subject vocabularies — one sub-package per source, so
+each owns its own data.
 
 * ``arxiv`` — arXiv's ~155 fine-grained category codes (``groups()``,
-  ``valid_codes()``), bundled from ``taxonomy.json``. arXiv-specific; for
-  labelling an arXiv paper's own category tags.
+  ``valid_codes()``), from the arXiv-specific ``taxonomy.json`` bundled *inside*
+  that package. For labelling an arXiv paper's own category tags.
 * ``s2``    — Semantic Scholar's ~20 coarse fields of study (``fields()``,
   ``valid_fields()``), an inline list. What the live S2 seed-search filter uses.
 

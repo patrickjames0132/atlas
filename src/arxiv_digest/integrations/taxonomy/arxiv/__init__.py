@@ -2,10 +2,10 @@
 
 The ~155 arXiv category codes (``cs.LG``, ``math.PR``, …) in 8 top-level areas,
 each a ``{code, name}`` pair (``cs.LG`` → "Machine Learning"), sourced from
-https://arxiv.org/category_taxonomy and bundled next to this module as
-``taxonomy.json``. arXiv-specific — kept for labelling an arXiv paper's own
-category tags. The S2 fields-of-study vocabulary lives in the sibling ``s2``
-module.
+https://arxiv.org/category_taxonomy and bundled inside this package as
+``taxonomy.json`` — the data is arXiv-specific, so it lives here rather than at
+the shared ``taxonomy`` root. Kept for labelling an arXiv paper's own category
+tags. The S2 fields-of-study vocabulary lives in the sibling ``s2`` package.
 
 (Not to be confused with the top-level ``integrations.arxiv`` package — that's
 the ar5iv renderer + id regex. This is ``integrations.taxonomy.arxiv``, just the
