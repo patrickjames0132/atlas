@@ -1,4 +1,4 @@
-"""Neighborhood-graph assembly (services/graph.py): the typed Graph model —
+"""Neighborhood-graph assembly (services/graph/build.py): the typed Graph model —
 dedupe, relation accumulation, edge directions, counts, and the snapshot cache.
 
 S2 traversals are monkeypatched with canned node dicts; the cache is real SQLite
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from arxiv_digest.services import graph as graph_service
-from arxiv_digest.services.model import Counts, Edge, Graph, Seed
+from arxiv_digest.services.graph import build
+from arxiv_digest.services.graph.model import Counts, Edge, Graph, Seed
 
 
 def make_node(paper_id: str, **extra) -> dict:
@@ -32,19 +32,19 @@ def fake_s2(monkeypatch):
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    monkeypatch.setattr(graph_service.s2, "get_paper", get_paper)
-    monkeypatch.setattr(graph_service.s2, "references",
+    monkeypatch.setattr(build.s2, "get_paper", get_paper)
+    monkeypatch.setattr(build.s2, "references",
                         lambda pid, limit: [{"node": make_node("ref1"), "influential": True}])
-    monkeypatch.setattr(graph_service.s2, "citations",
+    monkeypatch.setattr(build.s2, "citations",
                         lambda pid, limit: [{"node": make_node("cite1"), "influential": False}])
     # The similar hit overlaps ref1 — must accumulate rels, not duplicate.
-    monkeypatch.setattr(graph_service.s2, "recommendations",
+    monkeypatch.setattr(build.s2, "recommendations",
                         lambda pid, limit: [{"node": make_node("sim1")}, {"node": make_node("ref1")}])
     return calls
 
 
 def test_build_graph_shape(fake_s2):
-    graph = graph_service.build_graph("1706.03762")
+    graph = build.build_graph("1706.03762")
     assert isinstance(graph, Graph)
     assert graph.seed == Seed(arxiv_id=None, id="seed", title="The Seed")
     # arXiv-looking seeds are looked up with the ARXIV: prefix.
@@ -65,7 +65,7 @@ def test_build_graph_shape(fake_s2):
 
 
 def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):
-    graph = graph_service.build_graph("1706.03762")
+    graph = build.build_graph("1706.03762")
     dumped = graph.model_dump()
     # A callable-to-JSON shape the routes can hand to jsonify.
     assert dumped["seed"] == {"arxiv_id": None, "id": "seed", "title": "The Seed"}
@@ -75,24 +75,24 @@ def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):
 
 
 def test_raw_paperid_seed_skips_arxiv_prefix(fake_s2):
-    graph_service.build_graph("abc123def")  # not arXiv-shaped
+    build.build_graph("abc123def")  # not arXiv-shaped
     assert fake_s2["lookup"] == "abc123def"
 
 
 def test_snapshot_cache_round_trip(fake_s2):
-    first = graph_service.build_graph("1706.03762")
-    again = graph_service.build_graph("1706.03762")
+    first = build.build_graph("1706.03762")
+    again = build.build_graph("1706.03762")
     assert fake_s2["get_paper"] == 1  # second call served from cache — zero S2 hits
     assert again == first  # a Graph rebuilt from the cached JSON equals the original
 
 
 def test_refresh_bypasses_cache(fake_s2):
-    graph_service.build_graph("1706.03762")
-    graph_service.build_graph("1706.03762", refresh=True)
+    build.build_graph("1706.03762")
+    build.build_graph("1706.03762", refresh=True)
     assert fake_s2["get_paper"] == 2
 
 
 def test_unknown_seed_returns_none(monkeypatch):
-    monkeypatch.setattr(graph_service.s2, "get_paper", lambda lookup: None)
-    assert graph_service.build_graph("0000.00000") is None
-    assert graph_service.build_graph("   ") is None
+    monkeypatch.setattr(build.s2, "get_paper", lambda lookup: None)
+    assert build.build_graph("0000.00000") is None
+    assert build.build_graph("   ") is None

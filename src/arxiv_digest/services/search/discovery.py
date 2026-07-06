@@ -17,9 +17,9 @@ from __future__ import annotations
 
 import time
 
-from ..config import config
-from ..integrations import semantic_scholar as s2
-from ..storage import cache
+from ...config import config
+from ...integrations import semantic_scholar as s2
+from ...storage import cache
 
 
 def _expand_query(query: str) -> str:

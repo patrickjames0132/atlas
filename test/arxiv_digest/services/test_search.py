@@ -4,7 +4,7 @@ cache-first local search (real SQLite on the per-test temp DB).
 
 from __future__ import annotations
 
-from arxiv_digest.services import search as search_service
+from arxiv_digest.services.search import discovery
 from arxiv_digest.storage import cache
 
 # --- live_search (S2, mocked) ----------------------------------------------------
@@ -20,8 +20,8 @@ def test_live_search_unwraps_nodes_and_forwards_filters(monkeypatch):
         )
         return [{"node": {"id": "p1", "title": "A"}}, {"node": {"id": "p2", "title": "B"}}]
 
-    monkeypatch.setattr(search_service.s2, "search_papers", fake_search_papers)
-    out = search_service.live_search(
+    monkeypatch.setattr(discovery.s2, "search_papers", fake_search_papers)
+    out = discovery.live_search(
         "ssm", limit=5, year_from=2020, fields_of_study=["Computer Science"]
     )
     assert out == [{"id": "p1", "title": "A"}, {"id": "p2", "title": "B"}]  # unwrapped
@@ -35,8 +35,8 @@ def test_live_search_blank_short_circuits_without_hitting_s2(monkeypatch):
     def explode(*args, **kwargs):
         raise AssertionError("S2 should not be called for a blank query")
 
-    monkeypatch.setattr(search_service.s2, "search_papers", explode)
-    assert search_service.live_search("   ") == []
+    monkeypatch.setattr(discovery.s2, "search_papers", explode)
+    assert discovery.live_search("   ") == []
 
 
 def test_live_search_routes_query_through_the_expansion_seam(monkeypatch):
@@ -46,9 +46,9 @@ def test_live_search_routes_query_through_the_expansion_seam(monkeypatch):
         seen["query"] = query
         return "EXPANDED"
 
-    monkeypatch.setattr(search_service, "_expand_query", fake_expand)
-    monkeypatch.setattr(search_service.s2, "search_papers", lambda query, **kw: [{"node": {"id": query}}])
-    out = search_service.live_search("dqn")
+    monkeypatch.setattr(discovery, "_expand_query", fake_expand)
+    monkeypatch.setattr(discovery.s2, "search_papers", lambda query, **kw: [{"node": {"id": query}}])
+    out = discovery.live_search("dqn")
     assert seen["query"] == "dqn"          # the raw query goes through the seam
     assert out == [{"id": "EXPANDED"}]     # the expanded query is what reaches S2
 
@@ -76,7 +76,7 @@ def test_local_search_matches_tokens_and_flags_fresh_graph():
             _node("nB", "Some Other Paper", authors="Smith"),
         ],
     ))
-    out = search_service.local_search("attention")
+    out = discovery.local_search("attention")
     ids = [hit["id"] for hit in out]
     assert ids == ["seedA"]  # only the token-matching paper
     assert out[0]["has_graph"] is True  # a fresh snapshot exists with it as seed
@@ -89,7 +89,7 @@ def test_local_search_dedupes_keeping_the_richer_record():
     cache.set("graph:s2", _snapshot(
         {"id": "s2b", "title": "Seed Two"},
         [_node("shared", "Shared Paper Title", authors="Rich Author")]))
-    (hit,) = search_service.local_search("shared paper")
+    (hit,) = discovery.local_search("shared paper")
     assert hit["id"] == "shared" and hit["authors"] == "Rich Author"
 
 
@@ -102,7 +102,7 @@ def test_local_search_year_filter_excludes_out_of_range_and_undated():
             _node("undated", "Deep Learning Undated", year=None, authors="C"),
         ],
     ))
-    out = search_service.local_search("deep learning", year_from=2015)
+    out = discovery.local_search("deep learning", year_from=2015)
     assert {hit["id"] for hit in out} == {"new"}  # 2010 too old, undated excluded under a bound
 
 
@@ -115,12 +115,12 @@ def test_local_search_ranks_phrase_title_then_seed_then_citations():
             _node("partial", "Networks of Neural Cells", authors="P", citation_count=50),
         ],
     ))
-    order = [hit["id"] for hit in search_service.local_search("neural networks")]
+    order = [hit["id"] for hit in discovery.local_search("neural networks")]
     # phrase-in-title (seedX, exact) beat non-phrase (partial); among the two,
     # the explored seed beats the plain hit.
     assert order.index("seedX") < order.index("exact") < order.index("partial")
 
 
 def test_local_search_blank_returns_empty():
-    assert search_service.local_search("") == []
-    assert search_service.local_search("   ") == []
+    assert discovery.local_search("") == []
+    assert discovery.local_search("   ") == []

@@ -25,10 +25,10 @@ from __future__ import annotations
 
 import logging
 
-from ..config import config
-from ..integrations import arxiv
-from ..integrations import semantic_scholar as s2
-from ..storage import cache
+from ...config import config
+from ...integrations import arxiv
+from ...integrations import semantic_scholar as s2
+from ...storage import cache
 from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)

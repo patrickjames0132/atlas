@@ -5,19 +5,22 @@ into the app's actual features. A `services` function is what a `routes` HTTP
 handler calls; the route does request parsing and error-to-status mapping, the
 service does the real work.
 
-- **`graph.py`** — assemble a paper's neighborhood graph (documented in full
-  below).
-- **`search.py`** — seed discovery: a live S2 search plus an instant cache-first
-  search (documented below).
+Each feature is its own package:
+
+- **`graph/`** — assemble a paper's neighborhood graph (`build.py`) + its typed
+  models (`model.py`). Documented in full below.
+- **`search/`** — seed discovery: a live S2 search plus an instant cache-first
+  search (`discovery.py`). Documented below.
+- **`sources/`** — the bring-your-own-sources subsystem. Its own README.
 
 ---
 
-## `search.py` — seed discovery
+## `search/` — seed discovery
 
 ### Why it exists
 
-Before you can build a graph you need a seed paper. `search.py` is how you find
-one, two complementary ways:
+Before you can build a graph you need a seed paper. `search/` (in `discovery.py`)
+is how you find one, two complementary ways:
 
 - **`live_search`** — a relevance search across all of Semantic Scholar
   (`s2.search_papers` → `/paper/search`). This replaced the app's earlier
@@ -89,7 +92,7 @@ filter, and the phrase/seed/citation ranking).
 
 ---
 
-## `graph.py` — neighborhood graph assembly
+## `graph/` — neighborhood graph assembly
 
 ### Why it exists
 
@@ -126,8 +129,9 @@ to the seed.
   `influential` is `None` on `similar` edges (it's a citation-only flag).
 - **`counts`** (`Counts`) — raw traversal sizes plus the final deduped node count.
 
-The models (`Graph`/`Node`/`Edge`/`Seed`/`Counts`) live in `graph.py` beside
-`build_graph`. Callers that need JSON serialize with `graph.model_dump()` /
+The models (`Graph`/`Node`/`Edge`/`Seed`/`Counts`) live in `graph/model.py`,
+beside `build.py`'s `build_graph`. Callers that need JSON serialize with
+`graph.model_dump()` /
 `graph.model_dump_json()` — the routes hand `model_dump()` to `jsonify`. The
 model is also what goes in and out of the cache (stored as JSON, re-validated on
 read), so the shape can't silently drift — at the cost of a validate on each
