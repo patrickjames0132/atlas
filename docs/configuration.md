@@ -113,6 +113,16 @@ vendors. Each entry:
   final shape has settled. Don't treat `extras` as a long-term home —
   it's a staging area, not a junk drawer.
 
+## `server` — Flask + conversation policy
+
+- **`history_turns: 8`** — each chat (graph Q&A and library chat, separate
+  stores) keeps its last 8 user+assistant pairs as context, persisted only
+  on success and trimmed after each turn. The whole retained window is
+  re-sent to the model on *every* follow-up, so this is a token-cost and
+  context-window cap, not a storage limit — 8 pairs keeps multi-step
+  tutoring coherent while bounding the per-question overhead. Stores are
+  in-memory (cleared on restart — fine for a local single-user app).
+
 ## `sources` — bring-your-own sources
 
 - **`embedding.model`**: `all-MiniLM-L6-v2`, 384-dim, symmetric (no query

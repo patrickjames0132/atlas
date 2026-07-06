@@ -160,6 +160,50 @@ Thin wrappers over `services/sources`. Points worth knowing:
   removal in a `finally`. Ingestion is synchronous — a big book chunks and
   embeds for a while; the frontend shows a spinner, not a job queue.
 
+## `agents.py` — the teacher's SSE endpoints
+
+| Endpoint | Intent | Job |
+| --- | --- | --- |
+| `POST /api/lecture` | `lecture` | streamed lecture (history mode backfills first) |
+| `POST /api/ask` | `q&a` | agentic Q&A over the graph |
+| `POST /api/ask_sources` | `librarian` | offline library chat |
+
+(The route face of the `agents` package — a deliberate name-cousin,
+different full paths.) Each endpoint validates, builds typed inputs, and
+hands off to `orchestrator.run(intent, ...)`; one `_relay` generator
+serializes the typed event stream as SSE.
+
+Design decisions worth knowing:
+
+- **One serialization rule replaces six tuple matches.** Frame name = the
+  event's `type` tag, payload = `model_dump(exclude={"type"})`. That
+  reproduces the old wire shapes for `token`/`beat`/`cited`/`trace`/`done`
+  exactly, with the two documented renames (`nodes` → `discovery`,
+  error `{"error"}` → `{"message"}`); `discard` is gone (nothing to disavow
+  — the tutor's pre-answer narration is never streamed).
+- **The typed-node boundary.** `orchestrator.run` takes `Node` models; the
+  frontend sends dicts that the force-graph renderer has mutated with
+  simulation fields (`x`, `vy`, `index`, ...). `_node` picks exactly the
+  model's fields out of each dict — strict about the core shape (missing
+  fields → 400), tolerant about baggage.
+- **History lives here, not in the agents** (locked Phase 4 decision). Two
+  in-memory stores — graph chat and library chat, same `session_id` never
+  cross-contaminates — persisted **only on success** (a failed answer must
+  not poison the follow-up context), `<<FIG n>>` markers stripped (render
+  directives, not conversation content), trimmed to
+  `config.server.history_turns` pairs.
+- **No availability gate on `/api/ask_sources`** (the old route 400'd when
+  embeddings didn't load): retrieval self-degrades to lexical-only, and an
+  empty library gets the librarian's friendly no-hits answer — a working
+  degraded feature shouldn't be refused. The sources drawer's `available`
+  flag still tells the UI the semantic story.
+- **SSE `error` frames carry the orchestrator's message text** — like
+  `SourceError`, they're the user-facing error surface (the panel needs
+  something actionable); HTTP-level errors stay canned. And the module
+  logger (never `current_app.logger`): the generators run after the request
+  context is gone, where touching `current_app` would kill the stream
+  before the `error` frame the frontend waits for.
+
 ## Who uses it, and how/why
 
 The React frontend (Phase 6) is the only caller: the search/seed flow hits

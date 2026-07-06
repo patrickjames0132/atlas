@@ -3,15 +3,13 @@
 ``app.py`` calls :func:`register_blueprints` to wire them all onto the app.
 Each route module owns its endpoints and any small per-concern helpers (SSE
 framing, arXiv-id normalization) so the app factory stays thin.
-
-Being ported module by module (Phase 5) — blueprints join ``ALL_BLUEPRINTS``
-as they land: graph, then search, sessions, sources, agents.
 """
 
 from __future__ import annotations
 
 from flask import Flask
 
+from .agents import bp as agents_bp
 from .graph import bp as graph_bp
 from .search import bp as search_bp
 from .sessions import bp as sessions_bp
@@ -19,7 +17,7 @@ from .sources import bp as sources_bp
 
 # Order is cosmetic — every route carries its own full /api/... path, so
 # there's no prefix overlap between blueprints.
-ALL_BLUEPRINTS = [graph_bp, search_bp, sessions_bp, sources_bp]
+ALL_BLUEPRINTS = [graph_bp, search_bp, agents_bp, sessions_bp, sources_bp]
 
 
 def register_blueprints(app: Flask) -> None:

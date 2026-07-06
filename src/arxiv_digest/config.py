@@ -361,13 +361,19 @@ class SourcesConfig(ConfigModel):
 
 
 class ServerConfig(ConfigModel):
-    """Where the Flask app listens, and how loudly it logs."""
+    """Where the Flask app listens, how loudly it logs, and the route-owned
+    conversation policy."""
 
     host: str = Field(min_length=1, description="Interface Flask binds to.")
     port: int = Field(ge=1, le=65535, description="TCP port Flask listens on.")
     debug: bool = Field(
         description="Verbose (DEBUG-level) logging, including the arXiv client's "
         "per-page requests."
+    )
+    history_turns: PositiveInt = Field(
+        description="Past user+assistant turn pairs each chat keeps as context. "
+        "The whole retained window is re-sent to the model on every follow-up, "
+        "so this caps token cost and context growth, not storage."
     )
 
 

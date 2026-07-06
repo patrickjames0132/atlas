@@ -44,7 +44,8 @@
   "server": {
     "host": "127.0.0.1",
     "port": 5000,
-    "debug": false
+    "debug": false,
+    "history_turns": 8
   },
   "llm": {
     "providers": {

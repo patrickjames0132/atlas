@@ -1,0 +1,306 @@
+"""AI-teacher routes: every workflow streams through the agents orchestrator.
+
+POST /api/lecture      -> streamed AI lecture over the visible graph
+POST /api/ask          -> streamed agentic Q&A over the visible graph
+POST /api/ask_sources  -> streamed chat answered purely from the local library
+
+Each endpoint validates the request, builds typed inputs, and hands off to
+``orchestrator.run(intent, ...)``; the typed event stream comes back as SSE
+frames named by each event's ``type`` tag (``model_dump`` minus the tag),
+always terminated by ``done`` or ``error``. Conversation history lives HERE
+(a locked design decision — agents receive history, they never store it):
+two in-memory stores, one per chat, persisted only on success.
+
+(This module is ``routes/agents.py``, the route face of the ``agents``
+package — a deliberate name-cousin, different full paths.)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from typing import Iterable, Iterator, cast
+
+from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
+from pydantic import ValidationError
+
+from ..agents import events, orchestrator
+from ..agents.lecturer.config import MODE_INTENTS
+from ..agents.lecturer.main import Mode
+from ..config import config
+from ..services.graph import Node
+
+bp = Blueprint("agents", __name__)
+
+# Module logger, NOT current_app.logger: the SSE generators below run during
+# response iteration, after the request/app context is gone — touching
+# current_app there raises RuntimeError and kills the stream before the
+# `error` event the frontend waits for can be sent.
+log = logging.getLogger(__name__)
+
+# Session-scoped Q&A history, kept in memory (cleared on restart — fine for a
+# local single-user app). Maps a client-generated session id ->
+# [{role, content}, ...]. The library chat gets its own store so a graph Q&A
+# and a library chat never cross-contaminate context.
+_QA_SESSIONS: dict[str, list[dict]] = {}
+_SOURCES_SESSIONS: dict[str, list[dict]] = {}
+
+# Inline-figure markers (<<FIG n>>) are stripped from the PERSISTED history:
+# they stream to the frontend (which replaces them with the image) but must
+# not re-enter the model's context on follow-ups — a model that sees
+# "<<FIG 1>>" already sitting in its previous answer skips placing the fresh
+# marker for this turn's figure, and the image falls back to the end of the
+# bubble.
+_FIG_MARKER_RE = re.compile(r"[ \t]*<<FIG \d+>>\n?")
+
+
+def _opt_source_ids(payload: dict) -> list[str] | None:
+    """Parse the optional ``source_ids`` scope from a request body.
+
+    Args:
+        payload: The parsed JSON body.
+
+    Returns:
+        The library source ids to scope the answer to. ``None`` when the key
+        is absent or malformed — no scope, so the whole library is searched.
+        A **present** ``source_ids`` array yields exactly its string entries,
+        including an **empty list** — an explicit "no sources selected" that
+        searches nothing rather than everything.
+    """
+    raw = payload.get("source_ids")
+    if not isinstance(raw, list):
+        return None
+    return [source_id for source_id in raw if isinstance(source_id, str) and source_id]
+
+
+def _node(raw: dict) -> Node:
+    """Build a typed ``Node`` from a frontend node payload.
+
+    Strict about the core shape, tolerant about baggage: exactly the model's
+    fields are picked out of the dict (the force-graph renderer mutates node
+    objects with simulation fields — ``x``, ``vy``, ``index``, ... — and
+    ``extra="forbid"`` would reject every real payload), and the graph
+    annotations default (``rels``/``is_seed``) since discovered nodes may
+    not carry them.
+
+    Args:
+        raw: One node dict from the request body.
+
+    Returns:
+        The validated ``Node``.
+
+    Raises:
+        ValidationError: When the core fields are missing/malformed.
+    """
+    data = {name: raw[name] for name in Node.model_fields if name in raw}
+    data.setdefault("rels", [])
+    data.setdefault("is_seed", False)
+    return Node.model_validate(data)
+
+
+def _sse(event: str, data: object) -> str:
+    """Format one Server-Sent Event frame.
+
+    Args:
+        event: The event name (``beat``, ``token``, ``trace``, …).
+        data: A JSON-serializable payload.
+
+    Returns:
+        The wire-format frame: ``event:`` and ``data:`` lines terminated by
+        a blank line.
+    """
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _sse_response(generator: Iterator[str]) -> Response:
+    """Wrap a generator of SSE frames as a streaming response.
+
+    ``X-Accel-Buffering: no`` keeps nginx (if ever put in front) from
+    buffering the stream; ``Cache-Control: no-cache`` stops intermediaries
+    caching partial output.
+
+    Args:
+        generator: An iterator yielding SSE frame strings (from ``_sse``).
+
+    Returns:
+        A ``text/event-stream`` Flask Response streaming the frames.
+    """
+    return Response(
+        generator,
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _relay(
+    workflow: Iterable[events.Event],
+    *,
+    store: dict[str, list[dict]] | None = None,
+    session_id: str = "",
+    question: str = "",
+) -> Iterator[str]:
+    """Serialize a workflow's typed events as SSE frames, persisting on success.
+
+    Frame name = the event's ``type`` tag; payload = ``model_dump`` minus the
+    tag — one rule for every event, replacing the old per-kind tuple
+    matching. The orchestrator guarantees the stream ends with ``Done`` or
+    ``Error``; a turn is persisted only when it ended with ``Done`` (a failed
+    answer must not poison the follow-up context), with figure markers
+    stripped and the window trimmed to ``config.server.history_turns`` pairs.
+
+    Args:
+        workflow: The orchestrator's event stream.
+        store: The history store to persist into (None = no persistence —
+            lectures aren't chat).
+        session_id: The client's session key; blank disables persistence.
+        question: The user's question, persisted as the ``user`` turn.
+
+    Yields:
+        SSE frame strings.
+    """
+    answer_parts: list[str] = []
+    succeeded = False
+    try:
+        for event in workflow:
+            if isinstance(event, events.Token):
+                answer_parts.append(event.text)
+            succeeded = isinstance(event, events.Done)
+            yield _sse(event.type, event.model_dump(exclude={"type"}))
+    except Exception:  # the orchestrator catches its own; this guards serialization
+        log.exception("agent stream failed")
+        yield _sse("error", {"message": "The teacher hit an unexpected error."})
+        return
+    if succeeded and store is not None and session_id:
+        answer = _FIG_MARKER_RE.sub("", "".join(answer_parts)).strip()
+        convo = store.setdefault(session_id, [])
+        convo.append({"role": "user", "content": question})
+        convo.append({"role": "assistant", "content": answer})
+        keep = config.server.history_turns * 2
+        if len(convo) > keep:
+            del convo[:-keep]
+
+
+@bp.post("/api/lecture")
+def api_lecture() -> ResponseReturnValue:
+    """Stream a lecture over the visible graph as SSE ``beat`` events.
+
+    Body:
+        ``{seed: {node fields}, nodes: [visible node objects], mode:
+        history|intuition|bridge, target?: {node fields}}``.
+
+    Returns:
+        An SSE stream — history mode opens with the backfill's ``trace`` +
+        ``discovery`` frames (the found ancestors join the narrated set),
+        then ``beat`` frames ``{heading, text, node_ids}``, ending with
+        ``done`` or ``error``. HTTP 400 for missing/malformed nodes or an
+        unknown mode.
+    """
+    payload = request.get_json(silent=True) or {}
+    raw_nodes = payload.get("nodes")
+    if not isinstance(raw_nodes, list) or not raw_nodes:
+        return jsonify({"error": "nodes must be a non-empty list"}), 400
+    raw_mode = payload.get("mode") or "history"
+    if raw_mode not in MODE_INTENTS:
+        return jsonify({"error": f"unknown lecture mode {raw_mode!r}"}), 400
+    mode = cast(Mode, raw_mode)  # the membership check above is the narrowing
+    raw_target = payload.get("target")
+    try:
+        seed = _node(payload.get("seed") or {})
+        nodes = [_node(raw) for raw in raw_nodes]
+        target = _node(raw_target) if raw_target else None
+    except ValidationError:
+        return jsonify({"error": "seed/nodes are malformed"}), 400
+
+    return _sse_response(
+        _relay(orchestrator.run("lecture", seed=seed, nodes=nodes, mode=mode, target=target))
+    )
+
+
+@bp.post("/api/ask")
+def api_ask() -> ResponseReturnValue:
+    """Answer a question grounded in the visible graph, streamed as SSE.
+
+    The tutor reads papers via tool use; conversation history is keyed by
+    ``session_id`` so follow-ups keep context, persisted only on success.
+
+    Body:
+        ``{question, session_id, seed, nodes, source_ids?}`` — ``source_ids``
+        scopes the tutor's library search to a subset of uploaded sources.
+
+    Returns:
+        An SSE stream: ``trace`` frames (tool steps), ``discovery`` frames
+        (papers + edges to merge into the live graph), ``figure`` frames,
+        ``token`` prose, one ``cited`` frame (``{node_ids}``), then ``done``
+        or ``error``. HTTP 400 when the question or nodes are
+        missing/malformed.
+    """
+    payload = request.get_json(silent=True) or {}
+    question = (payload.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+    raw_nodes = payload.get("nodes")
+    if not isinstance(raw_nodes, list) or not raw_nodes:
+        return jsonify({"error": "nodes must be a non-empty list"}), 400
+    try:
+        seed = _node(payload.get("seed") or {})
+        nodes = [_node(raw) for raw in raw_nodes]
+    except ValidationError:
+        return jsonify({"error": "seed/nodes are malformed"}), 400
+    session_id = payload.get("session_id") or ""
+    source_ids = _opt_source_ids(payload)
+    history = _QA_SESSIONS.get(session_id, []) if session_id else []
+
+    return _sse_response(
+        _relay(
+            orchestrator.run(
+                "q&a",
+                question=question,
+                seed=seed,
+                nodes=nodes,
+                history=history,
+                source_ids=source_ids,
+            ),
+            store=_QA_SESSIONS,
+            session_id=session_id,
+            question=question,
+        )
+    )
+
+
+@bp.post("/api/ask_sources")
+def api_ask_sources() -> ResponseReturnValue:
+    """Answer a question purely from the user's local library, streamed as SSE.
+
+    The offline library chat — no graph required, and no availability gate:
+    retrieval self-degrades (lexical-only without the embedder), and an
+    empty library gets the librarian's friendly no-hits answer rather than
+    a refusal. History is keyed by ``session_id`` in its own store.
+
+    Body:
+        ``{question, session_id, source_ids?}`` — ``source_ids`` scopes
+        retrieval to a subset of sources.
+
+    Returns:
+        An SSE stream: one retrieval ``trace`` frame, ``token`` prose, then
+        ``done`` or ``error``. HTTP 400 when the question is missing.
+    """
+    payload = request.get_json(silent=True) or {}
+    question = (payload.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+    session_id = payload.get("session_id") or ""
+    source_ids = _opt_source_ids(payload)
+    history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
+
+    return _sse_response(
+        _relay(
+            orchestrator.run(
+                "librarian", question=question, history=history, source_ids=source_ids
+            ),
+            store=_SOURCES_SESSIONS,
+            session_id=session_id,
+            question=question,
+        )
+    )
