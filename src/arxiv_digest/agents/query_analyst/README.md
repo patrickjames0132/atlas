@@ -52,6 +52,21 @@ query_analyst.expand_query          main.py
   live search, sits on the interactive path, and the task is two lines of
   vocabulary work — flagship models buy nothing here.
 
+## Who uses it, and how/why
+
+- **`services/search/discovery.py`** (ported, live in the new tree) —
+  `live_search` passes every query through `_expand_query`, whose whole body
+  is `return query_analyst.expand_query(query)`. The seam survives as a
+  named function (rather than inlining the call) so search tests can
+  monkeypatch `discovery._expand_query` without importing agent machinery,
+  and because it predates the agent — the old repo shipped it as a
+  documented passthrough waiting for exactly this. `local_search` does
+  *not* expand: it greps graphs already cached on disk, where recall is
+  bounded by what's stored, not by vocabulary.
+- **Nobody else.** Not reachable through the orchestrator — expansion is
+  search infrastructure, not a teacher workflow; the frontend never
+  addresses this agent, it just gets better search results.
+
 ## Testing
 
 `test_main.py` swaps the model via `agent.override(...)`: `TestModel` with

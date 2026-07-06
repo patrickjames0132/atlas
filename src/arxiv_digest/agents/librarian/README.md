@@ -61,6 +61,27 @@ the sources before a single token streams.
   missing, retrieval degrades (lexical-only, or `[]` → the no-hits answer)
   rather than crashing.
 
+## Who uses it, and how/why
+
+- **`agents/orchestrator` (Phase 4d, not yet built).** The `librarian`
+  intent is a pure delegation: the whole `workflows/librarian.md` playbook
+  already lives inside `answer(...)`, so the orchestrator just calls it,
+  relays the `RetrievalTrace`/`Token` stream, and appends `Done`/`Error`.
+  No model-side routing — a librarian question never costs an orchestrator
+  completion.
+- **Old repo, traced (not yet ported):** `routes/teacher.py`'s
+  `POST /api/ask_sources` guards the door (400 when the question is blank
+  or `sources.available()` says the local library can't load), pulls prior
+  turns from its in-memory `_SOURCES_SESSIONS[session_id]`, calls
+  `answer_from_sources(question, history, source_ids)`, and serializes the
+  event tuples as `trace`/`token`/`done`/`error` SSE frames. On success it
+  persists the new turn back into the session store, trimmed to
+  `TEACHER_HISTORY_TURNS * 2` entries. Phase 5 rewrites this route to call
+  the orchestrator with intent `librarian`; the availability check and
+  history persistence stay in routes (locked decision — agents receive
+  history, they never store it), and the SSE frame names fall out of each
+  event's `type` tag instead of hand-matched tuple kinds.
+
 ## Testing
 
 `test_main.py` fakes `sources.search` (canned passage dicts) and swaps the

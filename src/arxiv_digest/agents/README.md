@@ -310,6 +310,36 @@ it). See its own README for the full story.
   workflow. It degrades to a passthrough on any failure: search can never
   break because the LLM hiccuped.
 
+## Who uses it, and how/why
+
+Callers *into* the package (each sub-agent's own README traces its callers
+in detail):
+
+- **`services/search/discovery.py`** (ported, live now) — `live_search`
+  routes every query through its `_expand_query` seam, a one-line delegation
+  to `query_analyst.expand_query`. The only agent consumed outside the
+  teacher workflows: it's infrastructure for search, wired directly, never
+  through the orchestrator.
+- **The routes layer (Phase 5, traced from the old repo, not yet ported).**
+  Old `routes/teacher.py` calls the teacher functions directly —
+  `lecture_beats` behind `POST /api/teacher` (lecture), `answer_agentic`
+  behind the Q&A path, `answer_from_sources` behind `POST /api/ask_sources` —
+  and serializes their `("kind", data)` tuples as SSE frames. The rewrite
+  replaces all of that with one entry point: routes call the
+  **orchestrator** with an intent hint (`lecture` / `q&a` / `librarian`),
+  serialize the typed `Event` stream by its `type` tag, and keep session
+  history persistence for themselves (a locked decision — agents receive
+  history, they never store it).
+
+Inside the package, the shared root modules exist for the sub-agents:
+every agent builds its model via `factory.build_model` and its instruction
+parts via `prompts.skill`; the librarian (and next the tutor) converts route
+turns with `prompts.history`; the lecturer (and next the tutor) numbers
+papers with `prompts.node_lines` / `idx_to_id`; every workflow yields
+`events` models; `traversal.py` waits on the tutor's expand/search tools and
+the orchestrator's `history_backfill` (traced from the old repo's
+`neighbors.py` callers, not yet ported).
+
 ## Testing
 
 Agent loops are tested with PydanticAI's `TestModel` / `FunctionModel`
