@@ -34,6 +34,21 @@ Design decisions worth knowing:
   applies. The old route prefixed unconditionally — which broke panel
   hydration for papers that exist on S2 but not on arXiv (their nodes
   hydrate by raw paperId). Fixed in this port, mirroring `build_graph`.
+- **Why arXiv ids at all, when the data all comes from S2?** Because the
+  arXiv id is how *humans* hand us papers — recognizing it is input
+  handling, not an arXiv dependency. The chain: (1) **paste-recognition** —
+  the dominant flow for ML papers is copying `arxiv.org/abs/...` from a
+  browser or a tweet; unrecognized, that string would fall through to S2's
+  lexical search as junk keywords and find nothing, while a recognized id
+  is a statement of intent that skips search and lands on that exact paper.
+  (2) **S2 addressing** — S2's own lookup API takes `ARXIV:<id>` as an
+  external identifier, so normalization is just translating the reference a
+  human gave us into the key S2 wants (accepting an ISBN without being a
+  printing press). The version strip belongs here too: `v5` and `v2` are
+  the same paper to S2 and to our cache keys. (3) **ar5iv rendering** —
+  a node's `arxiv_id` is the ticket to figures and full text. (4)
+  *(future)* the arXiv **category tags** planned for the detail panel.
+  Retiring arXiv *search* removed none of these.
 - **`/api/graph` serializes the typed `Graph`** via `model_dump()` — the
   route is the model-to-JSON boundary (Phase 3 decision: the graph is a
   Pydantic model everywhere inside the app).
