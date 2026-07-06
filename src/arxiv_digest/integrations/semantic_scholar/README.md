@@ -107,9 +107,32 @@ package needs to know it's a package internally.
 None of these are ported yet, but because the public API is unchanged,
 none of them will need a single import edit when we get there.
 
+## Fields of study — `vocab.py`
+
+S2's **fields of study**: its own ~20 coarse top-level subjects
+(`Computer Science`, `Mathematics`, …) — much coarser than arXiv's ~155
+categories. This is the vocabulary the **seed-search filter** uses: S2's
+`/paper/search` filters on exactly these (`fieldsOfStudy`).
+
+It lives in *this* package because it's S2's vocabulary — each provider owns its
+own (arXiv's finer one is `arxiv.vocab`), rather than a shared taxonomy package.
+
+- **`vocab.fields()`** — the fields, alphabetical, for populating the picker.
+- **`vocab.valid_fields()`** — a `frozenset` of them, for validating a submitted
+  filter.
+- Backed by an inline `FIELDS` tuple — a small, fixed, S2-defined list, so no
+  data file (unlike arXiv's bundled JSON); each value is already its own
+  human-readable label.
+
+**Casing is Title Case** (`"Computer Science"`), matching what S2 returns on
+paper objects and accepts in the `fieldsOfStudy` filter. If it ever differs live,
+`vocab.FIELDS` is the one tuple to edit. `search.search_papers` forwards a
+`fields_of_study` filter straight to `fieldsOfStudy`; its values come from here.
+
 ## Testing
 
 Split to mirror the source layout: `test_client.py`, `test_nodes.py`,
-`test_traversal.py`, `test_search.py` — 24 tests total, no network (HTTP is
-faked at `client.request` or, for `client.py` itself, at
+`test_traversal.py`, `test_search.py`, and `test_vocab.py` (the ~20 fields in
+alphabetical order; `valid_fields()` rejects junk and arXiv codes) — no network
+(HTTP is faked at `client.request` or, for `client.py` itself, at
 `urllib.request.urlopen`).

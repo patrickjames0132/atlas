@@ -1,8 +1,14 @@
-"""Load and query the bundled arXiv category taxonomy.
+"""The arXiv category taxonomy — arXiv's fine-grained subject vocabulary.
 
-The implementation behind the ``taxonomy.arxiv`` package: it reads the package's
-bundled ``taxonomy.json`` once and answers "what areas/categories exist" and "is
-this a real code". See the package ``__init__`` for the what/why.
+The ~155 arXiv category codes (``cs.LG``, ``math.PR``, …) grouped into 8 areas,
+each a ``{code, name}`` pair (``cs.LG`` → "Machine Learning"), sourced from
+https://arxiv.org/category_taxonomy and bundled beside this module as
+``taxonomy.json``. Lives in the ``arxiv`` package (with ar5iv + ``ID_RE``)
+because it's arXiv-specific — for labelling an arXiv paper's own category tags.
+Semantic Scholar's parallel (coarser) vocabulary is ``semantic_scholar.vocab``.
+
+Reads "what areas/categories exist" (``groups``) and "is this a real code"
+(``valid_codes``); see the package README for the full story.
 """
 
 from __future__ import annotations
