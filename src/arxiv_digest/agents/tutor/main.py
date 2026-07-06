@@ -21,7 +21,6 @@ import asyncio
 from typing import Iterator
 
 from pydantic import BaseModel, ConfigDict
-from pydantic_core import from_json
 from pydantic_ai import Agent, Tool, UsageLimits
 from pydantic_ai.messages import (
     PartDeltaEvent,
@@ -31,6 +30,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.run import AgentRunResultEvent
 from pydantic_ai.tools import RunContext, ToolDefinition
+from pydantic_core import from_json
 
 from ...services.graph import Node
 from ...services.sources import store

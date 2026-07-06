@@ -5,10 +5,12 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 `Agent`s wired from `config.llm.agents` entries) instead of the old repo's
 hand-rolled Anthropic SDK loops.
 
-**Status: shared infrastructure built** (`events.py`, `traversal.py`,
-`factory.py`, `prompts.py`, the `skills/` drafts) **plus four agents:
-`query_analyst`, `librarian`, `lecturer`, and `tutor`**; the orchestrator
-lands last.
+**Status: COMPLETE.** The shared infrastructure (`events.py`,
+`traversal.py`, `factory.py`, `prompts.py`, `skills/`), all four
+model-driven agents (`query_analyst`, `librarian`, `lecturer`, `tutor`),
+and the `orchestrator` dispatcher are built and tested; the old
+`teacher/` package is fully retired. What remains is wiring: routes call
+`orchestrator.run(intent, ...)` in Phase 5.
 
 ## `events.py` — the typed event stream
 
@@ -222,17 +224,22 @@ prompt. Two kinds live side by side:
 
 ## The workflows
 
-### `orchestrator`
+### `orchestrator` *(built)*
 
-The front door. Input: an intent hint + the request payload. For the three
-known intents it runs the matching workflow skill deterministically; its
-model engages only for ambiguous or multi-step requests. Its `tools.py`
-holds the sub-agent delegations plus **`history_backfill`** — the
+The front door. `run(intent, ...)` takes the UI's intent hint + the request
+payload, dispatches the matching workflow deterministically, and is the one
+place the termination contract is enforced: every stream ends with exactly
+one `Done` or `Error`. Its `backfill.py` holds **`history_backfill`** — the
 deterministic reference-walk ported from the old `lecture.py`: launch from
 the oldest visible papers, hop backward through day-cached references, add
 the most-cited new ancestors per hop, stop at a year floor or the hop
 budget, emit `Trace`/`Discovery` events per productive hop. Not an agent —
-no LLM ever touches it.
+no LLM ever touches it; its knobs are typed config (`config.graph.backfill`),
+not `llm.agents` extras. **No model lives in the orchestrator yet,
+deliberately:** every current entry point passes a known intent, so the
+hybrid design's model half (ambiguous/multi-step requests) is a documented
+seam in `main.py`, not speculative plumbing — same call as the
+query-expansion seam in Phase 3. See its own README.
 
 ### `lecturer` — the streamed graph lecture *(built)*
 
