@@ -34,22 +34,29 @@ integrations: static/inline data, no HTTP client, no cache.
 
 ```
 arxiv/               — arXiv categories
-  __init__.py          groups(), valid_codes()
+  __init__.py          re-exports groups(), valid_codes()
+  vocab.py             the query logic (loads taxonomy.json)
   taxonomy.json        the ~155 codes (arXiv-specific data, kept with its package)
 s2/                  — S2 fields of study
-  __init__.py          fields(), valid_fields()  (inline FIELDS tuple, no data file)
+  __init__.py          re-exports fields(), valid_fields()
+  vocab.py             the inline FIELDS tuple + accessors (no data file)
 ```
 
-- **`arxiv/`** — `groups()` (the areas-with-categories tree) and `valid_codes()`
-  (an `@lru_cache`'d `frozenset` of every code), over a private `@lru_cache`'d
-  `_data()` that parses the package's bundled `taxonomy.json` once. All in one
-  `__init__.py`, so `_data()` is private (single-file use).
-- **`s2/`** — `fields()` (S2's ~20 fields, alphabetical) and `valid_fields()`,
-  over an inline `FIELDS` tuple. No data file — each value is already its own
-  human-readable label.
+Each sub-package's `__init__.py` is a thin shim — the descriptive docstring plus
+a re-export — and the actual code lives in a `vocab.py` beside it (named the same
+in both so they read alike; `vocab`, not `categories`/`fields`, so the module
+never shares a name with a function it holds).
+
+- **`arxiv/vocab.py`** — `groups()` (the areas-with-categories tree) and
+  `valid_codes()` (an `@lru_cache`'d `frozenset` of every code), over a private
+  `@lru_cache`'d `_data()` that parses the package's bundled `taxonomy.json`
+  once.
+- **`s2/vocab.py`** — `fields()` (S2's ~20 fields, alphabetical) and
+  `valid_fields()`, over an inline `FIELDS` tuple. No data file — each value is
+  already its own human-readable label.
 
 `taxonomy/__init__.py` exposes the two sub-packages (`from . import arxiv, s2`);
-consumers namespace through them.
+consumers namespace through them (`taxonomy.arxiv.groups()`).
 
 > **Naming note.** `taxonomy.arxiv` (this category list) is *not*
 > `integrations.arxiv` (the ar5iv renderer + id regex). Same word, different
