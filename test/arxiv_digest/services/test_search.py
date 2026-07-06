@@ -39,14 +39,20 @@ def test_live_search_blank_short_circuits_without_hitting_s2(monkeypatch):
     assert discovery.live_search("   ") == []
 
 
-def test_live_search_routes_query_through_the_expansion_seam(monkeypatch):
+def analysis(expanded: str, titles: list[str] | None = None):
+    return discovery.query_analyst.Expansion(
+        expanded_query=expanded, known_titles=titles or []
+    )
+
+
+def test_live_search_routes_query_through_the_analysis_seam(monkeypatch):
     seen = {}
 
-    def fake_expand(query):
+    def fake_analyze(query):
         seen["query"] = query
-        return "EXPANDED"
+        return analysis("EXPANDED")
 
-    monkeypatch.setattr(discovery, "_expand_query", fake_expand)
+    monkeypatch.setattr(discovery, "_analyze", fake_analyze)
     monkeypatch.setattr(discovery.s2, "search_papers", lambda query, **kw: [{"node": {"id": query}}])
     out = discovery.live_search("dqn")
     assert seen["query"] == "dqn"          # the raw query goes through the seam
@@ -55,16 +61,49 @@ def test_live_search_routes_query_through_the_expansion_seam(monkeypatch):
 
 def test_the_seam_delegates_to_the_query_analyst(monkeypatch):
     monkeypatch.setattr(
-        discovery.query_analyst, "expand_query", lambda query: query + " deep q-network"
+        discovery.query_analyst, "analyze", lambda query: analysis(query + " deep q-network")
     )
-    assert discovery._expand_query("dqn") == "dqn deep q-network"
+    assert discovery._analyze("dqn").expanded_query == "dqn deep q-network"
+
+
+def test_verified_titles_lead_results_and_dedupe_against_lexical(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "_analyze",
+        lambda query: analysis("dqn deep q-network", ["Playing Atari", "Ghost Paper"]),
+    )
+    matches = {"Playing Atari": {"id": "atari01", "title": "Playing Atari"}}
+    monkeypatch.setattr(discovery.s2, "match_title", lambda title: matches.get(title))
+    monkeypatch.setattr(
+        discovery.s2, "search_papers",
+        lambda query, **kw: [{"node": {"id": "atari01", "title": "Playing Atari"}},
+                             {"node": {"id": "other02", "title": "Other"}}],
+    )
+    out = discovery.live_search("dqn")
+    # The verified paper leads; its lexical duplicate is dropped; the
+    # unverifiable "Ghost Paper" produced nothing (and broke nothing).
+    assert [node["id"] for node in out] == ["atari01", "other02"]
+
+
+def test_title_match_s2_errors_skip_the_title_not_the_search(monkeypatch):
+    monkeypatch.setattr(
+        discovery, "_analyze", lambda query: analysis("dqn", ["Playing Atari"])
+    )
+
+    def match_down(title):
+        raise discovery.s2.S2Error("rate limited")
+
+    monkeypatch.setattr(discovery.s2, "match_title", match_down)
+    monkeypatch.setattr(
+        discovery.s2, "search_papers", lambda query, **kw: [{"node": {"id": "p1"}}]
+    )
+    assert discovery.live_search("dqn") == [{"id": "p1"}]
 
 
 def test_a_pasted_arxiv_url_skips_search_and_expansion_entirely(monkeypatch):
     def explode(*args, **kwargs):
-        raise AssertionError("a pasted id must not reach expansion or lexical search")
+        raise AssertionError("a pasted id must not reach analysis or lexical search")
 
-    monkeypatch.setattr(discovery, "_expand_query", explode)
+    monkeypatch.setattr(discovery, "_analyze", explode)
     monkeypatch.setattr(discovery.s2, "search_papers", explode)
     lookups = []
 

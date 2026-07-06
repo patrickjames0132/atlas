@@ -54,3 +54,33 @@ def test_search_papers_omits_fields_filter_when_empty(monkeypatch):
     monkeypatch.setattr(client, "request", lambda url, **kw: urls.append(url) or {"data": []})
     search.search_papers("transformers", limit=5, fields_of_study=[])
     assert "fieldsOfStudy" not in urls[0]
+
+
+def test_match_title_resolves_the_best_match(monkeypatch):
+    urls = []
+
+    def fake_request(url, **kw):
+        urls.append(url)
+        return {"data": [{"paperId": "atari01", "title": "Playing Atari", "matchScore": 174.2}]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    node = search.match_title("Playing Atari with Deep Reinforcement Learning")
+    assert "/paper/search/match?" in urls[0]
+    assert node is not None and node["id"] == "atari01"
+
+
+def test_match_title_treats_the_no_match_404_as_none(monkeypatch):
+    def no_match(url, **kw):
+        raise client.S2Error("S2 GET ... -> HTTP 404", status=404)
+
+    monkeypatch.setattr(client, "request", no_match)
+    assert search.match_title("A Paper The Model Made Up") is None
+
+
+def test_match_title_reraises_real_failures(monkeypatch):
+    def rate_limited(url, **kw):
+        raise client.S2Error("S2 GET ... -> gave up after 4 tries")
+
+    monkeypatch.setattr(client, "request", rate_limited)
+    with pytest.raises(client.S2Error):
+        search.match_title("Playing Atari")

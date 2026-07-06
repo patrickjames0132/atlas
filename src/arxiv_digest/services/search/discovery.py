@@ -24,24 +24,55 @@ from ...integrations import semantic_scholar as s2
 from ...storage import cache
 
 
-def _expand_query(query: str) -> str:
-    """Query-expansion seam — delegates to the query analyst agent.
+def _analyze(query: str) -> query_analyst.Expansion:
+    """Query-analysis seam — delegates to the query analyst agent.
 
     S2 search is lexical, so a seminal paper that never spells out an acronym
-    in its title/abstract is unfindable from the acronym alone; the analyst
-    expands it ("DQN" -> "DQN deep Q-network deep Q-learning") before the
-    query hits S2. This started life as a documented passthrough so the call
-    site wouldn't move when expansion arrived — and it didn't.
+    in its title/abstract is unfindable from the acronym alone. The analyst
+    attacks the gap from both ends: an expanded query ("DQN" -> "DQN deep
+    Q-network deep Q-learning") for the lexical search, and the exact titles
+    of confidently recalled papers for title-match verification. This seam
+    started life as a documented passthrough so the call site wouldn't move
+    when the agent arrived — and it didn't.
 
     Args:
         query: The raw user query.
 
     Returns:
-        The expanded query — or the original unchanged: ``expand_query``
-        degrades to a passthrough on any failure, so search never breaks
+        The analyst's ``Expansion`` — or a passthrough (query unchanged, no
+        titles): ``analyze`` degrades on any failure, so search never breaks
         because the LLM hiccuped.
     """
-    return query_analyst.expand_query(query)
+    return query_analyst.analyze(query)
+
+
+def _verified_titles(titles: list[str]) -> list[dict]:
+    """Resolve analyst-suggested titles against S2's title match.
+
+    Suggestions come from the model's parametric knowledge (the acronym→paper
+    associations Google resolves via link text); this is the verification
+    half — only papers S2 actually matches are returned, so an invented
+    title costs one lookup and produces nothing. Match failures (including
+    S2 errors) skip the title rather than break the search: these hits are
+    an enhancement, and the lexical search still runs either way.
+
+    Args:
+        titles: Exact-title suggestions, most relevant first.
+
+    Returns:
+        The matched papers' node dicts, deduped, in suggestion order.
+    """
+    verified: list[dict] = []
+    seen: set[str] = set()
+    for title in titles:
+        try:
+            node = s2.match_title(title)
+        except s2.S2Error:
+            continue
+        if node and node["id"] not in seen:
+            seen.add(node["id"])
+            verified.append(node)
+    return verified
 
 
 def live_search(
@@ -82,8 +113,13 @@ def live_search(
     if pasted_id:
         paper = s2.get_paper(f"ARXIV:{pasted_id}")
         return [paper] if paper else []
+    analysis = _analyze(query)
+    # Confidently recalled papers, verified via S2 title match, lead the
+    # results — like the id path, an exact resolution outranks lexical hits
+    # and bypasses the filters (it's the paper the query *means*).
+    verified = _verified_titles(analysis.known_titles)
     hits = s2.search_papers(
-        _expand_query(query),
+        analysis.expanded_query,
         limit=limit,
         year_from=year_from,
         year_to=year_to,
@@ -91,7 +127,9 @@ def live_search(
     )
     # search_papers returns the traversal shape (``[{"node": ...}]``); unwrap to
     # bare node dicts so live and local search return the same thing.
-    return [hit["node"] for hit in hits]
+    verified_ids = {node["id"] for node in verified}
+    lexical = [hit["node"] for hit in hits if hit["node"]["id"] not in verified_ids]
+    return (verified + lexical)[:limit]
 
 
 def local_search(

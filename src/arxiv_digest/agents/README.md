@@ -312,7 +312,7 @@ it). See its own README for the full story.
   expanded ("DQN" → "DQN deep Q-network deep Q-learning") so S2's lexical
   search can find seminal papers that never spell the acronym out.
 - **Tools:** none. **Skills:** none.
-- **Note:** invoked from `services/search`'s `_expand_query` seam, *not*
+- **Note:** invoked from `services/search`'s `_analyze` seam, *not*
   through the orchestrator — it's infrastructure for search, not a teacher
   workflow. It degrades to a passthrough on any failure: search can never
   break because the LLM hiccuped.
@@ -323,8 +323,9 @@ Callers *into* the package (each sub-agent's own README traces its callers
 in detail):
 
 - **`services/search/discovery.py`** (ported, live now) — `live_search`
-  routes every query through its `_expand_query` seam, a one-line delegation
-  to `query_analyst.expand_query`. The only agent consumed outside the
+  routes every query through its `_analyze` seam, a one-line delegation
+  to `query_analyst.analyze` (expansion + confidently recalled titles,
+  verified via S2 title match). The only agent consumed outside the
   teacher workflows: it's infrastructure for search, wired directly, never
   through the orchestrator.
 - **The routes layer (Phase 5, traced from the old repo, not yet ported).**

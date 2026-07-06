@@ -63,7 +63,7 @@ the sources before a single token streams.
 
 ## Who uses it, and how/why
 
-- **`agents/orchestrator` (Phase 4d, not yet built).** The `librarian`
+- **`agents/orchestrator` (Phase 4d).** The `librarian`
   intent is a pure delegation: the whole `workflows/librarian.md` playbook
   already lives inside `answer(...)`, so the orchestrator just calls it,
   relays the `RetrievalTrace`/`Token` stream, and appends `Done`/`Error`.

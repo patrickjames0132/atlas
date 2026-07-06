@@ -94,7 +94,7 @@ Design decisions worth knowing:
   future detail-panel tags) — rather than forcing a common envelope; the
   pickers they feed are different controls. Unknown provider → 404.
 
-### Planned: LLM title resolution (not yet built)
+### LLM title resolution
 
 Query expansion fixes the *vocabulary* gap ("DQN" → "…deep Q-network…"),
 but there's a stronger play for famous papers. Google resolves "DQN"
@@ -106,11 +106,12 @@ retrieval, no built-in RAG needed (a bare API call retrieves nothing;
 Anthropic's opt-in web-search tool would be real grounding but is
 latency/cost overkill per keystroke). And S2 has the perfect receiving end:
 a **title-match endpoint** (`/paper/search/match`) that resolves a
-near-exact title to a paper. So the plan: grow the analyst's structured
-output to `Expansion{expanded_query, known_titles}` ("name the papers this
+near-exact title to a paper. So the mechanics: the analyst's structured
+output is `Expansion{expanded_query, known_titles}` ("name the papers this
 query most likely refers to *only if confident*") — still one Haiku call —
-then `live_search` becomes: pasted id? → exact lookup → **known titles? →
-S2 title-match, prepend verified hits** → expanded lexical search. The
+and `live_search` runs: pasted id? → exact lookup → **known titles? →
+S2 title-match, verified hits lead** → expanded lexical search (deduped
+against the verified hits, capped at `limit` together). The
 hallucination risk defuses itself: an invented title simply doesn't match
 on S2 and we fall back to the lexical search we'd have run anyway — the
 failure mode is "no better than today," never worse. Post-cutoff papers
