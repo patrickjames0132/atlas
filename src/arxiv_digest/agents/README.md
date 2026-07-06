@@ -6,8 +6,9 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 hand-rolled Anthropic SDK loops.
 
 **Status: shared infrastructure built** (`events.py`, `traversal.py`,
-`factory.py`, the `skills/` drafts) **plus the first agent,
-`query_analyst`**; the remaining sub-agent packages land one at a time.
+`factory.py`, `prompts.py`, the `skills/` drafts) **plus two agents:
+`query_analyst` and `librarian`**; the remaining sub-agent packages land one
+at a time.
 
 ## `events.py` — the typed event stream
 
@@ -109,6 +110,22 @@ rule is no env vars — the key comes from `config.llm.providers`, passed
 explicitly to the provider. `agent_entry(id)` (the lookup half) is also how
 an agent reads its own `extras` knobs.
 
+## `prompts.py` — app data → model input
+
+The other half of agent assembly: `assemble(base, skills)` builds an agent's
+full instructions (its package `SYSTEM_PROMPT` + each named skill's markdown,
+loaded from `skills/`; a typo'd skill name fails at import, not by silently
+weakening the prompt), `format_passages(hits)` renders retrieved library
+passages tagged `[Title, p.N]` (shared by the librarian's grounding context
+and, later, the tutor's `search_sources` tool result), and `history(turns)`
+converts the routes layer's `[{role, content}]` turns into PydanticAI
+message history.
+
+One house rule lives here: **agents are built with `instructions=`, never
+`system_prompt=`** — PydanticAI silently drops a `system_prompt` whenever
+`message_history` is passed, which would cost an agent its persona on every
+follow-up turn.
+
 ## Decisions log (locked before design)
 
 1. **Hybrid orchestration with intent hints.** Routes always call the
@@ -138,6 +155,7 @@ agents/
   events.py          ← shared: the typed event stream every workflow emits
   traversal.py       ← shared: day-cached S2 hops + free-text search (plumbing)
   factory.py         ← shared: config.llm entry -> live PydanticAI model
+  prompts.py         ← shared: skills -> instructions, passages/history -> model input
   skills/            ← shared: skills.md files any sub-agent's config may load
     numbered-papers.md      the index-not-id grounding protocol
     teaching-voice.md       the "sharp, friendly teacher" persona rules
@@ -255,19 +273,22 @@ grounded in what it actually read.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`,
   `figures`.
 
-### `librarian` — offline library chat
+### `librarian` — offline library chat *(built)*
 
-Graph-free RAG over the user's own uploaded sources.
+Graph-free RAG over the user's own uploaded sources. See its own README.
 
 - **Input:** question, conversation history, optional scope. Retrieval
   (`services.sources.search` — RRF over FTS5 + vectors) runs *before* the
   agent, deterministically; the passages go in as context.
 - **Tools:** none.
 - **Output:** streamed prose citing inline by title and page, e.g.
-  "(Deep Learning, p.243)". A `Trace` event names the retrieved sources
+  "(Deep Learning, p.243)". A `RetrievalTrace` names the retrieved sources
   first; empty retrieval yields a friendly "nothing found" answer without
   engaging the model.
 - **Skills:** `teaching-voice`, `citation-discipline`.
+- **Note:** the whole `workflows/librarian.md` playbook lives in
+  `librarian.answer(...)` — the orchestrator's `librarian` intent just
+  calls it.
 
 ### `query_analyst` — seed-search query expansion *(built)*
 

@@ -48,7 +48,9 @@ def test_query_is_stripped_before_expansion():
     seen = {}
 
     def record(messages, info):
+        seen["prompt"] = messages[0].parts[-1].content
         raise RuntimeError("stop after recording")  # passthrough returns the strip
 
     with query_analyst.agent.override(model=FunctionModel(record)):
         assert query_analyst.expand_query("  DQN  ") == "DQN"
+    assert seen["prompt"] == "DQN"
