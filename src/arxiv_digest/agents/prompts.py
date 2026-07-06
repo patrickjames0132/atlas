@@ -12,6 +12,7 @@ joins it with blank lines itself; this module only supplies the parts.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from pydantic_ai.messages import (
@@ -21,6 +22,8 @@ from pydantic_ai.messages import (
     TextPart,
     UserPromptPart,
 )
+
+from ..services.graph import Node
 
 SKILLS_DIR = Path(__file__).parent / "skills"
 
@@ -40,6 +43,51 @@ def skill(name: str) -> str:
             weakening its prompt.
     """
     return (SKILLS_DIR / f"{name}.md").read_text().strip()
+
+
+def node_lines(nodes: Sequence[Node]) -> str:
+    """Render graph nodes as the numbered list the model refers into.
+
+    A paper's number is simply its list position + 1 — the model never sees
+    Semantic Scholar's long hex ids (the ``numbered-papers`` skill explains
+    the protocol to the model; ``idx_to_id`` maps its indices back).
+
+    Args:
+        nodes: The visible graph nodes, in display order.
+
+    Returns:
+        One line per paper — ``[n] (year, citations; relations) Title — <tldr
+        or abstract, truncated>``.
+    """
+    lines = []
+    for number, node in enumerate(nodes, start=1):
+        year = node.year if node.year is not None else "n.d."
+        citations = (
+            f", {node.citation_count} citations"
+            if node.citation_count is not None
+            else ""
+        )
+        summary = node.tldr or node.abstract or ""
+        if summary:
+            summary = " — " + " ".join(summary.split())[:240]
+        relations = ",".join(node.rels) or "?"
+        lines.append(f"[{number}] ({year}{citations}; {relations}) {node.title}{summary}")
+    return "\n".join(lines)
+
+
+def idx_to_id(nodes: Sequence[Node], indices: Iterable[int]) -> list[str]:
+    """Map the model's 1-based numbered-list indices back to node ids.
+
+    Args:
+        nodes: The same node sequence ``node_lines`` numbered.
+        indices: Indices the model emitted; out-of-range values are ignored,
+            never raised on (a hallucinated index just means one fewer
+            highlight).
+
+    Returns:
+        The node ids for the valid indices, in the model's order.
+    """
+    return [nodes[index - 1].id for index in indices if 1 <= index <= len(nodes)]
 
 
 def format_passages(hits: list[dict]) -> str:

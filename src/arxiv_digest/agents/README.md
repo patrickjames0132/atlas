@@ -6,9 +6,9 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 hand-rolled Anthropic SDK loops.
 
 **Status: shared infrastructure built** (`events.py`, `traversal.py`,
-`factory.py`, `prompts.py`, the `skills/` drafts) **plus two agents:
-`query_analyst` and `librarian`**; the remaining sub-agent packages land one
-at a time.
+`factory.py`, `prompts.py`, the `skills/` drafts) **plus three agents:
+`query_analyst`, `librarian`, and `lecturer`**; tutor and orchestrator land
+next.
 
 ## `events.py` — the typed event stream
 
@@ -116,7 +116,11 @@ The other half of agent assembly: `skill(name)` loads one skill's markdown
 from `skills/` (a typo'd skill name fails at import, not by silently
 weakening the prompt) — agents pass their parts straight to PydanticAI,
 `instructions=[SYSTEM_PROMPT, *(skill(n) for n in SKILLS)]`, which joins a
-sequence with blank lines natively. `format_passages(hits)` renders retrieved library
+sequence with blank lines natively. `node_lines(nodes)` renders graph nodes
+as the numbered list of the `numbered-papers` protocol (a paper's number is
+its list position + 1) and `idx_to_id` maps the model's indices back to node
+ids, ignoring hallucinated ones (shared by the lecturer and, later, the
+tutor). `format_passages(hits)` renders retrieved library
 passages tagged `[Title, p.N]` (shared by the librarian's grounding context
 and, later, the tutor's `search_sources` tool result), and `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI
@@ -230,7 +234,7 @@ the most-cited new ancestors per hop, stop at a year floor or the hop
 budget, emit `Trace`/`Discovery` events per productive hop. Not an agent —
 no LLM ever touches it.
 
-### `lecturer` — the streamed graph lecture
+### `lecturer` — the streamed graph lecture *(built)*
 
 - **Input:** seed, visible nodes (numbered), mode
   (`history` / `intuition` / `bridge`), target paper (bridge only). History
