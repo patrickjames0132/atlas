@@ -33,27 +33,23 @@ export interface UseDiscoveryArgs {
 /** What {@link useDiscovery} returns for GraphExplorer to wire up. */
 export interface DiscoveryApi {
   /**
-   * Papers the agent has pulled in this session. Mirrors what's been pushed
-   * into `base.nodes` — kept separately so it can extend the teacher's
-   * grounding context on follow-up questions without forcing `base` to
-   * rebuild (which would drop the sim's x/y on every node).
-   */
-  discoveredNodes: GraphNode[]
-  /**
    * Bumped whenever base.nodes/links are mutated in place, so the filtered
    * view (and anything else keyed on it) recomputes despite `base` itself
    * keeping the same object identity.
    */
   graphVersion: number
-  /** Merge a discovery event's nodes + edges into the live graph. */
+  /**
+   * Merge discovery nodes + edges into the live graph. Dedupes internally,
+   * so re-feeding the store's full discovery arrays is safe — only papers
+   * not yet on the canvas are added. (The discovery LISTS live in the
+   * workspace slice — grounding, save, and the legend read from there;
+   * this hook owns only the sim-side merge.)
+   */
   onDiscover: (newNodes: GraphNode[], newEdges: GraphEdge[]) => void
 }
 
 /**
- * Own the agent-discovery state and the in-place `base` merge.
- *
- * On a new graph the state resets — usually to empty, but a restored session's
- * node set already carries its discovered papers, which are re-collected here.
+ * Own the in-place `base` merge for agent discoveries.
  */
 export function useDiscovery({
   base,
@@ -63,15 +59,11 @@ export function useDiscovery({
   onYearLo,
   onYearHi,
 }: UseDiscoveryArgs): DiscoveryApi {
-  const [discoveredNodes, setDiscoveredNodes] = useState<GraphNode[]>([])
   const [graphVersion, setGraphVersion] = useState(0)
 
-  // Reset per graph. Usually empty (discoveries arrive later via onDiscover);
-  // on a restored session the saved node set already carries its discovered
-  // papers.
+  // Reset the version counter per graph.
   useEffect(() => {
     if (!base) return
-    setDiscoveredNodes(base.nodes.filter((n) => n.discovered))
     setGraphVersion(0)
   }, [base])
 
@@ -132,7 +124,6 @@ export function useDiscovery({
         addedLinks++
       }
 
-      if (addedNodes.length) setDiscoveredNodes((prev) => [...prev, ...addedNodes])
       if (addedNodes.length || addedLinks) {
         setGraphVersion((v) => v + 1)
         // Reheat so new nodes settle into place, but don't yank the camera —
@@ -143,5 +134,5 @@ export function useDiscovery({
     [base, layout, nodeTimelineX, fgRef, onYearLo, onYearHi],
   )
 
-  return { discoveredNodes, graphVersion, onDiscover }
+  return { graphVersion, onDiscover }
 }
