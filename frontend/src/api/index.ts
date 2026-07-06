@@ -1,4 +1,4 @@
-// Typed client for the arXiv Atlas backend API.
+// Typed client for the Atlas backend API.
 //
 // Split by concern into sibling modules; this barrel re-exports them so callers
 // keep importing everything from `./api`:

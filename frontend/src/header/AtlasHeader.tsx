@@ -57,7 +57,7 @@ export default function AtlasHeader({
   return (
     <header className="atlas-top">
       <div className="brand">
-        arXiv <span>Atlas</span>
+        <span>Atlas</span>
       </div>
       <Search
         query={query}
