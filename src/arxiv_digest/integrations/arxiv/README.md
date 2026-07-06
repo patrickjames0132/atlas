@@ -75,22 +75,25 @@ fulltext.py    — strips the render to readable body text
   failure or PDF-only submission), both `get_figures()` and `get_fulltext()`
   cache `{"available": False, ...}` rather than retrying on every panel open.
 
-## Who uses it, and how/why (traced, not yet ported)
+## Who uses it, and how/why
 
-- **`services/graph.py`** (ported) — `arxiv.ID_RE.fullmatch()` in `_looks_arxiv`
-  to decide whether a seed is an arXiv id (look it up as `ARXIV:<id>`) or a raw
-  S2 `paperId` — the discrimination that lets re-seeding land on any node,
-  arXiv or not.
+- **`services/graph/build.py`** — `arxiv.looks_arxiv()` (which wraps
+  `ID_RE.fullmatch`) to decide whether a seed is an arXiv id (look it up as
+  `ARXIV:<id>`) or a raw S2 `paperId` — the discrimination that lets
+  re-seeding land on any node, arXiv or not.
 - **`routes/graph.py`** — `arxiv.ID_RE.search()` to pull an id out of pasted
-  text; plus the detail panel's figures (`get_figures()`) and the
-  `/api/figure_proxy` route (`is_ar5iv_url()` to allowlist, `fetch_image()` to
-  relay) so the browser never talks to ar5iv directly and the proxy can't be
-  abused as an open relay.
-- **`teacher/tools.py`** — the agentic Q&A `read_paper` tool calls
-  `get_fulltext()` for a paper's actual content beyond the abstract/TL;DR.
-- **`library/sources.py`** — calls `html_to_text()` directly (not
-  `get_fulltext()`) to turn an ingested web page into searchable text — the one
-  caller with nothing to do with ar5iv or arXiv (see the layering note).
+  text (extraction, not discrimination — hence `search`, where
+  `looks_arxiv` uses `fullmatch`), then `looks_arxiv()` for the same
+  prefix-or-not lookup as the graph build; plus the detail panel's figures
+  (`get_figures()`) and the `/api/figure_proxy` route (`is_ar5iv_url()` to
+  allowlist, `fetch_image()` to relay) so the browser never talks to ar5iv
+  directly and the proxy can't be abused as an open relay.
+- **`agents/tutor/tools.py`** — the `read_paper` tool calls `get_fulltext()`
+  for a paper's actual content beyond the abstract/TL;DR, and `show_figure`
+  calls `get_figures()`.
+- **`services/sources/extract.py`** — calls `html_to_text()` directly (not
+  `get_fulltext()`) to turn an ingested web page into searchable text — the
+  one caller with nothing to do with ar5iv or arXiv (see the layering note).
 
 ## Category taxonomy — `vocab.py`
 

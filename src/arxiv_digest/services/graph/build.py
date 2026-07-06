@@ -34,25 +34,6 @@ from .model import Counts, Edge, Graph, Node, Seed
 log = logging.getLogger(__name__)
 
 
-def _looks_arxiv(ref: str) -> bool:
-    """Distinguish an arXiv id from a raw Semantic Scholar paperId.
-
-    The seed can arrive as either — an arXiv id (from the search box) or a raw
-    S2 ``paperId`` (from clicking a node in an existing graph). S2's lookup
-    needs them addressed differently (an arXiv id must be prefixed ``ARXIV:``),
-    so we sniff which one we're holding.
-
-    Args:
-        ref: The seed reference the user (or a re-seed click) supplied.
-
-    Returns:
-        True when ``ref`` is *entirely* an arXiv id (new- or old-style, with or
-        without a version suffix). ``fullmatch`` — not ``search`` — because a
-        bare S2 paperId must NOT be mistaken for one.
-    """
-    return bool(arxiv.ID_RE.fullmatch(ref))
-
-
 def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     """Build (or load from cache) the neighborhood graph for a seed paper.
 
@@ -89,7 +70,7 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
 
     # --- Resolve the seed. An arXiv id has to be handed to S2 as ``ARXIV:<id>``
     # (its external-id syntax); a raw paperId is passed through untouched.
-    lookup = f"ARXIV:{seed_ref}" if _looks_arxiv(seed_ref) else seed_ref
+    lookup = f"ARXIV:{seed_ref}" if arxiv.looks_arxiv(seed_ref) else seed_ref
     seed_paper = s2.get_paper(lookup)
     if not seed_paper:  # S2 knows no paper for this reference — a dead link.
         return None

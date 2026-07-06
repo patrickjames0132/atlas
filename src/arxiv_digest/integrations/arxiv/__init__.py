@@ -45,6 +45,25 @@ ID_RE = re.compile(
     re.IGNORECASE,
 )
 
+def looks_arxiv(ref: str) -> bool:
+    """Distinguish an arXiv id from a raw Semantic Scholar paperId.
+
+    A paper reference can arrive as either — an arXiv id (from the search box
+    or a pasted link) or a raw S2 ``paperId`` (from clicking a node in an
+    existing graph). S2's lookup needs them addressed differently (an arXiv id
+    must be prefixed ``ARXIV:``), so callers sniff which one they're holding.
+
+    Args:
+        ref: The paper reference the user (or a re-seed click) supplied.
+
+    Returns:
+        True when ``ref`` is *entirely* an arXiv id (new- or old-style, with or
+        without a version suffix). ``fullmatch`` — not ``search`` — because a
+        bare S2 paperId must NOT be mistaken for one.
+    """
+    return bool(ID_RE.fullmatch(ref))
+
+
 __all__ = [
     "ID_RE",
     "fetch_image",
@@ -52,5 +71,6 @@ __all__ = [
     "get_fulltext",
     "html_to_text",
     "is_ar5iv_url",
+    "looks_arxiv",
     "vocab",
 ]

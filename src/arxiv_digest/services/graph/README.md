@@ -67,7 +67,7 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    - a raw **S2 paperId** (from clicking a node in an existing graph) → passed
      through untouched.
 
-   `_looks_arxiv()` tells them apart with `arxiv.ID_RE.fullmatch` (whole-string
+   `arxiv.looks_arxiv()` tells them apart with `ID_RE.fullmatch` (whole-string
    match — a bare paperId must not be mistaken for an id). This is the mechanism
    that lets you **re-seed on any node**, including a journal paper with no arXiv
    id, so exploration never dead-ends. If S2 has no paper → `None`.
@@ -105,7 +105,8 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
 - **The whole snapshot is cached, not the individual S2 calls.** One cache entry
   per seed, TTL'd, rather than caching each traversal separately — the route
   wants an all-or-nothing snapshot, and this keeps the cache key simple.
-- **`_looks_arxiv` uses `fullmatch`, not `search`.** We only want to treat a
+- **`arxiv.looks_arxiv` uses `fullmatch`, not `search`.** (Shared with
+  `routes/graph.py`'s paper hydration — it lives in `integrations.arxiv`.) We only want to treat a
   reference as an arXiv id when it is *entirely* one; a random paperId that
   happens to contain id-shaped digits must fall through to the paperId path.
   (`routes/graph.py` uses `arxiv.ID_RE.search` instead — it's pulling an id out
