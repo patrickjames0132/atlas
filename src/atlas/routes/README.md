@@ -17,6 +17,7 @@ down.
 | `GET /api/paper/<ref>` | hydrate one paper's details for the panel |
 | `GET /api/paper/<ref>/figures` | the paper's ar5iv figures, proxied |
 | `GET /api/paper/<ref>/code` | Hugging Face code & artifact links |
+| `GET /api/paper/<ref>/categories` | the paper's own arXiv category tags |
 | `GET /api/figure_proxy?src=` | same-origin relay for ar5iv images |
 
 Design decisions worth knowing:
@@ -45,9 +46,10 @@ Design decisions worth knowing:
   human gave us into the key S2 wants (accepting an ISBN without being a
   printing press). The version strip belongs here too: `v5` and `v2` are
   the same paper to S2 and to our cache keys. (3) **ar5iv rendering** —
-  a node's `arxiv_id` is the ticket to figures and full text. (4)
-  *(future)* the arXiv **category tags** planned for the detail panel.
-  Retiring arXiv *search* removed none of these.
+  a node's `arxiv_id` is the ticket to figures and full text. (4) the arXiv
+  **category tags** (`/api/paper/<ref>/categories`) — S2 doesn't carry a
+  paper's own category codes, so this is the one detail-panel field arXiv's
+  metadata (not S2) supplies. Retiring arXiv *search* removed none of these.
 - **`/api/graph` serializes the typed `Graph`** via `model_dump()` — the
   route is the model-to-JSON boundary (Phase 3 decision: the graph is a
   Pydantic model everywhere inside the app).
@@ -56,6 +58,10 @@ Design decisions worth knowing:
   open relay; responses carry a day-long `Cache-Control`. This is the
   same-origin contract behind both the detail panel's figure strip and the
   researcher's `show_figure` payloads.
+- **`/api/paper/<ref>/categories` is a panel nicety, not load-bearing** —
+  same degrade-to-`available: false` contract as figures/code (a bad id, a
+  raw S2 paperId with no arXiv metadata, or an arXiv outage all look the
+  same to the frontend). Labels each code via `arxiv.vocab.name_for`.
 
 ## `search.py` — finding a seed paper
 
@@ -92,8 +98,9 @@ Design decisions worth knowing:
   block the live search running alongside them.
 - **`/api/taxonomy/<provider>` returns each provider's natural shape** —
   `{fields: [...]}` for s2 (~20 fields of study, the live-search filter),
-  `{groups: [...]}` for arxiv (~155 categories in 8 areas, reserved for the
-  future detail-panel tags) — rather than forcing a common envelope; the
+  `{groups: [...]}` for arxiv (~155 categories in 8 areas — the same
+  taxonomy the detail panel's tags are labelled from, via
+  `arxiv.vocab.name_for`) — rather than forcing a common envelope; the
   pickers they feed are different controls. Unknown provider → 404.
 
 ### LLM title resolution
@@ -217,10 +224,10 @@ Design decisions worth knowing:
 
 The React frontend (Phase 6) is the only caller: the search/seed flow hits
 `/api/graph`, clicking a node hydrates via `/api/paper/<ref>`, and the
-detail panel lazily loads `/figures` and `/code`. `<img>` tags point at
-`/api/figure_proxy` URLs (both panel figures and the researcher's inline answer
-figures use it). The search box fans out to `/api/local_search` (instant)
-and `/api/search` (live) in parallel; the filter picker loads
+detail panel lazily loads `/figures`, `/code`, and `/categories`. `<img>` tags
+point at `/api/figure_proxy` URLs (both panel figures and the researcher's
+inline answer figures use it). The search box fans out to `/api/local_search`
+(instant) and `/api/search` (live) in parallel; the filter picker loads
 `/api/taxonomy/s2` once.
 
 ## Testing

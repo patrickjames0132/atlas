@@ -5,8 +5,8 @@ behind it.
 
 ```
 detail/
-  useSelection.ts — selection id, lazy hydration/figures/code, click gesture
-  DetailPanel.tsx — the panel (badges, summary, actions, code links, figures)
+  useSelection.ts — selection id, lazy hydration/figures/code/categories, click gesture
+  DetailPanel.tsx — the panel (badges, summary, category tags, actions, code links, figures)
   detail.css      — styles (ported light-touch)
 ```
 
@@ -16,22 +16,27 @@ detail/
   Graph neighbors arrive summary-light; opening one hydrates its
   abstract/TL;DR on first click (cached per paper). Figures (ar5iv) fetch
   on first open, with failures cached as `unavailable` so a flaky ar5iv
-  isn't re-hit; code links (HF Papers) use a requested-set for the same
-  guarantee. A new graph invalidates all three caches and selects its seed.
+  isn't re-hit; code links (HF Papers) and category tags (arXiv's own
+  metadata) each use a requested-set for the same guarantee. A new graph
+  invalidates all four caches and selects its seed.
 - **Hydration works for non-arXiv papers** (fixed in this port): the fetch
   uses `arxiv_id ?? id` — the old code's arXiv gate left journal papers
   abstract-less forever, the client half of the hydration bug fixed
-  server-side in Phase 5. Figures and code links stay arXiv-gated on
-  purpose: ar5iv and HF Papers are arXiv-keyed services.
+  server-side in Phase 5. Figures, code links, and category tags stay
+  arXiv-gated on purpose: ar5iv, HF Papers, and arXiv's own metadata are all
+  arXiv-keyed — a journal paper's node just never requests them.
 - **The click gesture:** single click selects; a quick (<350 ms) second
   click on the same node re-seeds the whole graph on it — wandering the
   literature node-to-node. Re-seeding uses the S2 paperId so journal
   papers work as seeds too.
 - **`DetailPanel` is purely presentational**, and its `CodeRow`/
-  `CodeSection` children are single-parent — nested in the parent's file
-  per the hybrid structure rule. The HF section caps rows (3 models /
-  2 datasets / 2 Spaces) with the totals linking out to HF Papers; the
-  PDF link renders only for arXiv papers (it rewrites `/abs/` → `/pdf/`).
+  `CodeSection`/`CategoryTags` children are single-parent — nested in the
+  parent's file per the hybrid structure rule. The HF section caps rows
+  (3 models / 2 datasets / 2 Spaces) with the totals linking out to HF
+  Papers; the PDF link renders only for arXiv papers (it rewrites `/abs/` →
+  `/pdf/`). Category tags render as read-only pills (unlike the search
+  filter's clickable `.cat-chip` — nothing to toggle here) between the
+  meta line and the TL;DR.
 
 ## Who uses it, and how/why (traced from the old app)
 

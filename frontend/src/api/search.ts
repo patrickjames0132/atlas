@@ -121,8 +121,11 @@ export async function searchLocal(
  *
  * Never throws — failures degrade to an empty list, which simply renders the
  * picker without options. (The backend also serves the ~155 arXiv categories
- * at `/api/taxonomy/arxiv`; no client function exists yet because nothing
- * consumes them until the detail-panel category-tags feature lands.)
+ * at `/api/taxonomy/arxiv` — still no client function for it: the
+ * detail-panel category-tags feature that was the planned consumer landed
+ * server-labelled instead, via `graph.ts`'s `fetchCategories`, so the full
+ * taxonomy still has no frontend caller. Reserved for an arXiv-category
+ * search filter, mirroring this one, if that ever lands.)
  */
 export async function getFields(): Promise<string[]> {
   try {

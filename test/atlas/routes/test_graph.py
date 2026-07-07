@@ -95,6 +95,21 @@ def test_code_links_degrade_to_the_empty_envelope(client, monkeypatch):
     assert response.json["available"] is False
 
 
+def test_categories_degrades_on_failure(client, monkeypatch):
+    tags = {"available": True, "categories": [{"code": "cs.LG", "name": "Machine Learning"}]}
+    monkeypatch.setattr(graph_routes.arxiv, "get_categories", lambda ref: tags)
+    response = client.get("/api/paper/1706.03762/categories")
+    assert response.json == tags
+
+    def boom(ref):
+        raise TimeoutError("arxiv slow")
+
+    monkeypatch.setattr(graph_routes.arxiv, "get_categories", boom)
+    response = client.get("/api/paper/1706.03762/categories")
+    assert response.status_code == 200  # degrade, never 500 the panel
+    assert response.json == {"available": False, "categories": []}
+
+
 def test_figure_proxy_is_locked_to_ar5iv(client, monkeypatch):
     assert client.get("/api/figure_proxy?src=https://evil.example/x.png").status_code == 400
 

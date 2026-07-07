@@ -1,12 +1,12 @@
 # `integrations.arxiv`
 
 Everything the app derives directly from arXiv itself: arXiv-**id detection**,
-and figures + full text via [ar5iv](https://ar5iv.org) (arXiv's LaTeX→HTML
-renderer).
+figures + full text via [ar5iv](https://ar5iv.org) (arXiv's LaTeX→HTML
+renderer), and a paper's own **category tags** via arXiv's export API.
 
 ## Why it exists
 
-Two arXiv-specific jobs, both kept for arXiv papers only (the same call we made
+Three arXiv-specific jobs, all kept for arXiv papers only (the same call we made
 to keep ar5iv rather than go pure-PDF):
 
 - **`ID_RE`** — recognizing a bare or URL-wrapped arXiv id (`2406.12345`,
@@ -18,6 +18,10 @@ to keep ar5iv rather than go pure-PDF):
   paper's own LaTeX source to HTML, which this package fetches once and extracts
   two different things from: figures + captions (for the detail panel) and
   readable body text (for the agentic Q&A tool).
+- **a paper's own category tags** — Semantic Scholar doesn't carry a paper's
+  arXiv category codes (`cs.LG`, `math.PR`, …) either. arXiv's export API
+  (a different host from ar5iv, built for exactly this per-id metadata lookup)
+  supplies the raw codes; `vocab.name_for` labels them for the detail panel.
 
 **This package was `ar5iv`, renamed to `arxiv` (2026-07-05) to be the single
 home for arXiv-derived code.** `ID_RE` moved in from the separate `arxiv_client`
@@ -33,12 +37,16 @@ reaching into the other's internals; a shared `client.py` fixes that at the root
 ## How it's structured
 
 ```
-ID_RE          — the arXiv-id regex, at the package root (__init__.py)
+ID_RE           — the arXiv-id regex, at the package root (__init__.py)
 
-client.py      — fetch_html, fetch_image, is_ar5iv_url, the shared cache TTL
+client.py       — fetch_html, fetch_image, is_ar5iv_url, the shared cache TTL
      ↓
-figures.py     — extracts {image, caption} pairs from the render
-fulltext.py    — strips the render to readable body text
+figures.py      — extracts {image, caption} pairs from the render
+fulltext.py     — strips the render to readable body text
+
+categories.py   — a paper's own category codes, via arXiv's export API (its
+                  own host + client — unrelated to ar5iv's client.py above)
+vocab.py        — the bundled taxonomy: what categories exist + their labels
 ```
 
 - **`ID_RE`** lives at the package root, so consumers just do
@@ -56,9 +64,15 @@ fulltext.py    — strips the render to readable body text
 - **`fulltext.py`** — `get_fulltext()` and `html_to_text()`, backed by
   `_TextParser`. `html_to_text()` is public because it's reused outside this
   package — see below.
+- **`categories.py`** — `fetch_categories()` (the raw arXiv export API call,
+  parsed from its Atom feed with stdlib `xml.etree.ElementTree`) and
+  `get_categories()` (labels + caches). Its own `_USER_AGENT` and host
+  constant — `client.py`'s are ar5iv-specific and this hits
+  `export.arxiv.org`, a different service entirely.
+- **`vocab.py`** — see "Category taxonomy" below.
 
-`__init__.py` re-exports `ID_RE`, `get_figures`, `get_fulltext`, `html_to_text`,
-`is_ar5iv_url`, and `fetch_image`.
+`__init__.py` re-exports `ID_RE`, `get_categories`, `get_figures`,
+`get_fulltext`, `html_to_text`, `is_ar5iv_url`, and `fetch_image`.
 
 ## Design decisions worth knowing
 
@@ -74,6 +88,9 @@ fulltext.py    — strips the render to readable body text
 - **A miss is cached too.** When ar5iv has no render (404 — a LaTeX-conversion
   failure or PDF-only submission), both `get_figures()` and `get_fulltext()`
   cache `{"available": False, ...}` rather than retrying on every panel open.
+  `get_categories()` follows the same rule for a bad/withdrawn id — arXiv's
+  export API answers a miss with HTTP 200 and zero `<entry>` elements, not a
+  404, so `fetch_categories()` returns `None` rather than raising.
 
 ## Who uses it, and how/why
 
@@ -85,9 +102,10 @@ fulltext.py    — strips the render to readable body text
   text (extraction, not discrimination — hence `search`, where
   `looks_arxiv` uses `fullmatch`), then `looks_arxiv()` for the same
   prefix-or-not lookup as the graph build; plus the detail panel's figures
-  (`get_figures()`) and the `/api/figure_proxy` route (`is_ar5iv_url()` to
-  allowlist, `fetch_image()` to relay) so the browser never talks to ar5iv
-  directly and the proxy can't be abused as an open relay.
+  (`get_figures()`), category tags (`get_categories()`), and the
+  `/api/figure_proxy` route (`is_ar5iv_url()` to allowlist, `fetch_image()`
+  to relay) so the browser never talks to ar5iv directly and the proxy
+  can't be abused as an open relay.
 - **`agents/researcher/tools.py`** — the `read_paper` tool calls `get_fulltext()`
   for a paper's actual content beyond the abstract/TL;DR, and `show_figure`
   calls `get_figures()`.
@@ -95,7 +113,7 @@ fulltext.py    — strips the render to readable body text
   `get_fulltext()`) to turn an ingested web page into searchable text — the
   one caller with nothing to do with ar5iv or arXiv (see the layering note).
 
-## Category taxonomy — `vocab.py`
+## Category taxonomy — `vocab.py` — and a paper's own tags — `categories.py`
 
 The arXiv **category taxonomy**: the ~155 arXiv codes (`cs.LG`, `math.PR`, …)
 grouped into 8 top-level areas, each a `{code, name}` pair
@@ -107,27 +125,55 @@ it's arXiv-specific, the same reason `ID_RE` and ar5iv do — each provider owns
 its own controlled vocabulary. Semantic Scholar's parallel (coarser) one is
 `semantic_scholar.vocab`.
 
-- **`vocab.groups()`** — the areas-with-categories tree, for a picker or for
-  labelling a paper's tags.
+- **`vocab.groups()`** — the areas-with-categories tree, for the seed-search
+  filter picker (`/api/taxonomy/arxiv`).
 - **`vocab.valid_codes()`** — an `@lru_cache`'d `frozenset` of every code, for
   validating a submitted filter.
-- Both read a private `@lru_cache`'d `_data()` that parses `taxonomy.json` once.
+- **`vocab.name_for(code)`** — the code → display-name lookup
+  (`cs.LG` → "Machine Learning"), for labelling a paper's *own* tags. Returns
+  `None` for a code arXiv has since retired/renamed out of the taxonomy;
+  `categories.get_categories()` falls back to the bare code rather than
+  dropping it.
+- All three read a private `@lru_cache`'d `_data()` that parses
+  `taxonomy.json` once.
+
+`vocab` only answers "what categories exist" and "what's this code called" —
+it has no idea what any *specific paper* is tagged with. That's
+`categories.py`'s job: `get_categories(arxiv_id)` fetches the paper's own
+codes from arXiv's export API (`https://export.arxiv.org/api/query` — a
+different host from ar5iv, and the *only* source for this field; S2 doesn't
+carry it) and labels each one via `vocab.name_for`, caching the result
+(`{"available", "categories": [{"code", "name"}]}`) the same way
+`figures.py`/`fulltext.py` cache theirs.
 
 Design notes:
-- **Static bundled data**, not a runtime fetch — the taxonomy changes maybe once
-  a year, so shipping the file means no network call and no cache to reason about.
-- **No `code → name` lookup yet.** The API answers "what exists" and "is this
-  real", not "what's the label for `cs.LG`". The planned detail-panel feature
-  (labelling an arXiv paper's own category tags) needs that; it'll be added then.
-- A paper's *own* categories come from arXiv metadata, not S2 — `vocab` only
-  describes what categories exist.
+- **The taxonomy is static bundled data**, not a runtime fetch — it changes
+  maybe once a year, so shipping the file means no network call and no cache
+  to reason about for "what exists". A paper's *own* tags are the opposite —
+  genuinely per-paper data that only arXiv's live metadata has — hence the
+  separate `categories.py` fetch.
+- **`fetch_categories()` returns `None`, not raises, for an unresolvable id** —
+  arXiv's export API answers a bad/withdrawn id with HTTP 200 and an empty
+  feed (zero `<entry>` elements), never a 404. The route degrades that (and
+  any real HTTP/network failure) to `available: false` either way.
+- **`get_categories()` dedupes by display name, not by code.** Six pairs in
+  the taxonomy are different codes for the same subject cross-listed under
+  two top-level areas and happen to share one name (`cs.LG`/`stat.ML`, both
+  "Machine Learning"; also `cs.IT`/`math.IT`, `cs.NA`/`math.NA`,
+  `cs.SY`/`eess.SY`, `math.MP`/`math-ph`, `math.ST`/`stat.TH`). A paper
+  cross-listed in both of a pair would otherwise show the identical label
+  twice; only arXiv's first-listed code of the pair survives.
 
 ## Testing
 
 This package contributes `test_ids.py` (`ID_RE` against bare/versioned/old-style
 /URL-wrapped ids and a keyword non-match), `test_vocab.py` (the taxonomy: 8
 areas, `cs.LG` → "Machine Learning", `valid_codes()` covers exactly the codes in
-`groups()`, memoization), plus `test_client.py`, `test_figures.py`,
+`groups()`, memoization, `name_for` known/unknown codes), `test_categories.py`
+(labelling, the bare-code fallback for an unrecognized code, the
+no-entry/blank-id misses, cache + refresh, and `fetch_categories` parsing a
+real Atom feed shape), plus `test_client.py`, `test_figures.py`,
 `test_fulltext.py`. `client.fetch_html` is faked at the module boundary so
-`figures`/`fulltext` tests never touch real HTTP; `test_client.py` itself fakes
-`urllib.request.urlopen`.
+`figures`/`fulltext` tests never touch real HTTP; `test_client.py` and
+`test_categories.py` each fake `urllib.request.urlopen` directly for their own
+host.

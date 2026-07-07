@@ -356,10 +356,23 @@ optional, behind a key.
       multi-step asks, let an orchestrator model route or fan out across
       sub-agents and synthesize. Same trigger as above: build when usage
       shows the researcher's own tool loop isn't enough.
-- [ ] **Detail-panel arXiv category tags** — show an arXiv paper's own
-      categories (`cs.LG` → "Machine Learning") via `integrations.arxiv.vocab`
-      (+ `/api/taxonomy/arxiv`, already served); needs a thin arXiv metadata
-      fetch for per-paper categories (S2 doesn't carry them).
+- [x] **Detail-panel arXiv category tags** *(v2.3.0)* — the panel now shows an
+      arXiv paper's own category tags (`cs.LG` → "Machine Learning") as
+      read-only pills between the meta line and the TL;DR. S2 doesn't carry
+      per-paper categories, so a new `integrations.arxiv.categories` module
+      hits arXiv's own export API (a different host from ar5iv) for the raw
+      codes and labels them via a new `vocab.name_for` lookup, served by
+      `GET /api/paper/<ref>/categories` (same degrade-to-`available:false`
+      contract as figures/code) and fetched lazily in `useSelection` alongside
+      them. *Fixed same day:* six pairs in the taxonomy are different codes
+      that happen to share one display name (`cs.LG`/`stat.ML`, both
+      "Machine Learning"; also the `cs.IT`/`math.IT`, `cs.NA`/`math.NA`,
+      `cs.SY`/`eess.SY`, `math.MP`/`math-ph`, `math.ST`/`stat.TH` pairs) — a
+      paper cross-listed in both of a pair showed the identical label twice
+      (caught on Kingma & Welling's VAE paper, tagged both `stat.ML` and
+      `cs.LG`); `get_categories` now dedupes by display name, keeping arXiv's
+      first-listed code of the pair. *(From the `todos.md` inbox,
+      2026-07-07.)*
 - [ ] **General non-arXiv full text** — S2's `openAccessPdf` + the existing
       pymupdf pipeline as a fallback reader for `read_paper` on journal
       papers (text only; figures stay ar5iv-quality-or-nothing).
@@ -611,6 +624,15 @@ optional, behind a key.
       frontend) for single-letter variable/parameter names and rename them to
       say what they hold; add this as a standing convention, not just a
       one-time cleanup. *(From the `todos.md` inbox, 2026-07-06.)*
+- [ ] **Live per-relation count sliders** — in the graph workspace, sliders to
+      control how many references/citations/similar papers are shown, live
+      (today's counts are fixed at build time by `ref_limit`/`cite_limit`/
+      `similar_limit`). Raising a slider past what's already on screen should
+      pull more from the *original* search results rather than re-querying
+      from scratch — needs the backend to either over-fetch and cache a
+      larger pool per seed (see the citation-ranking fix, v2.1.1, which
+      already over-fetches up to S2's 1000-per-call cap) or support paging
+      further into it on demand. *(From the `todos.md` inbox, 2026-07-06.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).

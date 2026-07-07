@@ -190,3 +190,33 @@ export async function fetchCodeLinks(arxivId: string): Promise<CodeLinksResponse
   if (!res.ok) return EMPTY_CODE_LINKS
   return res.json()
 }
+
+/** One of a paper's own arXiv category tags, e.g. `{code: "cs.LG", name: "Machine Learning"}`. */
+export interface Category {
+  code: string
+  name: string
+}
+
+/** The `/api/paper/<id>/categories` response. */
+export interface CategoriesResponse {
+  /** False for a bad/withdrawn id — S2-only (non-arXiv) papers have none either. */
+  available: boolean
+  /** Primary category first, as arXiv itself orders them. */
+  categories: Category[]
+}
+
+const EMPTY_CATEGORIES: CategoriesResponse = { available: false, categories: [] }
+
+/**
+ * The paper's own arXiv category tags for the detail panel.
+ *
+ * Never throws — failures degrade to `{ available: false }` so a flaky arXiv
+ * export API can't break the panel.
+ *
+ * @param arxivId The paper's arXiv id.
+ */
+export async function fetchCategories(arxivId: string): Promise<CategoriesResponse> {
+  const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/categories`)
+  if (!res.ok) return EMPTY_CATEGORIES
+  return res.json()
+}

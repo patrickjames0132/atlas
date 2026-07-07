@@ -1,6 +1,6 @@
 """Everything the app derives directly from arXiv itself.
 
-Three things live here, all arXiv-specific and all for arXiv papers only:
+Four things live here, all arXiv-specific and all for arXiv papers only:
 
 * **arXiv-id detection** (``ID_RE``, at the package root below) — recognizing a
   bare or URL-wrapped arXiv id, so a pasted id/link routes to that exact paper
@@ -13,9 +13,14 @@ Three things live here, all arXiv-specific and all for arXiv papers only:
   * ``figures``  — ``{image, caption}`` pairs from the render's ``<figure>``s.
   * ``fulltext`` — the render stripped to readable body text; also
     ``html_to_text``, a generic helper reused by the web-page source ingester.
-* **the arXiv category taxonomy** (``vocab`` — ``groups`` / ``valid_codes`` over
-  the bundled ``taxonomy.json``): the ~155 arXiv category codes, for labelling
-  an arXiv paper's own tags. S2's parallel vocabulary is ``semantic_scholar.vocab``.
+* **the arXiv category taxonomy** (``vocab`` — ``groups`` / ``valid_codes`` /
+  ``name_for`` over the bundled ``taxonomy.json``): the ~155 arXiv category
+  codes, for labelling an arXiv paper's own tags. S2's parallel vocabulary is
+  ``semantic_scholar.vocab``.
+* **a paper's own category tags** (``categories`` — ``get_categories``): S2
+  doesn't carry a paper's arXiv category codes, so this hits arXiv's export API
+  (a different host from ar5iv) for the one field, then labels each code via
+  ``vocab.name_for``.
 
 This package was ``ar5iv`` until we consolidated all arXiv-derived code into one
 place (2026-07-05): the ar5iv renderer plus ``ID_RE``, which used to sit in the
@@ -30,6 +35,7 @@ from __future__ import annotations
 import re
 
 from . import vocab
+from .categories import get_categories
 from .client import fetch_image, is_ar5iv_url
 from .figures import get_figures
 from .fulltext import get_fulltext, html_to_text
@@ -88,6 +94,7 @@ __all__ = [
     "ID_RE",
     "extract_id",
     "fetch_image",
+    "get_categories",
     "get_figures",
     "get_fulltext",
     "html_to_text",

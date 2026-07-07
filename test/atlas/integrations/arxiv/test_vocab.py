@@ -39,3 +39,8 @@ def test_valid_codes_covers_exactly_the_codes_in_groups():
 def test_valid_codes_is_memoized():
     # lru_cache returns the same frozenset object on repeat calls.
     assert vocab.valid_codes() is vocab.valid_codes()
+
+
+def test_name_for_known_and_unknown_codes():
+    assert vocab.name_for("cs.LG") == "Machine Learning"
+    assert vocab.name_for("not.a.real.code") is None

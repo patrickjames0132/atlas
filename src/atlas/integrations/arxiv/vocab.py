@@ -57,3 +57,34 @@ def valid_codes() -> frozenset[str]:
         for group in _data()["groups"]
         for category in group["categories"]
     )
+
+
+@lru_cache(maxsize=1)
+def _names_by_code() -> dict[str, str]:
+    """Build the code -> display-name map once, from the bundled taxonomy.
+
+    Returns:
+        Every category code mapped to its human-readable name.
+    """
+    return {
+        category["code"]: category["name"]
+        for group in _data()["groups"]
+        for category in group["categories"]
+    }
+
+
+def name_for(code: str) -> str | None:
+    """Look up a category code's display name (``cs.LG`` -> "Machine Learning").
+
+    For labelling a paper's *own* category tags in the detail panel — the
+    codes themselves come from arXiv's per-paper metadata, not from here.
+
+    Args:
+        code: An arXiv category code.
+
+    Returns:
+        The display name, or None when the code isn't in the bundled taxonomy
+        (arXiv occasionally retires/renames categories; an unrecognized code
+        still displays, just without a label).
+    """
+    return _names_by_code().get(code)

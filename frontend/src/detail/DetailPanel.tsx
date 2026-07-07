@@ -1,11 +1,11 @@
 /**
  * The right-hand paper detail panel: relation badges, title, authors, the
- * TL;DR / abstract, code & artifact links (Hugging Face Papers), lazily-loaded
- * figures (ar5iv), and the paper actions (abstract/PDF links, pin,
- * explore-from-here).
+ * TL;DR / abstract, its own arXiv category tags, code & artifact links
+ * (Hugging Face Papers), lazily-loaded figures (ar5iv), and the paper
+ * actions (abstract/PDF links, pin, explore-from-here).
  */
 
-import type { CodeLinksResponse, FiguresResponse } from '../api'
+import type { CategoriesResponse, CodeLinksResponse, FiguresResponse } from '../api'
 import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
 import { REL_COLOR } from '../graph/theme'
@@ -21,6 +21,8 @@ export interface DetailPanelProps {
   figuresLoading: boolean
   /** The node's code & artifact links, once fetched (undefined until then). */
   codeLinks?: CodeLinksResponse
+  /** The node's own arXiv category tags, once fetched (undefined until then). */
+  categories?: CategoriesResponse
   /** Whether the node is currently pinned in place. */
   isPinned: boolean
   /** Pin/unpin the node. */
@@ -56,6 +58,19 @@ function CodeRow({
       <span className="code-label">{label}</span>
       {meta && <span className="code-meta">{meta}</span>}
     </a>
+  )
+}
+
+/** The paper's own arXiv category tags (e.g. `cs.LG` → "Machine Learning"). */
+function CategoryTags({ categories }: { categories: CategoriesResponse }) {
+  return (
+    <div className="detail-cats">
+      {categories.categories.map((c) => (
+        <span key={c.code} className="detail-cat" title={c.code}>
+          {c.name}
+        </span>
+      ))}
+    </div>
   )
 }
 
@@ -106,6 +121,7 @@ export default function DetailPanel({
   figures,
   figuresLoading,
   codeLinks,
+  categories,
   isPinned,
   onTogglePin,
   onClose,
@@ -131,6 +147,9 @@ export default function DetailPanel({
           {(node.citation_count ?? 0).toLocaleString()} citations
         </div>
       </div>
+      {categories && categories.available && categories.categories.length > 0 && (
+        <CategoryTags categories={categories} />
+      )}
       {(node.tldr || node.abstract) && (
         <p className="detail-summary">
           {node.tldr ? (

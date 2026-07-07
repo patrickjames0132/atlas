@@ -5,6 +5,7 @@ GET /api/graph?seed=&refresh=      -> neighborhood graph for a seed paper
 GET /api/paper/<arxiv_id>          -> full details for one paper (panel hydrate)
 GET /api/paper/<arxiv_id>/figures  -> the paper's figures + captions (ar5iv)
 GET /api/paper/<arxiv_id>/code     -> code & artifact links (Hugging Face Papers)
+GET /api/paper/<arxiv_id>/categories -> the paper's own arXiv category tags
 GET /api/figure_proxy?src=         -> same-origin proxy for an ar5iv image
 
 Two failure philosophies live here, on purpose: the *load-bearing* endpoints
@@ -145,6 +146,29 @@ def api_code(paper_ref: str) -> Response:
     except Exception:  # HF down/slow — degrade gracefully, don't 500 the panel
         current_app.logger.warning("code-links fetch failed for %s", ref, exc_info=True)
         result = huggingface.empty_result()
+    return jsonify(result)
+
+
+@bp.get("/api/paper/<path:paper_ref>/categories")
+def api_categories(paper_ref: str) -> Response:
+    """Fetch a paper's own arXiv category tags for the detail panel.
+
+    Args:
+        paper_ref: The paper's arXiv id (path-encoded). Non-arXiv papers (a
+            raw S2 paperId) have none — arXiv's own metadata is the only
+            source for this field.
+
+    Returns:
+        JSON ``{available, categories: [{code, name}]}``. A bad/withdrawn id
+        comes back as ``available: false`` — not an error — and an arXiv
+        outage degrades the same way rather than 500-ing the panel.
+    """
+    ref = normalize_arxiv_id(paper_ref)
+    try:
+        result = arxiv.get_categories(ref)
+    except Exception:  # arXiv down/slow — degrade gracefully, don't 500 the panel
+        current_app.logger.warning("category fetch failed for %s", ref, exc_info=True)
+        return jsonify({"available": False, "categories": []})
     return jsonify(result)
 
 

@@ -10,7 +10,7 @@ api/
   sse.ts       — the shared text/event-stream reader (internal plumbing)
   agents.ts    — streaming lecture / Q&A / library chat  (routes/agents.py)
   search.ts    — live + local seed search, field vocabulary (routes/search.py)
-  graph.ts     — graph, paper detail, figures, code links  (routes/graph.py)
+  graph.ts     — graph, paper detail, figures, code links, category tags (routes/graph.py)
   sessions.ts  — saved workspaces                          (routes/sessions.py)
   sources.ts   — the local semantic library                (routes/sources.py)
   index.ts     — the barrel
@@ -21,9 +21,10 @@ api/
 - **Two failure philosophies, mirroring the backend routes.** Load-bearing
   calls (`fetchGraph`, `searchLive`, `getSession`, ingestion) throw with the
   server's message for the UI to surface. Niceties and fallbacks
-  (`fetchFigures`, `fetchCodeLinks`, `searchLocal`, `listSessions`,
-  `getFields`) **never throw** — they degrade to empty/unavailable shapes so
-  a flaky upstream can't break a panel or block the live search.
+  (`fetchFigures`, `fetchCodeLinks`, `fetchCategories`, `searchLocal`,
+  `listSessions`, `getFields`) **never throw** — they degrade to
+  empty/unavailable shapes so a flaky upstream can't break a panel or block
+  the live search.
 - **One paper type everywhere.** `GraphNode` mirrors the backend's
   `services.graph.Node` and is also the shape of a live-search hit and a
   discovered paper — graph neighbors, search results, and agent discoveries
@@ -53,9 +54,12 @@ api/
   expanded (and famous papers title-resolved) server-side; a pasted arXiv
   id/URL resolves to exactly that paper with filters skipped. The client
   just sees better-ordered `papers`.
-- **No arXiv-categories client function yet.** The backend serves
-  `/api/taxonomy/arxiv`, but nothing consumes it until the detail-panel
-  category-tags feature lands — no dead exports.
+- **The detail-panel category tags landed server-labelled, not via
+  `/api/taxonomy/arxiv`.** That endpoint (the full ~155-code taxonomy, for a
+  future search filter) still has no client function — the planned consumer
+  turned out not to need it. `fetchCategories` instead hits a dedicated
+  per-paper endpoint (`/api/paper/<ref>/categories`) that returns each tag
+  already labelled, so the client does no code→name lookups of its own.
 
 ## Who uses it, and how/why (traced from the old app; components port next)
 
@@ -66,7 +70,7 @@ api/
 - **`teacher/Teacher.tsx`** — the three `agents.ts` streams; `Discovery`
   payloads flow up to the graph via `useDiscovery`.
 - **`detail/DetailPanel.tsx`** — `fetchPaperDetail`, `fetchFigures`,
-  `fetchCodeLinks` on node click (lazy, degradable).
+  `fetchCodeLinks`, `fetchCategories` on node click (lazy, degradable).
 - **`library/Sources.tsx`** — `sources.ts` CRUD; `sessions/Sessions.tsx` —
   `sessions.ts` CRUD.
 

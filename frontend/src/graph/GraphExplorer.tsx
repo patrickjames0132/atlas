@@ -125,9 +125,11 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     [dispatch],
   )
 
-  // Selection: the open detail panel, its hydration + figures + code links.
-  const { selectedId, setSelectedId, selected, figures, figLoading, codeLinks, onNodeClick } =
-    useSelection({ base, graph, loadGraph: doLoadGraph })
+  // Selection: the open detail panel, its hydration + figures + code links +
+  // category tags.
+  const {
+    selectedId, setSelectedId, selected, figures, figLoading, codeLinks, categories, onNodeClick,
+  } = useSelection({ base, graph, loadGraph: doLoadGraph })
 
   // The sim-side discovery merge. The discovery LISTS live in the store (the
   // teacher dispatches them); this effect feeds them into the in-place merge,
@@ -278,6 +280,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
           figures={selected.arxiv_id ? figures[selected.arxiv_id] : undefined}
           figuresLoading={figLoading === selected.arxiv_id}
           codeLinks={selected.arxiv_id ? codeLinks[selected.arxiv_id] : undefined}
+          categories={selected.arxiv_id ? categories[selected.arxiv_id] : undefined}
           isPinned={pinned.has(selected.id)}
           onTogglePin={() => togglePin(selected.id)}
           onClose={() => setSelectedId(null)}

@@ -1,13 +1,19 @@
 /**
  * Selection state for the explorer: which node is open in the detail panel,
  * its lazily-hydrated details (abstract/TL;DR), its lazily-fetched figures,
- * and the click handler that both selects and (on a quick double-click)
- * re-seeds the graph.
+ * code links, and arXiv category tags, and the click handler that both
+ * selects and (on a quick double-click) re-seeds the graph.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchCodeLinks, fetchFigures, fetchPaperDetail } from '../api'
-import type { CodeLinksResponse, FiguresResponse, GraphNode, GraphResponse } from '../api'
+import { fetchCategories, fetchCodeLinks, fetchFigures, fetchPaperDetail } from '../api'
+import type {
+  CategoriesResponse,
+  CodeLinksResponse,
+  FiguresResponse,
+  GraphNode,
+  GraphResponse,
+} from '../api'
 import type { Base, VNode } from '../graph/model'
 
 /** Arguments for {@link useSelection}. */
@@ -34,15 +40,18 @@ export interface SelectionApi {
   figLoading: string | null
   /** Code & artifact links (HF Papers) per arXiv id, as they finish loading. */
   codeLinks: Record<string, CodeLinksResponse>
+  /** The paper's own arXiv category tags per arXiv id, as they finish loading. */
+  categories: Record<string, CategoriesResponse>
   /** Canvas click handler: select on click, re-seed on quick double-click. */
   onNodeClick: (node: VNode) => void
 }
 
 /**
- * Own the selected-paper state: selection, detail hydration, and figures.
+ * Own the selected-paper state: selection, detail hydration, figures, code
+ * links, and category tags.
  *
- * Per-paper caches (details, figures) reset — and the seed becomes the
- * selection — whenever a new graph loads.
+ * Per-paper caches (details, figures, code links, categories) reset — and
+ * the seed becomes the selection — whenever a new graph loads.
  */
 export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): SelectionApi {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -53,6 +62,9 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
   // Code & artifact links (HF Papers) per arXiv id, same lazy pattern.
   const [codeLinks, setCodeLinks] = useState<Record<string, CodeLinksResponse>>({})
   const codeRequested = useRef<Set<string>>(new Set())
+  // The paper's own arXiv category tags per arXiv id, same lazy pattern.
+  const [categories, setCategories] = useState<Record<string, CategoriesResponse>>({})
+  const categoriesRequested = useRef<Set<string>>(new Set())
 
   // A new graph invalidates the per-paper caches and selects its seed.
   useEffect(() => {
@@ -60,6 +72,8 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     setFigures({})
     setCodeLinks({})
     codeRequested.current = new Set()
+    setCategories({})
+    categoriesRequested.current = new Set()
     setSelectedId(graph ? graph.seed.id : null)
   }, [graph])
 
@@ -92,6 +106,15 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     fetchCodeLinks(aid).then((res) => setCodeLinks((c) => ({ ...c, [aid]: res })))
   }, [selected])
 
+  // Same for the paper's own arXiv category tags. fetchCategories never
+  // throws — failures land as { available: false }.
+  useEffect(() => {
+    const aid = selected?.arxiv_id
+    if (!aid || categoriesRequested.current.has(aid)) return
+    categoriesRequested.current.add(aid)
+    fetchCategories(aid).then((res) => setCategories((c) => ({ ...c, [aid]: res })))
+  }, [selected])
+
   // Single click selects a node; a quick second click on the SAME node re-seeds
   // the whole graph on it — letting you wander the literature node-to-node. We
   // re-seed by Semantic Scholar id (node.id) so journal papers work too.
@@ -119,5 +142,7 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     [details, loadGraph],
   )
 
-  return { selectedId, setSelectedId, selected, figures, figLoading, codeLinks, onNodeClick }
+  return {
+    selectedId, setSelectedId, selected, figures, figLoading, codeLinks, categories, onNodeClick,
+  }
 }
