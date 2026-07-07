@@ -80,9 +80,9 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
   /** The selected node, overlaid with any hydrated detail fields. */
   const selected = useMemo<VNode | null>(() => {
     if (!base || !selectedId) return null
-    const n = base.nodes.find((x) => x.id === selectedId)
-    if (!n) return null
-    return details[selectedId] ? ({ ...n, ...details[selectedId] } as VNode) : n
+    const node = base.nodes.find((candidate) => candidate.id === selectedId)
+    if (!node) return null
+    return details[selectedId] ? ({ ...node, ...details[selectedId] } as VNode) : node
   }, [base, selectedId, details])
 
   // Lazily fetch the selected paper's figures (ar5iv) the first time it's
@@ -92,8 +92,10 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     if (!aid || figures[aid] || figLoading === aid) return
     setFigLoading(aid)
     fetchFigures(aid)
-      .then((res) => setFigures((f) => ({ ...f, [aid]: res })))
-      .catch(() => setFigures((f) => ({ ...f, [aid]: { available: false, figures: [] } })))
+      .then((res) => setFigures((prev) => ({ ...prev, [aid]: res })))
+      .catch(() =>
+        setFigures((prev) => ({ ...prev, [aid]: { available: false, figures: [] } })),
+      )
       .finally(() => setFigLoading((cur) => (cur === aid ? null : cur)))
   }, [selected, figures, figLoading])
 
@@ -103,7 +105,7 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     const aid = selected?.arxiv_id
     if (!aid || codeRequested.current.has(aid)) return
     codeRequested.current.add(aid)
-    fetchCodeLinks(aid).then((res) => setCodeLinks((c) => ({ ...c, [aid]: res })))
+    fetchCodeLinks(aid).then((res) => setCodeLinks((prev) => ({ ...prev, [aid]: res })))
   }, [selected])
 
   // Same for the paper's own arXiv category tags. fetchCategories never
@@ -112,22 +114,22 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     const aid = selected?.arxiv_id
     if (!aid || categoriesRequested.current.has(aid)) return
     categoriesRequested.current.add(aid)
-    fetchCategories(aid).then((res) => setCategories((c) => ({ ...c, [aid]: res })))
+    fetchCategories(aid).then((res) => setCategories((prev) => ({ ...prev, [aid]: res })))
   }, [selected])
 
   // Single click selects a node; a quick second click on the SAME node re-seeds
   // the whole graph on it — letting you wander the literature node-to-node. We
   // re-seed by Semantic Scholar id (node.id) so journal papers work too.
-  const lastClick = useRef<{ id: string; t: number }>({ id: '', t: 0 })
+  const lastClick = useRef<{ id: string; time: number }>({ id: '', time: 0 })
   const onNodeClick = useCallback(
     (node: VNode) => {
       const now = performance.now()
-      if (lastClick.current.id === node.id && now - lastClick.current.t < 350) {
-        lastClick.current = { id: '', t: 0 }
+      if (lastClick.current.id === node.id && now - lastClick.current.time < 350) {
+        lastClick.current = { id: '', time: 0 }
         if (!node.is_seed) loadGraph(node.id)
         return
       }
-      lastClick.current = { id: node.id, t: now }
+      lastClick.current = { id: node.id, time: now }
       setSelectedId(node.id)
       // Neighbor nodes arrive summary-light — hydrate the panel on first open.
       // By arXiv id when there is one, else the raw S2 paperId: journal papers
@@ -135,7 +137,7 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
       // the client half of the hydration bug fixed server-side in Phase 5).
       if (!node.tldr && !node.abstract && !details[node.id]) {
         fetchPaperDetail(node.arxiv_id ?? node.id)
-          .then((full) => setDetails((d) => ({ ...d, [node.id]: full })))
+          .then((full) => setDetails((prev) => ({ ...prev, [node.id]: full })))
           .catch(() => {})
       }
     },

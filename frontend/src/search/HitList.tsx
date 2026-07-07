@@ -62,15 +62,15 @@ export default function HitList({
       {localHits && (
         <>
           <div className="hit-sub">From your cache</div>
-          {localHits.map((h) => (
+          {localHits.map((hit) => (
             <button
-              key={h.id}
+              key={hit.id}
               className="hit"
-              onClick={() => onPick(h.arxiv_id ?? h.id)}
+              onClick={() => onPick(hit.arxiv_id ?? hit.id)}
             >
               <div className="hit-title">
-                {h.title}
-                {h.has_graph && (
+                {hit.title}
+                {hit.has_graph && (
                   <span
                     className="hit-badge"
                     title="Graph snapshot cached — explores without hitting the API"
@@ -80,9 +80,9 @@ export default function HitList({
                 )}
               </div>
               <div className="hit-meta">
-                {refAuthors(h.authors) ? `${refAuthors(h.authors)} · ` : ''}
-                {h.year ?? '—'} ·{' '}
-                {(h.citation_count ?? 0).toLocaleString()} citations
+                {refAuthors(hit.authors) ? `${refAuthors(hit.authors)} · ` : ''}
+                {hit.year ?? '—'} ·{' '}
+                {(hit.citation_count ?? 0).toLocaleString()} citations
               </div>
             </button>
           ))}
@@ -105,15 +105,15 @@ export default function HitList({
         <div className="hit-note">No results from Semantic Scholar.</div>
       )}
       {hits
-        ?.filter((h) => !localHits?.some((l) => l.id === h.id))
-        .map((h) => (
-          <button key={h.id} className="hit" onClick={() => onPick(h.arxiv_id ?? h.id)}>
-            <div className="hit-title">{h.title}</div>
+        ?.filter((hit) => !localHits?.some((local) => local.id === hit.id))
+        .map((hit) => (
+          <button key={hit.id} className="hit" onClick={() => onPick(hit.arxiv_id ?? hit.id)}>
+            <div className="hit-title">{hit.title}</div>
             <div className="hit-meta">
-              <span className="hit-date">{formatPubDate(h.pub_date, h.year)}</span>
+              <span className="hit-date">{formatPubDate(hit.pub_date, hit.year)}</span>
               {' · '}
-              {refAuthors(h.authors) ? `${refAuthors(h.authors)} · ` : ''}
-              {(h.citation_count ?? 0).toLocaleString()} citations
+              {refAuthors(hit.authors) ? `${refAuthors(hit.authors)} · ` : ''}
+              {(hit.citation_count ?? 0).toLocaleString()} citations
             </div>
           </button>
         ))}

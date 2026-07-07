@@ -16,10 +16,10 @@ import type { GraphNode, LocalHit, SearchFilters } from '../api'
 export interface SeedSearchApi {
   /** The controlled value of the search box. */
   query: string
-  setQuery: (q: string) => void
+  setQuery: (query: string) => void
   /** The active (pre-submit, always optional) date/field filters. */
   filters: SearchFilters
-  setFilters: (f: SearchFilters) => void
+  setFilters: (next: SearchFilters) => void
   /** Live S2 results (null until a search lands / after clearHits). */
   hits: GraphNode[] | null
   /** Cache-first results from previously seen graphs (null when none). */
@@ -29,7 +29,7 @@ export interface SeedSearchApi {
   /** The live search failed (rate limit / outage) — cache-only mode. */
   liveFailed: boolean
   /** Run both searches for a query (local first, live alongside). */
-  runSearch: (q: string) => Promise<void>
+  runSearch: (text: string) => Promise<void>
   /** Dismiss all results (picking a hit, closing the panel, re-seeding). */
   clearHits: () => void
 }
@@ -62,7 +62,7 @@ export function useSeedSearch(
    * cache-only rather than erroring while local hits exist.
    */
   const runSearch = useCallback(
-    async (q: string) => {
+    async (text: string) => {
       setSearching(true)
       onError(null)
       setHits(null)
@@ -70,17 +70,17 @@ export function useSeedSearch(
       setLiveFailed(false)
       // Cache-first: local hits resolve near-instantly and render while the
       // live search is still in flight (or failing, when rate-limited).
-      const localP = searchLocal(q, 10, filters)
-      localP.then((l) => setLocalHits(l.length ? l : null))
+      const localPromise = searchLocal(text, 10, filters)
+      localPromise.then((local) => setLocalHits(local.length ? local : null))
       try {
-        const res = await searchLive(q, 12, filters)
+        const res = await searchLive(text, 12, filters)
         setHits(res.papers)
-        if (res.papers.length === 0 && (await localP).length === 0)
-          onError(`Nothing matched "${q}" — not on Semantic Scholar, not in your cache.`)
-      } catch (e) {
+        if (res.papers.length === 0 && (await localPromise).length === 0)
+          onError(`Nothing matched "${text}" — not on Semantic Scholar, not in your cache.`)
+      } catch (error) {
         setLiveFailed(true)
-        if ((await localP).length === 0)
-          onError(e instanceof Error ? e.message : String(e))
+        if ((await localPromise).length === 0)
+          onError(error instanceof Error ? error.message : String(error))
       } finally {
         setSearching(false)
       }

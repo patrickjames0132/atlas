@@ -32,16 +32,16 @@ export function splitAnswer(
   // joined by their own newlines instead of gluing together.
   let buf = ''
   const flush = () => {
-    const t = buf.replace(/^\n+|\n+$/g, '') // outer blank lines only; keep internal breaks
-    if (t) parts.push(t)
+    const trimmed = buf.replace(/^\n+|\n+$/g, '') // outer blank lines only; keep internal breaks
+    if (trimmed) parts.push(trimmed)
     buf = ''
   }
   let last = 0
-  for (const m of clean.matchAll(FIG_MARKER)) {
-    buf += clean.slice(last, m.index)
-    last = (m.index ?? 0) + m[0].length
-    const slot = Number(m[1])
-    const fig = figs.find((f) => f.slot === slot)
+  for (const match of clean.matchAll(FIG_MARKER)) {
+    buf += clean.slice(last, match.index)
+    last = (match.index ?? 0) + match[0].length
+    const slot = Number(match[1])
+    const fig = figs.find((figure) => figure.slot === slot)
     if (fig && !used.has(slot)) {
       used.add(slot)
       flush()
@@ -51,5 +51,5 @@ export function splitAnswer(
   buf += clean.slice(last)
   flush()
   if (parts.length === 0) parts.push('')
-  return { parts, leftover: figs.filter((f) => f.slot == null || !used.has(f.slot)) }
+  return { parts, leftover: figs.filter((figure) => figure.slot == null || !used.has(figure.slot)) }
 }

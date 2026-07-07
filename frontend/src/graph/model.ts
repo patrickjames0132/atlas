@@ -54,12 +54,12 @@ const MONTHS = [
  */
 export function formatPubDate(pubDate?: string | null, year?: number | null): string {
   if (pubDate) {
-    const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(pubDate)
-    if (m) {
-      const mon = MONTHS[Number(m[2]) - 1]
-      if (mon && m[3]) return `${mon} ${Number(m[3])}, ${m[1]}`
-      if (mon) return `${mon} ${m[1]}`
-      return m[1]
+    const match = /^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(pubDate)
+    if (match) {
+      const mon = MONTHS[Number(match[2]) - 1]
+      if (mon && match[3]) return `${mon} ${Number(match[3])}, ${match[1]}`
+      if (mon) return `${mon} ${match[1]}`
+      return match[1]
     }
   }
   return year != null ? String(year) : '—'
@@ -84,8 +84,8 @@ export function primaryRel(node: GraphNode): string {
  */
 export function nodeRadius(node: GraphNode): number {
   if (node.is_seed) return 10
-  const c = node.citation_count ?? 0
-  return Math.min(3 + Math.sqrt(c) / 6, 18)
+  const citations = node.citation_count ?? 0
+  return Math.min(3 + Math.sqrt(citations) / 6, 18)
 }
 
 /**
@@ -94,22 +94,22 @@ export function nodeRadius(node: GraphNode): number {
  * `idx` (per-conversation numbering ephemera; the researcher renumbers from node
  * order on every question, so persisting it would only mislead).
  */
-export function cleanNode(n: VNode): GraphNode {
+export function cleanNode(node: VNode): GraphNode {
   return {
-    id: n.id,
-    arxiv_id: n.arxiv_id,
-    title: n.title,
-    abstract: n.abstract,
-    tldr: n.tldr,
-    year: n.year,
-    month: n.month,
-    pub_date: n.pub_date,
-    citation_count: n.citation_count,
-    authors: n.authors,
-    url: n.url,
-    rels: n.rels,
-    is_seed: n.is_seed,
-    discovered: n.discovered,
+    id: node.id,
+    arxiv_id: node.arxiv_id,
+    title: node.title,
+    abstract: node.abstract,
+    tldr: node.tldr,
+    year: node.year,
+    month: node.month,
+    pub_date: node.pub_date,
+    citation_count: node.citation_count,
+    authors: node.authors,
+    url: node.url,
+    rels: node.rels,
+    is_seed: node.is_seed,
+    discovered: node.discovered,
   }
 }
 
@@ -119,13 +119,13 @@ export function cleanNode(n: VNode): GraphNode {
  * discovered papers).
  */
 export function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
-  const c = { references: 0, citations: 0, similar: 0, nodes: nodes.length }
-  nodes.forEach((n) =>
-    n.rels.forEach((r) => {
-      if (r === 'reference') c.references++
-      else if (r === 'citation') c.citations++
-      else if (r === 'similar') c.similar++
+  const counts = { references: 0, citations: 0, similar: 0, nodes: nodes.length }
+  nodes.forEach((node) =>
+    node.rels.forEach((rel) => {
+      if (rel === 'reference') counts.references++
+      else if (rel === 'citation') counts.citations++
+      else if (rel === 'similar') counts.similar++
     }),
   )
-  return c
+  return counts
 }

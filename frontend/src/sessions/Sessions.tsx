@@ -14,8 +14,8 @@ import './sessions.css'
 // the parent's job (it holds the live graph + chat), reached via onSave/onOpen.
 
 function when(ts: number): string {
-  const d = new Date(ts * 1000)
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const date = new Date(ts * 1000)
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function Sessions({
@@ -55,8 +55,8 @@ export default function Sessions({
   }, [open, refresh, defaultName])
 
   const onSaveClick = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
+    async (event: React.FormEvent) => {
+      event.preventDefault()
       if (!canSave || busy) return
       setError(null)
       setBusy(true)
@@ -75,12 +75,12 @@ export default function Sessions({
   // Overwrite an existing saved session with the current workspace, keeping its
   // name. It jumps to the top of the list (ordered by last-updated) on refresh.
   const onUpdate = useCallback(
-    async (s: SavedSessionMeta) => {
+    async (session: SavedSessionMeta) => {
       if (!canSave || busy) return
       setError(null)
       setBusy(true)
       try {
-        await onSave(s.name, s.id)
+        await onSave(session.name, session.id)
         await refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -120,7 +120,7 @@ export default function Sessions({
         <form className="src-url session-save" onSubmit={onSaveClick}>
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(event) => setName(event.target.value)}
             placeholder={canSave ? 'Name this session…' : 'Load a graph to save it'}
             aria-label="Session name"
             disabled={!canSave || busy}
@@ -137,24 +137,25 @@ export default function Sessions({
           ) : items.length === 0 ? (
             <div className="sources-empty">No saved sessions yet.</div>
           ) : (
-            items.map((s) => (
-              <div key={s.id} className="source-row">
+            items.map((session) => (
+              <div key={session.id} className="source-row">
                 <button
                   className="session-open"
-                  onClick={() => onOpen(s.id)}
+                  onClick={() => onOpen(session.id)}
                   title="Reopen this graph + chat"
                 >
-                  <div className="source-title">🗂 {s.name}</div>
+                  <div className="source-title">🗂 {session.name}</div>
                   <div className="source-sub">
-                    {s.seed_title ? `${s.seed_title} · ` : ''}
-                    {s.n_nodes} paper{s.n_nodes === 1 ? '' : 's'} · {when(s.updated_at)}
+                    {session.seed_title ? `${session.seed_title} · ` : ''}
+                    {session.n_nodes} paper{session.n_nodes === 1 ? '' : 's'} ·{' '}
+                    {when(session.updated_at)}
                   </div>
                 </button>
                 <div className="session-row-actions">
                   {canSave && (
                     <button
                       className="link-btn"
-                      onClick={() => onUpdate(s)}
+                      onClick={() => onUpdate(session)}
                       disabled={busy}
                       title="Overwrite this saved session with the current graph + chat"
                     >
@@ -163,8 +164,8 @@ export default function Sessions({
                   )}
                   <button
                     className="link-btn"
-                    onClick={() => onDelete(s.id)}
-                    aria-label={`Delete ${s.name}`}
+                    onClick={() => onDelete(session.id)}
+                    aria-label={`Delete ${session.name}`}
                   >
                     Delete
                   </button>

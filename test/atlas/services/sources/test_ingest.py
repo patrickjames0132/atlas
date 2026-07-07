@@ -33,7 +33,7 @@ def test_ingest_pdf_end_to_end(tmp_path, stub_embeddings):
     assert record["title"] == "My Book" and record["kind"] == "pdf"
     assert record["pages"] == 2 and record["n_chunks"] == 2
 
-    hits = sources.search("Adam optimizer", k=1)
+    hits = sources.search("Adam optimizer", top_k=1)
     assert hits and hits[0]["page"] == 1 and hits[0]["source_title"] == "My Book"
 
 
@@ -61,24 +61,24 @@ def test_ingest_url_uses_page_title(monkeypatch, stub_embeddings):
 
 @pytest.fixture()
 def two_sources(stub_embeddings):
-    a = sources.add_source("Optim Book", "pdf", None, [(1, "the adam optimizer rules")])
-    b = sources.add_source("Zoo Book", "pdf", None, [(1, "the adam quokka hops")])
-    return a["id"], b["id"]
+    optim = sources.add_source("Optim Book", "pdf", None, [(1, "the adam optimizer rules")])
+    zoo = sources.add_source("Zoo Book", "pdf", None, [(1, "the adam quokka hops")])
+    return optim["id"], zoo["id"]
 
 
 def test_scope_none_searches_all(two_sources):
-    titles = {hit["source_title"] for hit in sources.search("adam", k=10)}
+    titles = {hit["source_title"] for hit in sources.search("adam", top_k=10)}
     assert titles == {"Optim Book", "Zoo Book"}
 
 
 def test_scope_subset_restricts(two_sources):
     a_id, _ = two_sources
-    titles = {hit["source_title"] for hit in sources.search("adam", k=10, source_ids=[a_id])}
+    titles = {hit["source_title"] for hit in sources.search("adam", top_k=10, source_ids=[a_id])}
     assert titles == {"Optim Book"}
 
 
 def test_scope_empty_searches_nothing(two_sources):
-    assert sources.search("adam", k=10, source_ids=[]) == []
+    assert sources.search("adam", top_k=10, source_ids=[]) == []
 
 
 def test_list_and_delete_cascade(two_sources):
@@ -87,6 +87,6 @@ def test_list_and_delete_cascade(two_sources):
     assert sources.delete_source(a_id) is True
     assert {source["id"] for source in sources.list_sources()} == {b_id}
     # a's chunks are gone from retrieval entirely.
-    titles = {hit["source_title"] for hit in sources.search("adam optimizer", k=10)}
+    titles = {hit["source_title"] for hit in sources.search("adam optimizer", top_k=10)}
     assert "Optim Book" not in titles
     assert sources.delete_source(a_id) is False  # already gone

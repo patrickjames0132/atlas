@@ -72,7 +72,7 @@ export function usePinning({
         node.fx = node.x
         node.fy = node.y
       }
-      setPinned((p) => new Set(p).add(node.id))
+      setPinned((prev) => new Set(prev).add(node.id))
     },
     [layout, nodeTimelineX],
   )
@@ -80,32 +80,32 @@ export function usePinning({
   const togglePin = useCallback(
     (id: string) => {
       if (!base) return
-      const n = base.nodes.find((x) => x.id === id)
-      if (!n) return
+      const node = base.nodes.find((candidate) => candidate.id === id)
+      if (!node) return
       if (pinned.has(id)) {
         // Unpin: in Timeline, keep the date-column x-pin; in Force, fully release.
-        n.fx = layout === 'timeline' ? nodeTimelineX(n) : undefined
-        n.fy = undefined
-        setPinned((p) => {
-          const s = new Set(p)
-          s.delete(id)
-          return s
+        node.fx = layout === 'timeline' ? nodeTimelineX(node) : undefined
+        node.fy = undefined
+        setPinned((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
         })
         fgRef.current?.d3ReheatSimulation?.()
       } else {
-        n.fx = n.x
-        n.fy = n.y
-        setPinned((p) => new Set(p).add(id))
+        node.fx = node.x
+        node.fy = node.y
+        setPinned((prev) => new Set(prev).add(id))
       }
     },
     [base, pinned, layout, nodeTimelineX, fgRef],
   )
 
   const releaseAll = useCallback(() => {
-    base?.nodes.forEach((n) => {
+    base?.nodes.forEach((node) => {
       // Clearing user pins keeps the timeline structure (re-pin x by date).
-      n.fx = base && layout === 'timeline' ? nodeTimelineX(n) : undefined
-      n.fy = undefined
+      node.fx = base && layout === 'timeline' ? nodeTimelineX(node) : undefined
+      node.fy = undefined
     })
     setPinned(new Set())
     fitDone.current = false

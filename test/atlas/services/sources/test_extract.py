@@ -20,7 +20,7 @@ def test_chunk_blank_and_short():
 
 
 def test_chunk_windows_overlap_and_break_on_spaces():
-    words = " ".join(f"word{i:03d}" for i in range(200))  # ~1600 chars
+    words = " ".join(f"word{index:03d}" for index in range(200))  # ~1600 chars
     chunks = extract.chunk_text(words, size=300, overlap=60)
     assert len(chunks) > 3
     for chunk in chunks:

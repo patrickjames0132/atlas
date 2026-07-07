@@ -83,15 +83,19 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const base = useMemo<Base | null>(() => {
     if (!graph) return null
     fitDone.current = false
-    const nodes: VNode[] = graph.nodes.map((n) => ({ ...n }))
-    const links: VLink[] = graph.edges.map((e) => ({ ...e, _s: e.source, _t: e.target }))
+    const nodes: VNode[] = graph.nodes.map((node) => ({ ...node }))
+    const links: VLink[] = graph.edges.map((edge) => ({
+      ...edge,
+      _s: edge.source,
+      _t: edge.target,
+    }))
     const years = nodes
-      .map((n) => n.year)
-      .filter((y): y is number => typeof y === 'number')
+      .map((node) => node.year)
+      .filter((year): year is number => typeof year === 'number')
     const counts: Record<string, number> = { reference: 0, citation: 0, similar: 0 }
-    nodes.forEach((n) =>
-      n.rels.forEach((r) => {
-        if (r in counts) counts[r]++
+    nodes.forEach((node) =>
+      node.rels.forEach((rel) => {
+        if (rel in counts) counts[rel]++
       }),
     )
     return {
@@ -155,17 +159,18 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
    */
   const view = useMemo(() => {
     if (!base) return { nodes: [] as VNode[], links: [] as VLink[] }
-    const nodeOk = (n: VNode) => {
-      if (n.is_seed) return true
-      if (!n.rels.some((r) => r !== 'seed' && enabled.has(r))) return false
-      if (typeof n.year === 'number' && (n.year < yearLo || n.year > yearHi)) return false
+    const nodeOk = (node: VNode) => {
+      if (node.is_seed) return true
+      if (!node.rels.some((rel) => rel !== 'seed' && enabled.has(rel))) return false
+      if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi))
+        return false
       return true
     }
     const nodes = base.nodes.filter(nodeOk)
-    const ids = new Set(nodes.map((n) => n.id))
+    const ids = new Set(nodes.map((node) => node.id))
     const links = base.links
-      .filter((l) => enabled.has(l.type) && ids.has(l._s) && ids.has(l._t))
-      .map((l) => ({ ...l, source: l._s, target: l._t }))
+      .filter((link) => enabled.has(link.type) && ids.has(link._s) && ids.has(link._t))
+      .map((link) => ({ ...link, source: link._s, target: link._t }))
     return { nodes, links }
     // graphVersion isn't read directly — it's a signal that base.nodes/links
     // were mutated in place (discoveries) and this must recompute.
@@ -175,12 +180,12 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   /** Neighbors of the hovered node (for focus-on-hover dimming). */
   const hoverSet = useMemo(() => {
     if (!base || !hoverId) return null
-    const s = new Set<string>([hoverId])
-    base.links.forEach((l) => {
-      if (l._s === hoverId) s.add(l._t)
-      if (l._t === hoverId) s.add(l._s)
+    const neighbors = new Set<string>([hoverId])
+    base.links.forEach((link) => {
+      if (link._s === hoverId) neighbors.add(link._t)
+      if (link._t === hoverId) neighbors.add(link._s)
     })
-    return s
+    return neighbors
   }, [base, hoverId])
 
   /** What to focus the canvas on: hovering wins; otherwise the papers the AI
@@ -191,12 +196,12 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   )
 
   /** Toggle one relation type's visibility (the filter chips). */
-  const toggleType = useCallback((t: string) => {
+  const toggleType = useCallback((type: string) => {
     setEnabled((prev) => {
-      const s = new Set(prev)
-      if (s.has(t)) s.delete(t)
-      else s.add(t)
-      return s
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
     })
   }, [])
 

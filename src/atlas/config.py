@@ -64,10 +64,10 @@ class StorageConfig(ConfigModel):
 
     @field_validator("data_dir")
     @classmethod
-    def _anchor_to_repo_root(cls, v: Path) -> Path:
+    def _anchor_to_repo_root(cls, path: Path) -> Path:
         """A relative path in config.json means "relative to the repo root"."""
-        v = v.expanduser()
-        return v if v.is_absolute() else PROJECT_ROOT / v
+        path = path.expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
 
     # The DB paths derive from data_dir, so overriding that one field (as the
     # tests do) relocates all storage at once.
@@ -220,14 +220,14 @@ class AgentConfig(ConfigModel):
 
     @field_validator("model")
     @classmethod
-    def _model_has_provider_prefix(cls, v: str) -> str:
+    def _model_has_provider_prefix(cls, model: str) -> str:
         """Catch a bare model name early — PydanticAI needs the vendor prefix."""
-        if ":" not in v:
+        if ":" not in model:
             raise ValueError(
-                f"model {v!r} must be '<provider>:<model_name>', e.g. "
+                f"model {model!r} must be '<provider>:<model_name>', e.g. "
                 "'anthropic:claude-sonnet-4-6'"
             )
-        return v
+        return model
 
     @property
     def provider(self) -> str:
@@ -250,8 +250,8 @@ class LLMConfig(ConfigModel):
     @model_validator(mode="after")
     def _agent_ids_are_unique(self) -> LLMConfig:
         """Other code will look agents up by id — a duplicate would be ambiguous."""
-        ids = [a.id for a in self.agents]
-        dupes = {i for i in ids if ids.count(i) > 1}
+        ids = [agent.id for agent in self.agents]
+        dupes = {agent_id for agent_id in ids if ids.count(agent_id) > 1}
         if dupes:
             raise ValueError(f"duplicate agent id(s): {sorted(dupes)}")
         return self

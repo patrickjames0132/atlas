@@ -74,7 +74,9 @@ def answer(
             event stream with ``Error``.
         sqlite3.Error: On library database failures during retrieval.
     """
-    hits = sources.search(question, k=config.sources.retrieval.chat_k, source_ids=source_ids)
+    hits = sources.search(
+        question, top_k=config.sources.retrieval.chat_k, source_ids=source_ids
+    )
     yield events.RetrievalTrace(found=len(hits), sources=_hit_titles(hits))
     if not hits:
         yield events.Token(text=NO_HITS_ANSWER)

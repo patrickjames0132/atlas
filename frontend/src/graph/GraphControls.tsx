@@ -20,7 +20,7 @@ export interface GraphControlsProps {
   /** The relation types currently shown. */
   enabled: Set<string>
   /** Toggle one relation type on/off. */
-  onToggleType: (t: string) => void
+  onToggleType: (type: string) => void
   /** Per-relation node counts (from the base graph, chips show these). */
   counts: Record<string, number>
   /** The base graph's year range (slider bounds). */
@@ -29,8 +29,8 @@ export interface GraphControlsProps {
   /** The selected year window. */
   yearLo: number
   yearHi: number
-  onYearLo: (y: number) => void
-  onYearHi: (y: number) => void
+  onYearLo: (year: number) => void
+  onYearHi: (year: number) => void
   /** Visible vs. total node counts for the readout. */
   visibleCount: number
   totalCount: number
@@ -65,7 +65,7 @@ export default function GraphControls({
   const showYears = maxYear > minYear
   const yearSpan = maxYear - minYear
   /** Position (0–100%) of a year along the range track, for the fill + knobs. */
-  const yearPct = (y: number) => (yearSpan ? ((y - minYear) / yearSpan) * 100 : 0)
+  const yearPct = (year: number) => (yearSpan ? ((year - minYear) / yearSpan) * 100 : 0)
 
   return (
     <div className="controls">
@@ -81,16 +81,16 @@ export default function GraphControls({
         </button>
       </div>
       <div className="ctrl-chips">
-        {REL_TYPES.map((t) => (
+        {REL_TYPES.map((type) => (
           <button
-            key={t}
-            className={`chip ${enabled.has(t) ? 'on' : ''}`}
-            onClick={() => onToggleType(t)}
-            style={{ '--c': REL_COLOR[t] } as CSSProperties}
+            key={type}
+            className={`chip ${enabled.has(type) ? 'on' : ''}`}
+            onClick={() => onToggleType(type)}
+            style={{ '--c': REL_COLOR[type] } as CSSProperties}
           >
             <i />
-            {REL_LABEL[t]}
-            <em>{counts[t]}</em>
+            {REL_LABEL[type]}
+            <em>{counts[type]}</em>
           </button>
         ))}
       </div>
@@ -115,7 +115,7 @@ export default function GraphControls({
               max={maxYear}
               value={yearLo}
               aria-label="Earliest year"
-              onChange={(e) => onYearLo(Math.min(Number(e.target.value), yearHi))}
+              onChange={(event) => onYearLo(Math.min(Number(event.target.value), yearHi))}
             />
             <input
               type="range"
@@ -123,7 +123,7 @@ export default function GraphControls({
               max={maxYear}
               value={yearHi}
               aria-label="Latest year"
-              onChange={(e) => onYearHi(Math.max(Number(e.target.value), yearLo))}
+              onChange={(event) => onYearHi(Math.max(Number(event.target.value), yearLo))}
             />
           </div>
         </div>

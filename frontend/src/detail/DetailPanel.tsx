@@ -25,7 +25,7 @@ export interface DetailPanelProps {
   /** The node's own arXiv category tags, once fetched (undefined until then). */
   categories?: CategoriesResponse
   /** Open a figure full-screen (the shared lightbox — GraphExplorer owns it). */
-  onEnlarge: (f: AnswerFigure) => void
+  onEnlarge: (figure: AnswerFigure) => void
   /** Whether the node is currently pinned in place. */
   isPinned: boolean
   /** Pin/unpin the node. */
@@ -37,10 +37,10 @@ export interface DetailPanelProps {
 }
 
 /** Compact count for repo metadata: 1400 → "1.4k", 2100000 → "2.1M". */
-function fmtCount(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`
-  return String(n)
+function fmtCount(count: number): string {
+  if (count >= 1e6) return `${(count / 1e6).toFixed(1).replace(/\.0$/, '')}M`
+  if (count >= 1e3) return `${(count / 1e3).toFixed(1).replace(/\.0$/, '')}k`
+  return String(count)
 }
 
 /** One link-out row in the "Code & artifacts" section. */
@@ -68,9 +68,9 @@ function CodeRow({
 function CategoryTags({ categories }: { categories: CategoriesResponse }) {
   return (
     <div className="detail-cats">
-      {categories.categories.map((c) => (
-        <span key={c.code} className="detail-cat" title={c.code}>
-          {c.name}
+      {categories.categories.map((category) => (
+        <span key={category.code} className="detail-cat" title={category.code}>
+          {category.name}
         </span>
       ))}
     </div>
@@ -96,16 +96,16 @@ function CodeSection({ code }: { code: CodeLinksResponse }) {
           meta={code.github.stars > 0 ? `★ ${fmtCount(code.github.stars)}` : undefined}
         />
       )}
-      {code.models.slice(0, 3).map((m) => (
-        <CodeRow key={m.id} href={m.url} icon="🤖" label={m.id}
-          meta={m.likes > 0 ? `♥ ${fmtCount(m.likes)}` : undefined} />
+      {code.models.slice(0, 3).map((model) => (
+        <CodeRow key={model.id} href={model.url} icon="🤖" label={model.id}
+          meta={model.likes > 0 ? `♥ ${fmtCount(model.likes)}` : undefined} />
       ))}
-      {code.datasets.slice(0, 2).map((d) => (
-        <CodeRow key={d.id} href={d.url} icon="🗃" label={d.id}
-          meta={d.likes > 0 ? `♥ ${fmtCount(d.likes)}` : undefined} />
+      {code.datasets.slice(0, 2).map((dataset) => (
+        <CodeRow key={dataset.id} href={dataset.url} icon="🗃" label={dataset.id}
+          meta={dataset.likes > 0 ? `♥ ${fmtCount(dataset.likes)}` : undefined} />
       ))}
-      {code.spaces.slice(0, 2).map((s) => (
-        <CodeRow key={s.id} href={s.url} icon={s.emoji || '🚀'} label={s.id} />
+      {code.spaces.slice(0, 2).map((space) => (
+        <CodeRow key={space.id} href={space.url} icon={space.emoji || '🚀'} label={space.id} />
       ))}
       {code.paper_url && (
         <a className="code-more" href={code.paper_url} target="_blank" rel="noreferrer">
@@ -137,9 +137,9 @@ export default function DetailPanel({
         ✕
       </button>
       <div className="detail-badges">
-        {node.rels.map((r) => (
-          <span key={r} className="badge" style={{ color: REL_COLOR[r] }}>
-            {r}
+        {node.rels.map((rel) => (
+          <span key={rel} className="badge" style={{ color: REL_COLOR[rel] }}>
+            {rel}
           </span>
         ))}
       </div>
@@ -193,18 +193,20 @@ export default function DetailPanel({
       {figures && figures.available && figures.figures.length > 0 && (
         <div className="detail-figs">
           <div className="detail-figs-head">Figures</div>
-          {figures.figures.map((f, i) => (
-            <figure key={i} className="detail-fig">
+          {figures.figures.map((figure, index) => (
+            <figure key={index} className="detail-fig">
               <button
                 type="button"
                 className="detail-fig-btn"
-                onClick={() => onEnlarge({ image: f.image, caption: f.caption, title: null })}
+                onClick={() =>
+                  onEnlarge({ image: figure.image, caption: figure.caption, title: null })
+                }
                 title="Click to enlarge"
                 aria-label="Enlarge figure"
               >
-                <img src={f.image} alt={f.caption || `Figure ${i + 1}`} loading="lazy" />
+                <img src={figure.image} alt={figure.caption || `Figure ${index + 1}`} loading="lazy" />
               </button>
-              {f.caption && <figcaption>{f.caption}</figcaption>}
+              {figure.caption && <figcaption>{figure.caption}</figcaption>}
             </figure>
           ))}
         </div>

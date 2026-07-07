@@ -20,9 +20,9 @@ def test_get_papers_chunks_batches_and_skips_nulls(monkeypatch):
         return [{"paperId": pid} if pid != "ARXIV:bad" else None for pid in body["ids"]]
 
     monkeypatch.setattr(client, "request", fake_request)
-    ids = [f"id{i}" for i in range(501)] + ["", "ARXIV:bad"]  # falsy dropped, bad unresolved
+    ids = [f"id{index}" for index in range(501)] + ["", "ARXIV:bad"]  # falsy dropped, bad unresolved
     out = traversal.get_papers(ids)
-    assert [len(b) for b in bodies] == [500, 2]  # chunked at the 500-id cap
+    assert [len(body) for body in bodies] == [500, 2]  # chunked at the 500-id cap
     assert len(out) == 501 and "ARXIV:bad" not in out
     assert out["id0"]["id"] == "id0"
 

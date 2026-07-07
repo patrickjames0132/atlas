@@ -57,4 +57,7 @@ if _unknown:
         f"known budget knobs: {sorted(BUDGET_DEFAULTS)}"
     )
 
-BUDGETS: dict[str, int] = {**BUDGET_DEFAULTS, **{k: int(v) for k, v in _extras.items()}}
+BUDGETS: dict[str, int] = {
+    **BUDGET_DEFAULTS,
+    **{name: int(value) for name, value in _extras.items()},
+}

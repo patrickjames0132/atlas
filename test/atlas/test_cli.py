@@ -14,8 +14,12 @@ RECORD = {"id": "src01", "title": "Deep Learning", "kind": "pdf", "pages": 800, 
 
 def test_ingest_dispatches_urls_and_paths(monkeypatch):
     seen = []
-    monkeypatch.setattr(sources, "ingest_url", lambda t, title=None: seen.append(("url", t)) or RECORD)
-    monkeypatch.setattr(sources, "ingest_pdf", lambda t, title=None: seen.append(("pdf", t)) or RECORD)
+    monkeypatch.setattr(
+        sources, "ingest_url", lambda target, title=None: seen.append(("url", target)) or RECORD
+    )
+    monkeypatch.setattr(
+        sources, "ingest_pdf", lambda target, title=None: seen.append(("pdf", target)) or RECORD
+    )
 
     runner = CliRunner()
     assert "Ingested [pdf]" in runner.invoke(cli, ["ingest", "https://example.org/x"]).output

@@ -26,8 +26,8 @@ export interface UseDiscoveryArgs {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fgRef: { current: any }
   /** Widen the year filter when a discovery falls outside the current range. */
-  onYearLo: (y: number) => void
-  onYearHi: (y: number) => void
+  onYearLo: (year: number) => void
+  onYearHi: (year: number) => void
 }
 
 /** What {@link useDiscovery} returns for GraphExplorer to wire up. */
@@ -70,62 +70,66 @@ export function useDiscovery({
   const onDiscover = useCallback(
     (newNodes: GraphNode[], newEdges: GraphEdge[]) => {
       if (!base || (newNodes.length === 0 && newEdges.length === 0)) return
-      const knownIds = new Set(base.nodes.map((n) => n.id))
+      const knownIds = new Set(base.nodes.map((node) => node.id))
       const addedNodes: GraphNode[] = []
-      for (const n of newNodes) {
-        if (knownIds.has(n.id)) continue
-        knownIds.add(n.id)
+      for (const node of newNodes) {
+        if (knownIds.has(node.id)) continue
+        knownIds.add(node.id)
         // Start near whichever already-placed node it was discovered from, so
         // it doesn't fly in from the origin when the sim reheats. Topic-search
         // hits have no edge (ungrounded) — anchor them on the seed and scatter
         // wider so they settle into a loose cluster instead of stacking on it.
-        const anchorEdge = newEdges.find((e) => e.source === n.id || e.target === n.id)
+        const anchorEdge = newEdges.find(
+          (edge) => edge.source === node.id || edge.target === node.id,
+        )
         const anchorId = anchorEdge
-          ? anchorEdge.source === n.id
+          ? anchorEdge.source === node.id
             ? anchorEdge.target
             : anchorEdge.source
           : null
         const anchor = anchorId
-          ? base.nodes.find((x) => x.id === anchorId)
-          : base.nodes.find((x) => x.is_seed)
+          ? base.nodes.find((candidate) => candidate.id === anchorId)
+          : base.nodes.find((candidate) => candidate.is_seed)
         const spread = anchorEdge ? 40 : 120
-        const vn: VNode = { ...n }
+        const viewNode: VNode = { ...node }
         if (anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number') {
-          vn.x = anchor.x + (Math.random() - 0.5) * spread
-          vn.y = anchor.y + (Math.random() - 0.5) * spread
+          viewNode.x = anchor.x + (Math.random() - 0.5) * spread
+          viewNode.y = anchor.y + (Math.random() - 0.5) * spread
         }
-        if (layout === 'timeline') vn.fx = nodeTimelineX(vn)
-        base.nodes.push(vn)
-        addedNodes.push(n)
-        n.rels.forEach((r) => {
-          if (r in base.counts) base.counts[r]++
+        if (layout === 'timeline') viewNode.fx = nodeTimelineX(viewNode)
+        base.nodes.push(viewNode)
+        addedNodes.push(node)
+        node.rels.forEach((rel) => {
+          if (rel in base.counts) base.counts[rel]++
         })
         // A discovery older/newer than anything on the graph widens both the
         // base's year range and the active filter, so it stays visible.
-        if (typeof n.year === 'number') {
-          if (n.year < base.minYear) {
-            base.minYear = n.year
-            onYearLo(n.year)
+        if (typeof node.year === 'number') {
+          if (node.year < base.minYear) {
+            base.minYear = node.year
+            onYearLo(node.year)
           }
-          if (n.year > base.maxYear) {
-            base.maxYear = n.year
-            onYearHi(n.year)
+          if (node.year > base.maxYear) {
+            base.maxYear = node.year
+            onYearHi(node.year)
           }
         }
       }
 
-      const knownLinkKeys = new Set(base.links.map((l) => `${l._s}|${l._t}|${l.type}`))
+      const knownLinkKeys = new Set(
+        base.links.map((link) => `${link._s}|${link._t}|${link.type}`),
+      )
       let addedLinks = 0
-      for (const e of newEdges) {
-        const key = `${e.source}|${e.target}|${e.type}`
+      for (const edge of newEdges) {
+        const key = `${edge.source}|${edge.target}|${edge.type}`
         if (knownLinkKeys.has(key)) continue
         knownLinkKeys.add(key)
-        base.links.push({ ...e, _s: e.source, _t: e.target })
+        base.links.push({ ...edge, _s: edge.source, _t: edge.target })
         addedLinks++
       }
 
       if (addedNodes.length || addedLinks) {
-        setGraphVersion((v) => v + 1)
+        setGraphVersion((version) => version + 1)
         // Reheat so new nodes settle into place, but don't yank the camera —
         // the user may be mid-conversation, not looking at the graph.
         fgRef.current?.d3ReheatSimulation?.()

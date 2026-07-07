@@ -20,8 +20,8 @@ export default function Lightbox({
 }) {
   // Close on Escape while open.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -35,10 +35,10 @@ export default function Lightbox({
       <img
         src={figure.image}
         alt={figure.caption || 'Figure'}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       />
       {(figure.title || figure.caption || typeof figure.figure === 'number') && (
-        <div className="fig-lightbox-cap" onClick={(e) => e.stopPropagation()}>
+        <div className="fig-lightbox-cap" onClick={(event) => event.stopPropagation()}>
           {typeof figure.figure === 'number' && <b>Figure {figure.figure}</b>}
           {figure.title && (
             <span>{typeof figure.figure === 'number' ? ' · ' : ''}{figure.title}</span>

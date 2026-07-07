@@ -680,10 +680,20 @@ optional, behind a key.
       back would need a few extra stratified-`offset` calls per seed/expand,
       trading latency/API load for it. Shipping the single-call fix for now;
       revisit if the recency skew is still too tight in practice.
-- [ ] **No single-letter identifiers** — sweep the codebase (backend +
-      frontend) for single-letter variable/parameter names and rename them to
-      say what they hold; add this as a standing convention, not just a
-      one-time cleanup. *(From the `todos.md` inbox, 2026-07-06.)*
+- [x] **No single-letter identifiers** *(v2.4.2)* — swept the whole codebase
+      (backend `src/atlas`, `frontend/src`, **and** `test/`) clean of
+      single-letter variable / parameter / loop / comprehension / generic-type
+      names, renaming each for what it holds: `node` not `n`, `event` not `e`,
+      `query` not `q`, `top_k` not `k` (threaded through the public
+      `sources.search(...)` kwarg and its callers/tests), `Item` not `T`,
+      `(prev) =>` in setState updaters, `catch (error)`. Left the genuinely
+      non-single-letter shorthands already in the code (`ctx`, `fg`, `lo`/`hi`,
+      `err`, `msg`, `buf`, `frac`) and external property names we don't own
+      (react-force-graph's `node.x`/`.y`, the `_s`/`_t` endpoint fields, the
+      `"q"` API keys). Made it a **standing convention** in `CLAUDE.md`
+      ("Code conventions") so it doesn't drift back. Behavior-neutral: the whole
+      quality gate (ruff, strict mypy, 277 tests, tsc + oxlint) stays green.
+      *(From the `todos.md` inbox, 2026-07-06.)*
 - [ ] **Live per-relation count sliders** — in the graph workspace, sliders to
       control how many references/citations/similar papers are shown, live
       (today's counts are fixed at build time by `ref_limit`/`cite_limit`/

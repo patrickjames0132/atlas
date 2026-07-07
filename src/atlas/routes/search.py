@@ -75,25 +75,25 @@ def api_search() -> ResponseReturnValue:
         the same shape as graph nodes); ``{error}`` with HTTP 502 when
         Semantic Scholar is unavailable. Saves nothing.
     """
-    q = (request.args.get("q") or "").strip()
+    query = (request.args.get("q") or "").strip()
     try:
         limit = max(1, min(int(request.args.get("limit", "25")), 100))
     except ValueError:
         limit = 25
-    if not q:
-        return jsonify({"q": q, "count": 0, "papers": []})
+    if not query:
+        return jsonify({"q": query, "count": 0, "papers": []})
     try:
         papers = search_service.live_search(
-            q,
+            query,
             limit=limit,
             year_from=_opt_year("year_from"),
             year_to=_opt_year("year_to"),
             fields_of_study=_opt_fields(),
         )
     except semantic_scholar.S2Error as exc:
-        current_app.logger.warning("live search failed for %r: %s", q, exc)
+        current_app.logger.warning("live search failed for %r: %s", query, exc)
         return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
-    return jsonify({"q": q, "count": len(papers), "papers": papers})
+    return jsonify({"q": query, "count": len(papers), "papers": papers})
 
 
 @bp.get("/api/local_search")
@@ -116,24 +116,24 @@ def local_search_route() -> Response:
         degrades to zero local hits, since this must not block the live
         search running alongside it.
     """
-    q = (request.args.get("q") or "").strip()
+    query = (request.args.get("q") or "").strip()
     try:
         limit = max(1, min(int(request.args.get("limit", "10")), 50))
     except ValueError:
         limit = 10
-    if not q:
-        return jsonify({"q": q, "count": 0, "papers": []})
+    if not query:
+        return jsonify({"q": query, "count": 0, "papers": []})
     try:
         papers = search_service.local_search(
-            q,
+            query,
             limit=limit,
             year_from=_opt_year("year_from"),
             year_to=_opt_year("year_to"),
         )
     except Exception:
-        current_app.logger.exception("local search failed for %r", q)
+        current_app.logger.exception("local search failed for %r", query)
         papers = []
-    return jsonify({"q": q, "count": len(papers), "papers": papers})
+    return jsonify({"q": query, "count": len(papers), "papers": papers})
 
 
 @bp.get("/api/taxonomy/<provider>")

@@ -15,17 +15,17 @@ export default function BeatList({
   if (beats.length === 0) return null
   return (
     <ol className="beats">
-      {beats.map((b, i) => (
+      {beats.map((beat, index) => (
         <li
-          key={i}
-          className={`beat ${activeBeat === i ? 'active' : ''}`}
-          onClick={() => onBeatClick(i, b)}
+          key={index}
+          className={`beat ${activeBeat === index ? 'active' : ''}`}
+          onClick={() => onBeatClick(index, beat)}
         >
-          {b.heading && <div className="beat-heading">{b.heading}</div>}
-          <p>{b.text}</p>
-          {b.node_ids.length > 0 && (
+          {beat.heading && <div className="beat-heading">{beat.heading}</div>}
+          <p>{beat.text}</p>
+          {beat.node_ids.length > 0 && (
             <div className="beat-nodes">
-              {b.node_ids.length} paper{b.node_ids.length > 1 ? 's' : ''} ✦
+              {beat.node_ids.length} paper{beat.node_ids.length > 1 ? 's' : ''} ✦
             </div>
           )}
         </li>

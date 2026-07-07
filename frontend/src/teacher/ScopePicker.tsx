@@ -29,7 +29,7 @@ export default function ScopePicker({
       <button
         type="button"
         className={`scope-btn ${all ? '' : 'on'}`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen((prev) => !prev)}
         title="Choose which of your sources the assistant may search"
       >
         📚{' '}
@@ -56,15 +56,15 @@ export default function ScopePicker({
               )}
             </span>
           </div>
-          {items.map((s) => (
-            <label key={s.id} className="scope-item">
+          {items.map((source) => (
+            <label key={source.id} className="scope-item">
               <input
                 type="checkbox"
-                checked={checkedIds.includes(s.id)}
-                onChange={() => onToggle(s.id)}
+                checked={checkedIds.includes(source.id)}
+                onChange={() => onToggle(source.id)}
               />
-              <span className="scope-item-title" title={s.title}>
-                {s.title}
+              <span className="scope-item-title" title={source.title}>
+                {source.title}
               </span>
             </label>
           ))}

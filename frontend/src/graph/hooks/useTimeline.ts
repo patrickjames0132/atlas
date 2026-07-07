@@ -92,10 +92,10 @@ export function useTimeline({
   // earliest year if the seed itself has no year.
   const noDateX = useMemo(() => {
     if (!base) return 0
-    const seed = base.nodes.find((n) => n.is_seed)
-    const y = typeof seed?.year === 'number' ? seed.year : base.minYear
+    const seed = base.nodes.find((node) => node.is_seed)
+    const year = typeof seed?.year === 'number' ? seed.year : base.minYear
     const frac = typeof seed?.month === 'number' ? (seed.month - 1) / 12 : 0
-    return (y - base.minYear + frac) * YEAR_SPACING
+    return (year - base.minYear + frac) * YEAR_SPACING
   }, [base])
 
   // Map a year to its gridline x on the timeline.
@@ -121,13 +121,13 @@ export function useTimeline({
   const applyLayoutPhysics = useCallback(
     (mode: 'force' | 'timeline') => {
       if (!base) return
-      base.nodes.forEach((n) => {
+      base.nodes.forEach((node) => {
         if (mode === 'timeline') {
-          n.fx = nodeTimelineX(n)
-          n.fy = undefined
+          node.fx = nodeTimelineX(node)
+          node.fy = undefined
         } else {
-          n.fx = undefined
-          n.fy = undefined
+          node.fx = undefined
+          node.fy = undefined
         }
       })
       // Timeline: a collision force sized to each node's radius spreads papers
@@ -138,7 +138,7 @@ export function useTimeline({
       if (charge) charge.strength(-30)
       fg?.d3Force?.(
         'collide',
-        mode === 'timeline' ? forceCollide((n: VNode) => nodeRadius(n) + 6) : null,
+        mode === 'timeline' ? forceCollide((node: VNode) => nodeRadius(node) + 6) : null,
       )
       fitDone.current = false
       fg?.d3ReheatSimulation?.()
@@ -180,14 +180,14 @@ export function useTimeline({
       ctx.lineWidth = 1 / globalScale
       for (let yr = base.minYear; yr <= base.maxYear; yr++) {
         if ((yr - base.minYear) % step !== 0) continue
-        const x = yearToX(yr)
+        const lineX = yearToX(yr)
         ctx.strokeStyle = 'rgba(120,130,150,0.12)'
         ctx.beginPath()
-        ctx.moveTo(x, tl.y)
-        ctx.lineTo(x, br.y)
+        ctx.moveTo(lineX, tl.y)
+        ctx.lineTo(lineX, br.y)
         ctx.stroke()
         ctx.fillStyle = 'rgba(150,160,180,0.65)'
-        ctx.fillText(String(yr), x, tl.y + 4 / globalScale)
+        ctx.fillText(String(yr), lineX, tl.y + 4 / globalScale)
       }
       ctx.restore()
     },
@@ -197,8 +197,8 @@ export function useTimeline({
   const freezeSettledY = useCallback(
     (pinned: Set<string>) => {
       if (layout !== 'timeline' || !base) return
-      base.nodes.forEach((n) => {
-        if (!pinned.has(n.id) && typeof n.y === 'number') n.fy = n.y
+      base.nodes.forEach((node) => {
+        if (!pinned.has(node.id) && typeof node.y === 'number') node.fy = node.y
       })
     },
     [layout, base],

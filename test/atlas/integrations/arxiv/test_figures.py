@@ -48,7 +48,7 @@ def test_get_figures_a_nested_figure_does_not_corrupt_the_outer_image(monkeypatc
 
 
 def test_get_figures_caps_figure_count(monkeypatch):
-    html = "".join(f'<figure><img src="fig{i}.png"></figure>' for i in range(20))
+    html = "".join(f'<figure><img src="fig{index}.png"></figure>' for index in range(20))
     monkeypatch.setattr(client, "fetch_html", lambda arxiv_id: html)
 
     result = figures.get_figures("2406.12345")

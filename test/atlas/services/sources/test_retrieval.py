@@ -33,7 +33,7 @@ def test_rrf_fuse_rewards_agreement_and_dedupes() -> None:
 
     vector = [chunk(1), chunk(2), chunk(3)]   # 2 is #2 here
     lexical = [chunk(2), chunk(9)]            # 2 is #1 here → appears in both
-    fused = retrieval._rrf_fuse([vector, lexical], k=10, rrf_k=60)
+    fused = retrieval._rrf_fuse([vector, lexical], top_k=10, rrf_k=60)
 
     ids = [hit["page"] for hit in fused]  # page mirrors id in this fixture
     assert ids[0] == 2                # in both lists → highest fused score
@@ -60,7 +60,7 @@ def _seed_chunks(rows: list[tuple[int, str]], n_chunks: int) -> None:
 def test_search_lexical_path_offline(monkeypatch) -> None:
     """search() returns FTS5 hits when the vector side is unavailable."""
     # Force the semantic ranker off so only lexical + RRF run (no model load).
-    monkeypatch.setattr(embeddings, "embed_query", lambda q: None)
+    monkeypatch.setattr(embeddings, "embed_query", lambda query: None)
     _seed_chunks(
         [
             (42, "The Adam optimizer combines momentum with RMSProp."),
@@ -71,23 +71,23 @@ def test_search_lexical_path_offline(monkeypatch) -> None:
     if not store.HAS_FTS:
         pytest.skip("FTS5 not compiled into this SQLite build")
 
-    hits = sources.search("Adam optimizer", k=3)
+    hits = sources.search("Adam optimizer", top_k=3)
     assert hits, "lexical search should find the Adam passage"
     assert hits[0]["source_title"] == "Deep Learning"
     assert hits[0]["page"] == 42
     assert "score" in hits[0]
 
     # An explicit empty scope still means "search nothing".
-    assert sources.search("Adam optimizer", k=3, source_ids=[]) == []
+    assert sources.search("Adam optimizer", top_k=3, source_ids=[]) == []
 
 
 def test_delete_source_purges_fts(monkeypatch) -> None:
     """Deleting a source drops its rows from the FTS5 index (via triggers)."""
-    monkeypatch.setattr(embeddings, "embed_query", lambda q: None)
+    monkeypatch.setattr(embeddings, "embed_query", lambda query: None)
     _seed_chunks([(1, "The Adam optimizer is popular.")], n_chunks=1)
     if not store.HAS_FTS:
         pytest.skip("FTS5 not compiled into this SQLite build")
 
-    assert sources.search("Adam", k=3)
+    assert sources.search("Adam", top_k=3)
     assert sources.delete_source("s1") is True
-    assert sources.search("Adam", k=3) == []
+    assert sources.search("Adam", top_k=3) == []

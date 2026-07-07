@@ -18,7 +18,7 @@ one completion call.
 
 ```
 librarian.answer(question, history, source_ids)     main.py
-  1  sources.search(question, k=chat_k, scope)      ← deterministic, model not engaged
+  1  sources.search(question, top_k=chat_k, scope)  ← deterministic, model not engaged
   2  yield RetrievalTrace(found, sources)           ← "what I'm working from"
   3  no hits? yield Token(NO_HITS_ANSWER); return   ← an answer, not an error
   4  passages + question → one streamed completion

@@ -35,7 +35,7 @@ export function useConversation() {
   const dispatch = useAppDispatch()
   const seedNode = useAppSelector(selectSeedNode)
   const groundingNodes = useAppSelector(selectGroundingNodes)
-  const chatLength = useAppSelector((s) => s.transcript.chat.length)
+  const chatLength = useAppSelector((state) => state.transcript.chat.length)
 
   const [teaching, setTeaching] = useState(false)
   const [asking, setAsking] = useState(false)
@@ -126,13 +126,13 @@ export function useConversation() {
             },
             // History mode first walks back through references to the field's
             // roots: show the hops, and merge the ancestors into the graph.
-            onTrace: (t) => dispatch(histTraceAdded(t)),
-            onDiscovery: (d) => dispatch(discoveryMerged(d)),
-            onError: (m) => setError(m),
+            onTrace: (trace) => dispatch(histTraceAdded(trace)),
+            onDiscovery: (discovery) => dispatch(discoveryMerged(discovery)),
+            onError: (message) => setError(message),
           },
         )
-      } catch (e) {
-        if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : String(e))
+      } catch (error) {
+        if (!ctrl.signal.aborted) setError(error instanceof Error ? error.message : String(error))
       } finally {
         if (abortRef.current === ctrl) abortRef.current = null
         setTeaching(false)
@@ -166,10 +166,10 @@ export function useConversation() {
             },
             {
               signal: ctrl.signal,
-              onToken: (t) => dispatch(tokenAppended(t)),
-              onTrace: (t) => dispatch(traceAdded(t)),
-              onDiscovery: (d) => dispatch(discoveryMerged(d)),
-              onFigure: (f) => dispatch(figureAdded(f)),
+              onToken: (token) => dispatch(tokenAppended(token)),
+              onTrace: (trace) => dispatch(traceAdded(trace)),
+              onDiscovery: (discovery) => dispatch(discoveryMerged(discovery)),
+              onFigure: (figure) => dispatch(figureAdded(figure)),
               onCited: (ids) => {
                 highlight(ids)
                 // Mark this answer active, like a beat lights up on arrival.
@@ -177,7 +177,7 @@ export function useConversation() {
                 setActiveChat(askIdxRef.current)
                 dispatch(citedSet(ids))
               },
-              onError: (m) => setError(m),
+              onError: (message) => setError(message),
             },
           )
         } else {
@@ -186,9 +186,9 @@ export function useConversation() {
             { question, session_id: sessionId.current, source_ids: sourceIds },
             {
               signal: ctrl.signal,
-              onRetrieve: (r) => dispatch(retrieveSet(r)),
-              onToken: (t) => dispatch(tokenAppended(t)),
-              onError: (m) => setError(m),
+              onRetrieve: (retrieval) => dispatch(retrieveSet(retrieval)),
+              onToken: (token) => dispatch(tokenAppended(token)),
+              onError: (message) => setError(message),
             },
           )
         }

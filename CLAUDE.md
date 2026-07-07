@@ -71,6 +71,21 @@ scratch; never treat leftover items there as authoritative.
 The repo is **private** (`github.com/patrickjames0132/arxiv-digest`), default
 branch `main`.
 
+## Code conventions
+
+- **No single-letter identifiers.** Name every variable, parameter, loop target,
+  and generic type parameter for what it *holds*, in both the backend and the
+  frontend — `node` not `n`, `event` not `e`, `query` not `q`, `top_k` not `k`,
+  `Item` not `T`. This applies to tight scopes too (`.map((node) => …)`,
+  `catch (error)`, `(prev) => …` in a `setState` updater). The exceptions are
+  external property names we don't own (e.g. react-force-graph's `node.x`/`.y`,
+  a paper's `_s`/`_t` endpoint fields) and canvas coordinates where a longer
+  name reads worse — but a *local* coordinate still gets a real name (`lineX`,
+  not `x`). Established two- to three-letter shorthands already in the code
+  (`ctx`, `fg`, `lo`/`hi`, `aid`, `err`, `msg`, `buf`, `frac`) are fine; the
+  rule is specifically about single letters. The whole codebase was swept clean
+  of them once — keep it that way, don't reintroduce them.
+
 ## Caveats — read before committing
 
 - **Secrets:** `.env` is gitignored — never commit it. `.env.example` holds only

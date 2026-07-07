@@ -19,16 +19,16 @@ import './sources.css'
 type Upload = { name: string; status: 'ingesting' | 'done' | 'error'; error?: string; pct?: number }
 
 /** Run `worker` over `items` with at most `limit` in flight at once. */
-async function runPool<T>(
-  items: T[],
+async function runPool<Item>(
+  items: Item[],
   limit: number,
-  worker: (item: T, index: number) => Promise<void>,
+  worker: (item: Item, index: number) => Promise<void>,
 ): Promise<void> {
   let next = 0
   const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
-      const i = next++
-      await worker(items[i], i)
+      const index = next++
+      await worker(items[index], index)
     }
   })
   await Promise.all(runners)
@@ -47,7 +47,7 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const uploading = uploads.some((u) => u.status === 'ingesting')
+  const uploading = uploads.some((upload) => upload.status === 'ingesting')
   const locked = !!busy || uploading || !available
 
   const refresh = useCallback(async () => {
@@ -68,35 +68,45 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
   const onFiles = useCallback(
     async (files: File[]) => {
       const pdfs = files.filter(
-        (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+        (file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'),
       )
       if (!pdfs.length || uploading) return
       setError(null)
-      setUploads(pdfs.map((f) => ({ name: f.name, status: 'ingesting' })))
-      await runPool(pdfs, 3, async (file, i) => {
+      setUploads(pdfs.map((file) => ({ name: file.name, status: 'ingesting' })))
+      await runPool(pdfs, 3, async (file, index) => {
         try {
-          await uploadSource(file, undefined, (p) =>
+          await uploadSource(file, undefined, (progress) =>
             setUploads((prev) =>
-              prev.map((u, j) => (j === i ? { ...u, pct: p.total ? p.done / p.total : 0 } : u)),
+              prev.map((upload, position) =>
+                position === index
+                  ? { ...upload, pct: progress.total ? progress.done / progress.total : 0 }
+                  : upload,
+              ),
             ),
           )
-          setUploads((prev) => prev.map((u, j) => (j === i ? { ...u, status: 'done' } : u)))
+          setUploads((prev) =>
+            prev.map((upload, position) =>
+              position === index ? { ...upload, status: 'done' } : upload,
+            ),
+          )
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           setUploads((prev) =>
-            prev.map((u, j) => (j === i ? { ...u, status: 'error', error: msg } : u)),
+            prev.map((upload, position) =>
+              position === index ? { ...upload, status: 'error', error: msg } : upload,
+            ),
           )
         }
       })
       await refresh()
-      setUploads((prev) => prev.filter((u) => u.status === 'error'))
+      setUploads((prev) => prev.filter((upload) => upload.status === 'error'))
     },
     [refresh, uploading],
   )
 
   const onPick = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files ? Array.from(e.target.files) : []
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files ? Array.from(event.target.files) : []
       if (fileRef.current) fileRef.current.value = '' // allow re-picking the same file(s)
       onFiles(files)
     },
@@ -104,25 +114,27 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
   )
 
   const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
+    (event: React.DragEvent) => {
+      event.preventDefault()
       setDragging(false)
       if (locked) return
-      onFiles(Array.from(e.dataTransfer.files))
+      onFiles(Array.from(event.dataTransfer.files))
     },
     [locked, onFiles],
   )
 
   const onAddUrl = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault()
-      const u = url.trim()
-      if (!u || locked) return
+    async (event: React.FormEvent) => {
+      event.preventDefault()
+      const trimmedUrl = url.trim()
+      if (!trimmedUrl || locked) return
       setError(null)
-      setBusy(u)
+      setBusy(trimmedUrl)
       setBusyPct(null)
       try {
-        await ingestUrl(u, undefined, (p) => setBusyPct(p.total ? p.done / p.total : 0))
+        await ingestUrl(trimmedUrl, undefined, (progress) =>
+          setBusyPct(progress.total ? progress.done / progress.total : 0),
+        )
         setUrl('')
         await refresh()
       } catch (err) {
@@ -171,8 +183,8 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
 
         <div
           className={`sources-add ${dragging ? 'dragging' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault()
+          onDragOver={(event) => {
+            event.preventDefault()
             if (!locked) setDragging(true)
           }}
           onDragLeave={() => setDragging(false)}
@@ -196,7 +208,7 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
           <form className="src-url" onSubmit={onAddUrl}>
             <input
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(event) => setUrl(event.target.value)}
               placeholder="…or paste a URL"
               aria-label="Source URL"
               disabled={locked}
@@ -210,33 +222,35 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
 
         {uploads.length > 0 && (
           <div className="upload-list">
-            {uploads.map((u, i) => (
-              <div key={i} className={`upload-row ${u.status}`}>
-                <span className="upload-name" title={u.name}>
-                  {u.name}
+            {uploads.map((upload, index) => (
+              <div key={index} className={`upload-row ${upload.status}`}>
+                <span className="upload-name" title={upload.name}>
+                  {upload.name}
                 </span>
                 <span className="upload-status">
-                  {u.status === 'ingesting' ? (
+                  {upload.status === 'ingesting' ? (
                     <>
                       <span className="spin" />{' '}
-                      {u.pct != null ? `embedding ${Math.round(u.pct * 100)}%` : 'reading…'}
+                      {upload.pct != null
+                        ? `embedding ${Math.round(upload.pct * 100)}%`
+                        : 'reading…'}
                     </>
-                  ) : u.status === 'done' ? (
+                  ) : upload.status === 'done' ? (
                     '✓ added'
                   ) : (
                     '✕ failed'
                   )}
                 </span>
-                {u.status === 'ingesting' && (
+                {upload.status === 'ingesting' && (
                   <div className="upload-bar">
                     <div
                       className="upload-bar-fill"
-                      style={{ width: `${Math.round((u.pct ?? 0) * 100)}%` }}
+                      style={{ width: `${Math.round((upload.pct ?? 0) * 100)}%` }}
                     />
                   </div>
                 )}
-                {u.status === 'error' && u.error && (
-                  <div className="upload-err">{u.error}</div>
+                {upload.status === 'error' && upload.error && (
+                  <div className="upload-err">{upload.error}</div>
                 )}
               </div>
             ))}
@@ -263,21 +277,21 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
           ) : items.length === 0 ? (
             <div className="sources-empty">No sources yet.</div>
           ) : (
-            items.map((s) => (
-              <div key={s.id} className="source-row">
+            items.map((source) => (
+              <div key={source.id} className="source-row">
                 <div className="source-meta">
-                  <div className="source-title" title={s.origin || s.title}>
-                    {s.kind === 'url' ? '🔗' : '📄'} {s.title}
+                  <div className="source-title" title={source.origin || source.title}>
+                    {source.kind === 'url' ? '🔗' : '📄'} {source.title}
                   </div>
                   <div className="source-sub">
-                    {s.pages ? `${s.pages} pages · ` : ''}
-                    {s.n_chunks} passages
+                    {source.pages ? `${source.pages} pages · ` : ''}
+                    {source.n_chunks} passages
                   </div>
                 </div>
                 <button
                   className="link-btn"
-                  onClick={() => onRemove(s.id)}
-                  aria-label={`Remove ${s.title}`}
+                  onClick={() => onRemove(source.id)}
+                  aria-label={`Remove ${source.title}`}
                 >
                   Remove
                 </button>

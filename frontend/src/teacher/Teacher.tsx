@@ -67,7 +67,7 @@ export default function Teacher({
     listSources()
       .then((res) => {
         setLibraryItems(res.sources)
-        setScopeIds(res.sources.map((s) => s.id)) // default: every source checked
+        setScopeIds(res.sources.map((source) => source.id)) // default: every source checked
       })
       .catch(() => {})
   }, [])
@@ -77,12 +77,12 @@ export default function Teacher({
   const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
   const scopeArg = scopeAll ? undefined : scopeIds
 
-  const onAsk = (e: FormEvent) => {
-    e.preventDefault()
-    const q = input.trim()
-    if (!q || asking) return
+  const onAsk = (event: FormEvent) => {
+    event.preventDefault()
+    const question = input.trim()
+    if (!question || asking) return
     setInput('')
-    ask(q, scopeArg)
+    ask(question, scopeArg)
   }
 
   return (
@@ -97,10 +97,10 @@ export default function Teacher({
                 checkedIds={scopeIds}
                 onToggle={(id) =>
                   setScopeIds((prev) =>
-                    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                    prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
                   )
                 }
-                onSelectAll={() => setScopeIds(libraryItems.map((s) => s.id))}
+                onSelectAll={() => setScopeIds(libraryItems.map((source) => source.id))}
                 onDeselectAll={() => setScopeIds([])}
               />
             )}
@@ -114,14 +114,14 @@ export default function Teacher({
         {(hasGraph || beats.length > 0 || chat.length > 0) && (
           <div className="teacher-modes">
             {hasGraph &&
-              MODES.map((m) => (
+              MODES.map((mode) => (
                 <button
-                  key={m.key}
+                  key={mode.key}
                   className="teach-btn"
-                  onClick={() => runLecture(m.key)}
+                  onClick={() => runLecture(mode.key)}
                   disabled={teaching}
                 >
-                  {teaching ? '…' : m.label}
+                  {teaching ? '…' : mode.label}
                 </button>
               ))}
             {(beats.length > 0 || chat.length > 0) && (
@@ -141,15 +141,16 @@ export default function Teacher({
         <HistTrace trace={histTrace} />
         <BeatList beats={beats} activeBeat={activeBeat} onBeatClick={onBeatClick} />
 
-        {chat.map((m, i) => {
-          const clickable = m.role === 'assistant' && !!m.cited && m.cited.length > 0
+        {chat.map((message, index) => {
+          const clickable =
+            message.role === 'assistant' && !!message.cited && message.cited.length > 0
           return (
             <ChatMessage
-              key={`c${i}`}
-              message={m}
-              active={activeChat === i}
+              key={`c${index}`}
+              message={message}
+              active={activeChat === index}
               streaming={asking}
-              onActivate={clickable ? () => onChatClick(i, m.cited!) : undefined}
+              onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
               onEnlarge={setLightbox}
             />
           )
@@ -168,7 +169,7 @@ export default function Teacher({
       <form className="teacher-ask" onSubmit={onAsk}>
         <input
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(event) => setInput(event.target.value)}
           placeholder={hasGraph ? 'Ask about the papers on screen…' : 'Ask your books and PDFs…'}
           aria-label="Ask the assistant a question"
         />

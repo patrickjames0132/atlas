@@ -29,7 +29,7 @@ import './atlas.css'
 
 export default function Atlas() {
   const dispatch = useAppDispatch()
-  const { graph, epoch, loading, error } = useAppSelector((s) => s.workspace)
+  const { graph, epoch, loading, error } = useAppSelector((state) => state.workspace)
 
   // Drawer visibility + the assistant toggle — shell-local UI.
   const [showSources, setShowSources] = useState(false)
@@ -78,12 +78,12 @@ export default function Atlas() {
   /** Route the search form: a pasted arXiv id/URL jumps straight to its
    * graph; anything else runs the keyword search. */
   const onSubmit = useCallback(
-    (e: FormEvent) => {
-      e.preventDefault()
-      const q = query.trim()
-      if (!q) return
-      if (ID_RE.test(q)) pickSeed(q)
-      else runSearch(q)
+    (event: FormEvent) => {
+      event.preventDefault()
+      const trimmed = query.trim()
+      if (!trimmed) return
+      if (ID_RE.test(trimmed)) pickSeed(trimmed)
+      else runSearch(trimmed)
     },
     [query, pickSeed, runSearch],
   )
@@ -113,7 +113,7 @@ export default function Atlas() {
         onOpenSources={() => setShowSources(true)}
         assistantAvailable={hasGraph || libraryCount > 0}
         assistantOpen={assistantOpen}
-        onToggleAssistant={() => setAssistantOpen((o) => !o)}
+        onToggleAssistant={() => setAssistantOpen((prev) => !prev)}
         onOpenSessions={() => setShowSessions(true)}
       />
 

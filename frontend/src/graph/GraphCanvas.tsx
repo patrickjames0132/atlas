@@ -74,28 +74,28 @@ export default function GraphCanvas({
       height={height}
       graphData={data}
       backgroundColor="#0f1115"
-      nodeLabel={(n: GraphNode) => `${n.title}${n.year ? ` (${n.year})` : ''}`}
+      nodeLabel={(node: GraphNode) => `${node.title}${node.year ? ` (${node.year})` : ''}`}
       nodeRelSize={1}
       onNodeClick={onNodeClick}
-      onNodeHover={(n: VNode | null) => onNodeHover(n ? n.id : null)}
+      onNodeHover={(node: VNode | null) => onNodeHover(node ? node.id : null)}
       onNodeDragEnd={onNodeDragEnd}
       onEngineStop={onEngineStop}
       onRenderFramePre={onRenderFramePre}
       cooldownTicks={120}
-      linkColor={(l: VLink) =>
-        focusSet && !focusSet.has(l._s) && !focusSet.has(l._t)
+      linkColor={(link: VLink) =>
+        focusSet && !focusSet.has(link._s) && !focusSet.has(link._t)
           ? DIM_EDGE
-          : EDGE_COLOR[l.type]
+          : EDGE_COLOR[link.type]
       }
-      linkWidth={(l: { influential?: boolean | null }) => (l.influential ? 1.6 : 0.6)}
-      linkDirectionalArrowLength={(l: VLink) => (l.type === 'similar' ? 0 : 2.4)}
+      linkWidth={(link: { influential?: boolean | null }) => (link.influential ? 1.6 : 0.6)}
+      linkDirectionalArrowLength={(link: VLink) => (link.type === 'similar' ? 0 : 2.4)}
       linkDirectionalArrowRelPos={1}
       nodeCanvasObject={(
         node: VNode & { x: number; y: number },
         ctx: CanvasRenderingContext2D,
         globalScale: number,
       ) => {
-        const r = nodeRadius(node)
+        const radius = nodeRadius(node)
         const dim = focusSet ? !focusSet.has(node.id) : false
         const isPinned = pinned.has(node.id)
         const isSel = selectedId === node.id
@@ -104,12 +104,12 @@ export default function GraphCanvas({
         // Glow behind papers the teacher is highlighting.
         if (isLit && !dim) {
           ctx.beginPath()
-          ctx.arc(node.x, node.y, r + 5, 0, 2 * Math.PI)
+          ctx.arc(node.x, node.y, radius + 5, 0, 2 * Math.PI)
           ctx.fillStyle = 'rgba(255,209,102,0.22)'
           ctx.fill()
         }
         ctx.beginPath()
-        ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
+        ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI)
         ctx.fillStyle = dim ? DIM_NODE : REL_COLOR[primaryRel(node)]
         ctx.fill()
         if (node.discovered && !dim) {
@@ -141,11 +141,11 @@ export default function GraphCanvas({
           ctx.textAlign = 'center'
           ctx.textBaseline = 'top'
           ctx.fillStyle = 'rgba(231,236,245,0.9)'
-          const t = node.title
+          const title = node.title
           ctx.fillText(
-            t.length > 42 ? t.slice(0, 40) + '…' : t,
+            title.length > 42 ? title.slice(0, 40) + '…' : title,
             node.x,
-            node.y + r + 1,
+            node.y + radius + 1,
           )
         }
       }}

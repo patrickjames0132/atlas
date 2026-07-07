@@ -17,8 +17,10 @@ def test_groups_returns_areas_with_categories():
             assert category["code"] and category["name"]
 
     # A well-known area/category is present and correctly labelled.
-    cs = next(g for g in groups if g["group"] == "Computer Science")
-    machine_learning = next(c for c in cs["categories"] if c["code"] == "cs.LG")
+    cs = next(group for group in groups if group["group"] == "Computer Science")
+    machine_learning = next(
+        category for category in cs["categories"] if category["code"] == "cs.LG"
+    )
     assert machine_learning["name"] == "Machine Learning"
 
 

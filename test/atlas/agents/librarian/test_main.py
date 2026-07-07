@@ -50,7 +50,7 @@ def test_scope_and_chat_k_reach_retrieval(monkeypatch):
     list(librarian.answer("q", source_ids=["s2"]))
     assert seen["question"] == "q"
     assert seen["kwargs"] == {
-        "k": config.sources.retrieval.chat_k,
+        "top_k": config.sources.retrieval.chat_k,
         "source_ids": ["s2"],
     }
 

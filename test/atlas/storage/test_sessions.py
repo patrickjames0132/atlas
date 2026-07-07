@@ -94,10 +94,10 @@ def test_list_sessions_omits_the_data_blob():
 
 
 def test_list_sessions_orders_newest_updated_first():
-    a = sessions.save_session(_payload(name="Older"))
-    b = sessions.save_session(_payload(name="Newer"))
-    _touch(a["id"], updated_at=1000)
-    _touch(b["id"], updated_at=2000)
+    older = sessions.save_session(_payload(name="Older"))
+    newer = sessions.save_session(_payload(name="Newer"))
+    _touch(older["id"], updated_at=1000)
+    _touch(newer["id"], updated_at=2000)
 
     names = [row["name"] for row in sessions.list_sessions()]
     assert names == ["Newer", "Older"]

@@ -31,58 +31,60 @@ function searchFailReason(reason: TraceEvent['reason']): string | null {
 }
 
 /** One trace chip: a human line per researcher action, failures included. */
-function TraceLine({ t }: { t: TraceEvent }) {
-  if (t.action === 'figure')
+function TraceLine({ trace }: { trace: TraceEvent }) {
+  if (trace.action === 'figure')
     return (
-      <div className={`trace-line ${t.ok ? '' : 'fail'}`}>
-        🖼 {t.ok ? 'Showed' : 'Tried'} <b>Figure {t.figure}</b>
-        {t.title ? (
+      <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
+        🖼 {trace.ok ? 'Showed' : 'Tried'} <b>Figure {trace.figure}</b>
+        {trace.title ? (
           <>
             {' '}
-            of <b>{t.title}</b>
+            of <b>{trace.title}</b>
           </>
         ) : null}
       </div>
     )
-  if (t.action === 'search_sources')
+  if (trace.action === 'search_sources')
     return (
-      <div className={`trace-line ${t.ok ? '' : 'fail'}`}>
-        📚 {t.ok ? 'Searched your sources' : 'Tried your sources'}
-        {t.query ? (
+      <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
+        📚 {trace.ok ? 'Searched your sources' : 'Tried your sources'}
+        {trace.query ? (
           <>
             {' '}
-            for <b>“{t.query}”</b>
+            for <b>“{trace.query}”</b>
           </>
         ) : null}
-        {t.ok && <em>{t.found ? `${t.found} passage${t.found > 1 ? 's' : ''}` : 'nothing'}</em>}
+        {trace.ok && (
+          <em>{trace.found ? `${trace.found} passage${trace.found > 1 ? 's' : ''}` : 'nothing'}</em>
+        )}
       </div>
     )
-  if (t.action === 'search')
+  if (trace.action === 'search')
     return (
-      <div className={`trace-line ${t.ok ? '' : 'fail'}`}>
-        🔎 {t.ok ? 'Searched' : 'Tried'} <b>“{t.query}”</b>
-        {t.year_from || t.year_to ? (
+      <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
+        🔎 {trace.ok ? 'Searched' : 'Tried'} <b>“{trace.query}”</b>
+        {trace.year_from || trace.year_to ? (
           <span>
             {' '}
-            ({t.year_from ?? '…'}–{t.year_to ?? 'now'})
+            ({trace.year_from ?? '…'}–{trace.year_to ?? 'now'})
           </span>
         ) : null}
-        {t.ok && <em>{t.found ? `${t.found} new` : 'nothing new'}</em>}
-        {!t.ok && searchFailReason(t.reason) && <em>{searchFailReason(t.reason)}</em>}
+        {trace.ok && <em>{trace.found ? `${trace.found} new` : 'nothing new'}</em>}
+        {!trace.ok && searchFailReason(trace.reason) && <em>{searchFailReason(trace.reason)}</em>}
       </div>
     )
-  if (t.action === 'expand')
+  if (trace.action === 'expand')
     return (
-      <div className={`trace-line ${t.ok ? '' : 'fail'}`}>
-        🔗 {t.ok ? 'Expanded' : 'Tried'} <b>{t.relation}</b> of{' '}
-        <b>{t.title || `paper #${t.index}`}</b>
-        {t.ok && <em>{t.found ? `${t.found} new` : 'nothing new'}</em>}
+      <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
+        🔗 {trace.ok ? 'Expanded' : 'Tried'} <b>{trace.relation}</b> of{' '}
+        <b>{trace.title || `paper #${trace.index}`}</b>
+        {trace.ok && <em>{trace.found ? `${trace.found} new` : 'nothing new'}</em>}
       </div>
     )
   return (
-    <div className={`trace-line ${t.ok ? '' : 'fail'}`}>
-      📖 {t.ok ? 'Read' : 'Tried'} <b>{t.title || `paper #${t.index}`}</b>
-      <em>{t.detail === 'full' ? 'full text' : 'summary'}</em>
+    <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
+      📖 {trace.ok ? 'Read' : 'Tried'} <b>{trace.title || `paper #${trace.index}`}</b>
+      <em>{trace.detail === 'full' ? 'full text' : 'summary'}</em>
     </div>
   )
 }
@@ -101,70 +103,72 @@ export default function ChatMessage({
   streaming: boolean
   /** Re-light this answer's cited papers (undefined = not clickable). */
   onActivate?: () => void
-  onEnlarge: (f: AnswerFigure) => void
+  onEnlarge: (figure: AnswerFigure) => void
 }) {
-  const m = message
   const clickable = !!onActivate
   return (
     <div
-      className={`chat ${m.role}${clickable ? ' clickable' : ''}${active ? ' active' : ''}`}
+      className={`chat ${message.role}${clickable ? ' clickable' : ''}${active ? ' active' : ''}`}
       onClick={onActivate}
     >
       {/* Library-chat retrieval summary (graph-free mode). */}
-      {m.retrieve && (
+      {message.retrieve && (
         <div className="chat-trace">
-          <div className={`trace-line ${m.retrieve.found ? '' : 'fail'}`}>
+          <div className={`trace-line ${message.retrieve.found ? '' : 'fail'}`}>
             📚 Searched your library
             <em>
-              {m.retrieve.found
-                ? `${m.retrieve.found} passage${m.retrieve.found > 1 ? 's' : ''}`
+              {message.retrieve.found
+                ? `${message.retrieve.found} passage${message.retrieve.found > 1 ? 's' : ''}`
                 : 'nothing'}
             </em>
-            {m.retrieve.sources.length > 0 && (
-              <span className="trace-srcs"> from {m.retrieve.sources.join(', ')}</span>
+            {message.retrieve.sources.length > 0 && (
+              <span className="trace-srcs"> from {message.retrieve.sources.join(', ')}</span>
             )}
           </div>
         </div>
       )}
-      {m.trace && m.trace.length > 0 && (
+      {message.trace && message.trace.length > 0 && (
         <div className="chat-trace">
-          {m.trace.map((t, j) => (
-            <TraceLine key={j} t={t} />
+          {message.trace.map((event, index) => (
+            <TraceLine key={index} trace={event} />
           ))}
         </div>
       )}
       {(() => {
-        if (!m.text) {
-          return m.role === 'assistant' && streaming && !m.trace?.length && !m.retrieve
+        if (!message.text) {
+          return message.role === 'assistant' &&
+            streaming &&
+            !message.trace?.length &&
+            !message.retrieve
             ? '…'
             : ''
         }
         // Interleave the prose with the figures the agent placed via
         // <<FIG n>> markers; unplaced figures fall back to the end.
-        const { parts, leftover } = splitAnswer(m.text, m.figures)
+        const { parts, leftover } = splitAnswer(message.text, message.figures)
         return (
           <>
-            {parts.map((p, k) =>
-              typeof p === 'string' ? (
-                <span key={k}>{p}</span>
+            {parts.map((part, index) =>
+              typeof part === 'string' ? (
+                <span key={index}>{part}</span>
               ) : (
-                <div key={k} className="chat-figs chat-figs-inline">
-                  <FigCard f={p} onEnlarge={onEnlarge} />
+                <div key={index} className="chat-figs chat-figs-inline">
+                  <FigCard figure={part} onEnlarge={onEnlarge} />
                 </div>
               ),
             )}
             {leftover.length > 0 && (
               <div className="chat-figs">
-                {leftover.map((f, k) => (
-                  <FigCard key={k} f={f} onEnlarge={onEnlarge} />
+                {leftover.map((figure, index) => (
+                  <FigCard key={index} figure={figure} onEnlarge={onEnlarge} />
                 ))}
               </div>
             )}
           </>
         )
       })()}
-      {m.cited && m.cited.length > 0 && (
-        <div className="chat-cited">grounded in {m.cited.length} paper(s) ✦</div>
+      {message.cited && message.cited.length > 0 && (
+        <div className="chat-cited">grounded in {message.cited.length} paper(s) ✦</div>
       )}
     </div>
   )

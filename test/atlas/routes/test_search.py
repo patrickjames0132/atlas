@@ -10,8 +10,8 @@ from atlas.routes import search as search_routes
 def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
     seen = {}
 
-    def fake_live_search(q, **kwargs):
-        seen["q"], seen["kwargs"] = q, kwargs
+    def fake_live_search(query, **kwargs):
+        seen["q"], seen["kwargs"] = query, kwargs
         return [{"id": "s2id01", "title": "Playing Atari"}]
 
     monkeypatch.setattr(search_routes.search_service, "live_search", fake_live_search)
@@ -35,7 +35,7 @@ def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
 
 
 def test_blank_query_returns_empty_without_touching_the_service(client, monkeypatch):
-    def explode(q, **kwargs):
+    def explode(query, **kwargs):
         raise AssertionError("the service must not be called for a blank query")
 
     monkeypatch.setattr(search_routes.search_service, "live_search", explode)
@@ -47,7 +47,7 @@ def test_blank_query_returns_empty_without_touching_the_service(client, monkeypa
 def test_limit_is_clamped_and_garbage_defaults(client, monkeypatch):
     seen = {}
 
-    def fake_live_search(q, **kwargs):
+    def fake_live_search(query, **kwargs):
         seen.setdefault("limits", []).append(kwargs["limit"])
         return []
 
@@ -58,7 +58,7 @@ def test_limit_is_clamped_and_garbage_defaults(client, monkeypatch):
 
 
 def test_s2_down_returns_a_canned_502(client, monkeypatch):
-    def s2_down(q, **kwargs):
+    def s2_down(query, **kwargs):
         raise semantic_scholar.S2Error("rate limited")
 
     monkeypatch.setattr(search_routes.search_service, "live_search", s2_down)
@@ -68,7 +68,7 @@ def test_s2_down_returns_a_canned_502(client, monkeypatch):
 
 
 def test_local_search_never_errors(client, monkeypatch):
-    def boom(q, **kwargs):
+    def boom(query, **kwargs):
         raise RuntimeError("cache corrupt")
 
     monkeypatch.setattr(search_routes.search_service, "local_search", boom)

@@ -132,7 +132,7 @@ def _lexical_search(
     return [dict(row) for row in rows]
 
 
-def _rrf_fuse(rankings: list[list[dict]], k: int, rrf_k: int) -> list[dict]:
+def _rrf_fuse(rankings: list[list[dict]], top_k: int, rrf_k: int) -> list[dict]:
     """Fuse several ranked chunk lists via Reciprocal Rank Fusion.
 
     Each ranker contributes ``1 / (rrf_k + rank)`` (1-based rank) to a chunk's
@@ -142,11 +142,11 @@ def _rrf_fuse(rankings: list[list[dict]], k: int, rrf_k: int) -> list[dict]:
     Args:
         rankings: One best-first list of chunk dicts per ranker; each dict must
             carry a unique ``id`` plus the display fields.
-        k: Maximum fused passages to return.
+        top_k: Maximum fused passages to return.
         rrf_k: The RRF damping constant (larger flattens rank influence).
 
     Returns:
-        Up to ``k`` passage dicts ``{source_id, source_title, page, text, score}``
+        Up to ``top_k`` passage dicts ``{source_id, source_title, page, text, score}``
         ordered by fused score (higher = stronger), deduplicated by chunk id.
     """
     scores: dict[int, float] = {}
@@ -156,7 +156,7 @@ def _rrf_fuse(rankings: list[list[dict]], k: int, rrf_k: int) -> list[dict]:
             chunk_id = hit["id"]
             scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (rrf_k + rank)
             chunks.setdefault(chunk_id, hit)
-    ordered = sorted(scores, key=lambda chunk_id: scores[chunk_id], reverse=True)[:k]
+    ordered = sorted(scores, key=lambda chunk_id: scores[chunk_id], reverse=True)[:top_k]
     return [
         {
             "source_id": chunks[chunk_id]["source_id"],
@@ -170,7 +170,7 @@ def _rrf_fuse(rankings: list[list[dict]], k: int, rrf_k: int) -> list[dict]:
 
 
 def search(
-    query: str, k: int | None = None, source_ids: list[str] | None = None
+    query: str, top_k: int | None = None, source_ids: list[str] | None = None
 ) -> list[dict]:
     """Hybrid search over the library — semantic KNN fused with lexical BM25.
 
@@ -182,7 +182,7 @@ def search(
 
     Args:
         query: What to look for — a concept or question.
-        k: Maximum passages to return; defaults to ``config.sources.retrieval.search_k``.
+        top_k: Maximum passages to return; defaults to ``config.sources.retrieval.search_k``.
         source_ids: Restrict retrieval to this subset of source ids. ``None``
             means "no scope" — search the whole library; an **explicit empty
             list** means "no sources selected" — search nothing (returns []).
@@ -190,14 +190,14 @@ def search(
             filter can still yield ``k`` hits from the chosen sources.
 
     Returns:
-        Up to ``k`` passage dicts — ``{source_id, source_title, page, text,
+        Up to ``top_k`` passage dicts — ``{source_id, source_title, page, text,
         score}``, best-first (higher fused score = stronger). Empty when both
         rankers are unavailable, or when the scope is an explicit empty set.
 
     Raises:
         sqlite3.Error: On database failures.
     """
-    k = k or config.sources.retrieval.search_k
+    top_k = top_k or config.sources.retrieval.search_k
     # None = whole library; an explicit (possibly empty) list = exactly those
     # sources, so an empty scope searches nothing rather than everything.
     if source_ids is not None:
@@ -207,9 +207,9 @@ def search(
     else:
         ids = []
 
-    # Over-fetch each ranker when scoping so its pool still yields k in-scope hits
-    # after the filter; also gives RRF a deeper pool to fuse over.
-    fetch = k * 8 if ids else k
+    # Over-fetch each ranker when scoping so its pool still yields top_k in-scope
+    # hits after the filter; also gives RRF a deeper pool to fuse over.
+    fetch = top_k * 8 if ids else top_k
 
     with store.connect() as conn:
         vector = _vector_search(conn, query, fetch, ids)
@@ -219,4 +219,4 @@ def search(
             else []
         )
 
-    return _rrf_fuse([vector, lexical], k, config.sources.retrieval.rrf_k)
+    return _rrf_fuse([vector, lexical], top_k, config.sources.retrieval.rrf_k)

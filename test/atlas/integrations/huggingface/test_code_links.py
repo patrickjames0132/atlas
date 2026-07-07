@@ -19,12 +19,12 @@ def _fake_paper(**over):
         github_stars=15000,
         linked_models=[
             SimpleNamespace(
-                id=f"org/model-{i}",
-                likes=100 - i,
-                downloads=1000 * i,
+                id=f"org/model-{index}",
+                likes=100 - index,
+                downloads=1000 * index,
                 pipeline_tag="text-generation",
             )
-            for i in range(8)
+            for index in range(8)
         ],
         linked_datasets=[SimpleNamespace(id="org/data", likes=5, downloads=42)],
         linked_spaces=[SimpleNamespace(id="org/space", emoji="🚀", likes=None)],

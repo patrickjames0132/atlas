@@ -82,18 +82,18 @@ def sources_list() -> None:
 @cli.command("search-sources", help="Semantic search over the library.")
 @click.argument("query")
 @click.option("--source", default=None, help="Restrict to one source id.")
-@click.option("-k", "k", type=int, default=None, help="Number of passages.")
-def search_sources(query: str, source: str | None, k: int | None) -> None:
+@click.option("-k", "top_k", type=int, default=None, help="Number of passages.")
+def search_sources(query: str, source: str | None, top_k: int | None) -> None:
     """Semantic-search the library and print the top passages.
 
     Args:
         query: What to look for — a concept or question.
         source: Restrict retrieval to one source's id (optional).
-        k: Number of passages (defaults to ``config.sources.retrieval.search_k``).
+        top_k: Number of passages (defaults to ``config.sources.retrieval.search_k``).
     """
     from atlas.services import sources
 
-    hits = sources.search(query, k=k, source_ids=[source] if source else None)
+    hits = sources.search(query, top_k=top_k, source_ids=[source] if source else None)
     if not hits:
         click.echo("No matches (library empty, or embeddings unavailable).")
         return

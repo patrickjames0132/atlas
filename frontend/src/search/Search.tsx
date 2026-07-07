@@ -19,16 +19,16 @@ import './search.css'
 export interface SearchProps {
   /** The controlled search box value. */
   query: string
-  onQueryChange: (q: string) => void
+  onQueryChange: (query: string) => void
   /** Submit handler (routes to graph-load or keyword search). */
-  onSubmit: (e: FormEvent) => void
+  onSubmit: (event: FormEvent) => void
   /** A search is in flight (disables the button, swaps its label). */
   searching: boolean
   /** A graph is loading (also disables the button). */
   loadingGraph: boolean
   /** The active filters (all optional; empty = search everything). */
   filters: SearchFilters
-  onFilters: (f: SearchFilters) => void
+  onFilters: (next: SearchFilters) => void
 }
 
 /**
@@ -41,7 +41,7 @@ const MIN_YEAR = 1800
 /** Props for {@link YearRange}. */
 interface YearRangeProps {
   filters: SearchFilters
-  onFilters: (f: SearchFilters) => void
+  onFilters: (next: SearchFilters) => void
 }
 
 /**
@@ -72,7 +72,7 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
   }
 
   /** A year's position along the track as a 0–100 percentage. */
-  const pct = (v: number) => ((v - MIN_YEAR) / (maxYear - MIN_YEAR)) * 100
+  const pct = (year: number) => ((year - MIN_YEAR) / (maxYear - MIN_YEAR)) * 100
 
   return (
     <div className="filter-row year-row">
@@ -90,7 +90,7 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
           max={maxYear}
           value={lo}
           aria-label="Earliest publication year"
-          onChange={(e) => commit(Math.min(Number(e.target.value), hi), hi)}
+          onChange={(event) => commit(Math.min(Number(event.target.value), hi), hi)}
         />
         <input
           type="range"
@@ -100,7 +100,7 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
           max={maxYear}
           value={hi}
           aria-label="Latest publication year"
-          onChange={(e) => commit(lo, Math.max(Number(e.target.value), lo))}
+          onChange={(event) => commit(lo, Math.max(Number(event.target.value), lo))}
         />
       </div>
       <span className="year-readout">
@@ -142,28 +142,28 @@ export default function Search({
 
   /** Remove one field of study from the filter. */
   const removeField = (field: string) => {
-    onFilters({ ...filters, fields: filters.fields.filter((f) => f !== field) })
+    onFilters({ ...filters, fields: filters.fields.filter((other) => other !== field) })
   }
 
   return (
     <div className="search-box">
       <form
         className="seed-search"
-        onSubmit={(e) => {
+        onSubmit={(event) => {
           setOpen(false) // collapse the filter popover once a search is fired
-          onSubmit(e)
+          onSubmit(event)
         }}
       >
         <input
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Search a paper by title, or paste an arXiv id / URL…"
           aria-label="Search for a paper to explore"
         />
         <button
           type="button"
           className={`filter-toggle ${activeCount ? 'on' : ''}`}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen((prev) => !prev)}
           title="Optional filters: publication year and field of study"
         >
           Filters{activeCount ? ` · ${activeCount}` : ''}
@@ -182,7 +182,7 @@ export default function Search({
               className="cat-select"
               value=""
               aria-label="Add a field-of-study filter"
-              onChange={(e) => addField(e.target.value)}
+              onChange={(event) => addField(event.target.value)}
             >
               <option value="">
                 {fieldOptions === null ? 'Loading fields…' : 'Add a field…'}

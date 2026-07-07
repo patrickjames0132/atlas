@@ -103,7 +103,9 @@ export const saveWorkspace = createAsyncThunk<
     seed: graph.seed,
     layout: workspace.layout,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
-    nodes: [...graph.nodes, ...workspace.discoveredNodes].map((n) => cleanNode(n as VNode)),
+    nodes: [...graph.nodes, ...workspace.discoveredNodes].map((node) =>
+      cleanNode(node as VNode),
+    ),
     edges: [...graph.edges, ...workspace.discoveredEdges],
     chat: transcript.chat,
     beats: transcript.beats,
@@ -122,15 +124,15 @@ const workspaceSlice = createSlice({
     ) {
       if (!state.graph) return
       const knownIds = new Set([
-        ...state.graph.nodes.map((n) => n.id),
-        ...state.discoveredNodes.map((n) => n.id),
+        ...state.graph.nodes.map((node) => node.id),
+        ...state.discoveredNodes.map((node) => node.id),
       ])
       for (const node of action.payload.nodes) {
         if (knownIds.has(node.id)) continue
         knownIds.add(node.id)
         state.discoveredNodes.push(node)
       }
-      const edgeKey = (e: GraphEdge) => `${e.source}|${e.target}|${e.type}`
+      const edgeKey = (edge: GraphEdge) => `${edge.source}|${edge.target}|${edge.type}`
       const knownEdges = new Set(
         [...state.graph.edges, ...state.discoveredEdges].map(edgeKey),
       )
@@ -209,7 +211,7 @@ export const selectWorkspace = (state: StateWithWorkspace) => state.workspace
  * GraphResponse's compact seed header). */
 export const selectSeedNode = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
-  (graph) => graph?.nodes.find((n) => n.is_seed) ?? null,
+  (graph) => graph?.nodes.find((node) => node.is_seed) ?? null,
 )
 
 /**
@@ -239,13 +241,13 @@ export const selectHasDiscovered = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,
   (graph, discovered) =>
-    discovered.length > 0 || (graph?.nodes.some((n) => n.discovered) ?? false),
+    discovered.length > 0 || (graph?.nodes.some((node) => node.discovered) ?? false),
 )
 
 export const selectHasSearchHits = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,
   (graph, discovered) =>
-    discovered.some((n) => n.rels.includes('search')) ||
-    (graph?.nodes.some((n) => n.discovered && n.rels.includes('search')) ?? false),
+    discovered.some((node) => node.rels.includes('search')) ||
+    (graph?.nodes.some((node) => node.discovered && node.rels.includes('search')) ?? false),
 )

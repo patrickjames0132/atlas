@@ -59,7 +59,7 @@ def list_sessions() -> list[dict]:
             "SELECT id, name, seed_id, seed_title, n_nodes, created_at, updated_at "
             "FROM saved_sessions ORDER BY updated_at DESC"
         ).fetchall()
-    return [dict(r) for r in rows]
+    return [dict(row) for row in rows]
 
 
 def get_session(session_id: str) -> dict | None:
