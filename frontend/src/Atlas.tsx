@@ -70,7 +70,7 @@ export default function Atlas() {
   const pickSeed = useCallback(
     (seed: string) => {
       clearHits()
-      dispatch(loadGraph(seed))
+      dispatch(loadGraph({ seed }))
     },
     [clearHits, dispatch],
   )

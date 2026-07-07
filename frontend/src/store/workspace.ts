@@ -26,6 +26,13 @@ import type { TranscriptState } from './transcript'
 
 export interface WorkspaceState {
   graph: GraphResponse | null
+  /**
+   * The exact reference this graph was loaded with (arXiv id, pasted URL, or
+   * S2 paperId) — kept so "Refresh" can bust the *same* cache key the server
+   * stored the snapshot under (a double-click re-seed keys by paperId, a
+   * search by arXiv id). Null with no graph.
+   */
+  seedRef: string | null
   /** Papers the agent pulled in mid-conversation (deduped against the graph). */
   discoveredNodes: GraphNode[]
   discoveredEdges: GraphEdge[]
@@ -39,6 +46,7 @@ export interface WorkspaceState {
 
 const initialState: WorkspaceState = {
   graph: null,
+  seedRef: null,
   discoveredNodes: [],
   discoveredEdges: [],
   layout: 'timeline',
@@ -47,9 +55,18 @@ const initialState: WorkspaceState = {
   error: null,
 }
 
-/** Load (or re-seed) the graph for an arXiv id, pasted URL, or S2 paperId. */
-export const loadGraph = createAsyncThunk('workspace/loadGraph', (seed: string) =>
-  fetchGraph(seed),
+/**
+ * Load (or re-seed) the graph for an arXiv id, pasted URL, or S2 paperId.
+ *
+ * @param seed    The paper reference to build the neighborhood around.
+ * @param refresh Bypass the server's day-cached snapshot for this seed and
+ *                rebuild from Semantic Scholar (the "Refresh" action) —
+ *                useful when S2's data for a paper has visibly changed.
+ */
+export const loadGraph = createAsyncThunk(
+  'workspace/loadGraph',
+  ({ seed, refresh = false }: { seed: string; refresh?: boolean }) =>
+    fetchGraph(seed, refresh),
 )
 
 /**
@@ -150,6 +167,7 @@ const workspaceSlice = createSlice({
      * transcript and highlights clear themselves via extraReducers. */
     workspaceCleared(state) {
       state.graph = null
+      state.seedRef = null
       state.discoveredNodes = []
       state.discoveredEdges = []
       state.layout = 'timeline'
@@ -169,6 +187,9 @@ const workspaceSlice = createSlice({
       })
       .addCase(loadGraph.fulfilled, (state, action) => {
         state.graph = action.payload
+        // The reference actually requested — refresh must re-fetch with this
+        // same string to bust the exact snapshot the server keyed.
+        state.seedRef = action.meta.arg.seed
         state.discoveredNodes = []
         state.discoveredEdges = []
         state.epoch += 1
@@ -184,6 +205,10 @@ const workspaceSlice = createSlice({
       })
       .addCase(restoreSession.fulfilled, (state, action) => {
         state.graph = action.payload.graph
+        // A restore has no cached-snapshot origin; refreshing it does a real
+        // S2 rebuild, best-effort keyed by the seed's arXiv id (else paperId).
+        state.seedRef =
+          action.payload.graph.seed.arxiv_id ?? action.payload.graph.seed.id
         state.discoveredNodes = []
         state.discoveredEdges = []
         state.layout = action.payload.layout

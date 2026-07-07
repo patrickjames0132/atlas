@@ -14,7 +14,8 @@
 > source scope (v1.19.0), figures in agent answers (v1.20.0), hybrid lexical +
 > semantic library search (v1.21.0), quality hardening — strict mypy, src-layout,
 > 105-test offline suite (v1.21.1–.3), inline answer figures (v1.22.0), code &
-> artifact links via Hugging Face Papers (v1.23.0)
+> artifact links via Hugging Face Papers (v1.23.0), per-seed cache-clear Refresh
+> button (v2.5.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -717,11 +718,18 @@ optional, behind a key.
       categories as a second layer of tags — an arXiv paper would show both
       layers side by side, a non-arXiv paper would fall back to S2-only.
       *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Optional per-seed cache clear** — let the user bust the cached graph
-      snapshot (`data/digest.db`'s `cache` table) for one specific seeded
-      paper on demand, rather than only living with the 1-day TTL — useful
-      when S2's data for a paper visibly changes mid-session.
-      *(From the `todos.md` inbox, 2026-07-07.)*
+- [x] **Optional per-seed cache clear** *(v2.5.0)* — a **Refresh** button in the
+      graph controls (beside Release / Fit) busts the cached graph snapshot
+      (`data/digest.db`'s `cache` table) for the current seed on demand, rather
+      than only living with the 1-day TTL — useful when S2's data for a paper
+      visibly changes mid-session. Reuses the backend's existing `refresh=1`
+      path (bypass read → rebuild from S2 → upsert the snapshot), which was
+      wired end-to-end but never triggered from the UI. Frontend-only: the
+      workspace slice now records the **exact seed reference** the graph was
+      loaded with (`seedRef`) so Refresh replays the same string and busts the
+      *right* cache key — a double-click re-seed keys by S2 paperId, a search by
+      arXiv id — rather than a stale duplicate. *(From the `todos.md` inbox,
+      2026-07-07.)*
 - [ ] **Frontend pre-commit (format + lint)** — the backend has a full
       pre-commit hook set (`.pre-commit-config.yaml` → ruff, via
       `uv run nox -s precommit`); the frontend has none. `oxlint` exists today

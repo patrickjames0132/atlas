@@ -121,8 +121,9 @@ The Vite dev server proxies `/api/*` to Flask.
    node for details (TL;DR, abstract/PDF links, figures, code & artifacts);
    **double-click to re-seed** on it — journal papers included.
 3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
-   filters, a year slider, drag-to-pin, focus-on-hover. Click the **Atlas**
-   brand anytime to go home.
+   filters, a year slider, drag-to-pin, focus-on-hover, and a **Refresh** that
+   busts this seed's day-cached snapshot to re-fetch fresh from Semantic
+   Scholar. Click the **Atlas** brand anytime to go home.
 4. **Learn** (the 🎓 Assistant panel):
    - **Lectures** — "How we got here" (walks back to the field's roots
      first, then narrates chronologically, lighting up papers beat by beat)

@@ -40,6 +40,10 @@ export interface GraphControlsProps {
   onReleaseAll: () => void
   /** Re-center the graph (zoomToFit). */
   onFit: () => void
+  /** Bust this seed's cached snapshot and re-fetch it from Semantic Scholar. */
+  onRefresh: () => void
+  /** A graph load/refresh is in flight (disables Refresh). */
+  refreshing: boolean
 }
 
 /** Render the graph's control panel. */
@@ -60,6 +64,8 @@ export default function GraphControls({
   pinnedCount,
   onReleaseAll,
   onFit,
+  onRefresh,
+  refreshing,
 }: GraphControlsProps) {
   // The year slider only makes sense when the graph spans more than one year.
   const showYears = maxYear > minYear
@@ -144,6 +150,14 @@ export default function GraphControls({
           </button>
           <button className="mini-btn" onClick={onFit} title="Re-center the graph">
             Fit
+          </button>
+          <button
+            className="mini-btn"
+            onClick={onRefresh}
+            disabled={refreshing}
+            title="Bust this paper's cached snapshot and re-fetch from Semantic Scholar"
+          >
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </div>

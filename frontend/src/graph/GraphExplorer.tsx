@@ -42,7 +42,7 @@ import type { Base, VLink, VNode } from './model'
 
 export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const dispatch = useAppDispatch()
-  const { graph, discoveredNodes, discoveredEdges, layout } =
+  const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef } =
     useAppSelector(selectWorkspace)
   const highlightIds = useAppSelector(selectHighlightSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
@@ -130,10 +130,19 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
 
   const doLoadGraph = useCallback(
     (seed: string) => {
-      dispatch(loadGraph(seed))
+      dispatch(loadGraph({ seed }))
     },
     [dispatch],
   )
+
+  /**
+   * Re-fetch the current seed bypassing the server's day-cached snapshot,
+   * busting the exact cache entry (`graph:{seedRef}`) so a paper whose S2 data
+   * changed mid-session picks up the new neighborhood on demand.
+   */
+  const onRefresh = useCallback(() => {
+    if (seedRef) dispatch(loadGraph({ seed: seedRef, refresh: true }))
+  }, [dispatch, seedRef])
 
   // Selection: the open detail panel, its hydration + figures + code links +
   // category tags.
@@ -261,6 +270,8 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             pinnedCount={pinned.size}
             onReleaseAll={releaseAll}
             onFit={() => fgRef.current?.zoomToFit(400, 60)}
+            onRefresh={onRefresh}
+            refreshing={loading}
           />
         )}
 
