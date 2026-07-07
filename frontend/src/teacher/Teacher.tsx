@@ -18,7 +18,7 @@ import { listSources, type AnswerFigure, type LectureMode, type Source } from '.
 import { useAppSelector } from '../store'
 import { selectTranscript } from '../store/transcript'
 import ScopePicker from './ScopePicker'
-import Lightbox from './figures/Lightbox'
+import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
 import ChatMessage from './transcript/ChatMessage'
 import HistTrace from './transcript/HistTrace'

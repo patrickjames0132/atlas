@@ -559,9 +559,17 @@ optional, behind a key.
       keeps a **small, focused context** instead of one long conversation
       carrying every tool result. *(Patrick's observation while testing inline
       figures, 2026-07-04.)*
-- [ ] **Zoom on detail-panel figures** — the sidebar's paper figures (Phase 2.1)
-      aren't click-to-enlarge; give them the same **lightbox** the answer figures
-      got in v1.20.0 (reuse the existing component). *(From the `todos.md` inbox,
+- [x] **Zoom on detail-panel figures** *(v2.4.0)* — the sidebar's paper figures
+      (Phase 2.1) are now click-to-enlarge, reusing the same **lightbox** the
+      answer figures got in v1.20.0. Since it's now a genuine two-consumer
+      component, `Lightbox.tsx` was promoted out of `teacher/figures/` to a
+      new root-level `figures/` folder per the hybrid structure rule (each
+      caller — `Teacher.tsx`, `graph/GraphExplorer.tsx` — still owns its own
+      open/close state and instance). Caught a latent bug in the move: the
+      caption line unconditionally rendered `Figure {figure.figure}`, fine
+      for the teacher's always-numbered agent-cited figures but a bare
+      "Figure " for the detail panel's un-numbered ones — now the label only
+      shows when a number actually exists. *(From the `todos.md` inbox,
       2026-07-04.)*
 - [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
       feature to the user's **own library**: pull images out of an ingested PDF

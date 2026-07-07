@@ -10,6 +10,13 @@ detail/
   detail.css      — styles (ported light-touch)
 ```
 
+Figures are click-to-enlarge via `../figures/Lightbox.tsx` — a root-level,
+multi-consumer component (also used by the teacher's answer figures), not
+nested here; see `figures/README.md`. `DetailPanel` takes an `onEnlarge`
+callback rather than owning the lightbox itself — `GraphExplorer.tsx` (its
+parent) holds that state, same pattern as `Teacher.tsx` does for its own
+figures.
+
 ## Design decisions worth knowing
 
 - **Everything about a paper loads lazily, and each thing exactly once.**
@@ -40,9 +47,10 @@ detail/
 
 ## Who uses it, and how/why (traced from the old app)
 
-The shell (`Atlas.tsx`, for now) owns the `useSelection` instance, hands
-its `onNodeClick` to `GraphCanvas`, renders `DetailPanel` when `selected`
-is non-null, and passes `selectedId` back to the canvas for the selection
+`graph/GraphExplorer.tsx` owns the `useSelection` instance, hands its
+`onNodeClick` to `GraphCanvas`, renders `DetailPanel` when `selected` is
+non-null (passing it `onEnlarge={setLightbox}` for its own lightbox
+instance), and passes `selectedId` back to the canvas for the selection
 ring. The teacher's "papers I cited" chips also drive `setSelectedId`.
 
 ## How it's verified

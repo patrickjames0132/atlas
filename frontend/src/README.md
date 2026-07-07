@@ -25,15 +25,21 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  ├─ controls panel            graph/GraphControls.tsx
    │  ├─ the canvas                graph/GraphCanvas.tsx
    │  ├─ legend                    graph/Legend.tsx
-   │  └─ detail panel (on select)  detail/DetailPanel.tsx
+   │  ├─ detail panel (on select)  detail/DetailPanel.tsx
+   │  └─ figure lightbox           figures/Lightbox.tsx
    └─ assistant panel (🎓)         teacher/Teacher.tsx
       ├─ scope picker              teacher/ScopePicker.tsx
       ├─ backfill trace            teacher/transcript/HistTrace.tsx
       ├─ lecture beats             teacher/transcript/BeatList.tsx
       ├─ chat turns                teacher/transcript/ChatMessage.tsx
       │  └─ inline figures         teacher/figures/FigCard.tsx
-      └─ figure lightbox           teacher/figures/Lightbox.tsx
+      └─ figure lightbox           figures/Lightbox.tsx (same instance type as above,
+                                    but GraphExplorer and Teacher each own their own)
 ```
+
+`figures/Lightbox.tsx` is the frontend's first true multi-consumer, root-level
+component (promoted from `teacher/figures/` once the detail panel became a
+second caller) — see "the hybrid rule" above.
 
 Non-visual folders: `api/` (the typed backend client — the only layer that
 knows URLs and SSE frames), `store/` (the three slices + typed hooks),

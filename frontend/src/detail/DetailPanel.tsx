@@ -1,11 +1,12 @@
 /**
  * The right-hand paper detail panel: relation badges, title, authors, the
  * TL;DR / abstract, its own arXiv category tags, code & artifact links
- * (Hugging Face Papers), lazily-loaded figures (ar5iv), and the paper
- * actions (abstract/PDF links, pin, explore-from-here).
+ * (Hugging Face Papers), lazily-loaded figures (ar5iv, click-to-enlarge via
+ * the shared lightbox), and the paper actions (abstract/PDF links, pin,
+ * explore-from-here).
  */
 
-import type { CategoriesResponse, CodeLinksResponse, FiguresResponse } from '../api'
+import type { AnswerFigure, CategoriesResponse, CodeLinksResponse, FiguresResponse } from '../api'
 import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
 import { REL_COLOR } from '../graph/theme'
@@ -23,6 +24,8 @@ export interface DetailPanelProps {
   codeLinks?: CodeLinksResponse
   /** The node's own arXiv category tags, once fetched (undefined until then). */
   categories?: CategoriesResponse
+  /** Open a figure full-screen (the shared lightbox — GraphExplorer owns it). */
+  onEnlarge: (f: AnswerFigure) => void
   /** Whether the node is currently pinned in place. */
   isPinned: boolean
   /** Pin/unpin the node. */
@@ -122,6 +125,7 @@ export default function DetailPanel({
   figuresLoading,
   codeLinks,
   categories,
+  onEnlarge,
   isPinned,
   onTogglePin,
   onClose,
@@ -191,7 +195,15 @@ export default function DetailPanel({
           <div className="detail-figs-head">Figures</div>
           {figures.figures.map((f, i) => (
             <figure key={i} className="detail-fig">
-              <img src={f.image} alt={f.caption || `Figure ${i + 1}`} loading="lazy" />
+              <button
+                type="button"
+                className="detail-fig-btn"
+                onClick={() => onEnlarge({ image: f.image, caption: f.caption, title: null })}
+                title="Click to enlarge"
+                aria-label="Enlarge figure"
+              >
+                <img src={f.image} alt={f.caption || `Figure ${i + 1}`} loading="lazy" />
+              </button>
               {f.caption && <figcaption>{f.caption}</figcaption>}
             </figure>
           ))}

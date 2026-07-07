@@ -1,7 +1,8 @@
 /**
  * The graph exploration area: the canvas, its controls, the legend, and the
- * detail panel — plus every piece of state only they read (the `base` sim
- * dataset, declutter filters, hover, selection, canvas size).
+ * detail panel (plus its figure lightbox) — plus every piece of state only
+ * they read (the `base` sim dataset, declutter filters, hover, selection,
+ * canvas size).
  *
  * Store boundary (the Phase 6 state directive, drawn precisely here):
  *   READS  workspace.graph (to build `base`), workspace discoveries (merged
@@ -17,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { AnswerFigure } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { selectHighlightSet } from '../store/highlight'
 import {
@@ -28,6 +30,7 @@ import {
 } from '../store/workspace'
 import { useSelection } from '../detail/useSelection'
 import DetailPanel from '../detail/DetailPanel'
+import Lightbox from '../figures/Lightbox'
 import GraphCanvas from './GraphCanvas'
 import GraphControls from './GraphControls'
 import Legend from './Legend'
@@ -52,6 +55,9 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
   const [hoverId, setHoverId] = useState<string | null>(null)
+  // The detail panel's figures, enlarged full-screen (same lightbox the
+  // teacher's answer figures use).
+  const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
 
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -281,12 +287,14 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
           figuresLoading={figLoading === selected.arxiv_id}
           codeLinks={selected.arxiv_id ? codeLinks[selected.arxiv_id] : undefined}
           categories={selected.arxiv_id ? categories[selected.arxiv_id] : undefined}
+          onEnlarge={setLightbox}
           isPinned={pinned.has(selected.id)}
           onTogglePin={() => togglePin(selected.id)}
           onClose={() => setSelectedId(null)}
           onExplore={doLoadGraph}
         />
       )}
+      {lightbox && <Lightbox figure={lightbox} onClose={() => setLightbox(null)} />}
     </>
   )
 }

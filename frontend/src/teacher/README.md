@@ -14,7 +14,6 @@ teacher/
   figures/           ← sub-package: the inline-figure pipeline
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
-    Lightbox.tsx     — the full-screen viewer (Escape closes)
   transcript/        ← sub-package: rendering the conversation
     HistTrace.tsx    — the history lecture's backfill hops
     BeatList.tsx     — lecture beats (click to light their papers)
@@ -39,6 +38,11 @@ structure rule's nesting case (the `graph/hooks` precedent).
 
 ## Design decisions worth knowing
 
+- **`Lightbox.tsx` moved out to `../figures/`** (root-level, not nested here)
+  once the detail panel's own paper figures became a second consumer — the
+  hybrid structure rule promotes a component the moment it's no longer
+  single-parent. `FigCard.tsx` stays here; it's still teacher-only (the chat
+  bubble's inline-figure card styling, not reused elsewhere).
 - **The figure interleaver** (`figures/split.ts`): `FIG_TAIL` holds back a
   partial `<<FIG` marker at the end of streaming prose so it never flashes
   raw mid-chunk; an invented slot's marker vanishes without gluing its
