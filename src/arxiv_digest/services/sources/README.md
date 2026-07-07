@@ -26,6 +26,15 @@ text never leaves the machine, which matters for copyrighted books), and stored
 in a dedicated SQLite database with a vector index. Search is **hybrid** — see
 below.
 
+## Ingestion progress
+
+`add_source` (and the `ingest_pdf`/`ingest_url` wrappers) accept an optional
+`on_progress(done, total)` callback, ticked once when chunking finishes and
+then per embedding batch (`_EMBED_BATCH = 64` chunks — the encoder batches
+internally anyway; this only sets how often a progress UI updates).
+Embedding is where ingestion's time goes, so it's what a progress bar
+should measure. The sources route bridges the callback into SSE frames.
+
 ## How it's structured
 
 ```

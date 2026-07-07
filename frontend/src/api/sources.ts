@@ -1,9 +1,12 @@
 /**
- * Bring-your-own sources: the user's local semantic library (Phase 3d).
+ * Bring-your-own sources: the user's local semantic library.
  *
  * Sources are PDFs or web pages ingested server-side (chunked + embedded into
- * a sqlite-vec index) that the teacher can semantically search.
+ * a sqlite-vec index) that the teacher can semantically search. Ingestion
+ * streams SSE progress frames — embedding is where the time goes.
  */
+
+import { readSSE } from './sse'
 
 /** One ingested source in the library. */
 export interface Source {
@@ -42,45 +45,75 @@ export async function listSources(): Promise<SourcesResponse> {
   }
 }
 
-/**
- * Parse an ingest response, throwing the server's error message on failure.
- * Shared by {@link uploadSource} and {@link ingestUrl}.
- */
-async function ingestResult(res: Response): Promise<Source> {
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as { error?: string }).error || `Ingest failed (${res.status})`)
-  return data as Source
+/** Embedding progress for an in-flight ingestion: chunks done / total. */
+export interface IngestProgress {
+  done: number
+  total: number
 }
 
 /**
- * Upload a PDF into the library. Synchronous on the server — a big book takes
- * a while as it chunks + embeds, so callers should show a busy state.
+ * Consume an ingestion's SSE stream: `progress` frames feed the callback,
+ * `done` resolves with the stored record, `error` rejects with the server's
+ * message (a SourceError's text verbatim — written for users).
+ * Shared by {@link uploadSource} and {@link ingestUrl}.
+ */
+async function ingestResult(
+  res: Response,
+  onProgress?: (p: IngestProgress) => void,
+): Promise<Source> {
+  let source: Source | null = null
+  let message: string | null = null
+  await readSSE(res, (event, data) => {
+    if (event === 'progress') onProgress?.(data as IngestProgress)
+    else if (event === 'done') source = data as Source
+    else if (event === 'error') message = (data as { message: string }).message
+  })
+  if (message) throw new Error(message)
+  if (!source) throw new Error('Ingest failed (stream ended early)')
+  return source
+}
+
+/**
+ * Upload a PDF into the library. A big book takes a while as it chunks +
+ * embeds — the server streams embedding progress so callers can render a
+ * real bar, not just a spinner.
  *
- * @param file  The PDF file.
- * @param title Optional display title (defaults to the filename server-side).
+ * @param file       The PDF file.
+ * @param title      Optional display title (defaults to the filename server-side).
+ * @param onProgress Called per embedding batch with `{done, total}` chunks.
  * @throws With the server's error message when ingestion fails.
  */
-export async function uploadSource(file: File, title?: string): Promise<Source> {
+export async function uploadSource(
+  file: File,
+  title?: string,
+  onProgress?: (p: IngestProgress) => void,
+): Promise<Source> {
   const form = new FormData()
   form.append('file', file)
   if (title) form.append('title', title)
-  return ingestResult(await fetch('/api/sources', { method: 'POST', body: form }))
+  return ingestResult(await fetch('/api/sources', { method: 'POST', body: form }), onProgress)
 }
 
 /**
  * Ingest a web page (or a PDF link) by URL into the library.
  *
- * @param url   The page or PDF URL.
- * @param title Optional display title (defaults to the page title server-side).
+ * @param url        The page or PDF URL.
+ * @param title      Optional display title (defaults to the page title server-side).
+ * @param onProgress Called per embedding batch with `{done, total}` chunks.
  * @throws With the server's error message when ingestion fails.
  */
-export async function ingestUrl(url: string, title?: string): Promise<Source> {
+export async function ingestUrl(
+  url: string,
+  title?: string,
+  onProgress?: (p: IngestProgress) => void,
+): Promise<Source> {
   return ingestResult(
     await fetch('/api/sources', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, title }),
     }),
+    onProgress,
   )
 }
 

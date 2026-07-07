@@ -17,12 +17,11 @@ package — a deliberate name-cousin, different full paths.)
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from typing import Iterable, Iterator, cast
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
@@ -31,6 +30,7 @@ from ..agents.lecturer.config import MODE_INTENTS
 from ..agents.lecturer.main import Mode
 from ..config import config
 from ..services.graph import Node
+from .sse import sse, sse_response
 
 bp = Blueprint("agents", __name__)
 
@@ -100,40 +100,6 @@ def _node(raw: dict) -> Node:
     return Node.model_validate(data)
 
 
-def _sse(event: str, data: object) -> str:
-    """Format one Server-Sent Event frame.
-
-    Args:
-        event: The event name (``beat``, ``token``, ``trace``, …).
-        data: A JSON-serializable payload.
-
-    Returns:
-        The wire-format frame: ``event:`` and ``data:`` lines terminated by
-        a blank line.
-    """
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
-
-
-def _sse_response(generator: Iterator[str]) -> Response:
-    """Wrap a generator of SSE frames as a streaming response.
-
-    ``X-Accel-Buffering: no`` keeps nginx (if ever put in front) from
-    buffering the stream; ``Cache-Control: no-cache`` stops intermediaries
-    caching partial output.
-
-    Args:
-        generator: An iterator yielding SSE frame strings (from ``_sse``).
-
-    Returns:
-        A ``text/event-stream`` Flask Response streaming the frames.
-    """
-    return Response(
-        generator,
-        mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
 def _relay(
     workflow: Iterable[events.Event],
     *,
@@ -167,10 +133,10 @@ def _relay(
             if isinstance(event, events.Token):
                 answer_parts.append(event.text)
             succeeded = isinstance(event, events.Done)
-            yield _sse(event.type, event.model_dump(exclude={"type"}))
+            yield sse(event.type, event.model_dump(exclude={"type"}))
     except Exception:  # the orchestrator catches its own; this guards serialization
         log.exception("agent stream failed")
-        yield _sse("error", {"message": "The teacher hit an unexpected error."})
+        yield sse("error", {"message": "The teacher hit an unexpected error."})
         return
     if succeeded and store is not None and session_id:
         answer = _FIG_MARKER_RE.sub("", "".join(answer_parts)).strip()
@@ -213,7 +179,7 @@ def api_lecture() -> ResponseReturnValue:
     except ValidationError:
         return jsonify({"error": "seed/nodes are malformed"}), 400
 
-    return _sse_response(
+    return sse_response(
         _relay(orchestrator.run("lecture", seed=seed, nodes=nodes, mode=mode, target=target))
     )
 
@@ -252,7 +218,7 @@ def api_ask() -> ResponseReturnValue:
     source_ids = _opt_source_ids(payload)
     history = _QA_SESSIONS.get(session_id, []) if session_id else []
 
-    return _sse_response(
+    return sse_response(
         _relay(
             orchestrator.run(
                 "q&a",
@@ -294,7 +260,7 @@ def api_ask_sources() -> ResponseReturnValue:
     source_ids = _opt_source_ids(payload)
     history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
 
-    return _sse_response(
+    return sse_response(
         _relay(
             orchestrator.run(
                 "librarian", question=question, history=history, source_ids=source_ids

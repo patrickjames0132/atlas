@@ -13,8 +13,10 @@ import './sources.css'
 // loaded, remove sources. The library is global and persistent; the AI teacher
 // searches it during Q&A (Phase 3d).
 
-/** One file in an in-flight upload batch, tracked for per-file progress. */
-type Upload = { name: string; status: 'ingesting' | 'done' | 'error'; error?: string }
+/** One file in an in-flight upload batch, tracked for per-file progress.
+ * `pct` is embedding progress 0–1 (undefined until the first progress frame —
+ * extraction/chunking happens before the bar starts moving). */
+type Upload = { name: string; status: 'ingesting' | 'done' | 'error'; error?: string; pct?: number }
 
 /** Run `worker` over `items` with at most `limit` in flight at once. */
 async function runPool<T>(
@@ -37,6 +39,7 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
   const [items, setItems] = useState<Source[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null) // label of the in-flight URL ingest
+  const [busyPct, setBusyPct] = useState<number | null>(null) // its embedding progress (0-1)
   // Per-file progress for a multi-file upload batch (parallel, capped).
   const [uploads, setUploads] = useState<Upload[]>([])
   const [dragging, setDragging] = useState(false)
@@ -72,7 +75,11 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
       setUploads(pdfs.map((f) => ({ name: f.name, status: 'ingesting' })))
       await runPool(pdfs, 3, async (file, i) => {
         try {
-          await uploadSource(file)
+          await uploadSource(file, undefined, (p) =>
+            setUploads((prev) =>
+              prev.map((u, j) => (j === i ? { ...u, pct: p.total ? p.done / p.total : 0 } : u)),
+            ),
+          )
           setUploads((prev) => prev.map((u, j) => (j === i ? { ...u, status: 'done' } : u)))
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
@@ -113,14 +120,16 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
       if (!u || locked) return
       setError(null)
       setBusy(u)
+      setBusyPct(null)
       try {
-        await ingestUrl(u)
+        await ingestUrl(u, undefined, (p) => setBusyPct(p.total ? p.done / p.total : 0))
         setUrl('')
         await refresh()
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
         setBusy(null)
+        setBusyPct(null)
       }
     },
     [url, locked, refresh],
@@ -209,7 +218,8 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
                 <span className="upload-status">
                   {u.status === 'ingesting' ? (
                     <>
-                      <span className="spin" /> embedding…
+                      <span className="spin" />{' '}
+                      {u.pct != null ? `embedding ${Math.round(u.pct * 100)}%` : 'reading…'}
                     </>
                   ) : u.status === 'done' ? (
                     '✓ added'
@@ -217,6 +227,14 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
                     '✕ failed'
                   )}
                 </span>
+                {u.status === 'ingesting' && (
+                  <div className="upload-bar">
+                    <div
+                      className="upload-bar-fill"
+                      style={{ width: `${Math.round((u.pct ?? 0) * 100)}%` }}
+                    />
+                  </div>
+                )}
                 {u.status === 'error' && u.error && (
                   <div className="upload-err">{u.error}</div>
                 )}
@@ -227,8 +245,14 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
 
         {busy && (
           <div className="sources-busy">
-            Ingesting <b>{busy}</b>… <span className="spin" /> (large books take a
-            minute)
+            Ingesting <b>{busy}</b>… <span className="spin" />{' '}
+            {busyPct != null && `${Math.round(busyPct * 100)}%`}
+            <div className="upload-bar">
+              <div
+                className="upload-bar-fill"
+                style={{ width: `${Math.round((busyPct ?? 0) * 100)}%` }}
+              />
+            </div>
           </div>
         )}
         {error && <div className="sources-error">{error}</div>}

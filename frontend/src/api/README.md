@@ -34,6 +34,9 @@ api/
   `TeacherNode` ("only what feeds the prompt"); the new backend's typed
   boundary requires the core `Node` fields and 400s otherwise. Strict
   backend, simple frontend — the payload cost at ~65 nodes is negligible.
+- **Ingestion streams progress**: `uploadSource`/`ingestUrl` consume an SSE
+  stream (`progress` → callback, `done` → the record, `error` → thrown with
+  the server's user-facing message) instead of one long silent POST.
 - **`sse.ts` exists because `EventSource` is GET-only.** The three agent
   streams are POSTs answering `text/event-stream`, so the reader hand-decodes
   frames from `fetch`. Malformed frames are skipped, never fatal; a non-OK

@@ -8,7 +8,7 @@ are thin wrappers that extract the text first.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from uuid import uuid4
 
@@ -18,6 +18,16 @@ from .errors import SourceError
 
 log = logging.getLogger(__name__)
 
+ProgressFn = Callable[[int, int], None]
+"""Ingestion progress callback: ``(chunks_embedded_so_far, total_chunks)``.
+Called once with ``(0, total)`` when chunking finishes, then after every
+embedding batch — embedding is where the time goes, so it's what a progress
+bar should measure."""
+
+# Chunks embedded per progress step. The encoder batches internally anyway;
+# this only sets how often the callback (and any progress UI) ticks.
+_EMBED_BATCH = 64
+
 
 def add_source(
     title: str,
@@ -25,6 +35,7 @@ def add_source(
     origin: str | None,
     page_texts: Sequence[tuple[int | None, str]],
     pages: int | None = None,
+    on_progress: ProgressFn | None = None,
 ) -> dict:
     """Chunk, embed, and store a source's page texts.
 
@@ -35,6 +46,8 @@ def add_source(
         page_texts: ``[(page_no, text)]`` — page numbers are 1-based for PDFs and
             None for pageless sources (web pages).
         pages: Total page count (PDFs), or None.
+        on_progress: Optional ``(done, total)`` callback, ticked per
+            embedding batch (see ``ProgressFn``).
 
     Returns:
         The stored source record (see ``store.get_source``).
@@ -56,9 +69,18 @@ def add_source(
     if not chunk_rows:
         raise SourceError("No text to index after chunking.")
 
-    vectors = embeddings.embed_texts([chunk for _, chunk in chunk_rows])
-    if vectors is None:
-        raise SourceError("Embedding failed — cannot ingest sources.")
+    texts = [chunk for _, chunk in chunk_rows]
+    total = len(texts)
+    if on_progress:
+        on_progress(0, total)
+    vectors: list[list[float]] = []
+    for start in range(0, total, _EMBED_BATCH):
+        batch = embeddings.embed_texts(texts[start : start + _EMBED_BATCH])
+        if batch is None:
+            raise SourceError("Embedding failed — cannot ingest sources.")
+        vectors.extend(batch)
+        if on_progress:
+            on_progress(len(vectors), total)
 
     import sqlite_vec
 
@@ -86,7 +108,9 @@ def add_source(
     return record
 
 
-def ingest_pdf(path: str | Path, title: str | None = None) -> dict:
+def ingest_pdf(
+    path: str | Path, title: str | None = None, on_progress: ProgressFn | None = None
+) -> dict:
     """Ingest a PDF file into the source library.
 
     Args:
@@ -102,10 +126,14 @@ def ingest_pdf(path: str | Path, title: str | None = None) -> dict:
     """
     path = Path(path)
     pages, total = extract.extract_pdf(path)
-    return add_source(title or path.stem, "pdf", path.name, pages, pages=total)
+    return add_source(
+        title or path.stem, "pdf", path.name, pages, pages=total, on_progress=on_progress
+    )
 
 
-def ingest_url(url: str, title: str | None = None) -> dict:
+def ingest_url(
+    url: str, title: str | None = None, on_progress: ProgressFn | None = None
+) -> dict:
     """Fetch a web page and ingest its readable text as a single source.
 
     Args:
@@ -120,4 +148,6 @@ def ingest_url(url: str, title: str | None = None) -> dict:
             and ``add_source``).
     """
     text, page_title = extract.fetch_url(url)
-    return add_source(title or page_title or url, "url", url, [(None, text)])
+    return add_source(
+        title or page_title or url, "url", url, [(None, text)], on_progress=on_progress
+    )

@@ -1,13 +1,25 @@
-"""Sources routes: the list + availability flag, dual-mode ingestion with
-its two-tier error contract, temp-file hygiene, and idempotent delete."""
+"""Sources routes: the list + availability flag, progress-streaming
+ingestion with its two-tier error contract, temp-file hygiene, and
+idempotent delete."""
 
 from __future__ import annotations
 
 import io
+import json
 import os
 
 from arxiv_digest.routes import sources as sources_routes
 from arxiv_digest.services.sources import SourceError
+
+
+def frames(response) -> list[tuple[str, dict]]:
+    parsed = []
+    for chunk in response.data.decode().strip().split("\n\n"):
+        event_line, data_line = chunk.split("\n")
+        parsed.append(
+            (event_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: ")))
+        )
+    return parsed
 
 RECORD = {"id": "src01", "title": "Deep Learning", "kind": "pdf", "pages": 800}
 
@@ -26,12 +38,15 @@ def test_list_reports_availability_and_degrades(client, monkeypatch):
     assert response.json["available"] is False  # degrade, don't error
 
 
-def test_pdf_upload_ingests_from_a_cleaned_up_temp_file(client, monkeypatch):
+def test_pdf_upload_streams_progress_from_a_cleaned_up_temp_file(client, monkeypatch):
     seen = {}
 
-    def fake_ingest_pdf(path, title=None):
+    def fake_ingest_pdf(path, title=None, on_progress=None):
         seen["path"], seen["title"] = str(path), title
         seen["existed_during_ingest"] = os.path.exists(path)
+        if on_progress:
+            on_progress(0, 2)
+            on_progress(2, 2)
         return RECORD
 
     monkeypatch.setattr(sources_routes.sources_service, "ingest_pdf", fake_ingest_pdf)
@@ -40,7 +55,11 @@ def test_pdf_upload_ingests_from_a_cleaned_up_temp_file(client, monkeypatch):
         data={"file": (io.BytesIO(b"%PDF-1.4 fake"), "goodfellow.pdf")},
         content_type="multipart/form-data",
     )
-    assert response.status_code == 200 and response.json == RECORD
+    assert frames(response) == [
+        ("progress", {"done": 0, "total": 2}),
+        ("progress", {"done": 2, "total": 2}),
+        ("done", RECORD),
+    ]
     assert seen["title"] == "goodfellow"  # falls back to the filename stem
     assert seen["path"].endswith(".pdf")
     assert seen["existed_during_ingest"] is True
@@ -50,34 +69,34 @@ def test_pdf_upload_ingests_from_a_cleaned_up_temp_file(client, monkeypatch):
 def test_url_ingestion_and_the_no_input_400(client, monkeypatch):
     seen = {}
 
-    def fake_ingest_url(url, title=None):
+    def fake_ingest_url(url, title=None, on_progress=None):
         seen["url"], seen["title"] = url, title
         return RECORD
 
     monkeypatch.setattr(sources_routes.sources_service, "ingest_url", fake_ingest_url)
     response = client.post("/api/sources", json={"url": " https://example.org/notes ", "title": " Notes "})
-    assert response.status_code == 200
+    assert frames(response) == [("done", RECORD)]
     assert seen == {"url": "https://example.org/notes", "title": "Notes"}
 
-    assert client.post("/api/sources", json={}).status_code == 400
+    assert client.post("/api/sources", json={}).status_code == 400  # pre-stream JSON 400
 
 
 def test_two_tier_error_contract(client, monkeypatch):
-    def scanned(url, title=None):
+    def scanned(url, title=None, on_progress=None):
         raise SourceError("This PDF has no extractable text — is it scanned?")
 
     monkeypatch.setattr(sources_routes.sources_service, "ingest_url", scanned)
-    response = client.post("/api/sources", json={"url": "https://example.org/x"})
-    assert response.status_code == 400
-    assert "is it scanned?" in response.json["error"]  # user-facing by design
+    ((kind, data),) = frames(client.post("/api/sources", json={"url": "https://example.org/x"}))
+    assert kind == "error"
+    assert "is it scanned?" in data["message"]  # user-facing by design
 
-    def unexpected(url, title=None):
+    def unexpected(url, title=None, on_progress=None):
         raise RuntimeError("sqlite disk I/O error at /private/path")
 
     monkeypatch.setattr(sources_routes.sources_service, "ingest_url", unexpected)
-    response = client.post("/api/sources", json={"url": "https://example.org/x"})
-    assert response.status_code == 500
-    assert "/private/path" not in response.json["error"]  # canned; details in the log
+    ((kind, data),) = frames(client.post("/api/sources", json={"url": "https://example.org/x"}))
+    assert kind == "error"
+    assert "/private/path" not in data["message"]  # canned; details in the log
 
 
 def test_delete_is_idempotent(client, monkeypatch):

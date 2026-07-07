@@ -28,11 +28,12 @@ The public API is re-exported here, so callers use ``sources.ingest_pdf(...)`` /
 from __future__ import annotations
 
 from .errors import SourceError
-from .ingest import add_source, ingest_pdf, ingest_url
+from .ingest import ProgressFn, add_source, ingest_pdf, ingest_url
 from .retrieval import search
 from .store import available, delete_source, get_source, list_sources
 
 __all__ = [
+    "ProgressFn",
     "SourceError",
     "add_source",
     "available",

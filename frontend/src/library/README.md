@@ -5,6 +5,11 @@ upload PDFs (several at once), paste a URL, list, remove.
 
 ## Design decisions worth knowing
 
+- **Real progress bars** (browser-milestone addition): the ingest endpoint
+  streams `{done, total}` chunks-embedded frames, and each upload row (and
+  the URL busy row) renders a determinate bar + percent. Before the first
+  progress frame the row reads "reading…" — extraction/chunking happens
+  before the bar starts moving.
 - **Parallel uploads, capped at 3** (`runPool`, an in-file single-consumer
   helper per the hybrid rule), with per-file progress rows: successes drop
   out once they land in the library list below; **failures linger with

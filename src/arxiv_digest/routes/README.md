@@ -142,7 +142,7 @@ now replays typed `BackfillTrace` shapes.
 | Endpoint | Job |
 | --- | --- |
 | `GET /api/sources` | list the library + the `available` flag |
-| `POST /api/sources` | ingest a PDF upload or a `{url}` (synchronous) |
+| `POST /api/sources` | ingest a PDF upload or a `{url}`, streaming SSE progress |
 | `DELETE /api/sources/<id>` | remove a source — `{deleted: bool}`, idempotent |
 
 Thin wrappers over `services/sources`. Points worth knowing:
@@ -157,10 +157,17 @@ Thin wrappers over `services/sources`. Points worth knowing:
   verbatim as a 400 — those messages are *written for users* by the
   ingestion layer ("no extractable text — is it scanned?"). Anything
   unexpected is a canned 500, details in the log only.
+- **Ingestion streams progress** (browser-milestone addition): `progress`
+  frames carry `{done, total}` chunks embedded — embedding is where the
+  time goes — then `done` (the stored record) or `error`. The pipeline is
+  synchronous, so a worker thread runs it and a queue bridges its progress
+  callback into the SSE generator. Everything request-scoped (the upload's
+  temp file, the parsed URL) happens *before* streaming starts — the
+  generator outlives the request context (see `routes/sse.py`, the shared
+  SSE helpers promoted from `agents.py` when this second consumer arrived).
 - **Temp-file hygiene on upload:** `mkstemp` + close the fd *before*
   `upload.save()` (on Windows an open handle holds an exclusive lock),
-  removal in a `finally`. Ingestion is synchronous — a big book chunks and
-  embeds for a while; the frontend shows a spinner, not a job queue.
+  removal in a `finally`.
 
 ## `agents.py` — the teacher's SSE endpoints
 
