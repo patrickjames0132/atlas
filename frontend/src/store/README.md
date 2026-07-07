@@ -47,7 +47,7 @@ store/
 - **Save reads the store, not the canvas.** `graph.nodes ∪ discoveredNodes`
   + `graph.edges ∪ discoveredEdges` is exactly what the old code
   reconstructed from the sim-mutated objects; positions/pins were never
-  persisted anyway (`cleanNode` strips the tutor's `idx` on the way out).
+  persisted anyway (`cleanNode` strips the researcher's `idx` on the way out).
 - **Redux Toolkit + typed hooks** (`useAppDispatch`/`useAppSelector`) —
   components never import the raw react-redux hooks. Devtools give an
   action log of every beat, token batch, and discovery: an SSE stream

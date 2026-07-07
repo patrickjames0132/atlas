@@ -155,7 +155,7 @@ export function useConversation() {
       dispatch(turnStarted(question))
       try {
         if (seedNode) {
-          // Graph open: the tutor — reads/expands/searches via tool use.
+          // Graph open: the researcher — reads/expands/searches via tool use.
           await streamAsk(
             {
               question,

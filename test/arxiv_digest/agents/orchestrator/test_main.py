@@ -4,6 +4,7 @@ and the Done/Error termination contract."""
 from __future__ import annotations
 
 from arxiv_digest.agents import events
+from arxiv_digest.agents.models import Intent, LectureMode
 from arxiv_digest.agents.orchestrator import main as orchestrator_main
 from arxiv_digest.agents.orchestrator import run
 from arxiv_digest.services.graph import Node
@@ -44,11 +45,11 @@ def test_librarian_intent_relays_and_appends_done(monkeypatch):
         yield events.Token(text="From your book.")
 
     monkeypatch.setattr(orchestrator_main.librarian, "answer", fake_answer)
-    out = list(run("librarian", question="q"))
+    out = list(run(Intent.LIBRARIAN, question="q"))
     assert [event.type for event in out] == ["trace", "token", "done"]
 
 
-def test_qa_intent_passes_everything_through(monkeypatch):
+def test_research_intent_passes_everything_through(monkeypatch):
     seen: dict = {}
 
     def fake_answer(question, seed, nodes, history=None, source_ids=None):
@@ -56,9 +57,9 @@ def test_qa_intent_passes_everything_through(monkeypatch):
                     history=history, source_ids=source_ids)
         yield events.Token(text="ok")
 
-    monkeypatch.setattr(orchestrator_main.tutor, "answer", fake_answer)
+    monkeypatch.setattr(orchestrator_main.researcher, "answer", fake_answer)
     turns = [{"role": "user", "content": "earlier"}]
-    out = list(run("q&a", question="why?", seed=SEED, nodes=NODES,
+    out = list(run(Intent.RESEARCH, question="why?", seed=SEED, nodes=NODES,
                    history=turns, source_ids=["s1"]))
     assert seen == {"question": "why?", "seed": SEED, "nodes": NODES,
                     "history": turns, "source_ids": ["s1"]}
@@ -78,7 +79,7 @@ def test_history_lecture_backfills_then_narrates_the_enriched_set(monkeypatch):
 
     monkeypatch.setattr(orchestrator_main.backfill, "history_backfill", fake_backfill)
     monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
-    out = list(run("lecture", seed=SEED, nodes=NODES))
+    out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES))
     assert [event.type for event in out] == ["trace", "discovery", "beat", "done"]
     # The lecturer narrates the backfill-enriched node set.
     assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "anc01"]
@@ -95,7 +96,7 @@ def test_non_history_modes_skip_the_backfill(monkeypatch):
             [events.Beat(heading="H", text="T.", node_ids=[])]
         ),
     )
-    out = list(run("lecture", seed=SEED, nodes=NODES, mode="intuition"))
+    out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES, mode=LectureMode.INTUITION))
     assert [event.type for event in out] == ["beat", "done"]
 
 
@@ -105,13 +106,13 @@ def test_a_failing_workflow_ends_with_error_not_done(monkeypatch):
         raise RuntimeError("api down")
 
     monkeypatch.setattr(orchestrator_main.librarian, "answer", broken)
-    out = list(run("librarian", question="q"))
+    out = list(run(Intent.LIBRARIAN, question="q"))
     assert [event.type for event in out] == ["token", "error"]
     assert "api down" in out[-1].message
 
 
 def test_unknown_intent_and_missing_args_yield_error():
     assert [event.type for event in run("mystery")] == ["error"]  # type: ignore[arg-type]
-    assert [event.type for event in run("lecture")] == ["error"]
-    assert [event.type for event in run("q&a", question="why?")] == ["error"]
-    assert [event.type for event in run("librarian")] == ["error"]
+    assert [event.type for event in run(Intent.LECTURE)] == ["error"]
+    assert [event.type for event in run(Intent.RESEARCH, question="why?")] == ["error"]
+    assert [event.type for event in run(Intent.LIBRARIAN)] == ["error"]

@@ -1,4 +1,4 @@
-"""The tutor's model-callable tool surface, plus the run-state (deps) the
+"""The researcher's model-callable tool surface, plus the run-state (deps) the
 tools share.
 
 Every tool follows the old runners' one hard rule: **failures are reported in
@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
-class TutorDeps:
+class ResearcherDeps:
     """One question's run-state, shared by the loop and every tool.
 
     ``nodes`` is the numbered list — a paper's index is its position + 1,
@@ -75,7 +75,7 @@ class TutorDeps:
 STEPS_EXHAUSTED = "Step budget exhausted — answer now with what you've gathered."
 
 
-def _spend_step(deps: TutorDeps) -> bool:
+def _spend_step(deps: ResearcherDeps) -> bool:
     """Charge the total step budget; False when it's already spent."""
     if deps.steps_left <= 0:
         return False
@@ -83,14 +83,14 @@ def _spend_step(deps: TutorDeps) -> bool:
     return True
 
 
-def _node_at(deps: TutorDeps, index: int) -> Node | None:
+def _node_at(deps: ResearcherDeps, index: int) -> Node | None:
     """The numbered-list node for a model-given 1-based index, or None."""
     if 1 <= index <= len(deps.nodes):
         return deps.nodes[index - 1]
     return None
 
 
-def _record_cited(deps: TutorDeps, node_id: str) -> None:
+def _record_cited(deps: ResearcherDeps, node_id: str) -> None:
     if node_id not in deps.cited_ids:
         deps.cited_ids.append(node_id)
 
@@ -153,7 +153,7 @@ def _paper_text(node: Node, detail: str, index: int) -> str:
 
 
 def read_paper(
-    ctx: RunContext[TutorDeps], index: int, detail: Literal["summary", "full"]
+    ctx: RunContext[ResearcherDeps], index: int, detail: Literal["summary", "full"]
 ) -> str:
     """Read one of the numbered papers to ground your answer.
 
@@ -193,7 +193,7 @@ def read_paper(
     return text
 
 
-def expand_node(ctx: RunContext[TutorDeps], index: int, relation: traversal.Relation) -> str:
+def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal.Relation) -> str:
     """Pull one hop of neighbors for a numbered paper and add them to the
     graph as new numbered papers you can then read.
 
@@ -276,7 +276,7 @@ def expand_node(ctx: RunContext[TutorDeps], index: int, relation: traversal.Rela
 
 
 def search_papers(
-    ctx: RunContext[TutorDeps],
+    ctx: RunContext[ResearcherDeps],
     query: str,
     year_from: int | None = None,
     year_to: int | None = None,
@@ -342,7 +342,7 @@ def search_papers(
     return f'Search "{query}" returned nothing new.'
 
 
-def show_figure(ctx: RunContext[TutorDeps], index: int, figure: int) -> str:
+def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str:
     """Place one of a paper's own figures (image + caption, from ar5iv) into
     your answer. Only for a paper you've read in full — the full read lists
     its figures. The result gives you a <<FIG n>> marker: put it on its own
@@ -412,7 +412,7 @@ def show_figure(ctx: RunContext[TutorDeps], index: int, figure: int) -> str:
     )
 
 
-def search_sources(ctx: RunContext[TutorDeps], query: str, source_id: str | None = None) -> str:
+def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str | None = None) -> str:
     """Semantic search over the student's OWN uploaded sources (books, PDFs,
     web pages) — not the citation graph. Returns the most relevant passages
     with source title and page; attribute them inline in your prose.

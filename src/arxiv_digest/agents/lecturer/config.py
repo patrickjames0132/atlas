@@ -4,6 +4,8 @@ entry."""
 
 from __future__ import annotations
 
+from ..models import LectureMode
+
 AGENT_ID = "lecturer"
 
 SKILLS: tuple[str, ...] = ("numbered-papers", "teaching-voice", "citation-discipline")
@@ -22,19 +24,19 @@ SYSTEM_PROMPT = (
     "a pure framing or closing beat."
 )
 
-MODE_INTENTS = {
-    "history": (
+MODE_INTENTS: dict[LectureMode, str] = {
+    LectureMode.HISTORY: (
         "Mode: HOW WE GOT HERE. Tell the story chronologically — from the "
         "oldest roots among the references, through the key ideas that made "
         "each next step possible, to the SEED paper and the work it went on "
         "to spawn (its citations)."
     ),
-    "intuition": (
+    LectureMode.INTUITION: (
         "Mode: INTUITION OF THIS PAPER. Center the SEED paper: what problem "
         "it solved, the core idea, and why it works — using the surrounding "
         "papers only for context and contrast."
     ),
-    "bridge": (
+    LectureMode.BRIDGE: (
         "Mode: BRIDGE. Build a conceptual bridge between the SEED paper and "
         "the TARGET paper, tracing the ideas that connect two areas that may "
         "look unrelated at first."

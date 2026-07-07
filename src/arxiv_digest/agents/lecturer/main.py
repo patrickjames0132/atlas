@@ -21,7 +21,7 @@ event stream with ``Error``.
 
 from __future__ import annotations
 
-from typing import Iterator, Literal
+from typing import Iterator
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 from pydantic_ai import Agent
@@ -36,9 +36,8 @@ from pydantic_core import from_json
 
 from ...services.graph import Node
 from .. import events, factory, prompts, streams
+from ..models import LectureMode
 from .config import AGENT_ID, MODE_INTENTS, SKILLS, SYSTEM_PROMPT
-
-Mode = Literal["history", "intuition", "bridge"]
 
 
 class LectureBeat(BaseModel):
@@ -59,7 +58,7 @@ agent: Agent[None, list[LectureBeat]] = Agent(
 )
 
 
-def _prompt(seed: Node, nodes: list[Node], mode: Mode, target: Node | None) -> str:
+def _prompt(seed: Node, nodes: list[Node], mode: LectureMode, target: Node | None) -> str:
     """Assemble the lecture request: mode intent, seed/target header, and the
     numbered paper list.
 
@@ -119,7 +118,7 @@ def _beat(beat: LectureBeat, nodes: list[Node]) -> events.Beat:
 def lecture(
     seed: Node,
     nodes: list[Node],
-    mode: Mode = "history",
+    mode: LectureMode = LectureMode.HISTORY,
     target: Node | None = None,
 ) -> Iterator[events.Beat]:
     """Stream a lecture over the visible graph as typed beats.

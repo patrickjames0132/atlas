@@ -1,19 +1,19 @@
-# Workflow: q&a
+# Workflow: research
 
-**Intent:** `q&a` — the user asked a question in the graph Q&A box.
+**Intent:** `research` — the user asked a question with a graph open.
 
 **Input:** the question, seed paper, the visible graph nodes, the session's
 conversation history, and an optional library scope (`source_ids`):
 
-- `None` — no scope; the tutor may search the whole library.
-- a present list — the tutor is pinned to exactly those sources: only they
+- `None` — no scope; the researcher may search the whole library.
+- a present list — the researcher is pinned to exactly those sources: only they
   appear in its context, and every source search is forced to them.
 - an empty list — "no sources selected": source search is disabled
   entirely.
 
 **Steps:**
 
-1. Delegate to the **tutor** with all inputs. The tutor investigates via
+1. Delegate to the **researcher** with all inputs. The researcher investigates via
    its tools (reading papers, expanding the graph, searching S2 and the
    library, attaching figures), each step within its budget.
 2. Forward its events as they arrive: `Trace` (each tool step, so the user

@@ -3,7 +3,7 @@
 The unified assistant panel — the old 743-line `Teacher.tsx` split along
 its real seams. One docked panel whose capability levels up with context:
 no graph + a library → the graph-free library chat (the librarian); graph
-open → lecture buttons + agentic Q&A (the lecturer and tutor).
+open → lecture buttons + agentic Q&A (the lecturer and researcher).
 
 ```
 teacher/
@@ -54,7 +54,7 @@ structure rule's nesting case (the `graph/hooks` precedent).
   `epoch` (fresh run-state per graph); the transcript itself resets or
   restores via the store, not via remount props.
 - **Wire deltas absorbed here:** `onDiscovery` (was `onNodes`), error
-  `{message}`, no `discard` handler (the tutor's pre-answer narration is
+  `{message}`, no `discard` handler (the researcher's pre-answer narration is
   never streamed), `BackfillTrace` naming.
 
 ## Who uses it, and how/why
@@ -67,6 +67,6 @@ sim merge, transcript → Save.
 ## How it's verified
 
 `tsc --noEmit` strict + oxlint. Browser-milestone items: a lecture lighting
-beats as they stream, a tutor answer with trace chips + an inline figure,
+beats as they stream, a researcher answer with trace chips + an inline figure,
 the library chat with a scope subset, Clear detaching follow-up context,
 and a save→restore round trip rehydrating the whole conversation.

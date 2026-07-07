@@ -1,4 +1,4 @@
-# `agents.tutor`
+# `agents.researcher`
 
 Agentic Q&A over the graph — the flagship. The model reads the visible
 papers, expands the graph or searches when they don't suffice, optionally
@@ -19,8 +19,8 @@ apparatus is replaced by one structured output.
 ## How it works
 
 ```
-tutor.answer(question, seed, nodes, history, source_ids)      main.py
-  1  deps = TutorDeps: numbered list, budgets (config extras),
+researcher.answer(question, seed, nodes, history, source_ids)      main.py
+  1  deps = ResearcherDeps: numbered list, budgets (config extras),
      visited-sets, read cache, event queue                     tools.py
   2  agent.run_stream_events(...) driven one event at a time
      on a private loop (the sync bridge)
@@ -38,7 +38,7 @@ tutor.answer(question, seed, nodes, history, source_ids)      main.py
   loads `figures`), the strategy `SYSTEM_PROMPT`, and `BUDGETS`
   (defaults overridden by the agent entry's `extras`; unknown extras keys
   fail at import so the staging area can't silently accumulate).
-- **`tools.py`** — `TutorDeps` (the run-state) and the five tools.
+- **`tools.py`** — `ResearcherDeps` (the run-state) and the five tools.
 - **`main.py`** — the `Answer` model, the `Agent`, the sync event bridge.
 
 ## Design decisions worth knowing
@@ -76,20 +76,20 @@ tutor.answer(question, seed, nodes, history, source_ids)      main.py
   retrieval degrades by itself, and an empty library never pays the torch
   load. The user's scope overrides the model's `source_id` pick, so the
   search can't stray outside chosen sources. (mypy note: the tool variable's
-  explicit `Tool[TutorDeps]` annotation is load-bearing — with `prepare=`
+  explicit `Tool[ResearcherDeps]` annotation is load-bearing — with `prepare=`
   in play, mypy can't infer the ParamSpec on its own.)
 
 ## Who uses it, and how/why
 
-- **`agents/orchestrator` (Phase 4d).** The `q&a` intent per
-  `skills/workflows/q&a.md`: a pure delegation to `answer(...)`, relaying
+- **`agents/orchestrator` (Phase 4d).** The `research` intent per
+  `skills/workflows/research.md`: a pure delegation to `answer(...)`, relaying
   its event stream and appending `Done`/`Error`.
 - **Old repo, traced (not yet ported):** `routes/teacher.py`'s
   `POST /api/ask` validates the question, pulls the graph-chat history from
   its session store, calls `teacher.answer_agentic(question, seed, nodes,
   history, source_ids)`, and serializes the tuples as SSE frames
   (`trace`/`nodes`/`figure`/`token`/`discard`/`cited`). Phase 5 rewrites it
-  to call the orchestrator with intent `q&a`; the `discard` frame dies with
+  to call the orchestrator with intent `research`; the `discard` frame dies with
   the sentinel, and `nodes` frames become `discovery` events.
 
 ## Testing

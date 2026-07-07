@@ -70,7 +70,7 @@
         "extras": {}
       },
       {
-        "id": "tutor",
+        "id": "researcher",
         "model": "anthropic:claude-sonnet-4-6",
         "extras": {
           "max_steps": 12,

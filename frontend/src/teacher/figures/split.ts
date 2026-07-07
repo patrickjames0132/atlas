@@ -1,6 +1,6 @@
 /**
  * The figure interleaver: pairing `<<FIG n>>` markers in streamed prose with
- * the figures the tutor attached, so images render inline exactly where the
+ * the figures the researcher attached, so images render inline exactly where the
  * model placed them.
  */
 

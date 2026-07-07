@@ -5,7 +5,7 @@ chat. No graph required.
 
 **Input:** the question, the session's conversation history (a separate
 store from the graph Q&A — the two chats never cross-contaminate context),
-and an optional `source_ids` scope (same semantics as the q&a workflow:
+and an optional `source_ids` scope (same semantics as the research workflow:
 `None` = whole library, present list = only those, empty = nothing).
 
 **Steps:**

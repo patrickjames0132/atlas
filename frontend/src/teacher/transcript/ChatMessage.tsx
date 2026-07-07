@@ -1,6 +1,6 @@
 /**
  * One chat turn: the library-retrieval summary (graph-free mode), the
- * tutor's trace chips, the prose interleaved with its `<<FIG n>>` figures,
+ * researcher's trace chips, the prose interleaved with its `<<FIG n>>` figures,
  * and the cited-papers footer. Clickable when the answer carries citations —
  * clicking re-lights the papers it was grounded in.
  */
@@ -9,7 +9,7 @@ import type { AnswerFigure, ChatMsg, TraceEvent } from '../../api'
 import FigCard from '../figures/FigCard'
 import { splitAnswer } from '../figures/split'
 
-/** One trace chip: a human line per tutor action, failures included. */
+/** One trace chip: a human line per researcher action, failures included. */
 function TraceLine({ t }: { t: TraceEvent }) {
   if (t.action === 'figure')
     return (

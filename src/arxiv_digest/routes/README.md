@@ -55,7 +55,7 @@ Design decisions worth knowing:
   ar5iv host before any fetch, so `/api/figure_proxy` can't be used as an
   open relay; responses carry a day-long `Cache-Control`. This is the
   same-origin contract behind both the detail panel's figure strip and the
-  tutor's `show_figure` payloads.
+  researcher's `show_figure` payloads.
 
 ## `search.py` — finding a seed paper
 
@@ -152,7 +152,7 @@ Thin wrappers over `services/sources`. Points worth knowing:
   semantic search is off; the check itself degrades to `False` on any
   error. This endpoint is where the lazy torch load happens — deliberate:
   the sources drawer is the UI's "is semantic search on" indicator (the
-  tutor, by contrast, never probes).
+  researcher, by contrast, never probes).
 - **Two-tier error contract.** `SourceError` text goes to the client
   verbatim as a 400 — those messages are *written for users* by the
   ingestion layer ("no extractable text — is it scanned?"). Anything
@@ -174,7 +174,7 @@ Thin wrappers over `services/sources`. Points worth knowing:
 | Endpoint | Intent | Job |
 | --- | --- | --- |
 | `POST /api/lecture` | `lecture` | streamed lecture (history mode backfills first) |
-| `POST /api/ask` | `q&a` | agentic Q&A over the graph |
+| `POST /api/ask` | `research` | agentic Q&A over the graph |
 | `POST /api/ask_sources` | `librarian` | offline library chat |
 
 (The route face of the `agents` package — a deliberate name-cousin,
@@ -189,7 +189,7 @@ Design decisions worth knowing:
   reproduces the old wire shapes for `token`/`beat`/`cited`/`trace`/`done`
   exactly, with the two documented renames (`nodes` → `discovery`,
   error `{"error"}` → `{"message"}`); `discard` is gone (nothing to disavow
-  — the tutor's pre-answer narration is never streamed).
+  — the researcher's pre-answer narration is never streamed).
 - **The typed-node boundary.** `orchestrator.run` takes `Node` models; the
   frontend sends dicts that the force-graph renderer has mutated with
   simulation fields (`x`, `vy`, `index`, ...). `_node` picks exactly the
@@ -218,7 +218,7 @@ Design decisions worth knowing:
 The React frontend (Phase 6) is the only caller: the search/seed flow hits
 `/api/graph`, clicking a node hydrates via `/api/paper/<ref>`, and the
 detail panel lazily loads `/figures` and `/code`. `<img>` tags point at
-`/api/figure_proxy` URLs (both panel figures and the tutor's inline answer
+`/api/figure_proxy` URLs (both panel figures and the researcher's inline answer
 figures use it). The search box fans out to `/api/local_search` (instant)
 and `/api/search` (live) in parallel; the filter picker loads
 `/api/taxonomy/s2` once.

@@ -102,7 +102,7 @@ export const saveWorkspace = createAsyncThunk<
     name,
     seed: graph.seed,
     layout: workspace.layout,
-    // cleanNode strips the tutor's per-conversation idx from discovered nodes.
+    // cleanNode strips the researcher's per-conversation idx from discovered nodes.
     nodes: [...graph.nodes, ...workspace.discoveredNodes].map((n) => cleanNode(n as VNode)),
     edges: [...graph.edges, ...workspace.discoveredEdges],
     chat: transcript.chat,

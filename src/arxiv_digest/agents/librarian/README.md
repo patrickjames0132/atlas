@@ -55,7 +55,7 @@ the sources before a single token streams.
   `source_ids` untouched, adding no interpretation of its own.
 - **`chat_k` over `search_k`**: the passages are the answer's *only*
   grounding (no paper reading, no follow-up searches), so the chat retrieves
-  more than the tutor's search tool will.
+  more than the researcher's search tool will.
 - **Availability is the route's problem.** The old `/api/ask_sources`
   route's 400-when-unavailable check stays in Phase 5; if the embedder is
   missing, retrieval degrades (lexical-only, or `[]` → the no-hits answer)

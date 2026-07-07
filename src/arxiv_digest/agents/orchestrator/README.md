@@ -20,7 +20,7 @@ orchestrator.run(intent, **payload)                    main.py
                Trace/Discovery stream out AND the discovered
                ancestors join the node set]
               → lecturer.lecture(seed, enriched_nodes, mode, target)
-  q&a       → tutor.answer(question, seed, nodes, history, source_ids)
+  q&a       → researcher.answer(question, seed, nodes, history, source_ids)
   librarian → librarian.answer(question, history, source_ids)
   always    → Done on success | Error on failure/bad input — last, always
 ```
@@ -120,7 +120,7 @@ option.
   `per_hop`, `frontier`, `lookback_years`, `fetch_limit`), not `llm.agents`
   extras — no LLM touches the walk, so an agent entry would be a category
   error; and the shape is settled (a years-old stable feature), meeting the
-  promotion bar the tutor's still-staging budgets don't.
+  promotion bar the researcher's still-staging budgets don't.
 - **Backfill failures are never fatal.** S2 errors on a hop are noted and
   skipped inside the walk; an entirely-empty walk reports once, with
   `error=True` distinguishing "we couldn't look" from "we found nothing".
@@ -140,7 +140,7 @@ option.
   `POST /api/lecture` → `lecture_beats` (after running the backfill
   inline), `POST /api/ask` → `answer_agentic`, `POST /api/ask_sources` →
   `answer_from_sources`. All three become `orchestrator.run(...)` with
-  intents `lecture` / `q&a` / `librarian`, serializing each typed event as
+  intents `lecture` / `research` / `librarian`, serializing each typed event as
   an SSE frame named by its `type` tag. Session history stays in routes
   (locked decision — agents receive history, never store it).
 - **Nothing else.** Sub-agents never call the orchestrator (no cycles), and

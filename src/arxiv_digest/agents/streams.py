@@ -7,7 +7,7 @@ the stream on a private event loop and yields each event as it arrives —
 the caller stays a plain generator, and tool events / output deltas flow
 out live.
 
-This is the bridge the tutor was built on, promoted to a shared module when
+This is the bridge the researcher was built on, promoted to a shared module when
 the lecturer needed it too: the sync convenience wrapper
 (``run_stream_sync().stream_output()``) turned out to deliver structured
 output in one burst at the end against the live API — narration "streamed"

@@ -7,7 +7,7 @@ hand-rolled Anthropic SDK loops.
 
 **Status: COMPLETE.** The shared infrastructure (`events.py`,
 `traversal.py`, `factory.py`, `prompts.py`, `skills/`), all four
-model-driven agents (`query_analyst`, `librarian`, `lecturer`, `tutor`),
+model-driven agents (`query_analyst`, `librarian`, `lecturer`, `researcher`),
 and the `orchestrator` dispatcher are built and tested; the old
 `teacher/` package is fully retired. What remains is wiring: routes call
 `orchestrator.run(intent, ...)` in Phase 5.
@@ -25,11 +25,11 @@ protocol for every workflow, declared in one file.
 | Event       | Emitted by            | Meaning                                                        |
 | ----------- | --------------------- | -------------------------------------------------------------- |
 | `Beat`      | lecturer              | one narration paragraph + heading + nodes to light up          |
-| `Token`     | tutor, librarian      | a chunk of streamed answer prose                               |
-| `Trace`     | tutor, orchestrator, librarian | "watch the agent work" — one variant per action (below) |
-| `Discovery` | tutor, orchestrator   | papers + edges to merge into the live graph                    |
-| `Figure`    | tutor                 | a real paper figure attached to the answer                     |
-| `Cited`     | tutor                 | final event: the node ids the answer draws on                  |
+| `Token`     | researcher, librarian      | a chunk of streamed answer prose                               |
+| `Trace`     | researcher, orchestrator, librarian | "watch the agent work" — one variant per action (below) |
+| `Discovery` | researcher, orchestrator   | papers + edges to merge into the live graph                    |
+| `Figure`    | researcher            | a real paper figure attached to the answer                     |
+| `Cited`     | researcher            | final event: the node ids the answer draws on                  |
 | `Done`      | every workflow        | clean finish — always last on success                          |
 | `Error`     | every workflow        | failure — always last, so the frontend never hangs             |
 
@@ -75,7 +75,7 @@ Two consumers, using it differently:
 - **The orchestrator's `history_backfill`** loops over
   `neighbors(..., "references", ...)` raw, hop after hop, walking toward a
   field's roots before a history lecture.
-- **The tutor's `expand_node` / `search_papers` tools** wrap `neighbors` /
+- **The researcher's `expand_node` / `search_papers` tools** wrap `neighbors` /
   `search` with everything agentic: budgets, visited-sets, numbering the
   finds, building `Discovery` events.
 
@@ -92,7 +92,7 @@ Design points worth knowing:
   own config supplies its limit, and a hop cached at one limit is never
   reused for another.
 - **`Relation` is a `Literal`** (`"references" | "citations" | "similar"`)
-  and `REL_TAG` maps it to the `Edge.type` tag — so when the tutor builds
+  and `REL_TAG` maps it to the `Edge.type` tag — so when the researcher builds
   `Edge(type=REL_TAG[relation])`, mypy verifies the whole chain from tool
   argument to graph edge.
 - **Plumbing, not tools.** No model ever calls these directly (see the
@@ -136,9 +136,9 @@ sequence with blank lines natively. `node_lines(nodes)` renders graph nodes
 as the numbered list of the `numbered-papers` protocol (a paper's number is
 its list position + 1) and `idx_to_id` maps the model's indices back to node
 ids, ignoring hallucinated ones (shared by the lecturer and, later, the
-tutor). `format_passages(hits)` renders retrieved library
+researcher). `format_passages(hits)` renders retrieved library
 passages tagged `[Title, p.N]` (shared by the librarian's grounding context
-and, later, the tutor's `search_sources` tool result), and `history(turns)`
+and, later, the researcher's `search_sources` tool result), and `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI
 message history.
 
@@ -150,7 +150,7 @@ follow-up turn.
 ## Decisions log (locked before design)
 
 1. **Hybrid orchestration with intent hints.** Routes always call the
-   orchestrator, passing the UI's intent (`lecture` / `q&a` / `librarian`).
+   orchestrator, passing the UI's intent (`lecture` / `research` / `librarian`).
    Known intents dispatch straight to the matching sub-agent per its
    `skills/workflows/` playbook — no routing LLM call. The orchestrator's
    own model engages only when intent is ambiguous or a workflow needs
@@ -159,7 +159,7 @@ follow-up turn.
    it existed to power tool-free fallbacks, and PydanticAI can't drive it.
    `backends.py` and the before-first-token fallback dance die with it.
 3. **The non-agentic grounded Q&A is deleted, not ported.** It was the CLI
-   backend's consolation prize. One tutor, always with tools; easy questions
+   backend's consolation prize. One researcher, always with tools; easy questions
    simply won't trigger tool calls.
 4. **Structured outputs everywhere.** Lecture beats stream as typed objects
    (no newline-delimited-JSON parsing); cited papers are a field of the
@@ -185,11 +185,11 @@ agents/
     figures.md              real figures only; <<FIG n>> marker placement
     workflows/              ← the orchestrator's playbooks, one per intent
       lecture.md              backfill → lecturer
-      q&a.md                  the tutor Q&A
+      research.md                  the researcher Q&A
       librarian.md            the librarian RAG chat
   orchestrator/      ← an agent: main.py, tools.py, config.py, README.md
   lecturer/          ← an agent:    "        "         "          "
-  tutor/             ← an agent:    "        "         "          "
+  researcher/             ← an agent:    "        "         "          "
   librarian/         ← an agent:    "        "         "          "
   query_analyst/     ← an agent:    "        "         "          "
 ```
@@ -270,7 +270,7 @@ query-expansion seam in Phase 3. See its own README.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
 - **Config:** the three mode-intent paragraphs; beat count bounds (5–9).
 
-### `tutor` — agentic Q&A over the graph *(built)*
+### `researcher` — agentic Q&A over the graph *(built)*
 
 The flagship. Reads, expands, and searches via tool use, then answers
 grounded in what it actually read.
@@ -349,17 +349,17 @@ in detail):
   behind the Q&A path, `answer_from_sources` behind `POST /api/ask_sources` —
   and serializes their `("kind", data)` tuples as SSE frames. The rewrite
   replaces all of that with one entry point: routes call the
-  **orchestrator** with an intent hint (`lecture` / `q&a` / `librarian`),
+  **orchestrator** with an intent hint (`lecture` / `research` / `librarian`),
   serialize the typed `Event` stream by its `type` tag, and keep session
   history persistence for themselves (a locked decision — agents receive
   history, they never store it).
 
 Inside the package, the shared root modules exist for the sub-agents:
 every agent builds its model via `factory.build_model` and its instruction
-parts via `prompts.skill`; the librarian (and next the tutor) converts route
-turns with `prompts.history`; the lecturer (and next the tutor) numbers
+parts via `prompts.skill`; the librarian (and next the researcher) converts route
+turns with `prompts.history`; the lecturer (and next the researcher) numbers
 papers with `prompts.node_lines` / `idx_to_id`; every workflow yields
-`events` models; `traversal.py` waits on the tutor's expand/search tools and
+`events` models; `traversal.py` waits on the researcher's expand/search tools and
 the orchestrator's `history_backfill` (traced from the old repo's
 `neighbors.py` callers, not yet ported).
 

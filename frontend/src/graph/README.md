@@ -94,7 +94,7 @@ to anything in this folder.
 
 ## `useDiscovery` — the graph grows mid-conversation
 
-Merges the papers a workflow pulls in (the tutor's expand/search tools, the
+Merges the papers a workflow pulls in (the researcher's expand/search tools, the
 lecture's backward walk) into the live graph:
 
 - **In-place append** with id/edge-key dedupe (an edge key is
@@ -109,7 +109,7 @@ lecture's backward walk) into the live graph:
 - **Reheat without camera yank:** `d3ReheatSimulation`, never `zoomToFit` —
   the user may be reading the chat, not watching the graph.
 - `discoveredNodes` mirrors what was merged, kept separately so follow-up
-  questions can extend the tutor's grounding without rebuilding `base`; on
+  questions can extend the researcher's grounding without rebuilding `base`; on
   a restored session it's re-collected from the saved nodes' `discovered`
   flags.
 
@@ -139,7 +139,7 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
 - `formatPubDate`: parsed by hand, not `new Date` — date-only strings parse
   as UTC and can render a day off in western timezones.
 - `cleanNode`: strips a live node back to persistable fields — sim x/y,
-  pins, and the tutor's per-conversation `idx` all deliberately dropped.
+  pins, and the researcher's per-conversation `idx` all deliberately dropped.
 - `ID_RE`: the client-side twin of the backend's arXiv-id regex — a pasted
   id/URL jumps straight to a graph, skipping a search round-trip. Deliberate
   duplication; the backend stays authoritative.

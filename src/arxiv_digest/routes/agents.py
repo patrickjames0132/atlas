@@ -1,7 +1,7 @@
 """AI-teacher routes: every workflow streams through the agents orchestrator.
 
 POST /api/lecture      -> streamed AI lecture over the visible graph
-POST /api/ask          -> streamed agentic Q&A over the visible graph
+POST /api/ask          -> the research agent, streamed over the visible graph
 POST /api/ask_sources  -> streamed chat answered purely from the local library
 
 Each endpoint validates the request, builds typed inputs, and hands off to
@@ -19,15 +19,14 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Iterable, Iterator, cast
+from typing import Iterable, Iterator
 
 from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
 from ..agents import events, orchestrator
-from ..agents.lecturer.config import MODE_INTENTS
-from ..agents.lecturer.main import Mode
+from ..agents.models import Intent, LectureMode
 from ..config import config
 from ..services.graph import Node
 from .sse import sse, sse_response
@@ -168,9 +167,10 @@ def api_lecture() -> ResponseReturnValue:
     if not isinstance(raw_nodes, list) or not raw_nodes:
         return jsonify({"error": "nodes must be a non-empty list"}), 400
     raw_mode = payload.get("mode") or "history"
-    if raw_mode not in MODE_INTENTS:
+    try:
+        mode = LectureMode(raw_mode)
+    except ValueError:
         return jsonify({"error": f"unknown lecture mode {raw_mode!r}"}), 400
-    mode = cast(Mode, raw_mode)  # the membership check above is the narrowing
     raw_target = payload.get("target")
     try:
         seed = _node(payload.get("seed") or {})
@@ -180,7 +180,7 @@ def api_lecture() -> ResponseReturnValue:
         return jsonify({"error": "seed/nodes are malformed"}), 400
 
     return sse_response(
-        _relay(orchestrator.run("lecture", seed=seed, nodes=nodes, mode=mode, target=target))
+        _relay(orchestrator.run(Intent.LECTURE, seed=seed, nodes=nodes, mode=mode, target=target))
     )
 
 
@@ -188,12 +188,12 @@ def api_lecture() -> ResponseReturnValue:
 def api_ask() -> ResponseReturnValue:
     """Answer a question grounded in the visible graph, streamed as SSE.
 
-    The tutor reads papers via tool use; conversation history is keyed by
+    The researcher reads papers via tool use; conversation history is keyed by
     ``session_id`` so follow-ups keep context, persisted only on success.
 
     Body:
         ``{question, session_id, seed, nodes, source_ids?}`` — ``source_ids``
-        scopes the tutor's library search to a subset of uploaded sources.
+        scopes the researcher's library search to a subset of uploaded sources.
 
     Returns:
         An SSE stream: ``trace`` frames (tool steps), ``discovery`` frames
@@ -221,7 +221,7 @@ def api_ask() -> ResponseReturnValue:
     return sse_response(
         _relay(
             orchestrator.run(
-                "q&a",
+                Intent.RESEARCH,
                 question=question,
                 seed=seed,
                 nodes=nodes,
@@ -263,7 +263,7 @@ def api_ask_sources() -> ResponseReturnValue:
     return sse_response(
         _relay(
             orchestrator.run(
-                "librarian", question=question, history=history, source_ids=source_ids
+                Intent.LIBRARIAN, question=question, history=history, source_ids=source_ids
             ),
             store=_SOURCES_SESSIONS,
             session_id=session_id,

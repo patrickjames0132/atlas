@@ -8,8 +8,8 @@ import json
 
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
-from arxiv_digest.agents import events, tutor
-from arxiv_digest.agents.tutor import config as tutor_config
+from arxiv_digest.agents import events, researcher
+from arxiv_digest.agents.researcher import config as researcher_config
 from arxiv_digest.services.graph import Node
 
 
@@ -66,9 +66,9 @@ def final(text: str, cited: list[int]) -> tuple[str, list[str]]:
 
 
 def run(model, monkeypatch, library=None, **kwargs) -> list:
-    monkeypatch.setattr(tutor.main.store, "list_sources", lambda: library or [])
-    with tutor.agent.override(model=model):
-        return list(tutor.answer("why does this work?", SEED, NODES, **kwargs))
+    monkeypatch.setattr(researcher.main.store, "list_sources", lambda: library or [])
+    with researcher.agent.override(model=model):
+        return list(researcher.answer("why does this work?", SEED, NODES, **kwargs))
 
 
 def test_answer_streams_token_deltas_and_maps_cited(monkeypatch):
@@ -110,7 +110,7 @@ def test_expand_discovers_numbers_and_directs_edges(monkeypatch):
                       citation_count=1, authors=None, url="https://example.org/node03")},
     ]
     monkeypatch.setattr(
-        tutor.tools.traversal, "neighbors", lambda paper_id, relation, limit: hits
+        researcher.tools.traversal, "neighbors", lambda paper_id, relation, limit: hits
     )
     model = scripted(
         [("expand_node", ['{"index": 1, "relation": "references"}'])],
@@ -149,7 +149,7 @@ def test_user_scope_overrides_the_models_source_pick(monkeypatch):
         calls["kwargs"] = kwargs
         return []
 
-    monkeypatch.setattr(tutor.tools.retrieval, "search", spy)
+    monkeypatch.setattr(researcher.tools.retrieval, "search", spy)
     library = [
         {"id": "s1", "title": "Deep Learning", "kind": "pdf", "pages": 800},
         {"id": "s2", "title": "RL Book", "kind": "pdf", "pages": 500},
@@ -163,7 +163,7 @@ def test_user_scope_overrides_the_models_source_pick(monkeypatch):
 
 
 def test_step_budget_steers_the_model_to_answer(monkeypatch):
-    monkeypatch.setitem(tutor_config.BUDGETS, "max_steps", 1)
+    monkeypatch.setitem(researcher_config.BUDGETS, "max_steps", 1)
     seen: dict = {}
     model = scripted(
         [
@@ -177,12 +177,12 @@ def test_step_budget_steers_the_model_to_answer(monkeypatch):
     traces = [event for event in out if isinstance(event, events.ReadTrace)]
     assert [trace.ok for trace in traces] == [True, False]
     returns = [part for part in seen["turns"][1][-1].parts if part.part_kind == "tool-return"]
-    assert tutor.tools.STEPS_EXHAUSTED in returns[1].content
+    assert researcher.tools.STEPS_EXHAUSTED in returns[1].content
 
 
 def test_show_figure_attaches_with_proxy_url_and_slot(monkeypatch):
     monkeypatch.setattr(
-        tutor.tools.figures_mod,
+        researcher.tools.figures_mod,
         "get_figures",
         lambda arxiv_id: {"figures": [{"image": "https://ar5iv.org/f1.png", "caption": "The net"}]},
     )

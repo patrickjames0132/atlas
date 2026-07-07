@@ -4,13 +4,13 @@ references / citations / similar work, and a free-text paper search.
 This is the cached, agent-tuned layer over
 ``integrations.semantic_scholar.traversal`` (which talks to the live API and
 caches nothing) — same name, different job, and the cache is the point: the
-orchestrator's history backfill and the tutor's ``expand_node`` /
+orchestrator's history backfill and the researcher's ``expand_node`` /
 ``search_papers`` tools re-hit the same hops constantly within a session, and
 the rate-limited S2 API must not pay for each repeat. Results are cached for
 ``config.graph.cache_ttl`` (the same day-long TTL as a graph snapshot —
 citation data changes slowly).
 
-Plumbing, not tools: no model ever calls these directly. The tutor's tools
+Plumbing, not tools: no model ever calls these directly. The researcher's tools
 wrap them with budgets, visited-sets, and numbering; the backfill loops over
 ``neighbors`` raw.
 """

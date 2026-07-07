@@ -1,4 +1,4 @@
-"""The tutor: agentic Q&A over the graph — read, expand, search, then answer.
+"""The researcher: agentic Q&A over the graph — read, expand, search, then answer.
 
 The flagship workflow. The model gets tools (``tools.py``) and a run-state
 deps object; it investigates until it has enough, then produces a structured
@@ -36,7 +36,7 @@ from ...services.sources import store
 from .. import events, factory, prompts, streams
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 from .tools import (
-    TutorDeps,
+    ResearcherDeps,
     expand_node,
     read_paper,
     search_papers,
@@ -46,7 +46,7 @@ from .tools import (
 
 
 class Answer(BaseModel):
-    """The tutor's structured final result: the prose and its citations.
+    """The researcher's structured final result: the prose and its citations.
 
     ``cited`` holds numbered-list indices (the model never sees node ids) —
     mapped to ids and merged with the papers it actually read on the way out.
@@ -59,7 +59,7 @@ class Answer(BaseModel):
 
 
 async def _if_sources(
-    ctx: RunContext[TutorDeps], tool_def: ToolDefinition
+    ctx: RunContext[ResearcherDeps], tool_def: ToolDefinition
 ) -> ToolDefinition | None:
     """Offer search_sources only when the user actually has a library."""
     return tool_def if ctx.deps.has_sources else None
@@ -67,7 +67,7 @@ async def _if_sources(
 
 # The explicit annotation is load-bearing: with the prepare= kwarg in play,
 # mypy can't jointly infer the Tool's ParamSpec without a declared target.
-_search_sources_tool: Tool[TutorDeps] = Tool(
+_search_sources_tool: Tool[ResearcherDeps] = Tool(
     search_sources, prepare=_if_sources, sequential=True
 )
 
@@ -75,9 +75,9 @@ _search_sources_tool: Tool[TutorDeps] = Tool(
 # concurrently by default, but these tools mutate shared deps state —
 # budgets, and above all the numbered list, whose indices must be assigned
 # in call order.
-agent: Agent[TutorDeps, Answer] = Agent(
+agent: Agent[ResearcherDeps, Answer] = Agent(
     factory.build_model(AGENT_ID),
-    deps_type=TutorDeps,
+    deps_type=ResearcherDeps,
     output_type=Answer,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
     tools=[
@@ -146,7 +146,7 @@ def answer(
         wanted = set(source_ids)
         library = [source for source in library if source.get("id") in wanted]
 
-    deps = TutorDeps(
+    deps = ResearcherDeps(
         nodes=list(nodes),
         known_ids={node.id for node in nodes},
         scope=source_ids,
@@ -205,7 +205,7 @@ def answer(
                 emitted = grown
 
     if final is None:  # pragma: no cover — the run raises before this
-        raise RuntimeError("tutor run ended without a final result")
+        raise RuntimeError("researcher run ended without a final result")
     yield from deps.drain()
     remainder = final.text[len(emitted) :]
     if remainder:

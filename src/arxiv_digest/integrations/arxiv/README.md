@@ -88,7 +88,7 @@ fulltext.py    — strips the render to readable body text
   (`get_figures()`) and the `/api/figure_proxy` route (`is_ar5iv_url()` to
   allowlist, `fetch_image()` to relay) so the browser never talks to ar5iv
   directly and the proxy can't be abused as an open relay.
-- **`agents/tutor/tools.py`** — the `read_paper` tool calls `get_fulltext()`
+- **`agents/researcher/tools.py`** — the `read_paper` tool calls `get_fulltext()`
   for a paper's actual content beyond the abstract/TL;DR, and `show_figure`
   calls `get_figures()`.
 - **`services/sources/extract.py`** — calls `html_to_text()` directly (not

@@ -46,7 +46,7 @@ export interface BackfillTrace {
 
 /**
  * New papers (+ the edges connecting them) a workflow pulled in — the
- * lecture's backward walk, or the tutor's expand_node / search_papers tools
+ * lecture's backward walk, or the researcher's expand_node / search_papers tools
  * — to be merged into the live graph.
  */
 export interface Discovery {
@@ -98,7 +98,7 @@ export async function streamLecture(
 }
 
 /**
- * A step the tutor took — reading a paper, expanding the graph to one not
+ * A step the researcher took — reading a paper, expanding the graph to one not
  * yet shown, or searching for off-graph papers. Surfaced live in the chat as
  * the agent works.
  */
@@ -123,7 +123,7 @@ export interface TraceEvent {
 }
 
 /**
- * A figure the tutor pulled into its answer (via show_figure): a same-origin
+ * A figure the researcher pulled into its answer (via show_figure): a same-origin
  * proxied image URL, the paper's own caption, and which paper/figure it is.
  */
 export interface AnswerFigure {
@@ -171,7 +171,7 @@ export interface AskHandlers {
  *
  * @param body The question, a session id for follow-up context, the seed,
  *             the visible nodes (full graph-node shapes — the grounding
- *             scope), and optional source_ids scoping the tutor's library
+ *             scope), and optional source_ids scoping the researcher's library
  *             search to a subset of uploaded sources.
  * @param h    Event handlers; see {@link AskHandlers}.
  */

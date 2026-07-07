@@ -30,10 +30,10 @@ export interface GraphNode {
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean
-  /** Added mid-conversation by the tutor's expand_node / search_papers tools. */
+  /** Added mid-conversation by the researcher's expand_node / search_papers tools. */
   discovered?: boolean
   /**
-   * The [n] index the tutor knows the paper by (discovered papers only;
+   * The [n] index the researcher knows the paper by (discovered papers only;
    * null when the lecture backfill found it, before numbering exists).
    */
   idx?: number | null

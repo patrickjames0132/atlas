@@ -79,7 +79,7 @@ from `config.json`.
 A **list** with one entry per sub-agent package under
 `src/arxiv_digest/agents/` — they land one at a time (today:
 `query_analyst`, which expands seed-search queries; the librarian,
-lecturer, tutor, and orchestrator follow), potentially on different
+lecturer, researcher, and orchestrator follow), potentially on different
 vendors. Each entry:
 
 ```json

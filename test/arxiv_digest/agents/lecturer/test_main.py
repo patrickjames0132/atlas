@@ -8,6 +8,7 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from arxiv_digest.agents import events, lecturer
+from arxiv_digest.agents.models import LectureMode
 from arxiv_digest.services.graph import Node
 
 
@@ -109,7 +110,7 @@ def test_bridge_mode_names_the_target():
     target = make_node("node04", "Attention Is All You Need", year=2017)
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
-            list(lecturer.lecture(SEED, NODES, mode="bridge", target=target))
+            list(lecturer.lecture(SEED, NODES, mode=LectureMode.BRIDGE, target=target))
     prompt = seen["request"].parts[-1].content
     assert prompt.startswith("Mode: BRIDGE")
     assert "TARGET paper: Attention Is All You Need" in prompt

@@ -90,8 +90,8 @@ export function nodeRadius(node: GraphNode): number {
 
 /**
  * Strip a live VNode back to its persistable GraphNode fields — dropping the
- * sim's x/y and any fx/fy pins (re-derived on restore), and the tutor's
- * `idx` (per-conversation numbering ephemera; the tutor renumbers from node
+ * sim's x/y and any fx/fy pins (re-derived on restore), and the researcher's
+ * `idx` (per-conversation numbering ephemera; the researcher renumbers from node
  * order on every question, so persisting it would only mislead).
  */
 export function cleanNode(n: VNode): GraphNode {

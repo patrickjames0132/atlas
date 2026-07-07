@@ -2,7 +2,7 @@
  * The unified assistant panel — now a slim shell. One docked side panel
  * whose capability levels up with context:
  *   • No graph, has a library → the graph-free library chat (librarian).
- *   • A graph is open → the streaming lecture + agentic Q&A (tutor).
+ *   • A graph is open → the streaming lecture + agentic Q&A (researcher).
  *
  * The conversation itself lives in the store (transcript slice) and the
  * stream orchestration in useConversation; this component owns only what it

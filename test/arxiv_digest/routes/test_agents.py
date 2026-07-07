@@ -89,7 +89,7 @@ def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
             "source_ids": ["s1", 42, ""]}
     response = client.post("/api/ask", json=body)
     assert [name for name, _ in frames(response)] == ["token", "cited", "done"]
-    assert seen["intent"] == "q&a"
+    assert seen["intent"] == "research"
     assert seen["kwargs"]["source_ids"] == ["s1"]  # non-strings dropped
     assert seen["kwargs"]["history"] == []
     # Persisted turn: marker stripped, both roles recorded.

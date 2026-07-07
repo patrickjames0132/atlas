@@ -56,7 +56,7 @@ class DiscoveredNode(Node):
 
     Exactly a graph ``Node`` plus two annotations: ``discovered`` marks it as
     agent-found (the frontend styles these differently), and ``idx`` is the
-    number the model knows it by — set when a tutor tool added it to the
+    number the model knows it by — set when a researcher tool added it to the
     numbered list, ``None`` when the history backfill found it (backfill runs
     *before* the lecturer numbers anything).
     """
@@ -81,7 +81,7 @@ class Discovery(BaseModel):
 
 
 class Figure(BaseModel):
-    """A real paper figure the tutor attached to its answer.
+    """A real paper figure the researcher attached to its answer.
 
     The frontend interleaves the image at the ``<<FIG slot>>`` marker the
     model placed in its prose (falling back to the end of the answer if the
@@ -132,7 +132,7 @@ class Error(BaseModel):
 
 
 class ReadTrace(BaseModel):
-    """The tutor read (or failed to read) a numbered paper."""
+    """The researcher read (or failed to read) a numbered paper."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -145,7 +145,7 @@ class ReadTrace(BaseModel):
 
 
 class ExpandTrace(BaseModel):
-    """The tutor pulled one hop of neighbors for a numbered paper.
+    """The researcher pulled one hop of neighbors for a numbered paper.
 
     ``relation`` is ``str | None`` (not a Literal): a failed call may carry
     whatever invalid relation the model asked for, reported as-is.
@@ -163,7 +163,7 @@ class ExpandTrace(BaseModel):
 
 
 class SearchTrace(BaseModel):
-    """The tutor ran a free-text Semantic Scholar search."""
+    """The researcher ran a free-text Semantic Scholar search."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -177,7 +177,7 @@ class SearchTrace(BaseModel):
 
 
 class SourceSearchTrace(BaseModel):
-    """The tutor searched the user's own uploaded library."""
+    """The researcher searched the user's own uploaded library."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -189,7 +189,7 @@ class SourceSearchTrace(BaseModel):
 
 
 class FigureTrace(BaseModel):
-    """The tutor attached (or failed to attach) a paper's figure."""
+    """The researcher attached (or failed to attach) a paper's figure."""
 
     model_config = ConfigDict(extra="forbid")
 
