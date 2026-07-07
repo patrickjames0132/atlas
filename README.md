@@ -94,13 +94,13 @@ by Pydantic; the value-by-value rationale lives in
 
 ```bash
 cd frontend && npm install && npm run build && cd ..
-uv run arxiv-atlas serve                      # http://127.0.0.1:5000
+uv run atlas serve                      # http://127.0.0.1:5000
 ```
 
 **Development** (two terminals, hot-reloading frontend):
 
 ```bash
-uv run arxiv-atlas serve                      # Terminal 1 — API
+uv run atlas serve                      # Terminal 1 — API
 cd frontend && npm run dev                    # Terminal 2 — http://localhost:5173
 ```
 
@@ -142,7 +142,7 @@ The Vite dev server proxies `/api/*` to Flask.
 ## The codebase
 
 The rewrite's first principle: **every package documents itself**. Start at
-any folder's `README.md` — e.g. `src/arxiv_digest/agents/` (the crew, the
+any folder's `README.md` — e.g. `src/atlas/agents/` (the crew, the
 event protocol, the streaming bridge), `services/sources/` (hybrid retrieval:
 FTS5 + vectors + RRF), `frontend/src/README.md` (the render-tree map), or
 `frontend/src/store/` (what earns a Redux slice and what stays local).

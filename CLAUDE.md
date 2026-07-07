@@ -1,6 +1,6 @@
 # CLAUDE.md — working agreement for this repo
 
-Instructions for Claude Code when working in `~/arxiv-digest`. Read this first;
+Instructions for Claude Code when working in `~/PyCharmProjects/atlas`. Read this first;
 it captures how we collaborate so you don't have to re-derive it each session.
 
 ## What this project is
@@ -13,7 +13,7 @@ digest app; that era is being retired).
 
 - **Vision, feature stack, and phase roadmap live in [OnePager.md](OnePager.md).**
   Keep it current. Read it to understand where we are and what's next.
-- Backend: Python/Flask + uv (`src/arxiv_digest/`, standard src-layout,
+- Backend: Python/Flask + uv (`src/atlas/`, standard src-layout,
   installed editable). Frontend: React + TS +
   Vite (`frontend/`). Graph rendering via `react-force-graph-2d`.
 
@@ -86,9 +86,9 @@ branch `main`.
   `POST /paper/batch` instead. Recommendations need `from=all-cs` (the default
   "recent" pool returns nothing for older seeds). Graph snapshots are cached in
   `data/digest.db` (`cache` table, 1-day TTL). Encourage setting `S2_API_KEY`.
-- **Run backend:** `uv run arxiv-atlas serve` (Python 3.14 in `.venv`; the
+- **Run backend:** `uv run atlas serve` (Python 3.14 in `.venv`; the
   console script comes from the editable src-layout install — `cli.py`).
-- **Quick backend checks:** `uv run python -c "from arxiv_digest.app import app; ..."`
+- **Quick backend checks:** `uv run python -c "from atlas.app import app; ..."`
   (no path shims needed — the package is installed) and Flask's
   `app.test_client()` — avoid hammering the live S2 API in tests.
 - Don't re-hit the live API repeatedly while iterating; it throttles the IP
@@ -101,13 +101,13 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
   hygiene + **ruff** lint (config in `pyproject.toml`).
-- **`mypy`** — type-checks `src/arxiv_digest`, **strict since v1.21.1**: no
+- **`mypy`** — type-checks `src/atlas`, **strict since v1.21.1**: no
   `disable_error_code` entries and `check_untyped_defs = true`. Keep it that way —
   new code must type-check clean; don't reintroduce disabled codes. At SDK
   boundaries prefer isinstance narrowing on real types (see `teacher/agentic.py`)
   over `getattr` duck-typing, and use `flask.typing.ResponseReturnValue` for
   views that return `(body, status)` tuples.
-- **`tests`** — `pytest` over `test/`, which **mirrors `src/arxiv_digest/`**
+- **`tests`** — `pytest` over `test/`, which **mirrors `src/atlas/`**
   (105 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
   in `test/conftest.py`: autouse temp-DB isolation (tests can't touch real
   `data/`), `fake_claude` (a scripted Anthropic client built from **real SDK

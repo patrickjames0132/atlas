@@ -338,6 +338,12 @@ optional, behind a key.
       Teacher.tsx and 577-line Atlas.tsx decomposed along the hybrid structure
       rule, ingest progress bars, a Home button, and the **"Atlas"** rebrand
       (in-app copy; repo name unchanged).
+- [x] **`atlas` package rename** *(v2.0.1)* — the backend catches up to the
+      in-app rebrand above: `src/arxiv_digest/` → `src/atlas/`,
+      `test/arxiv_digest/` → `test/atlas/`, every import updated, and the
+      console script `arxiv-atlas` → `atlas` (`uv run atlas serve`).
+      `pyproject.toml` has no remaining `arxiv` references. GitHub repo name
+      unchanged (`arxiv-digest`) — a separate, un-requested action.
 
 - [ ] **Graph-less research mode** — let the researcher run with no graph
       open: agentic research from scratch (search S2 + the local library, no

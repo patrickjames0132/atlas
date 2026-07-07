@@ -3,7 +3,7 @@
 `config.json` (repo root, gitignored) holds every tunable; copy
 `config.example.json` to start. Each field's meaning lives as a Pydantic
 `Field(description=...)` right next to it in
-[`config.py`](../src/arxiv_digest/config.py) — read that file for what each
+[`config.py`](../src/atlas/config.py) — read that file for what each
 setting does. This page is for the **why** behind specific example values,
 where a JSON file (no comments allowed) can't say it.
 
@@ -77,7 +77,7 @@ from `config.json`.
 ### `llm.agents` — the agents this app runs
 
 A **list** with one entry per sub-agent package under
-`src/arxiv_digest/agents/` — they land one at a time (today:
+`src/atlas/agents/` — they land one at a time (today:
 `query_analyst`, which expands seed-search queries; the librarian,
 lecturer, researcher, and orchestrator follow), potentially on different
 vendors. Each entry:
@@ -100,7 +100,7 @@ vendors. Each entry:
   above.
 - An entry is deliberately **thin**: an agent's words (system prompt,
   skills) and its tool functions are *code*, defined in its own package's
-  `config.py` and `tools.py` (see `src/arxiv_digest/agents/README.md`).
+  `config.py` and `tools.py` (see `src/atlas/agents/README.md`).
   Config carries only what an operator tunes — the model and the knobs.
 - **`extras`** is a deliberate escape hatch: a free-form JSON object for
   settings that don't have a permanent typed home yet. An earlier version
