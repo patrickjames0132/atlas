@@ -14,7 +14,7 @@ only ever *parsed*, never handed to PydanticAI whole.
 
 from __future__ import annotations
 
-from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.providers.anthropic import AnthropicProvider
 
 from ..config import AgentConfig, config
@@ -70,4 +70,13 @@ def build_model(agent_id: str) -> AnthropicModel:
             "factory doesn't construct yet"
         )
     provider = AnthropicProvider(api_key=config.llm.providers.anthropic.api_key)
-    return AnthropicModel(model_name, provider=provider)
+    return AnthropicModel(
+        model_name,
+        provider=provider,
+        # Without eager input streaming, Anthropic buffers a tool call's
+        # argument JSON server-side and delivers it in one burst — and every
+        # structured output here IS a tool call, so lecture beats and answer
+        # prose would only "stream" all at once at the end (observed live,
+        # frame-timestamped). Eager streaming is what makes them stream.
+        settings=AnthropicModelSettings(anthropic_eager_input_streaming=True),
+    )

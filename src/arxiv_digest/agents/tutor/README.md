@@ -60,10 +60,10 @@ tutor.answer(question, seed, nodes, history, source_ids)      main.py
   narration) is silently ignored rather than streamed-then-disavowed. The
   one surviving string protocol is `<<FIG n>>` — positional in prose, which
   structured output can't express.
-- **The sync bridge.** `run_stream_events` is async-only; `answer` stays a
-  sync generator (Flask SSE in Phase 5), so it drives the stream one event
-  at a time with `loop.run_until_complete(anext(...))`, draining the deps
-  queue between events. Answer prose is decoded from the output tool's
+- **The sync bridge lives in `agents/streams.py`** (promoted when the
+  lecturer needed it too): `run_stream_events` is async-only; `answer`
+  stays a sync generator (Flask SSE), iterating `streams.drive(...)` and
+  draining the deps queue between events. Answer prose is decoded from the output tool's
   streamed args with `pydantic_core.from_json(..., allow_partial=
   "trailing-strings")` — tokens flow while the JSON string is still open.
 - **Budgets live in `extras`** (max_steps, full/summary reads, hops +

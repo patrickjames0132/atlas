@@ -26,8 +26,21 @@ export interface HitListProps {
 }
 
 /**
- * Render the pick-a-paper panel. Returns null when there's nothing to show
- * (no local hits resolved and no live search outcome yet).
+ * Reference-style authors: "A & B" up to two names, "A et al." beyond —
+ * a hit list wants recognition, not the full roster.
+ */
+function refAuthors(authors?: string | null): string | null {
+  if (!authors) return null
+  const names = authors.split(', ')
+  if (names.length <= 2) return names.join(' & ')
+  return `${names[0]} et al.`
+}
+
+/**
+ * Render the pick-a-paper panel. Visible from the moment a search starts —
+ * the "Searching…" note is immediate feedback while the analyst + S2 work,
+ * and cache hits render the instant they resolve, never gated on the live
+ * search.
  */
 export default function HitList({
   hits,
@@ -37,7 +50,7 @@ export default function HitList({
   onPick,
   onClose,
 }: HitListProps) {
-  if (!hits && !localHits) return null
+  if (!hits && !localHits && !searching) return null
   return (
     <div className="hit-list">
       <div className="hit-head">
@@ -67,7 +80,7 @@ export default function HitList({
                 )}
               </div>
               <div className="hit-meta">
-                {h.authors ? `${h.authors} · ` : ''}
+                {refAuthors(h.authors) ? `${refAuthors(h.authors)} · ` : ''}
                 {h.year ?? '—'} ·{' '}
                 {(h.citation_count ?? 0).toLocaleString()} citations
               </div>
@@ -95,7 +108,7 @@ export default function HitList({
             <div className="hit-meta">
               <span className="hit-date">{formatPubDate(h.pub_date, h.year)}</span>
               {' · '}
-              {h.authors ? `${h.authors} · ` : ''}
+              {refAuthors(h.authors) ? `${refAuthors(h.authors)} · ` : ''}
               {(h.citation_count ?? 0).toLocaleString()} citations
             </div>
           </button>

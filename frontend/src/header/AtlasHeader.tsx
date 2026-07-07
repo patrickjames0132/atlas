@@ -28,6 +28,8 @@ export interface AtlasHeaderProps {
   onFilters: (f: SearchFilters) => void
   /** The loaded graph's seed title, shown beside the form (null = none). */
   seedTitle: string | null
+  /** Clear the workspace — back to the page-load default state. */
+  onHome: () => void
   onOpenSources: () => void
   /** There's something to assist with — a graph is open or a library exists;
    *  when false the Assistant toggle is hidden. */
@@ -48,6 +50,7 @@ export default function AtlasHeader({
   filters,
   onFilters,
   seedTitle,
+  onHome,
   onOpenSources,
   assistantAvailable,
   assistantOpen,
@@ -56,9 +59,14 @@ export default function AtlasHeader({
 }: AtlasHeaderProps) {
   return (
     <header className="atlas-top">
-      <div className="brand">
+      <button
+        type="button"
+        className="brand"
+        onClick={onHome}
+        title="Clear the graph and start fresh"
+      >
         <span>Atlas</span>
-      </div>
+      </button>
       <Search
         query={query}
         onQueryChange={onQueryChange}

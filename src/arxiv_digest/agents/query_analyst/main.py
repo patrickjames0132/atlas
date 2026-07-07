@@ -35,16 +35,17 @@ class Expansion(BaseModel):
     Typed fields instead of raw completion text, so prose the model might
     wrap around the query ("Here is the expanded...") can't leak into the
     search box.
+
+    Exact titles of the specific papers the query most likely refers to —
+    confident recalls only, empty otherwise. Suggestions, not truth: the
+    search service verifies each against S2's title match before showing
+    anything, so an invented title costs one lookup, never a wrong result.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     expanded_query: str
     known_titles: list[str]
-    """Exact titles of the specific papers the query most likely refers to —
-    confident recalls only, empty otherwise. Suggestions, not truth: the
-    search service verifies each against S2's title match before showing
-    anything, so an invented title costs one lookup, never a wrong result."""
 
 
 agent: Agent[None, Expansion] = Agent(
