@@ -22,9 +22,10 @@ validated by Pydantic as it streams.
 lecturer.lecture(seed, nodes, mode, target)          main.py
   1  prompt = mode intent + SEED/TARGET header
      + the numbered paper list (prompts.node_lines)
-  2  agent.run_stream_sync(...) with output_type=list[LectureBeat]
-  3  stream_output() partial validation: a beat is emitted the moment the
-     model starts the next one — narration begins before the lecture ends
+  2  streams.drive(agent, ...) — the shared sync event bridge
+  3  the output tool's args JSON is partial-parsed as it grows; a beat is
+     emitted the moment the model starts the next one — narration begins
+     before the lecture ends
   4  each LectureBeat -> events.Beat, indices mapped to node ids
      (prompts.idx_to_id); blank-text beats dropped
 ```
@@ -49,10 +50,17 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
   `numbered-papers` skill); the frontend receives `events.Beat` with node
   *ids*. The conversion point (`_beat`) is where hallucinated indices get
   dropped: an invalid index costs one highlight, never the lecture.
-- **A beat is final when its successor starts.** Under partial validation
-  the last list element may still be mid-generation, so the stream loop
-  only emits elements before it, and flushes the rest from the validated
-  final output. No beat is ever yielded twice or half-formed.
+- **A beat is final when its successor starts.** Under partial parsing the
+  last list element may still be mid-generation, so the stream loop only
+  emits elements before it, and flushes the rest from the validated final
+  output. No beat is ever yielded twice or half-formed.
+- **Why the event bridge, and why the factory's eager-streaming flag.**
+  Two burst-bugs found live (frame-timestamped): `run_stream_sync().
+  stream_output()` delivered the whole lecture at once against the real
+  API — hence `streams.drive` — and Anthropic buffers a tool call's input
+  JSON server-side unless `anthropic_eager_input_streaming` is set (every
+  structured output IS a tool call). Both are required for beats to
+  actually stream.
 - **No `max_tokens` knob.** The old `TEACHER_MAX_TOKENS` (3000) died with
   the config rewrite; the 5–9 beat bound in the prompt caps length
   naturally. If runaway lectures ever appear, the knob goes in this agent's

@@ -17,7 +17,6 @@ JSON parsing.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Iterator
 
 from pydantic import BaseModel, ConfigDict
@@ -34,7 +33,7 @@ from pydantic_core import from_json
 
 from ...services.graph import Node
 from ...services.sources import store
-from .. import events, factory, prompts
+from .. import events, factory, prompts, streams
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 from .tools import (
     TutorDeps,
@@ -44,8 +43,6 @@ from .tools import (
     search_sources,
     show_figure,
 )
-
-OUTPUT_TOOL = "final_result"  # PydanticAI's default output-tool name
 
 
 class Answer(BaseModel):
@@ -171,52 +168,41 @@ def answer(
     args_buffer = ""  # the output tool call's JSON args, accumulated
     output_part: int | None = None  # stream index of the output tool call
 
-    loop = asyncio.new_event_loop()
-    try:
-        # The step cap lives in the tools (each returns "answer now" once
-        # spent, so the model lands the answer itself); this is only a hard
-        # backstop against pathological loops, and exceeding it is an error.
-        stream_ctx = agent.run_stream_events(
-            _prompt(seed, deps.nodes, library, question),
-            deps=deps,
-            message_history=prompts.history(history),
-            usage_limits=UsageLimits(request_limit=BUDGETS["max_steps"] + 4),
-        )
-        stream = loop.run_until_complete(stream_ctx.__aenter__())
-        try:
-            while True:
-                try:
-                    event = loop.run_until_complete(anext(stream))
-                except StopAsyncIteration:
-                    break
-                yield from deps.drain()
+    # The step cap lives in the tools (each returns "answer now" once spent,
+    # so the model lands the answer itself); the usage limit is only a hard
+    # backstop against pathological loops, and exceeding it is an error.
+    stream = streams.drive(
+        agent,
+        _prompt(seed, deps.nodes, library, question),
+        deps=deps,
+        message_history=prompts.history(history),
+        usage_limits=UsageLimits(request_limit=BUDGETS["max_steps"] + 4),
+    )
+    for event in stream:
+        yield from deps.drain()
 
-                answer_grew = False
-                if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
-                    if event.part.tool_name == OUTPUT_TOOL:
-                        output_part = event.index
-                        args = event.part.args
-                        args_buffer = args if isinstance(args, str) else ""
-                        answer_grew = True
-                elif (
-                    isinstance(event, PartDeltaEvent)
-                    and event.index == output_part
-                    and isinstance(event.delta, ToolCallPartDelta)
-                    and isinstance(event.delta.args_delta, str)
-                ):
-                    args_buffer += event.delta.args_delta
-                    answer_grew = True
-                elif isinstance(event, AgentRunResultEvent):
-                    final = event.result.output
-                if answer_grew:
-                    grown = _partial_text(args_buffer)
-                    if len(grown) > len(emitted):
-                        yield events.Token(text=grown[len(emitted) :])
-                        emitted = grown
-        finally:
-            loop.run_until_complete(stream_ctx.__aexit__(None, None, None))
-    finally:
-        loop.close()
+        answer_grew = False
+        if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
+            if event.part.tool_name == streams.OUTPUT_TOOL:
+                output_part = event.index
+                args = event.part.args
+                args_buffer = args if isinstance(args, str) else ""
+                answer_grew = True
+        elif (
+            isinstance(event, PartDeltaEvent)
+            and event.index == output_part
+            and isinstance(event.delta, ToolCallPartDelta)
+            and isinstance(event.delta.args_delta, str)
+        ):
+            args_buffer += event.delta.args_delta
+            answer_grew = True
+        elif isinstance(event, AgentRunResultEvent):
+            final = event.result.output
+        if answer_grew:
+            grown = _partial_text(args_buffer)
+            if len(grown) > len(emitted):
+                yield events.Token(text=grown[len(emitted) :])
+                emitted = grown
 
     if final is None:  # pragma: no cover — the run raises before this
         raise RuntimeError("tutor run ended without a final result")

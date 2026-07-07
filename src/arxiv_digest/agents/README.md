@@ -112,6 +112,18 @@ rule is no env vars — the key comes from `config.llm.providers`, passed
 explicitly to the provider. `agent_entry(id)` (the lookup half) is also how
 an agent reads its own `extras` knobs.
 
+## `streams.py` — consuming a run synchronously, event by event
+
+`drive(agent, ...)` runs `run_stream_events` (async-only) on a private loop
+and yields each event as it arrives, so workflows stay plain sync
+generators. Two hard-won lessons live around it, both frame-timestamped
+against the live API: the sync convenience wrapper
+(`run_stream_sync().stream_output()`) delivers structured output in one
+burst at the end — drive the raw events instead; and Anthropic buffers a
+tool call's input JSON server-side unless the factory sets
+`anthropic_eager_input_streaming` — and every structured output IS a tool
+call, so without that flag nothing "streams" no matter how you consume it.
+
 ## `prompts.py` — app data → model input
 
 The other half of agent assembly: `skill(name)` loads one skill's markdown
@@ -162,6 +174,7 @@ agents/
   events.py          ← shared: the typed event stream every workflow emits
   traversal.py       ← shared: day-cached S2 hops + free-text search (plumbing)
   factory.py         ← shared: config.llm entry -> live PydanticAI model
+  streams.py         ← shared: the sync event bridge (drive a run, yield events)
   prompts.py         ← shared: skills -> instructions, passages/history -> model input
   skills/            ← shared: skills.md files any sub-agent's config may load
     numbered-papers.md      the index-not-id grounding protocol
