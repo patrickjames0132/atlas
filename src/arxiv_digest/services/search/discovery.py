@@ -96,7 +96,8 @@ def live_search(
         Relevance-ranked node dicts (S2's node shape — the same shape a graph
         neighbor has). Empty list for a blank query. A pasted arXiv id/URL
         returns exactly that paper (or nothing when S2 doesn't know it).
-        Saves nothing.
+        Results are cached for a day (same TTL as a graph snapshot), so a
+        repeated search answers instantly — no analyst call, no S2.
 
     Raises:
         s2.S2Error: When the Semantic Scholar request fails after retries.
@@ -113,6 +114,20 @@ def live_search(
     if pasted_id:
         paper = s2.get_paper(f"ARXIV:{pasted_id}")
         return [paper] if paper else []
+
+    # Whole-result cache: the expensive part of a live search is the analyst
+    # call plus two-ish throttled S2 requests, and re-typing a recent query
+    # is a common move — searching "DQN" a second time should be instant.
+    # The key carries the filters (a filtered search is a different search);
+    # the analyst's view is frozen for the TTL, which is fine for a day.
+    fields_key = ",".join(fields_of_study) if fields_of_study else ""
+    cache_key = (
+        f"livesearch:{query.lower()}:{limit}:{year_from or ''}:{year_to or ''}:{fields_key}"
+    )
+    cached = cache.get(cache_key, config.graph.cache_ttl)
+    if cached is not None:
+        return cached
+
     analysis = _analyze(query)
     # Confidently recalled papers, verified via S2 title match, lead the
     # results — like the id path, an exact resolution outranks lexical hits
@@ -129,7 +144,9 @@ def live_search(
     # bare node dicts so live and local search return the same thing.
     verified_ids = {node["id"] for node in verified}
     lexical = [hit["node"] for hit in hits if hit["node"]["id"] not in verified_ids]
-    return (verified + lexical)[:limit]
+    results = (verified + lexical)[:limit]
+    cache.set(cache_key, results)
+    return results
 
 
 def local_search(

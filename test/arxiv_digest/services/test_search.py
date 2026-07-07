@@ -84,6 +84,29 @@ def test_verified_titles_lead_results_and_dedupe_against_lexical(monkeypatch):
     assert [node["id"] for node in out] == ["atari01", "other02"]
 
 
+def test_repeat_searches_are_served_from_the_cache(monkeypatch):
+    calls = {"analyze": 0, "s2": 0}
+
+    def fake_analyze(query):
+        calls["analyze"] += 1
+        return analysis("dqn deep q-network")
+
+    def fake_search(query, **kw):
+        calls["s2"] += 1
+        return [{"node": {"id": "p1", "title": "Playing Atari"}}]
+
+    monkeypatch.setattr(discovery, "_analyze", fake_analyze)
+    monkeypatch.setattr(discovery.s2, "search_papers", fake_search)
+    first = discovery.live_search("DQN")
+    second = discovery.live_search("dqn")  # the cache key is case-insensitive
+    assert first == second == [{"id": "p1", "title": "Playing Atari"}]
+    assert calls == {"analyze": 1, "s2": 1}  # the repeat cost nothing
+
+    # A different filter set is a different search — not served from cache.
+    discovery.live_search("dqn", fields_of_study=["Computer Science"])
+    assert calls["s2"] == 2
+
+
 def test_title_match_s2_errors_skip_the_title_not_the_search(monkeypatch):
     monkeypatch.setattr(
         discovery, "_analyze", lambda query: analysis("dqn", ["Playing Atari"])

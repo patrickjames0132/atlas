@@ -57,6 +57,12 @@ limit), so search never breaks because the LLM hiccuped — see
 as a documented passthrough precisely so the call site wouldn't move when
 the agent landed — and it didn't.)
 
+Live-search results are **cached whole for a day** (the graph-snapshot
+TTL), keyed by query + filters: re-typing a recent query answers instantly
+— no analyst call, no S2 requests. (The local snapshot search can't serve
+acronym queries — "DQN" appears in no cached *title* — so repeat-query
+caching is what makes the second search instant.)
+
 ## `local_search`, step by step
 
 1. **Tokenize** the query (lowercased whitespace split); blank → no hits.
