@@ -593,35 +593,6 @@ optional, behind a key.
       Sessions that explicitly saved a layout — Force or Timeline — are
       unaffected; this only changes what happens when there's no stored
       preference at all.
-- [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
-      agentic Q&A only calls `show_figure` when the question explicitly asks for
-      a picture; you have to request an image every time to get one. It should
-      **decide on its own** when a figure would answer the question better and
-      pull one in unprompted — e.g. a question about a model's architecture
-      should surface the architecture diagram without being told to. Likely a
-      prompt nudge (make `show_figure` a default reflex when a read paper has a
-      relevant figure, not a last resort), and bumps up against the broader
-      **agent-reliability** item above — the model already skips `show_figure`
-      even when asked, so "show more often, unprompted" needs the tool-call
-      compliance to be solid first (stronger `AGENT_MODEL` / sub-agent
-      decomposition). *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **GPU embedding on Windows without shared memory** — the local sentence-
-      transformer embedder (`library/embeddings.py`, all-MiniLM / bge-small)
-      runs on CPU. On Windows machines with a discrete GPU (no shared/unified
-      memory), moving the model + inference to **CUDA** would speed up ingest
-      embedding meaningfully. Detect an available device and use it when present,
-      falling back to CPU cleanly; keep it optional/degrading like the rest of
-      the library stack (`available()`). *(From the `todos.md` inbox,
-      2026-07-07.)*
-- [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
-      feature to the user's **own library**: pull images out of an ingested PDF
-      (via `pymupdf`, which we already use for text) and let the agent surface a
-      relevant one when it cites a source passage — the library analogue of
-      `show_figure`, which today only covers arXiv papers (ar5iv). Needs page →
-      image extraction at ingest (or on demand), a way to reference an image from
-      a retrieved passage, and a `show_source_figure`-style tool + `figure` event
-      reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
-      2026-07-03.)*
 - [x] **Loading spinners for graph render + search** *(v2.2.0)* — neither the
       "Building graph…" overlay nor the "Searching Semantic Scholar…" hit-list
       note had any animated feedback, so a slow S2 fetch could read as hung.
@@ -695,6 +666,70 @@ optional, behind a key.
       ("Code conventions") so it doesn't drift back. Behavior-neutral: the whole
       quality gate (ruff, strict mypy, 277 tests, tsc + oxlint) stays green.
       *(From the `todos.md` inbox, 2026-07-06.)*
+- [x] **Optional per-seed cache clear** *(v2.5.0)* — a **Refresh** button in the
+      graph controls (beside Release / Fit) busts the cached graph snapshot
+      (`data/digest.db`'s `cache` table) for the current seed on demand, rather
+      than only living with the 1-day TTL — useful when S2's data for a paper
+      visibly changes mid-session. Reuses the backend's existing `refresh=1`
+      path (bypass read → rebuild from S2 → upsert the snapshot), which was
+      wired end-to-end but never triggered from the UI. Frontend-only: the
+      workspace slice now records the **exact seed reference** the graph was
+      loaded with (`seedRef`) so Refresh replays the same string and busts the
+      *right* cache key — a double-click re-seed keys by S2 paperId, a search by
+      arXiv id — rather than a stale duplicate. *(From the `todos.md` inbox,
+      2026-07-07.)*
+- [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
+      `run.py` with a `click` group (same command names: `serve`, `ingest`,
+      `sources`, `search-sources`, `forget`).
+- [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
+      sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
+      names the model the AI teacher actually runs on, not the build tool.
+- [x] **Deselect-all in the assistant source scope** *(v1.20.1)* — the source-scope
+      popover only had **Select all**; added a **Deselect all** (shown whenever any
+      source is checked) so you can clear and then pick a few, rather than unchecking
+      many by hand.
+- [x] **Empty source scope means "search nothing"** *(v1.20.2)* — corrects
+      v1.20.1: an empty checkbox set used to fall back to "search the whole
+      library" (both extremes behaved the same). Now the three states are
+      distinct — all checked = whole library, a subset = just those, **none
+      checked = search no sources**. Threaded a `None` (no scope → all) vs `[]`
+      (explicit empty → nothing) distinction through `sources.search`, both ask
+      routes, `answer_agentic`, and the `search_sources` tool.
+- [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
+      filter popover didn't close when a search fired; `Search`'s form `onSubmit`
+      now collapses it (`setOpen(false)`) before running the search.
+- [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
+      `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
+      with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
+- [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
+      agentic Q&A only calls `show_figure` when the question explicitly asks for
+      a picture; you have to request an image every time to get one. It should
+      **decide on its own** when a figure would answer the question better and
+      pull one in unprompted — e.g. a question about a model's architecture
+      should surface the architecture diagram without being told to. Likely a
+      prompt nudge (make `show_figure` a default reflex when a read paper has a
+      relevant figure, not a last resort), and bumps up against the broader
+      **agent-reliability** item above — the model already skips `show_figure`
+      even when asked, so "show more often, unprompted" needs the tool-call
+      compliance to be solid first (stronger `AGENT_MODEL` / sub-agent
+      decomposition). *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **GPU embedding on Windows without shared memory** — the local sentence-
+      transformer embedder (`library/embeddings.py`, all-MiniLM / bge-small)
+      runs on CPU. On Windows machines with a discrete GPU (no shared/unified
+      memory), moving the model + inference to **CUDA** would speed up ingest
+      embedding meaningfully. Detect an available device and use it when present,
+      falling back to CPU cleanly; keep it optional/degrading like the rest of
+      the library stack (`available()`). *(From the `todos.md` inbox,
+      2026-07-07.)*
+- [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
+      feature to the user's **own library**: pull images out of an ingested PDF
+      (via `pymupdf`, which we already use for text) and let the agent surface a
+      relevant one when it cites a source passage — the library analogue of
+      `show_figure`, which today only covers arXiv papers (ar5iv). Needs page →
+      image extraction at ingest (or on demand), a way to reference an image from
+      a retrieved passage, and a `show_source_figure`-style tool + `figure` event
+      reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
+      2026-07-03.)*
 - [ ] **Live per-relation count sliders** — in the graph workspace, sliders to
       control how many references/citations/similar papers are shown, live
       (today's counts are fixed at build time by `ref_limit`/`cite_limit`/
@@ -718,18 +753,6 @@ optional, behind a key.
       categories as a second layer of tags — an arXiv paper would show both
       layers side by side, a non-arXiv paper would fall back to S2-only.
       *(From the `todos.md` inbox, 2026-07-07.)*
-- [x] **Optional per-seed cache clear** *(v2.5.0)* — a **Refresh** button in the
-      graph controls (beside Release / Fit) busts the cached graph snapshot
-      (`data/digest.db`'s `cache` table) for the current seed on demand, rather
-      than only living with the 1-day TTL — useful when S2's data for a paper
-      visibly changes mid-session. Reuses the backend's existing `refresh=1`
-      path (bypass read → rebuild from S2 → upsert the snapshot), which was
-      wired end-to-end but never triggered from the UI. Frontend-only: the
-      workspace slice now records the **exact seed reference** the graph was
-      loaded with (`seedRef`) so Refresh replays the same string and busts the
-      *right* cache key — a double-click re-seed keys by S2 paperId, a search by
-      arXiv id — rather than a stale duplicate. *(From the `todos.md` inbox,
-      2026-07-07.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the
@@ -758,29 +781,6 @@ optional, behind a key.
       app) and start covering components/hooks, mirroring the backend's
       offline-only, no-live-API discipline.
       *(From the `todos.md` inbox, 2026-07-07.)*
-- [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
-      `run.py` with a `click` group (same command names: `serve`, `ingest`,
-      `sources`, `search-sources`, `forget`).
-- [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
-      sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
-      names the model the AI teacher actually runs on, not the build tool.
-- [x] **Deselect-all in the assistant source scope** *(v1.20.1)* — the source-scope
-      popover only had **Select all**; added a **Deselect all** (shown whenever any
-      source is checked) so you can clear and then pick a few, rather than unchecking
-      many by hand.
-- [x] **Empty source scope means "search nothing"** *(v1.20.2)* — corrects
-      v1.20.1: an empty checkbox set used to fall back to "search the whole
-      library" (both extremes behaved the same). Now the three states are
-      distinct — all checked = whole library, a subset = just those, **none
-      checked = search no sources**. Threaded a `None` (no scope → all) vs `[]`
-      (explicit empty → nothing) distinction through `sources.search`, both ask
-      routes, `answer_agentic`, and the `search_sources` tool.
-- [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
-      filter popover didn't close when a search fired; `Search`'s form `onSubmit`
-      now collapses it (`setOpen(false)`) before running the search.
-- [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
-      `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
-      with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
