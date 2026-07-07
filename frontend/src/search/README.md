@@ -32,6 +32,20 @@ search/
   active-filter badge). Two overlapping `<input type=range>` elements share
   one track; the low handle z-indexes on top at the far right so it stays
   grabbable.
+- **The panel appears the moment a search starts** — "Searching Semantic
+  Scholar…" is immediate feedback while the analyst + S2 work, and cache
+  hits render the instant they resolve, never gated on the live search.
+  (Browser-milestone fix: the hidden-until-something-arrives panel made
+  the analyst look like it stalled the results.)
+- **Authors render reference-style** — "A & B" up to two names, "First
+  et al." beyond (`refAuthors`): a hit list wants recognition, not the
+  roster. The backend requests authors for search endpoints only
+  (`SEARCH_FIELDS`); graph traversals stay author-less on purpose.
+- **A repeated query answers instantly** — the backend caches live-search
+  results whole for a day (query + filters keyed; see
+  `services/search/README.md`). The local snapshot search can't serve
+  acronym queries ("DQN" appears in no cached *title*), so repeat-query
+  caching is what makes the second search immediate.
 - **The field picker lazy-loads.** S2's ~20 fields of study fetch only when
   the popover first opens — the common no-filter path never pays it. (The
   old ~155-category arXiv picker with optgroups died with arXiv search.)

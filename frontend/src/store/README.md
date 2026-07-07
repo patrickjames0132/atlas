@@ -24,6 +24,9 @@ store/
   the header (seed title), and Save. `epoch` bumps per load/restore — the
   shell keys the teacher panel on it, replacing the old `graphKey` hack.
   `error` is the shared search/graph overlay surface.
+  `workspaceCleared` is the Home action: workspace back to initial (epoch
+  bumped so the teacher remounts), with the transcript and highlights
+  clearing themselves via `extraReducers` — one dispatch, page-load state.
 - **`transcript`** — written by the teacher's stream dispatches; read by the
   panel to render and by `saveWorkspace` to persist. This slice is why the
   old `onStateChange` → `teacherStateRef` plumbing died: the transcript used

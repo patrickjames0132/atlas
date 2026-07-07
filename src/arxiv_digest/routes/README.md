@@ -3,8 +3,7 @@
 The Flask API surface: one blueprint per concern, wired onto the app by
 `register_blueprints` (called from the app factory). Every route carries its
 full `/api/...` path — no blueprint URL prefixes — so the registry order is
-cosmetic. Being ported module by module (Phase 5): **graph** is in;
-search, sessions, sources, and agents follow.
+cosmetic.
 
 Route modules are thin: parse/validate the request, call one service or
 integration, map its outcomes onto HTTP. Anything thicker belongs a layer
@@ -78,6 +77,9 @@ Design decisions worth knowing:
   filters (they never apply to an explicit lookup). The query analyst fires
   only on real free-text queries. An id S2 doesn't know returns nothing
   rather than falling through to a junk lexical search of the id text.
+- **Repeated queries answer instantly** — `live_search` caches its results
+  whole for a day (query + filters keyed), so re-typing a recent query
+  skips the analyst and S2 entirely (see `services/search/README.md`).
 - **Filters degrade, never error.** A non-numeric year becomes "no filter";
   unknown `fields` values are silently dropped against
   `semantic_scholar.vocab.valid_fields()` (they can only come from a

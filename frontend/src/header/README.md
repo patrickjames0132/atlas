@@ -9,6 +9,9 @@ and the "Powered by Claude" credit.
 
 - **Purely presentational** — search state and drawer visibility live in
   the shell and pass through as props.
+- **The brand is the Home button** (browser-milestone addition): clicking
+  "Atlas" fires `onHome`, which dispatches `workspaceCleared` — back to
+  the page-load default (no graph, no results, no panel) without a reload.
 - **The Assistant toggle hides until there's something to assist with** (a
   graph is open or a library exists) — no dead buttons.
 - The Claude credit's starburst is inline SVG, no asset fetch.

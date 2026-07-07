@@ -81,7 +81,16 @@ package needs to know it's a package internally.
   `http_request`/`response` not `req`/`resp`, `year_from`/`year_to` not
   `lo`/`hi`.
 
-## Who uses it, and how/why (traced, not yet ported)
+## Field lists: three tiers on purpose
+
+`nodes.py` defines what each request asks S2 for: `DETAIL_FIELDS` (one
+paper, hydration — abstract/tldr/authors), `NEIGHBOR_FIELDS` (the many
+nodes of a traversal — summary-light, hydrated lazily on click), and
+`SEARCH_FIELDS` = neighbors + `authors.name` (search + title-match hits
+render in a pick-a-paper list, where authorship is how humans recognize a
+paper; the ~65 anonymous dots of a graph don't need it).
+
+## Who uses it, and how/why
 
 - **`services/graph.py`** — `build_graph()` is the whole point of this
   package's existence: one `get_paper()` to hydrate the seed's rich

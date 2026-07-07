@@ -110,7 +110,9 @@ and it's deliberate that the entry's `"provider:model"` string is only ever
 would pull the API key from environment variables, and this app's config
 rule is no env vars — the key comes from `config.llm.providers`, passed
 explicitly to the provider. `agent_entry(id)` (the lookup half) is also how
-an agent reads its own `extras` knobs.
+an agent reads its own `extras` knobs. The factory also sets
+`anthropic_eager_input_streaming` on every model — see `streams.py` below
+for why nothing streams without it.
 
 ## `streams.py` — consuming a run synchronously, event by event
 

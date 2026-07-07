@@ -12,7 +12,7 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 ```
 <Atlas>                            Atlas.tsx        — the shell
 ├─ header bar                      header/AtlasHeader.tsx
-│  ├─ brand ("Atlas")
+│  ├─ brand ("Atlas" — click = Home: clears the workspace)
 │  ├─ search box + filter popover  search/Search.tsx (year slider, field picker)
 │  ├─ seed title · drawer toggles  (📚 Sources · 🎓 Assistant · 🗂 Sessions)
 │  └─ "Powered by Claude" credit
