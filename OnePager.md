@@ -295,6 +295,18 @@ optional, behind a key.
       specific origin paper can still be missed since additions rank by citations
       over a narrow frontier — future tweak: prefer `influential` edges.)*
 
+- [ ] **Phase 3f — "What's Evolved Since" lecture mode** — a **third lecture
+      button** alongside "How We Got Here" (history) and "This Paper's Intuition"
+      (intuition), completing a **past → present → future** triptych. Where the
+      history mode walks *backward* through references to a field's roots, this
+      one walks *forward*: from the seed to the work that **built on it since** —
+      the newer architectures, follow-ups, and current frontier. Naturally
+      forward-looking, so it should lean on the recency-biased reach the Q&A
+      agent already has (`search_papers` with a year filter, `expand_node` over
+      *citations*) rather than the history mode's backward reference-walk.
+      Emits the same node-synced beats as the other two modes. *(From the
+      `todos.md` inbox, 2026-07-07.)*
+
 **Beyond the teacher**
 
 - [x] **Phase 4 — Saved sessions & workspaces** *(v1.15.0)* — persistence,
@@ -580,6 +592,26 @@ optional, behind a key.
       Sessions that explicitly saved a layout — Force or Timeline — are
       unaffected; this only changes what happens when there's no stored
       preference at all.
+- [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
+      agentic Q&A only calls `show_figure` when the question explicitly asks for
+      a picture; you have to request an image every time to get one. It should
+      **decide on its own** when a figure would answer the question better and
+      pull one in unprompted — e.g. a question about a model's architecture
+      should surface the architecture diagram without being told to. Likely a
+      prompt nudge (make `show_figure` a default reflex when a read paper has a
+      relevant figure, not a last resort), and bumps up against the broader
+      **agent-reliability** item above — the model already skips `show_figure`
+      even when asked, so "show more often, unprompted" needs the tool-call
+      compliance to be solid first (stronger `AGENT_MODEL` / sub-agent
+      decomposition). *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **GPU embedding on Windows without shared memory** — the local sentence-
+      transformer embedder (`library/embeddings.py`, all-MiniLM / bge-small)
+      runs on CPU. On Windows machines with a discrete GPU (no shared/unified
+      memory), moving the model + inference to **CUDA** would speed up ingest
+      embedding meaningfully. Detect an available device and use it when present,
+      falling back to CPU cleanly; keep it optional/degrading like the rest of
+      the library stack (`available()`). *(From the `todos.md` inbox,
+      2026-07-07.)*
 - [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
       feature to the user's **own library**: pull images out of an ingested PDF
       (via `pymupdf`, which we already use for text) and let the agent surface a
