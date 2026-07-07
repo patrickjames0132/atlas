@@ -46,6 +46,12 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  /* react-force-graph-2d's canvas wrapper sets position:relative inline with
+     no z-index of its own; at the tied z-index:auto level CSS falls back to
+     DOM order, and it renders after this overlay (see GraphExplorer.tsx), so
+     without an explicit z-index here a *replacement* graph's canvas paints
+     over this one whenever a graph is already on screen. */
+  z-index: 20;
   color: var(--muted);
   font-size: 15px;
   text-align: center;
@@ -57,6 +63,24 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+/* Dims a graph that's still on screen while a replacement loads (or fails to
+   load) over it — the overlay text alone doesn't read clearly against a busy
+   graph, only against the empty canvas (the first-load, no-graph-yet case). */
+.canvas-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.72);
+  z-index: 15; /* above .controls (4) / .hit-list (5), below .overlay (20) */
+  pointer-events: none;
+}
+.overlay-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  color: var(--text-strong);
 }
 .overlay.error {
   color: #f78ca0;

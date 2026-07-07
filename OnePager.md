@@ -555,6 +555,20 @@ optional, behind a key.
       once already, duplicated in the library upload flow; de-duped it there
       too) and wired it into both spots. *(From the `todos.md` inbox,
       2026-07-06.)*
+      **Fixed in v2.2.1:** the "Building graph…" overlay was invisible whenever
+      a graph was already on screen (re-seeding, or searching over an existing
+      graph) — only worked on the very first load. Root cause:
+      `react-force-graph-2d` sets its canvas wrapper's `position: relative`
+      inline with no `z-index`, tying it with `.overlay`'s implicit
+      `z-index: auto`; CSS then falls back to DOM order, and the canvas
+      renders *after* `.overlay` in `GraphExplorer.tsx`, so it painted over it
+      once a graph existed to render at all. Gave `.overlay` an explicit
+      `z-index: 20`, comfortably above every other floating panel
+      (`.controls` at 4, `.hit-list` at 5). Also, bare overlay text read poorly
+      against a busy graph still on screen, so a `.canvas-scrim` now dims the
+      whole canvas (graph + its controls/legend) and the overlay itself gets a
+      contrasting card background — for both the loading and the graph-load
+      error state (verified against a real 502 from the running server).
 - [x] **File logging + honest search-failure traces** *(v2.1.0)* — `create_app()`
       now logs to a rotating file (`data/atlas.log`, 5MB × 3 backups) as well as
       the console, so agent runs survive after the terminal scrolls away.
@@ -597,12 +611,6 @@ optional, behind a key.
       frontend) for single-letter variable/parameter names and rename them to
       say what they hold; add this as a standing convention, not just a
       one-time cleanup. *(From the `todos.md` inbox, 2026-07-06.)*
-- [ ] **Bare `atlas` on PATH, no `uv run` prefix** — `uv run atlas serve`
-      works today, but `uv run` re-resolves the env on every invocation;
-      activating `.venv` (`source .venv/bin/activate`) puts the console
-      script straight on PATH so it's just `atlas serve`. Worth documenting
-      as the normal workflow in CLAUDE.md/README rather than a code change.
-      *(From the `todos.md` inbox, 2026-07-06.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).

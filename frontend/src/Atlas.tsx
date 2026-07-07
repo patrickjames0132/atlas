@@ -148,14 +148,17 @@ export default function Atlas() {
             onClose={clearHits}
           />
 
+          {(loading || (error && !hits)) && hasGraph && <div className="canvas-scrim" />}
           {loading && (
-            <div className="overlay">
+            <div className={`overlay${hasGraph ? ' overlay-card' : ''}`}>
               <div className="overlay-loading">
                 <span className="spin" /> Building graph…
               </div>
             </div>
           )}
-          {error && !hits && <div className="overlay error">{error}</div>}
+          {error && !hits && (
+            <div className={`overlay error${hasGraph ? ' overlay-card' : ''}`}>{error}</div>
+          )}
           {!hasGraph && !loading && !hits && !error && (
             <div className="overlay hint">
               Search for a paper to map its citations, references, and similar
