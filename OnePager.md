@@ -373,6 +373,17 @@ optional, behind a key.
       `cs.LG`); `get_categories` now dedupes by display name, keeping arXiv's
       first-listed code of the pair. *(From the `todos.md` inbox,
       2026-07-07.)*
+- [x] **Fix: dateless papers in Timeline landed at the far edge** *(v2.3.1)* —
+      a paper with no publication year (S2 sometimes just doesn't have one)
+      was placed one slot before the earliest real year on the graph — a
+      strong, usually-wrong assumption that "unknown date" means "oldest."
+      `nodeTimelineX` (`useTimeline.ts`) now defaults a dateless node to the
+      **seed's own exact x** — same year *and* month fraction, pixel-aligned
+      with the seed's column, not just parked somewhere in its year — falling
+      back to the earliest year only if the seed itself has none. (There's no
+      day-level precision anywhere in this layout, only year+month, so
+      "exact" tops out at whatever precision the seed has — same ceiling
+      every other node on the graph is already subject to.)
 - [ ] **General non-arXiv full text** — S2's `openAccessPdf` + the existing
       pymupdf pipeline as a fallback reader for `read_paper` on journal
       papers (text only; figures stay ar5iv-quality-or-nothing).
@@ -633,6 +644,15 @@ optional, behind a key.
       larger pool per seed (see the citation-ranking fix, v2.1.1, which
       already over-fetches up to S2's 1000-per-call cap) or support paging
       further into it on demand. *(From the `todos.md` inbox, 2026-07-06.)*
+- [ ] **Recency preference for citations** — let the user choose whether the
+      papers citing the seed skew **older** (closer to the seed's own year —
+      the field's early response) or **more recent** (the current frontier),
+      rather than always ranking purely by citation count (v2.1.1). Probably
+      a control alongside the citation-count ranking rather than a
+      replacement for it — citation count is what rescued citations from
+      S2's recency-biased default order in the first place; this would be a
+      second axis (age vs. count) the user tunes, not a reversion.
+      *(From the `todos.md` inbox, 2026-07-07.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).

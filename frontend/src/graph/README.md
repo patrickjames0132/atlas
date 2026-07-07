@@ -121,8 +121,15 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
 - **Timeline mode:** a node's x is ALWAYS its date column — dragging only
   sets height, unpinning restores the column pin, and `releaseAll` keeps the
   date structure. `nodeTimelineX` maps year + month fraction to x (papers
-  sit *between* year gridlines by publication month; no-year papers get an
-  "n.d." lane left of the earliest year).
+  sit *between* year gridlines by publication month; a paper with no year
+  sits at the **seed's own exact x** — same year AND month fraction, so it's
+  pixel-aligned with the seed's own column, not just parked somewhere within
+  its year — rather than an "n.d." lane at the timeline's edge. S2 not
+  knowing a date isn't evidence the paper predates everything else on the
+  graph, and a node reached from the seed tends to be contemporaneous with
+  it anyway. Falls back to the earliest year only if the seed itself has
+  none; there's no day-level precision anywhere in this system, only
+  year+month, so "exact" tops out at whatever precision the seed has).
 - Timeline physics: pin every x, add a radius-sized collide force so a year
   column spreads out instead of clumping; `freezeSettledY` freezes heights
   once the sim settles so dragging one node can't re-relax the rest. The
