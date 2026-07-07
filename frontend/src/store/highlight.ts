@@ -7,7 +7,7 @@
 
 import { createSelector, createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
-import { loadGraph, restoreSession } from './workspace'
+import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 
 export interface HighlightState {
   ids: string[]
@@ -28,6 +28,7 @@ const highlightSlice = createSlice({
     builder
       .addCase(loadGraph.fulfilled, () => initialState)
       .addCase(restoreSession.fulfilled, () => initialState)
+      .addCase(workspaceCleared, () => initialState)
   },
 })
 

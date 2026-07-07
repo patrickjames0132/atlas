@@ -58,7 +58,7 @@ def search_papers(
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    params = {"query": query, "fields": nodes.NEIGHBOR_FIELDS, "limit": limit}
+    params = {"query": query, "fields": nodes.SEARCH_FIELDS, "limit": limit}
     year = _year_range(year_from, year_to)
     if year:
         params["year"] = year
@@ -88,7 +88,7 @@ def match_title(title: str) -> dict | None:
         client.S2Error: When the request fails after retries (any failure
             other than the no-match 404).
     """
-    params = {"query": title, "fields": nodes.NEIGHBOR_FIELDS}
+    params = {"query": title, "fields": nodes.SEARCH_FIELDS}
     url = f"{config.s2.graph_url}/paper/search/match?{urllib.parse.urlencode(params)}"
     try:
         data = client.request(url)

@@ -18,6 +18,10 @@ DETAIL_FIELDS = (
 # which we hydrate lazily when a node is opened. publicationDate gives month
 # granularity for the timeline layout.
 NEIGHBOR_FIELDS = "paperId,externalIds,title,year,publicationDate,citationCount"
+# Search hits render in a pick-a-paper list where authorship is how humans
+# recognize a paper — worth the extra field there, but not for the ~65
+# anonymous dots of a graph traversal.
+SEARCH_FIELDS = NEIGHBOR_FIELDS + ",authors.name"
 
 
 def node(paper: dict | None) -> dict | None:

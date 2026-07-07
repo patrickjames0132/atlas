@@ -17,7 +17,7 @@ import type { FormEvent } from 'react'
 import { listSources } from './api'
 import { ID_RE } from './graph/model'
 import { useAppDispatch, useAppSelector } from './store'
-import { errorSet, loadGraph, restoreSession, saveWorkspace } from './store/workspace'
+import { errorSet, loadGraph, restoreSession, saveWorkspace, workspaceCleared } from './store/workspace'
 import { useSeedSearch } from './search/useSeedSearch'
 import AtlasHeader from './header/AtlasHeader'
 import GraphExplorer from './graph/GraphExplorer'
@@ -46,9 +46,11 @@ export default function Atlas() {
   }, [])
   useEffect(refreshLibraryCount, [refreshLibraryCount])
 
-  // Surface the teacher whenever a graph loads or a session restores.
+  // Surface the teacher whenever a graph loads or a session restores. (Home
+  // also bumps the epoch, but with no graph there's nothing to surface.)
   useEffect(() => {
-    if (epoch > 0) setAssistantOpen(true)
+    if (epoch > 0 && graph) setAssistantOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epoch])
 
   // Seed search: query + optional filters, cache-first local / live S2 hits.
@@ -86,6 +88,14 @@ export default function Atlas() {
     [query, pickSeed, runSearch],
   )
 
+  /** Home: back to the page-load default — no graph, no results, no panel. */
+  const goHome = useCallback(() => {
+    dispatch(workspaceCleared())
+    clearHits()
+    setQuery('')
+    setAssistantOpen(false)
+  }, [dispatch, clearHits, setQuery])
+
   const hasGraph = !!graph && graph.nodes.length > 0
 
   return (
@@ -99,6 +109,7 @@ export default function Atlas() {
         filters={filters}
         onFilters={setFilters}
         seedTitle={graph?.seed.title ?? null}
+        onHome={goHome}
         onOpenSources={() => setShowSources(true)}
         assistantAvailable={hasGraph || libraryCount > 0}
         assistantOpen={assistantOpen}

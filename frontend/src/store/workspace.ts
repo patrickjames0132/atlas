@@ -143,6 +143,17 @@ const workspaceSlice = createSlice({
     layoutSet(state, action: PayloadAction<'force' | 'timeline'>) {
       state.layout = action.payload
     },
+    /** Home: back to the default no-graph state (the page-load look). The
+     * epoch bump remounts the teacher panel for fresh run state; the
+     * transcript and highlights clear themselves via extraReducers. */
+    workspaceCleared(state) {
+      state.graph = null
+      state.discoveredNodes = []
+      state.discoveredEdges = []
+      state.layout = 'force'
+      state.error = null
+      state.epoch += 1
+    },
     /** The shared search/graph error overlay (null clears it). */
     errorSet(state, action: PayloadAction<string | null>) {
       state.error = action.payload
@@ -184,7 +195,8 @@ const workspaceSlice = createSlice({
   },
 })
 
-export const { discoveryMerged, layoutSet, errorSet } = workspaceSlice.actions
+export const { discoveryMerged, layoutSet, errorSet, workspaceCleared } =
+  workspaceSlice.actions
 export default workspaceSlice.reducer
 
 // --- Selectors ---------------------------------------------------------------

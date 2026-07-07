@@ -19,7 +19,7 @@ import type {
   RetrieveEvent,
   TraceEvent,
 } from '../api'
-import { loadGraph, restoreSession } from './workspace'
+import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 
 export interface TranscriptState {
   chat: ChatMsg[]
@@ -80,8 +80,9 @@ const transcriptSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // A fresh graph starts a fresh conversation.
+      // A fresh graph starts a fresh conversation; Home clears everything.
       .addCase(loadGraph.fulfilled, () => initialState)
+      .addCase(workspaceCleared, () => initialState)
       // A restored session brings its saved transcript along.
       .addCase(restoreSession.fulfilled, (_state, action) => action.payload.transcript)
   },
