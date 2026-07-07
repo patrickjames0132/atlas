@@ -226,6 +226,7 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
     try:
         hits = traversal.neighbors(node.id, relation, BUDGETS["expand_limit"])
     except s2.S2Error as exc:
+        log.warning("expand_node failed for %r (%s): %s", node.id, relation, exc)
         deps.emit(events.ExpandTrace(ok=False, index=index, title=node.title, relation=relation))
         return f'Couldn\'t expand {relation} of "{node.title}": {exc}'
 
@@ -293,13 +294,13 @@ def search_papers(
     deps = ctx.deps
     query = query.strip()
     if not query:
-        deps.emit(events.SearchTrace(ok=False, query=query))
+        deps.emit(events.SearchTrace(ok=False, query=query, reason="empty_query"))
         return "Invalid search_papers call (empty query)."
     if not _spend_step(deps):
-        deps.emit(events.SearchTrace(ok=False, query=query))
+        deps.emit(events.SearchTrace(ok=False, query=query, reason="steps_exhausted"))
         return STEPS_EXHAUSTED
     if deps.searches_left <= 0:
-        deps.emit(events.SearchTrace(ok=False, query=query))
+        deps.emit(events.SearchTrace(ok=False, query=query, reason="budget_exhausted"))
         return "Search budget exhausted — answer with what you've found."
 
     visit_key = (query.lower(), year_from, year_to)
@@ -312,7 +313,8 @@ def search_papers(
     try:
         hits = traversal.search(query, BUDGETS["search_limit"], year_from, year_to)
     except s2.S2Error as exc:
-        deps.emit(events.SearchTrace(ok=False, query=query))
+        log.warning("search_papers failed for %r: %s", query, exc)
+        deps.emit(events.SearchTrace(ok=False, query=query, reason="error"))
         return f'Couldn\'t search "{query}": {exc}'
 
     new_nodes = []

@@ -10,6 +10,7 @@ See ``routes/README.md`` for the endpoint list.
 from __future__ import annotations
 
 import logging
+import logging.handlers
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, send_from_directory
@@ -34,11 +35,23 @@ def create_app() -> Flask:
     Returns:
         The configured Flask app.
     """
-    # Emit tracebacks + client chatter to the console so failures aren't
-    # silent. DEBUG level when config.server.debug is set, else INFO.
+    # Emit tracebacks + client chatter to the console *and* a rotating file
+    # (data/atlas.log — same dir as the SQLite caches) so failures survive
+    # after the terminal scrolls away. DEBUG level when config.server.debug
+    # is set, else INFO. force=True: create_app() can run more than once in
+    # a process (tests build a fresh app per test), and each call should
+    # retarget the file handler at that run's data_dir.
+    config.storage.ensure_dirs()
     logging.basicConfig(
         level=logging.DEBUG if config.server.debug else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.handlers.RotatingFileHandler(
+                config.storage.data_dir / "atlas.log", maxBytes=5_000_000, backupCount=3
+            ),
+        ],
+        force=True,
     )
     app = Flask(__name__, static_folder=None)
     # Books can be large — allow generous uploads for source ingestion.

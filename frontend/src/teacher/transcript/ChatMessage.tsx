@@ -9,6 +9,27 @@ import type { AnswerFigure, ChatMsg, TraceEvent } from '../../api'
 import FigCard from '../figures/FigCard'
 import { splitAnswer } from '../figures/split'
 
+/**
+ * Why a failed search never turned anything up, in plain words — "the budget
+ * ran out" and "Semantic Scholar errored" read very differently to someone
+ * watching the trace. Undefined `reason` (older saved sessions, or a passing
+ * search) renders nothing extra, same as before this field existed.
+ */
+function searchFailReason(reason: TraceEvent['reason']): string | null {
+  switch (reason) {
+    case 'budget_exhausted':
+      return 'search budget used up'
+    case 'steps_exhausted':
+      return 'out of steps'
+    case 'empty_query':
+      return 'empty query'
+    case 'error':
+      return 'search failed'
+    default:
+      return null
+  }
+}
+
 /** One trace chip: a human line per researcher action, failures included. */
 function TraceLine({ t }: { t: TraceEvent }) {
   if (t.action === 'figure')
@@ -47,6 +68,7 @@ function TraceLine({ t }: { t: TraceEvent }) {
           </span>
         ) : null}
         {t.ok && <em>{t.found ? `${t.found} new` : 'nothing new'}</em>}
+        {!t.ok && searchFailReason(t.reason) && <em>{searchFailReason(t.reason)}</em>}
       </div>
     )
   if (t.action === 'expand')

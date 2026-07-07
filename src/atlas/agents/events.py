@@ -163,7 +163,14 @@ class ExpandTrace(BaseModel):
 
 
 class SearchTrace(BaseModel):
-    """The researcher ran a free-text Semantic Scholar search."""
+    """The researcher ran a free-text Semantic Scholar search.
+
+    ``reason`` distinguishes *why* a failed search never turned anything up —
+    "the budget ran out" and "Semantic Scholar errored" read very differently
+    to someone debugging a stuck answer. ``None`` on success, and also on
+    saved sessions from before this field existed (the frontend falls back to
+    a generic "Tried" for those).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -174,6 +181,7 @@ class SearchTrace(BaseModel):
     found: int | None = None
     year_from: int | None = None
     year_to: int | None = None
+    reason: Literal["empty_query", "steps_exhausted", "budget_exhausted", "error"] | None = None
 
 
 class SourceSearchTrace(BaseModel):

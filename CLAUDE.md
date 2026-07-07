@@ -88,6 +88,11 @@ branch `main`.
   `data/digest.db` (`cache` table, 1-day TTL). Encourage setting `S2_API_KEY`.
 - **Run backend:** `uv run atlas serve` (Python 3.14 in `.venv`; the
   console script comes from the editable src-layout install — `cli.py`).
+- **Logs:** `create_app()` logs to the console *and* a rotating file,
+  `data/atlas.log` (5MB × 3 backups, gitignored with the rest of `data/`).
+  Useful for after-the-fact debugging of agent runs (e.g. an S2 429 or search
+  failure the UI only shows as a failed trace chip) — `grep` it for `WARNING`/
+  `ERROR` after reproducing.
 - **Quick backend checks:** `uv run python -c "from atlas.app import app; ..."`
   (no path shims needed — the package is installed) and Flask's
   `app.test_client()` — avoid hammering the live S2 API in tests.

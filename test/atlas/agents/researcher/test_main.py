@@ -180,6 +180,24 @@ def test_step_budget_steers_the_model_to_answer(monkeypatch):
     assert researcher.tools.STEPS_EXHAUSTED in returns[1].content
 
 
+def test_search_budget_exhausted_is_distinguished_from_an_error(monkeypatch):
+    monkeypatch.setitem(researcher_config.BUDGETS, "searches", 1)
+    monkeypatch.setattr(researcher.tools.traversal, "search", lambda *a, **kw: [])
+    model = scripted(
+        [
+            ("search_papers", ['{"query": "momentum methods"}']),
+            ("search_papers", ['{"query": "second order optimizers"}']),
+        ],
+        [final("Answering with what I have.", [])],
+    )
+    out = run(model, monkeypatch)
+    traces = [event for event in out if isinstance(event, events.SearchTrace)]
+    assert [(trace.ok, trace.reason) for trace in traces] == [
+        (True, None),
+        (False, "budget_exhausted"),
+    ]
+
+
 def test_show_figure_attaches_with_proxy_url_and_slot(monkeypatch):
     monkeypatch.setattr(
         researcher.tools.figures_mod,

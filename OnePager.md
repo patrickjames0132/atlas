@@ -548,6 +548,41 @@ optional, behind a key.
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
+- [ ] **Loading indicator for a new graph render** — building a fresh graph
+      (seed search → force layout) has no in-progress feedback; add a spinner
+      or skeleton state so it doesn't read as hung on a slow S2 fetch. *(From
+      the `todos.md` inbox, 2026-07-06.)*
+- [ ] **Loading indicator for search** — same gap on the seed-search box
+      itself: no spinner while a query is in flight. *(From the `todos.md`
+      inbox, 2026-07-06.)*
+- [x] **File logging + honest search-failure traces** *(v2.1.0)* — `create_app()`
+      now logs to a rotating file (`data/atlas.log`, 5MB × 3 backups) as well as
+      the console, so agent runs survive after the terminal scrolls away.
+      Diagnosing a real failure (a `search_papers` call for "BERT pre-training
+      deep bidirectional transformers...") turned up two gaps: the researcher's
+      `search_papers`/`expand_node` tools caught `S2Error` but never logged it
+      (unlike `show_figure`/`search_sources`), and the "Tried" trace chip looked
+      identical whether a search failed on an S2 error, an empty query, the
+      overall step budget, or — the actual cause here — the search-specific
+      budget (`BUDGETS["searches"] = 3`) already being spent by earlier calls
+      in the same turn. Fixed both: added the missing `log.warning` calls, and
+      gave `SearchTrace` a `reason` field (`empty_query` / `steps_exhausted` /
+      `budget_exhausted` / `error`) that the chat UI now renders as a specific
+      annotation instead of a bare "Tried" (older saved sessions without the
+      field still fall back to the old generic wording).
+      *(From the `todos.md` inbox, 2026-07-06.)*
+      **Next:** sweep other silent-failure spots (other agent tools, route
+      error paths) that should log before returning a user-facing message.
+- [ ] **No single-letter identifiers** — sweep the codebase (backend +
+      frontend) for single-letter variable/parameter names and rename them to
+      say what they hold; add this as a standing convention, not just a
+      one-time cleanup. *(From the `todos.md` inbox, 2026-07-06.)*
+- [ ] **Bare `atlas` on PATH, no `uv run` prefix** — `uv run atlas serve`
+      works today, but `uv run` re-resolves the env on every invocation;
+      activating `.venv` (`source .venv/bin/activate`) puts the console
+      script straight on PATH so it's just `atlas serve`. Worth documenting
+      as the normal workflow in CLAUDE.md/README rather than a code change.
+      *(From the `todos.md` inbox, 2026-07-06.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).

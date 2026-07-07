@@ -120,6 +120,12 @@ export interface TraceEvent {
   year_to?: number | null
   /** Figure number the agent showed — show_figure. */
   figure?: number | null
+  /**
+   * Why a failed search never turned anything up — search_papers only, and
+   * only when `ok` is false. Undefined on success, and on saved sessions
+   * from before this field existed (renders as a generic "Tried" then).
+   */
+  reason?: 'empty_query' | 'steps_exhausted' | 'budget_exhausted' | 'error'
 }
 
 /**
