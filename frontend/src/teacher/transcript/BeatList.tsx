@@ -4,6 +4,7 @@
  * rendered inline, click to enlarge. */
 
 import type { AnswerFigure, Beat } from '../../api'
+import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 
 /** Adapt a beat's figure to the shape FigCard/Lightbox render. */
@@ -34,8 +35,14 @@ export default function BeatList({
           className={`beat ${activeBeat === index ? 'active' : ''}`}
           onClick={() => onBeatClick(index, beat)}
         >
-          {beat.heading && <div className="beat-heading">{beat.heading}</div>}
-          <p>{beat.text}</p>
+          {beat.heading && (
+            <div className="beat-heading">
+              <MathText>{beat.heading}</MathText>
+            </div>
+          )}
+          <p>
+            <MathText>{beat.text}</MathText>
+          </p>
           {beat.figure && (
             // Enlarging the figure must not toggle the beat's highlight.
             <div onClick={(event) => event.stopPropagation()}>

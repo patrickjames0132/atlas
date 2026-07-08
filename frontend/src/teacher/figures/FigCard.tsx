@@ -1,6 +1,7 @@
 /** One attached figure: proxied image + caption, click to enlarge. */
 
 import type { AnswerFigure } from '../../api'
+import MathText from '../../notation/MathText'
 
 export default function FigCard({
   figure,
@@ -22,8 +23,18 @@ export default function FigCard({
       </button>
       <figcaption className="chat-fig-cap">
         <b>Figure {figure.figure}</b>
-        {figure.title ? ` · ${figure.title}` : ''}
-        {figure.caption ? ` — ${figure.caption}` : ''}
+        {figure.title ? (
+          <>
+            {' · '}
+            <MathText>{figure.title}</MathText>
+          </>
+        ) : null}
+        {figure.caption ? (
+          <>
+            {' — '}
+            <MathText>{figure.caption}</MathText>
+          </>
+        ) : null}
       </figcaption>
     </figure>
   )

@@ -28,7 +28,10 @@ For each feature, follow this cycle:
 2. **Hand off for testing** — Patrick tests it **in the browser himself** first.
    Give him specific things to check. **Do NOT commit until he approves.**
 3. On approval, **update the docs**: `README.md` and `OnePager.md` (tick roadmap
-   boxes, note what shipped).
+   boxes, note what shipped). If a **notable bug** was found & fixed along the
+   way — non-obvious root cause, surprising repro, a lesson worth keeping — add
+   an entry to **`BUGS.md`** (newest-first; see its header for the format).
+   Small, obvious fixes don't need one — the commit message is enough.
 4. **Commit, tag, and push** (details below).
 
 Don't skip ahead: no committing before the browser test, no starting the next

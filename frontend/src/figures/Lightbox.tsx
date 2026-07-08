@@ -10,6 +10,7 @@
 
 import { useEffect } from 'react'
 import type { AnswerFigure } from '../api'
+import MathText from '../notation/MathText'
 
 export default function Lightbox({
   figure,
@@ -41,10 +42,16 @@ export default function Lightbox({
         <div className="fig-lightbox-cap" onClick={(event) => event.stopPropagation()}>
           {typeof figure.figure === 'number' && <b>Figure {figure.figure}</b>}
           {figure.title && (
-            <span>{typeof figure.figure === 'number' ? ' · ' : ''}{figure.title}</span>
+            <span>
+              {typeof figure.figure === 'number' ? ' · ' : ''}
+              <MathText>{figure.title}</MathText>
+            </span>
           )}
           {figure.caption && (
-            <span>{typeof figure.figure === 'number' || figure.title ? ' — ' : ''}{figure.caption}</span>
+            <span>
+              {typeof figure.figure === 'number' || figure.title ? ' — ' : ''}
+              <MathText>{figure.caption}</MathText>
+            </span>
           )}
         </div>
       )}

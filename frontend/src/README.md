@@ -42,9 +42,11 @@ second caller) — see "the hybrid rule" above.
 
 Non-visual folders: `api/` (the typed backend client — the only layer that
 knows URLs and SSE frames), `store/` (the three slices + typed hooks),
-`graph/hooks/` + `graph/model.ts`/`theme.ts` (the sim machinery),
-`search/useSeedSearch.ts`, `detail/useSelection.ts`,
-`teacher/useConversation.ts` (each feature's state/logic hooks).
+`notation/` (the cross-cutting math renderer — `<MathText>` for the DOM
+surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
+`graph/model.ts`/`theme.ts` (the sim machinery), `search/useSeedSearch.ts`,
+`detail/useSelection.ts`, `teacher/useConversation.ts` (each feature's
+state/logic hooks).
 
 Every folder has its own README with the full story — this file is just the
 map. Verified by `npm run build` (strict tsc + Vite) and oxlint; behavior

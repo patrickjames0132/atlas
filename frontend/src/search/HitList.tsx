@@ -7,6 +7,7 @@
 
 import type { GraphNode, LocalHit } from '../api'
 import { formatPubDate } from '../graph/model'
+import MathText from '../notation/MathText'
 import './search.css'
 
 /** Props for {@link HitList}. */
@@ -69,7 +70,7 @@ export default function HitList({
               onClick={() => onPick(hit.arxiv_id ?? hit.id)}
             >
               <div className="hit-title">
-                {hit.title}
+                <MathText>{hit.title}</MathText>
                 {hit.has_graph && (
                   <span
                     className="hit-badge"
@@ -108,7 +109,9 @@ export default function HitList({
         ?.filter((hit) => !localHits?.some((local) => local.id === hit.id))
         .map((hit) => (
           <button key={hit.id} className="hit" onClick={() => onPick(hit.arxiv_id ?? hit.id)}>
-            <div className="hit-title">{hit.title}</div>
+            <div className="hit-title">
+              <MathText>{hit.title}</MathText>
+            </div>
             <div className="hit-meta">
               <span className="hit-date">{formatPubDate(hit.pub_date, hit.year)}</span>
               {' · '}

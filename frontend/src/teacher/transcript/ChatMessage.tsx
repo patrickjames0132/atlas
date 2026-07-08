@@ -6,6 +6,7 @@
  */
 
 import type { AnswerFigure, ChatMsg, TraceEvent } from '../../api'
+import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import { splitAnswer } from '../figures/split'
 
@@ -150,7 +151,9 @@ export default function ChatMessage({
           <>
             {parts.map((part, index) =>
               typeof part === 'string' ? (
-                <span key={index}>{part}</span>
+                <span key={index}>
+                  <MathText>{part}</MathText>
+                </span>
               ) : (
                 <div key={index} className="chat-figs chat-figs-inline">
                   <FigCard figure={part} onEnlarge={onEnlarge} />

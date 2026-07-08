@@ -915,11 +915,19 @@ optional, behind a key.
       a refresh/override button to the search surface, mirroring the graph's
       per-seed **Refresh** button (v2.5.0) that busts the snapshot cache.
       *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Proper subscripts & math notation** — paper text surfaces (titles,
-      abstracts, TL;DRs, lecture beats, answers) show raw LaTeX / plain-text
-      math today (e.g. `$\beta_2$`, "CO2") instead of rendered subscripts and
-      notation; render math properly wherever paper text is displayed (KaTeX
-      is the natural frontend fit). *(From the `todos.md` inbox, 2026-07-08.)*
+- [x] **Proper subscripts & math notation** *(v3.2.0)* — paper text surfaces
+      (titles, abstracts, TL;DRs, lecture beats, answers, search hits, figure
+      captions) now render **delimited LaTeX** (`$…$`, `$$…$$`, `\(…\)`,
+      `\[…\]`) with **KaTeX**, via a shared `frontend/src/notation/` package:
+      `<MathText>` for the DOM surfaces, `latexToUnicode` for graph node labels
+      (canvas — KaTeX can't reach it, so β₂ is a best-effort Unicode
+      approximation). Scoped to *delimited* math only — bare "CO2"/"H2O" is left
+      alone (auto-subscripting digits misfires on "GPT4", "COVID19"). Shipping
+      it surfaced a backend bug: ar5iv figure captions arrived as tripled MathML
+      soup (`subscriptitalic-ϵ…`); the fix emits each `<math>`'s clean `alttext`
+      LaTeX instead — see [BUGS.md](BUGS.md). Deferred to a later ticket:
+      user-uploaded source titles and researcher trace chips.
+      *(From the `todos.md` inbox, 2026-07-08; shipped 2026-07-08.)*
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).

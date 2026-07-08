@@ -10,6 +10,7 @@ import type { AnswerFigure, CategoriesResponse, CodeLinksResponse, FiguresRespon
 import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
 import { REL_COLOR } from '../graph/theme'
+import MathText from '../notation/MathText'
 import './detail.css'
 
 /** Props for {@link DetailPanel}. */
@@ -177,7 +178,9 @@ export default function DetailPanel({
           </span>
         ))}
       </div>
-      <h2>{node.title}</h2>
+      <h2>
+        <MathText>{node.title}</MathText>
+      </h2>
       <div className="detail-meta">
         {node.authors && <div>{node.authors}</div>}
         <div>
@@ -191,10 +194,10 @@ export default function DetailPanel({
           {node.tldr ? (
             <>
               <strong>TL;DR </strong>
-              {node.tldr}
+              <MathText>{node.tldr}</MathText>
             </>
           ) : (
-            node.abstract
+            <MathText>{node.abstract}</MathText>
           )}
         </p>
       )}
@@ -238,7 +241,11 @@ export default function DetailPanel({
               >
                 <img src={figure.image} alt={figure.caption || `Figure ${index + 1}`} loading="lazy" />
               </button>
-              {figure.caption && <figcaption>{figure.caption}</figcaption>}
+              {figure.caption && (
+                <figcaption>
+                  <MathText>{figure.caption}</MathText>
+                </figcaption>
+              )}
             </figure>
           ))}
         </div>

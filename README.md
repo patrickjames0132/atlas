@@ -126,7 +126,8 @@ The Vite dev server proxies `/api/*` to Flask.
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
    tags, figures, code & artifacts); **double-click to re-seed** on it —
-   journal papers included.
+   journal papers included. LaTeX math (`$…$`) renders throughout — titles,
+   abstracts, lecture beats, answers, and figure captions — via KaTeX.
 3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
    filters, a year slider, drag-to-pin, focus-on-hover, and a **Refresh** that
    busts this seed's day-cached snapshot to re-fetch fresh from Semantic

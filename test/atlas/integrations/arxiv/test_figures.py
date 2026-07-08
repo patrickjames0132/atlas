@@ -33,6 +33,42 @@ def test_get_figures_skips_figures_without_an_image(monkeypatch):
     assert result["figures"][0]["caption"] == "Has one."
 
 
+def test_get_figures_math_becomes_delimited_latex_not_tripled_mathml(monkeypatch):
+    # ar5iv renders a formula as a <math> whose children are three redundant text
+    # renderings (presentation MathML, content-MathML semantics, LaTeX) — stripping
+    # tags would yield garbled tripled soup. The alttext LaTeX is what we want.
+    math = (
+        '<math alttext="V_{*}(s)+\\epsilon_{a}" display="inline"><semantics>'
+        "<mrow><msub><mi>V</mi><mo>∗</mo></msub></mrow>"  # presentation glyphs
+        "<annotation-xml encoding=\"MathML-Content\">subscriptitalic-ϵa</annotation-xml>"
+        '<annotation encoding="application/x-tex">V_{*}(s)+\\epsilon_{a}</annotation>'
+        "</semantics></math>"
+    )
+    html = f'<figure><img src="fig1.png"><figcaption>The error {math} is small.</figcaption></figure>'
+    monkeypatch.setattr(client, "fetch_html", lambda arxiv_id: html)
+
+    caption = figures.get_figures("2406.12345")["figures"][0]["caption"]
+
+    # Clean, KaTeX-ready: the alttext LaTeX wrapped in $…$, no MathML soup.
+    assert caption == "The error $V_{*}(s)+\\epsilon_{a}$ is small."
+    assert "subscript" not in caption
+    assert "∗" not in caption
+
+
+def test_get_figures_math_without_alttext_is_dropped_not_garbled(monkeypatch):
+    # A <math> with no alttext contributes nothing rather than leaking its
+    # presentation-MathML glyphs into the caption.
+    html = (
+        '<figure><img src="fig1.png"><figcaption>See <math><mi>x</mi></math> here.'
+        "</figcaption></figure>"
+    )
+    monkeypatch.setattr(client, "fetch_html", lambda arxiv_id: html)
+
+    caption = figures.get_figures("2406.12345")["figures"][0]["caption"]
+
+    assert caption == "See here."
+
+
 def test_get_figures_a_nested_figure_does_not_corrupt_the_outer_image(monkeypatch):
     html = (
         '<figure><img src="outer.png">'

@@ -12,6 +12,7 @@
 
 import ForceGraph2DImport from 'react-force-graph-2d'
 import type { GraphNode } from '../api'
+import { latexToUnicode } from '../notation/latexToUnicode'
 import { nodeRadius, primaryRel } from './model'
 import type { VLink, VNode } from './model'
 import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR } from './theme'
@@ -74,7 +75,9 @@ export default function GraphCanvas({
       height={height}
       graphData={data}
       backgroundColor="#0f1115"
-      nodeLabel={(node: GraphNode) => `${node.title}${node.year ? ` (${node.year})` : ''}`}
+      nodeLabel={(node: GraphNode) =>
+        `${latexToUnicode(node.title)}${node.year ? ` (${node.year})` : ''}`
+      }
       nodeRelSize={1}
       onNodeClick={onNodeClick}
       onNodeHover={(node: VNode | null) => onNodeHover(node ? node.id : null)}
@@ -141,7 +144,7 @@ export default function GraphCanvas({
           ctx.textAlign = 'center'
           ctx.textBaseline = 'top'
           ctx.fillStyle = 'rgba(231,236,245,0.9)'
-          const title = node.title
+          const title = latexToUnicode(node.title)
           ctx.fillText(
             title.length > 42 ? title.slice(0, 40) + '…' : title,
             node.x,
