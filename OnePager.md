@@ -928,6 +928,21 @@ optional, behind a key.
       LaTeX instead — see [BUGS.md](BUGS.md). Deferred to a later ticket:
       user-uploaded source titles and researcher trace chips.
       *(From the `todos.md` inbox, 2026-07-08; shipped 2026-07-08.)*
+- [ ] **Tidy the lecture-mode buttons** — the three lecture buttons ("How we
+      got here" / "This paper's intuition" / "What's evolved since", defined in
+      `frontend/src/teacher/Teacher.tsx`, styled in `teacher/teacher.css`) look
+      jumbled on screen; give them a more organized, elegant layout (even
+      sizing/alignment, clearer grouping). Pure UI polish, no behavior change.
+      Candidate to bundle with other small UI-cleanup tickets in one ship.
+      *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Determinate "Building graph…" progress** — the graph-build notice
+      (`frontend/src/Atlas.tsx`) shows only a spinner; add a loading **percent**
+      like the Sources ingest does. Sources gets its determinate bar from **SSE
+      progress frames** (`api/sources.ts`), but the graph build is a single
+      blocking `/api/graph` request today — so this likely needs the build route
+      to **stream progress** (frontier hops fetched / total, or a coarse stage
+      count) the same way, not just a frontend change. *(From the `todos.md`
+      inbox, 2026-07-08.)*
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
