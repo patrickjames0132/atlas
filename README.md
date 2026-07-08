@@ -118,9 +118,11 @@ The Vite dev server proxies `/api/*` to Flask.
    a publication-year window (1800 → now) and S2 **fields of study**.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🟣 similar ·
    💗 found-by-search. Citations are selected **evenly across the years**
-   (the most-cited per year, with stratified sampling for mega-cited seeds),
-   so the descendant side spans the seed's whole timeline, not just the
-   recent tip. Node size = citations; thick links = influential citations; a
+   (the most-cited per year, with stratified sampling for mega-cited seeds —
+   and for truly mega-cited ones, landmark citers **mined from reachable
+   papers' reference lists and verified** to cite the seed, since S2's
+   citation list stops paging around 10k), so the descendant side spans the
+   seed's whole timeline, not just the recent tip. Node size = citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
    tags, figures, code & artifacts); **double-click to re-seed** on it —

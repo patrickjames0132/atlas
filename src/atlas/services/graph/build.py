@@ -82,11 +82,13 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     refs = s2.references(seed_id, config.graph.ref_limit)
     # The seed's citation count drives stratified sampling of the citation
     # pool — a mega-cited seed's pool spans its whole descendant era, not just
-    # the recent tip — before the even-by-year selection trims it.
+    # the recent tip — before the even-by-year selection trims it; its year
+    # lets landmark mining prune candidates that predate it.
     cites = s2.citations(
         seed_id,
         config.graph.cite_limit,
         total_count=seed_paper.get("citation_count"),
+        year=seed_paper.get("year"),
     )
     similar = s2.recommendations(seed_id, config.graph.similar_limit)
 

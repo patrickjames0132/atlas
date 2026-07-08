@@ -840,13 +840,14 @@ optional, behind a key.
       and there's no formatter. Add both to the pre-commit gate so frontend
       hygiene is enforced the same way backend hygiene is.
       *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Frontend tests** — the backend has a 277-test offline suite
+- [ ] **Frontend tests** — the backend has a 291-test offline suite
       (`uv run nox -s tests`); the frontend has none. Stand up a runner
       (Vitest + React Testing Library is the natural fit for this Vite/React
       app) and start covering components/hooks, mirroring the backend's
       offline-only, no-live-API discipline.
       *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Mega-paper citation coverage — beat the ~10k offset ceiling** — the
+- [x] **Mega-paper citation coverage — beat the ~10k offset ceiling**
+      *(v3.1.0)* — the
       v3.0.0 even-by-year citation spread has a known blind spot on truly
       mega-cited papers. S2's `/citations` endpoint returns citing papers
       **newest-first**, offers **no server-side sort**, and **rejects any
@@ -858,21 +859,53 @@ optional, behind a key.
       the even-by-year selection has exactly one year-bucket to spread over.
       Even a landmark 2019 citer (BERT-class famous) sits ~100k entries deep
       — S2 will simply never return it through this endpoint. (DQN at ~15k
-      citations is fine: offset 9000 reaches ~60% of its list, back to the
-      mid-2010s — the ceiling only bites somewhere beyond ~10-20k total
-      citations.) Candidate routes, roughly in order of appeal:
-      **(a) the heuristic** — recover famous *early* descendants indirectly:
-      landmark follow-ups are themselves heavily re-cited, so they surface
-      fast via the references of the reachable recent citers
-      (references-of-recent-citers), and/or via the `recommendations`
-      endpoint; approximate but no new infrastructure and it targets exactly
-      the papers a story cares about (the seminal descendants, not the long
-      tail). **(b) year-filtered citation queries** — trivial fix (one
-      request per target year) *if* S2 ever adds a `year` filter to the
-      citations endpoint (it has none today). **(c) the S2 Datasets bulk
-      API** — the only sanctioned full enumeration, but it means downloading
-      and indexing a citations dump, against the "no local corpus"
-      philosophy. *(From a live v3.0.0 session on 1706.03762, 2026-07-07.)*
+      citations is only partly affected: offset 9000 reaches ~60% of its
+      list, back to the mid-2010s, but its oldest citers are past the
+      ceiling too.) **Decided design — the heuristic as a pool-builder, not
+      a replacement.** The final even-by-year selection stays (pure
+      most-popular would re-clump in the hot years, losing the frontier);
+      the heuristic only enriches the *pool* it selects from. Three-tier
+      dispatch in `citations()`: **≤1000** citations → single page (the
+      complete list, exact); **1k–ceiling** → stratified offset windows
+      (unchanged); **past the ceiling** → stratified windows for the
+      reachable slice PLUS **landmark mining**: harvest the reference lists
+      of the pool's most-cited recent citers (surveys are goldmines — they
+      cite every landmark), rank candidates by their own citation count, and
+      **verify each candidate actually cites the seed** before keeping it —
+      a candidate merely co-appearing in reference lists is NOT proof, and
+      the graph must never invent a citation edge (verification via one
+      batched `references.paperId` lookup). Verified landmarks join the pool
+      (influential flag unknowable → False) and even-by-year does the rest:
+      BERT-class 2018-2020 landmarks AND the 2026 frontier, honestly edged.
+      Mining is best-effort — either batch failing just degrades to the
+      reachable pool, never fails the build. (A first cut also carried a
+      `deep_citations` retry mode and adaptive client pacing, built against
+      one congested S2 night; the congestion turned out to be transient, so
+      both were dropped as overkill — the ship is mining + stratified
+      windows + even-by-year, nothing more.)
+      Alternatives kept on file: year-filtered citation queries *if* S2 ever
+      adds them (trivial then), or the S2 Datasets bulk dump (full
+      enumeration, but against the "no local corpus" philosophy). *(From a
+      live v3.0.0 session on 1706.03762, 2026-07-07; design settled same
+      day.)*
+- [ ] **OpenAlex as a second citation provider** — the structural fix for
+      everything the mega-paper mining heuristic works around. OpenAlex is
+      free and keyless (~10 req/s, 100k/day — far gentler limits than S2's
+      congested shared pools) and its works API supports
+      `filter=cites:<id>` **with year filters and citation-count sorting** —
+      so "the most-cited papers citing AIAYN published in 2019" is ONE
+      request, no offset ceiling, no reference-list mining, no verification
+      batch. Needs: an `integrations/openalex` client, id mapping to/from S2
+      (via DOI / arXiv id, both present in S2's `externalIds`), and a
+      decision on where it slots in (likely: OpenAlex supplies the citation
+      *pool* for mega papers — or all papers — while S2 remains the backbone
+      for details/recommendations). Would let the landmark-mining path
+      retire. Note the user's original instinct here was arXiv itself, but
+      arXiv hosts preprints and has **no citation data** — citation edges
+      only exist in citation indexes (S2, OpenAlex, OpenCitations). And
+      parallelizing requests (asyncio) can't beat a rate limiter — the fix
+      is a provider with a friendlier one. *(From a live v3.0.x session,
+      2026-07-07.)*
 - [ ] **Adjustable side panels** — every docked side panel (the detail panel,
       the assistant panel) is a fixed width today; make them all user-resizable
       (a drag handle on the panel edge), ideally remembering the chosen size

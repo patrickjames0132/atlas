@@ -4,11 +4,14 @@ batch detail lookup, references, citations, and similarity recommendations.
 
 from __future__ import annotations
 
+import logging
 import urllib.parse
 from collections import defaultdict
 
 from ...config import config
 from . import client, nodes
+
+log = logging.getLogger(__name__)
 
 _BATCH_MAX = 500  # S2 caps /paper/batch at 500 ids per call.
 
@@ -33,6 +36,27 @@ _RANK_POOL = 1000
 _STRATA = 5
 _STRATUM_LIMIT = 200
 _MAX_OFFSET = 9000
+
+# Landmark mining for citation lists the offset ceiling truncates. A paper
+# with more citations than S2 will ever page through (e.g. ~150k for
+# "Attention Is All You Need") has its famous mid-era citers — BERT-class
+# landmarks — sitting far past the ceiling, unreachable by any offset. But
+# landmarks are exactly the papers everyone ELSE cites: harvest the
+# reference lists of the pool's most-cited reachable citers (surveys are
+# goldmines — they cite every landmark), rank the candidates by their own
+# citation count, and VERIFY each one actually cites the seed before
+# keeping it — co-appearing in reference lists is not proof, and the graph
+# must never invent a citation edge. Verified landmarks join the pool the
+# even-by-year selection draws from. The whole mine costs exactly TWO batch
+# requests (harvest + verify) — per-source /references calls at S2's
+# throttle made mega builds crawl.
+_MINE_SOURCES = 12  # reachable citers whose reference lists are mined
+# Candidates sent to verification. Generous on purpose: verification is ONE
+# batch request regardless of count, and reference lists are dominated by
+# giants that predate the seed (rank-by-citations alone would spend every
+# slot on papers that can't possibly cite it). Candidates published before
+# the seed are pruned first; the cap just keeps the batch payload sane.
+_MINE_CANDIDATES = 200
 
 
 def get_papers(paper_ids: list[str], fields: str = nodes.DETAIL_FIELDS) -> dict[str, dict]:
@@ -207,6 +231,105 @@ def _stratified_pool(path: str, key: str, total_count: int) -> list[dict]:
     return pool
 
 
+def _cites_seed(candidate_ids: list[str], seed_id: str) -> set[str]:
+    """The subset of candidates whose reference lists contain the seed.
+
+    One batched ``references.paperId`` lookup — the honesty gate of landmark
+    mining: only a candidate PROVEN to cite the seed may enter the citation
+    pool (and become a citation edge). A candidate whose references can't be
+    checked counts as unverified and is dropped — the graph never guesses.
+
+    Args:
+        candidate_ids: S2 paperIds of the mined candidates, best-first.
+        seed_id: The seed's S2 paperId to look for.
+
+    Returns:
+        The verified candidate ids (empty when the batch request fails —
+        mining is best-effort, never a build dependency).
+    """
+    if not candidate_ids:
+        return set()
+    url = f"{config.s2.graph_url}/paper/batch?fields=references.paperId"
+    try:
+        data = client.request(url, method="POST", body={"ids": candidate_ids})
+    except client.S2Error as exc:
+        log.warning("landmark verification batch failed (%s); keeping no mined citers", exc)
+        return set()
+    papers = data if isinstance(data, list) else []
+    verified: set[str] = set()
+    for candidate_id, paper in zip(candidate_ids, papers):
+        references = (paper or {}).get("references") or []
+        if any(reference.get("paperId") == seed_id for reference in references):
+            verified.add(candidate_id)
+    return verified
+
+
+def _mined_landmarks(seed_id: str, pool: list[dict], year: int | None) -> list[dict]:
+    """Landmark citers recovered from beyond S2's offset ceiling.
+
+    Mines the reference lists of the pool's ``_MINE_SOURCES`` most-cited
+    reachable citers for papers not already in the pool, keeps the
+    ``_MINE_CANDIDATES`` most-cited candidates **published in or after the
+    seed's year** (a paper from before the seed can't cite it — without
+    this prune, the ranking drowns in pre-seed giants like optimizer and
+    dataset papers and the true descendants never reach verification), and
+    returns only the ones ``_cites_seed`` verifies. The harvest is ONE
+    ``references.*`` batch request covering every source at once (nested
+    reference lists come back with the neighbor fields, no per-source
+    calls), and verification is one more — two requests total. Best-effort
+    throughout: either batch failing degrades to fewer (or no) landmarks
+    rather than failing the graph build.
+
+    Args:
+        seed_id: The seed's S2 paperId (the verification target).
+        pool: The reachable citation pool (mined ids are excluded from it).
+        year: The seed's publication year (None skips the year prune;
+            undated candidates are kept for verification to judge).
+
+    Returns:
+        Verified landmark entries, ``{"node": ..., "influential": False}``
+        (the influence flag is per-citation data only the /citations
+        endpoint reports — unknowable here).
+    """
+    sources = _select_by_influence(pool, _MINE_SOURCES)
+    if not sources:
+        return []
+
+    fields = ",".join(f"references.{field}" for field in nodes.NEIGHBOR_FIELDS.split(","))
+    url = f"{config.s2.graph_url}/paper/batch?fields={urllib.parse.quote(fields)}"
+    try:
+        data = client.request(
+            url, method="POST", body={"ids": [source["node"]["id"] for source in sources]}
+        )
+    except client.S2Error as exc:
+        # Mining is strictly a cheap bonus — the reachable pool still serves.
+        log.warning("landmark harvest batch failed for %s (%s); skipping mining", seed_id, exc)
+        return []
+    harvested: list[dict] = []
+    for paper in data if isinstance(data, list) else []:
+        for reference in (paper or {}).get("references") or []:
+            candidate = nodes.node(reference)
+            if candidate:
+                harvested.append(candidate)
+
+    pooled_ids = {entry["node"]["id"] for entry in pool}
+    candidates: dict[str, dict] = {}
+    for candidate in harvested:
+        candidate_id = candidate["id"]
+        if candidate_id == seed_id or candidate_id in pooled_ids:
+            continue
+        if year is not None and candidate.get("year") is not None and candidate["year"] < year:
+            continue  # published before the seed — it can't cite it
+        if candidate_id not in candidates:
+            candidates[candidate_id] = candidate
+
+    ranked = sorted(
+        candidates.values(), key=lambda node: node.get("citation_count") or 0, reverse=True
+    )[:_MINE_CANDIDATES]
+    verified = _cites_seed([node["id"] for node in ranked], seed_id)
+    return [{"node": node, "influential": False} for node in ranked if node["id"] in verified]
+
+
 def _neighbors(path: str, key: str, limit: int) -> list[dict]:
     """Fetch one over-fetched page and keep the most-cited entries.
 
@@ -249,7 +372,9 @@ def references(paper_id: str, limit: int) -> list[dict]:
     return _neighbors(f"{client.quote(paper_id)}/references", "citedPaper", limit)
 
 
-def citations(paper_id: str, limit: int, *, total_count: int | None = None) -> list[dict]:
+def citations(
+    paper_id: str, limit: int, *, total_count: int | None = None, year: int | None = None
+) -> list[dict]:
     """Fetch the papers that CITE this one (its descendants).
 
     The selection is *even by year*: the most-cited citing papers within each
@@ -257,24 +382,46 @@ def citations(paper_id: str, limit: int, *, total_count: int | None = None) -> l
     ``_select_even_by_year``) — not the global most-cited, which clumps in the
     field's busiest years, and not S2's raw order, which is just the newest.
 
+    The pool that selection draws from is built in three tiers by how many
+    citations the paper has (``total_count``):
+
+    * **<= one page** (``_RANK_POOL``, or ``total_count`` omitted): a single
+      over-fetched page — for modestly-cited papers that IS the complete
+      list, so selection is exact.
+    * **past one page**: *stratified sampling* across S2's newest-first
+      citation list (``_stratified_pool``), so the pool spans the reachable
+      descendant era instead of just the recent tip.
+    * **past the offset ceiling** (``_MAX_OFFSET``): the stratified pool is
+      additionally enriched with *mined landmarks* (``_mined_landmarks``) —
+      the famous citers living beyond what S2 will ever page to, recovered
+      from the reference lists of reachable citers and verified to actually
+      cite this paper before they may join.
+
     Args:
         paper_id: An S2 paperId or prefixed id.
         limit: Maximum citations to return.
         total_count: The paper's total citation count, when the caller knows
-            it. When it exceeds one page (``_RANK_POOL``), the pool is built by
-            *stratified sampling* across S2's citation list (see
-            ``_stratified_pool``) so the spread can reach older descendants,
-            not just the recent tip. Omitted/None falls back to one page.
+            it (drives the tier dispatch above). Omitted/None falls back to
+            one page.
+        year: The paper's own publication year, when the caller knows it —
+            lets landmark mining prune candidates that predate the paper
+            (they can't cite it) before ranking, so the verification budget
+            goes to plausible descendants instead of older mega-papers.
 
     Returns:
         A list of ``{"node": <node dict>, "influential": bool}`` entries.
 
     Raises:
-        client.S2Error: When the request fails after retries.
+        client.S2Error: When the request fails after retries (landmark
+            mining never raises — it degrades to the reachable pool).
     """
     path = f"{client.quote(paper_id)}/citations"
     if total_count and total_count > _RANK_POOL:
         pool = _stratified_pool(path, "citingPaper", total_count)
+        if total_count > _MAX_OFFSET + _STRATUM_LIMIT:
+            # The ceiling truncates this paper's citation list — the pool
+            # can't reach its older landmarks by offset. Mine them instead.
+            pool = pool + _mined_landmarks(paper_id, pool, year)
     else:
         pool = _fetch_page(path, "citingPaper", max(limit, _RANK_POOL))
     return _select_even_by_year(pool, limit)

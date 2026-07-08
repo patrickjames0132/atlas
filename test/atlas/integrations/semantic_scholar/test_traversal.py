@@ -210,6 +210,114 @@ def test_citations_even_propagates_a_newest_window_outage(monkeypatch):
         traversal.citations("p1", limit=5, total_count=15000)
 
 
+def test_citations_mega_mines_and_verifies_landmark_citers(monkeypatch):
+    """Past the offset ceiling the reachable windows are all recent-tip, so
+    the pool is enriched with landmark citers mined from reachable papers'
+    reference lists — kept ONLY when verified to actually cite the seed."""
+
+    def fake_request(url, method="GET", body=None, **kw):
+        if "references.title" in url:
+            # The harvest: ONE batch call returns every mined source's
+            # reference list — the seed itself (skipped), a pre-seed giant
+            # (pruned: it can't cite a paper from after its time), and two
+            # heavyweight landmark candidates.
+            return [
+                {"references": [
+                    {"paperId": "p1", "citationCount": 150000},
+                    {"paperId": "adam", "year": 2014, "citationCount": 190000},
+                    {"paperId": "bert", "year": 2019, "citationCount": 90000},
+                    {"paperId": "freeloader", "year": 2018, "citationCount": 80000},
+                ]},
+            ]
+        if "/paper/batch" in url:
+            # Verification: the pre-seed giant never reaches it; bert's
+            # references contain the seed; freeloader's don't — co-appearing
+            # in reference lists is not a citation.
+            assert body["ids"] == ["bert", "freeloader"]
+            return [
+                {"references": [{"paperId": "other"}, {"paperId": "p1"}]},
+                {"references": [{"paperId": "other"}]},
+            ]
+        # The reachable citation windows: all recent tip; the surveys are the
+        # most-cited entries, so they lead the mining sources.
+        offset = _offset_of(url)
+        return {"data": [
+            {"citingPaper": {"paperId": f"recent{offset}", "year": 2026, "citationCount": 5}},
+            {"citingPaper": {"paperId": f"survey{offset}", "year": 2026, "citationCount": 40}},
+        ]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    out = traversal.citations("p1", limit=4, total_count=150000, year=2017)
+    ids = {hit["node"]["id"] for hit in out}
+    assert "bert" in ids and "freeloader" not in ids  # verified in, unverified out
+    years = {hit["node"]["year"] for hit in out}
+    assert {2019, 2026} <= years  # the mined landmark era AND the frontier
+    mined = next(hit for hit in out if hit["node"]["id"] == "bert")
+    assert mined["influential"] is False  # unknowable off the /citations endpoint
+
+
+def test_citations_mega_mining_is_best_effort(monkeypatch):
+    """A dead batch pool means mining just bails — the reachable pool still
+    serves, and no extra requests chase the lost landmarks."""
+    urls = []
+
+    def fake_request(url, method="GET", body=None, **kw):
+        urls.append(url)
+        if "/paper/batch" in url:
+            raise client.S2Error("mining blocked")
+        offset = _offset_of(url)
+        return {"data": [
+            {"citingPaper": {"paperId": f"off{offset}", "year": 2026, "citationCount": 5}}
+        ]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    out = traversal.citations("p1", limit=3, total_count=150000)
+    assert out  # mining is best-effort; the reachable pool still serves
+    assert all(hit["node"]["year"] == 2026 for hit in out)
+    # Only the harvest batch was attempted — nothing followed its failure.
+    assert len([url for url in urls if "/paper/batch" in url]) == 1
+
+
+def test_citations_mega_unverifiable_candidates_are_dropped(monkeypatch):
+    """When the verification batch is down, NOTHING mined is kept — the
+    graph never guesses a citation edge."""
+
+    def fake_request(url, method="GET", body=None, **kw):
+        if "references.title" in url:
+            # The harvest batch succeeds and finds a landmark candidate...
+            return [
+                {"references": [{"paperId": "bert", "year": 2019, "citationCount": 90000}]}
+            ]
+        if "/paper/batch" in url:
+            raise client.S2Error("verification down")  # ...but no check can run.
+        offset = _offset_of(url)
+        return {"data": [
+            {"citingPaper": {"paperId": f"off{offset}", "year": 2026, "citationCount": 5}}
+        ]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    out = traversal.citations("p1", limit=3, total_count=150000)
+    assert all(hit["node"]["id"] != "bert" for hit in out)
+
+
+def test_citations_mid_tier_stratifies_without_mining(monkeypatch):
+    """Below the offset ceiling the whole list is reachable by windows —
+    no reference mining, no verification batch."""
+    urls = []
+
+    def fake_request(url, method="GET", body=None, **kw):
+        urls.append(url)
+        offset = _offset_of(url)
+        return {"data": [
+            {"citingPaper": {"paperId": f"off{offset}", "year": 2026 - offset // 1000,
+                             "citationCount": 5}}
+        ]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    traversal.citations("p1", limit=5, total_count=5000)
+    assert all("/paper/batch" not in url for url in urls)  # no harvest, no verify
+
+
 def test_recommendations_pool_in_url(monkeypatch):
     urls = []
 

@@ -32,8 +32,8 @@ def fake_s2(monkeypatch):
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    def citations(pid, limit, total_count=None):
-        calls["total_count"] = total_count
+    def citations(pid, limit, total_count=None, year=None):
+        calls["total_count"], calls["seed_year"] = total_count, year
         return [{"node": make_node("cite1"), "influential": False}]
 
     monkeypatch.setattr(build.s2, "get_paper", get_paper)
@@ -65,8 +65,9 @@ def test_build_graph_shape(fake_s2):
     # similar edges carry no influential (None).
     assert Edge(source="seed", target="sim1", type="similar") in graph.edges
     assert graph.counts == Counts(references=1, citations=1, similar=2, nodes=4)
-    # The seed's citation count rode along so the citation pool can stratify.
-    assert fake_s2["total_count"] == 1
+    # The seed's citation count rode along so the citation pool can stratify,
+    # and its year so landmark mining can prune pre-seed candidates.
+    assert fake_s2["total_count"] == 1 and fake_s2["seed_year"] == 2020
 
 
 def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):
