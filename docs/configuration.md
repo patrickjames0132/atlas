@@ -32,15 +32,6 @@ where a JSON file (no comments allowed) can't say it.
 - **`cache_ttl: 86400`** (1 day) — citation graphs change slowly; a day-long
   cache keeps repeat exploration and backtracking instant without
   re-hitting S2.
-- **`backfill`** — the deterministic "How we got here" reference walk the
-  orchestrator runs before a history lecture (no LLM involved, which is why
-  it lives here and not under `llm.agents` extras). `hops: 3` ×
-  `frontier: 2` launch papers × `fetch_limit: 8` references bounds the walk
-  at ~48 day-cached S2 lookups worst case; `per_hop: 6` keeps only the
-  most-cited (seminal) new ancestors per hop so the graph grows by ≤18
-  nodes; `lookback_years: 40` stops the march once the story reaches ~a
-  career-length before the seed — past that, "roots" stop being
-  interpretable context for a modern paper.
 
 ## `llm` — everything about talking to LLMs
 

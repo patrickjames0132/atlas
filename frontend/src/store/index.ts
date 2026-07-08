@@ -3,7 +3,7 @@
  * everything else stays component-local (the Phase 6 state directive).
  *
  *   workspace  — the loaded graph, discoveries, layout + load/restore/save
- *   transcript — the teacher's conversation (chat, beats, backfill trace)
+ *   transcript — the teacher's conversation (chat, beats)
  *   highlight  — the papers the teacher is currently talking about
  *
  * NOT here, by design: the sim dataset `Base` (mutable, canvas-owned),

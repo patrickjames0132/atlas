@@ -29,7 +29,6 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  └─ figure lightbox           figures/Lightbox.tsx
    └─ assistant panel (🎓)         teacher/Teacher.tsx
       ├─ scope picker              teacher/ScopePicker.tsx
-      ├─ backfill trace            teacher/transcript/HistTrace.tsx
       ├─ lecture beats             teacher/transcript/BeatList.tsx
       ├─ chat turns                teacher/transcript/ChatMessage.tsx
       │  └─ inline figures         teacher/figures/FigCard.tsx

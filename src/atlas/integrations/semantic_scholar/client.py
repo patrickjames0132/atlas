@@ -5,9 +5,9 @@ Rate-limit strategy (learned from a spike against the live API):
   * An optional ``S2_API_KEY`` (sent as ``x-api-key``) lifts the limits.
   * 429s are retried with exponential backoff.
   * Every call is paced to at most one per ``s2.min_interval`` — serialized
-    across threads via a lock, since graph building, lecture history
-    backfill, and agent expansion can all burst concurrently, and even an
-    authenticated key gets ~1 req/sec on the graph endpoints.
+    across threads via a lock, since graph building and agent expansion can
+    burst concurrently, and even an authenticated key gets ~1 req/sec on
+    the graph endpoints.
 
 Nothing here uses a third-party HTTP dependency — stdlib ``urllib`` keeps
 the client tiny and the deploy simple.
@@ -51,7 +51,7 @@ def throttle() -> None:
     """Block until at least ``s2.min_interval`` has passed since the last call.
 
     Serialized across threads via a lock so concurrent callers (graph build,
-    history backfill, agent expansion) queue instead of bursting. A no-op when
+    agent expansion) queue instead of bursting. A no-op when
     ``s2.min_interval`` is 0.
 
     Returns:

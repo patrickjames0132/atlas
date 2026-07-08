@@ -353,9 +353,6 @@
 .trace-line.fail {
   border-left-color: #f78ca0;
 }
-.hist-trace {
-  margin-bottom: 12px;
-}
 .trace-line b {
   color: var(--text);
   font-weight: 500;

@@ -1,5 +1,5 @@
-"""The dispatcher: intent routing, backfill enrichment feeding the lecturer,
-and the Done/Error termination contract."""
+"""The dispatcher: intent routing (lectures are pure delegation — they never
+expand the graph) and the Done/Error termination contract."""
 
 from __future__ import annotations
 
@@ -30,13 +30,13 @@ def make_node(node_id: str, title: str, **overrides) -> Node:
     return Node(**fields)
 
 
-SEED = make_node("seed01", "Seed", is_seed=True, rels=[])
-NODES = [SEED, make_node("node02", "Other", year=1992)]
-ANCESTOR = events.DiscoveredNode(
-    id="anc01", arxiv_id=None, title="Bellman 1957", abstract=None, tldr=None,
-    year=1957, month=None, pub_date=None, citation_count=50000, authors=None,
-    url="https://example.org/anc01", rels=["reference"], is_seed=False,
-)
+SEED = make_node("seed01", "Seed", is_seed=True, rels=[], year=2015)
+NODES = [
+    SEED,
+    make_node("node02", "Ancestor", year=1992),
+    make_node("desc01", "Descendant", year=2023, rels=["citation"]),
+    make_node("nodate", "Undated Similar", year=None, rels=["similar"]),
+]
 
 
 def test_librarian_intent_relays_and_appends_done(monkeypatch):
@@ -66,59 +66,48 @@ def test_research_intent_passes_everything_through(monkeypatch):
     assert out[-1] == events.Done()
 
 
-def test_history_lecture_backfills_then_narrates_the_enriched_set(monkeypatch):
-    def fake_backfill(seed, nodes):
-        yield events.BackfillTrace(hop=1, found=1, oldest=1957)
-        yield events.Discovery(nodes=[ANCESTOR], edges=[])
-
+def test_lecture_scopes_the_visible_nodes_per_mode(monkeypatch):
+    """A lecture never expands the graph — the lecturer only ever receives
+    visible nodes — and the directional modes are clamped to their side of
+    the seed: history ends AT the seed (no descendants), evolution starts
+    from it (no ancestors). Undated papers can't be placed in a
+    chronological story, so the clamped modes drop them; intuition sees
+    everything."""
     seen: dict = {}
 
     def fake_lecture(seed, nodes, mode="history", target=None):
-        seen["nodes"], seen["mode"] = nodes, mode
-        yield events.Beat(heading="Roots", text="It began.", node_ids=["anc01"])
+        seen["seed"], seen["nodes"], seen["mode"] = seed, nodes, mode
+        yield events.Beat(heading="Roots", text="It began.", node_ids=["node02"])
 
-    monkeypatch.setattr(orchestrator_main.backfill, "history_backfill", fake_backfill)
     monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
-    out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES))
-    assert [event.type for event in out] == ["trace", "discovery", "beat", "done"]
-    # The lecturer narrates the backfill-enriched node set.
-    assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "anc01"]
+    expected = {
+        LectureMode.HISTORY: ["seed01", "node02"],
+        LectureMode.EVOLUTION: ["seed01", "desc01"],
+        LectureMode.INTUITION: ["seed01", "node02", "desc01", "nodate"],
+    }
+    for mode, node_ids in expected.items():
+        out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES, mode=mode))
+        # Beats only — no trace/discovery frames ever precede a lecture.
+        assert [event.type for event in out] == ["beat", "done"]
+        assert seen["mode"] is mode
+        assert [node.id for node in seen["nodes"]] == node_ids
+    assert seen["seed"] is SEED
 
 
-def test_evolution_lecture_forward_backfills_then_narrates_the_enriched_set(monkeypatch):
-    def fake_forward(seed, nodes):
-        yield events.BackfillTrace(hop=1, found=1, newest=2025, direction="forward")
-        yield events.Discovery(nodes=[ANCESTOR], edges=[])
-
+def test_lecture_with_an_undated_seed_skips_the_clamp(monkeypatch):
+    """No seed year -> nothing to clamp against; the directional modes fall
+    back to the full visible set rather than dropping everything."""
     seen: dict = {}
 
     def fake_lecture(seed, nodes, mode="history", target=None):
-        seen["nodes"], seen["mode"] = nodes, mode
-        yield events.Beat(heading="Frontier", text="And now.", node_ids=["anc01"])
+        seen["nodes"] = nodes
+        yield events.Beat(heading="H", text="T.", node_ids=[])
 
-    monkeypatch.setattr(orchestrator_main.backfill, "forward_backfill", fake_forward)
     monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
-    out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES, mode=LectureMode.EVOLUTION))
-    assert [event.type for event in out] == ["trace", "discovery", "beat", "done"]
-    assert seen["mode"] is LectureMode.EVOLUTION
-    # The lecturer narrates the forward-enriched node set.
-    assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "anc01"]
-
-
-def test_intuition_mode_skips_both_backfills(monkeypatch):
-    def explode(seed, nodes):
-        raise AssertionError("backfill must not run in intuition mode")
-
-    monkeypatch.setattr(orchestrator_main.backfill, "history_backfill", explode)
-    monkeypatch.setattr(orchestrator_main.backfill, "forward_backfill", explode)
-    monkeypatch.setattr(
-        orchestrator_main.lecturer, "lecture",
-        lambda seed, nodes, mode="history", target=None: iter(
-            [events.Beat(heading="H", text="T.", node_ids=[])]
-        ),
-    )
-    out = list(run(Intent.LECTURE, seed=SEED, nodes=NODES, mode=LectureMode.INTUITION))
-    assert [event.type for event in out] == ["beat", "done"]
+    undated_seed = make_node("seed01", "Seed", is_seed=True, rels=[], year=None)
+    nodes = [undated_seed, *NODES[1:]]
+    list(run(Intent.LECTURE, seed=undated_seed, nodes=nodes, mode=LectureMode.HISTORY))
+    assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "desc01", "nodate"]
 
 
 def test_a_failing_workflow_ends_with_error_not_done(monkeypatch):

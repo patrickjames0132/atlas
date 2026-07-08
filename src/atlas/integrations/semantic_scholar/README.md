@@ -61,10 +61,10 @@ package needs to know it's a package internally.
 
 - **The throttle is a global, process-wide lock — not per-call, not
   per-feature.** `client.py`'s `_throttle_lock`/`_last_request` are module
-  state shared by every caller (graph build, lecture history backfill,
-  agent expansion can all fire concurrently). There's only one S2
-  rate-limit budget to protect, no matter how many features are hitting it
-  at once, so the throttle has to be global.
+  state shared by every caller (graph build and agent expansion can fire
+  concurrently). There's only one S2 rate-limit budget to protect, no
+  matter how many features are hitting it at once, so the throttle has to
+  be global.
 - **Batch over single-fetch.** `get_papers()` always uses `POST
   /paper/batch` (chunked at 500 ids, S2's cap), never the single-paper GET
   — which 429s almost immediately for unauthenticated callers.
@@ -98,10 +98,7 @@ paper; the ~65 anonymous dots of a graph don't need it).
   the three relation types that make up the visible graph. Also uses
   `arxiv.ID_RE` (not this package) to decide whether the seed reference
   needs an `ARXIV:` prefix before hitting S2, or is already a raw S2 paperId.
-- **`teacher/lecture.py`** — walks backward through `references()` during
-  the "How we got here" history backfill; catches `S2Error` per-hop so one
-  failed hop skips that ancestor rather than aborting the whole lecture.
-- **`teacher/neighbors.py`** — wraps `references()`/`citations()`/
+- **`agents/traversal.py`** — wraps `references()`/`citations()`/
   `recommendations()`/`search_papers()` behind its own day-long cache (see
   `storage/README.md`) — this *is* the mechanism behind the agentic Q&A
   tools `expand_node` and `search_papers`.

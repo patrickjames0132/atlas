@@ -13,14 +13,22 @@ Pydantic, not begged for in the prompt.
 convenience wrapper delivered the whole lecture in one burst at the end
 against the live API — verified with frame timestamps. See ``streams.py``.)
 
-Mode picks the story (``history`` / ``intuition`` / ``bridge``); in history
-mode the orchestrator runs its ``history_backfill`` tool first and passes the
-ancestor-enriched node set in. Model failures propagate — the caller ends the
+Mode picks the story (``history`` / ``intuition`` / ``evolution`` /
+``bridge``); every mode narrates the visible node set exactly as handed in —
+the lecturer never expands the graph (pulling new papers in is the
+researcher's job, on explicit questions). Lectures are illustrated: each
+storytelling mode gets a deterministic pre-fetched **figure pool** (the
+seed's own ar5iv figures for intuition; the story's landmark papers' for
+history/evolution) whose entries beats can attach; intuition additionally
+grounds in retrieved library passages. No tools involved — all fetched
+(cached) before the run. Model failures propagate — the caller ends the
 event stream with ``Error``.
 """
 
 from __future__ import annotations
 
+import logging
+import urllib.parse
 from typing import Iterator
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -34,21 +42,29 @@ from pydantic_ai.messages import (
 from pydantic_ai.run import AgentRunResultEvent
 from pydantic_core import from_json
 
+from ...integrations.arxiv import figures as figures_mod
 from ...services.graph import Node
+from ...services.sources import retrieval
 from .. import events, factory, prompts, streams
 from ..models import LectureMode
 from .config import AGENT_ID, MODE_INTENTS, SKILLS, SYSTEM_PROMPT
 
+log = logging.getLogger(__name__)
+
 
 class LectureBeat(BaseModel):
     """One beat as the model emits it: numbered-list indices, not node ids
-    (the model never sees ids — ``prompts.idx_to_id`` maps them back)."""
+    (the model never sees ids — ``prompts.idx_to_id`` maps them back), plus
+    optionally the number of a pooled figure to show with the beat (the
+    prompt lists the mode's figure pool; a mode with an empty pool maps any
+    value to nothing)."""
 
     model_config = ConfigDict(extra="forbid")
 
     heading: str
     text: str
     nodes: list[int]
+    figure: int | None = None
 
 
 agent: Agent[None, list[LectureBeat]] = Agent(
@@ -58,15 +74,99 @@ agent: Agent[None, list[LectureBeat]] = Agent(
 )
 
 
-def _prompt(seed: Node, nodes: list[Node], mode: LectureMode, target: Node | None) -> str:
-    """Assemble the lecture request: mode intent, seed/target header, and the
-    numbered paper list.
+# The story modes' figure pool: how many landmark papers (beyond the seed)
+# contribute figures, and how many figures each may contribute. Bounded so
+# the pre-lecture ar5iv fetches (cached, but a cold run pays them) and the
+# prompt's figure list stay small.
+_FIGURE_PAPERS = 4
+_FIGURES_PER_PAPER = 3
+
+
+def _paper_figures(paper: Node) -> list[dict]:
+    """One paper's ar5iv figures, for the lecture's figure pool.
+
+    Deterministic grounding, not a tool: fetched (cached) before the run so
+    the prompt can list the captions and beats can attach one. Empty for a
+    non-arXiv paper or on any fetch failure — figures are a nicety; the
+    lecture happens with or without them.
+    """
+    if not paper.arxiv_id:
+        return []
+    try:
+        result = figures_mod.get_figures(paper.arxiv_id)
+    except Exception:
+        log.warning("figure fetch failed for %s", paper.arxiv_id, exc_info=True)
+        return []
+    return result.get("figures") or []
+
+
+def _figure_pool(seed: Node, nodes: list[Node], mode: LectureMode) -> list[dict]:
+    """The figures a lecture may attach to its beats, as a flat numbered pool.
+
+    Intuition stays on the seed, so its pool is the seed's own figures
+    (untitled — there's only one paper in play). History and evolution tell
+    a many-paper story, so their pool draws from the seed plus the
+    ``_FIGURE_PAPERS`` most-cited arXiv papers among the (already
+    mode-scoped) visible nodes, ``_FIGURES_PER_PAPER`` figures each — every
+    entry titled with its source paper so both the model and the beat card
+    can attribute it. Bridge shows no figures.
+
+    Returns:
+        ``[{"image", "caption", "title"}]`` entries (``title`` None for the
+        intuition pool).
+    """
+    if mode is LectureMode.INTUITION:
+        return [{**figure, "title": None} for figure in _paper_figures(seed)]
+    if mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION):
+        return []
+    landmarks = sorted(
+        (node for node in nodes if node.arxiv_id and not node.is_seed),
+        key=lambda node: node.citation_count or 0,
+        reverse=True,
+    )[:_FIGURE_PAPERS]
+    pool: list[dict] = []
+    for paper in ([seed] if seed.arxiv_id else []) + landmarks:
+        for figure in _paper_figures(paper)[:_FIGURES_PER_PAPER]:
+            pool.append({**figure, "title": paper.title})
+    return pool
+
+
+def _seed_passages(seed: Node) -> list[dict]:
+    """Library passages about the seed, for the intuition lecture.
+
+    The same hybrid retrieval the librarian grounds in, queried with the
+    seed's title — extra context the lecture MAY draw on (attributed
+    inline). Empty when the library is empty/unavailable or on any failure.
+    """
+    query = (seed.title or "").strip()
+    if not query:
+        return []
+    try:
+        return retrieval.search(query)
+    except Exception:
+        log.warning("seed passage retrieval failed", exc_info=True)
+        return []
+
+
+def _prompt(
+    seed: Node,
+    nodes: list[Node],
+    mode: LectureMode,
+    target: Node | None,
+    figures: list[dict],
+    passages: list[dict],
+) -> str:
+    """Assemble the lecture request: mode intent, seed/target header, the
+    numbered paper list, and (intuition mode) the seed's figure list and
+    retrieved library passages.
 
     Args:
         seed: The seed paper.
         nodes: The visible graph nodes, in display order.
         mode: Which story to tell.
         target: The bridge target (bridge mode only), or None.
+        figures: The mode's figure pool (see ``_figure_pool``; may be empty).
+        passages: Retrieved library passages (empty outside intuition mode).
 
     Returns:
         The full user prompt.
@@ -74,12 +174,34 @@ def _prompt(seed: Node, nodes: list[Node], mode: LectureMode, target: Node | Non
     header = f"SEED paper: {seed.title}"
     if mode == "bridge" and target:
         header += f"\nTARGET paper: {target.title}"
-    return (
-        f"{MODE_INTENTS[mode]}\n\n"
-        f"{header}\n\n"
-        f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}\n\n"
-        f"Now deliver the lecture."
-    )
+    sections = [
+        MODE_INTENTS[mode],
+        header,
+        f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}",
+    ]
+    if figures:
+        figure_lines = []
+        for number, figure in enumerate(figures, 1):
+            source = f"[{figure['title']}] " if figure.get("title") else ""
+            caption = (figure.get("caption") or "(no caption)")[:200]
+            figure_lines.append(f"{number}. {source}{caption}")
+        pool_name = (
+            "Figures of the SEED paper"
+            if mode is LectureMode.INTUITION
+            else "Figures from the story's papers"
+        )
+        sections.append(
+            f"{pool_name} (attach one to a beat by setting the beat's "
+            "`figure` to its number):\n" + "\n".join(figure_lines)
+        )
+    if passages:
+        sections.append(
+            "Passages from the student's own library (optional extra "
+            "context — attribute inline when you draw on one):\n"
+            + prompts.format_passages(passages)
+        )
+    sections.append("Now deliver the lecture.")
+    return "\n\n".join(sections)
 
 
 def _partial_beats(args_json: str) -> list[LectureBeat]:
@@ -105,13 +227,27 @@ def _partial_beats(args_json: str) -> list[LectureBeat]:
     return beats
 
 
-def _beat(beat: LectureBeat, nodes: list[Node]) -> events.Beat:
-    """Convert a model beat to the event the frontend consumes (indices
-    mapped back to node ids)."""
+def _beat(beat: LectureBeat, nodes: list[Node], figures: list[dict]) -> events.Beat:
+    """Convert a model beat to the event the frontend consumes: indices
+    mapped back to node ids, and a valid ``figure`` number resolved to the
+    pooled figure's proxied image + caption + source paper (an out-of-range
+    or spurious number — including any in a mode whose pool is empty — just
+    means no figure, never a failure)."""
+    figure = None
+    if beat.figure is not None and 1 <= beat.figure <= len(figures):
+        chosen = figures[beat.figure - 1]
+        figure = events.BeatFigure(
+            # Same-origin proxy — the frontend can't hotlink ar5iv directly.
+            image="/api/figure_proxy?src=" + urllib.parse.quote(chosen["image"], safe=""),
+            caption=chosen.get("caption") or "",
+            number=beat.figure,
+            title=chosen.get("title"),
+        )
     return events.Beat(
         heading=beat.heading.strip(),
         text=beat.text.strip(),
         node_ids=prompts.idx_to_id(nodes, beat.nodes),
+        figure=figure,
     )
 
 
@@ -125,20 +261,28 @@ def lecture(
 
     Args:
         seed: The seed paper.
-        nodes: The visible graph nodes (in history mode, already enriched
-            with the orchestrator's backfilled ancestors).
-        mode: ``history``, ``intuition``, or ``bridge``.
+        nodes: The visible graph nodes — the lecture's entire world; the
+            lecturer narrates them as-is and never expands the graph.
+        mode: ``history``, ``intuition``, ``evolution``, or ``bridge``.
         target: The bridge target paper (bridge mode only), or None.
 
     Yields:
         ``events.Beat`` per beat, as soon as each is complete — a beat is
         final once the model starts the next one, so narration begins before
-        the lecture ends. Beats with blank text are dropped.
+        the lecture ends. Beats with blank text are dropped. A beat may
+        carry one figure from the mode's pool (the seed's own in intuition;
+        the story's landmark papers' in history/evolution).
 
     Raises:
         Exception: Model/stream failures propagate — the caller ends the
             event stream with ``Error``.
     """
+    # Every storytelling mode gets a figure pool (the seed's own figures for
+    # intuition; the story's landmark papers' for history/evolution — see
+    # _figure_pool); library passages ground the intuition lecture only.
+    figures = _figure_pool(seed, nodes, mode)
+    passages = _seed_passages(seed) if mode is LectureMode.INTUITION else []
+
     emitted = 0
     args_buffer = ""
     output_part: int | None = None
@@ -149,9 +293,9 @@ def lecture(
         for beat in beats[emitted:]:
             emitted += 1
             if beat.text.strip():
-                yield _beat(beat, nodes)
+                yield _beat(beat, nodes, figures)
 
-    for event in streams.drive(agent, _prompt(seed, nodes, mode, target)):
+    for event in streams.drive(agent, _prompt(seed, nodes, mode, target, figures, passages)):
         if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
             if event.part.tool_name == streams.OUTPUT_TOOL:
                 output_part = event.index

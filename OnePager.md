@@ -296,6 +296,9 @@ optional, behind a key.
       — don't 429. *(Browser-tested — reaches genuinely older foundational work; a
       specific origin paper can still be missed since additions rank by citations
       over a narrow frontier — future tweak: prefer `influential` edges.)*
+      **Retired in v3.0.0** — lectures no longer expand the graph (see
+      "Lectures never expand the graph" under Enhancements); the history
+      lecture now narrates the visible ancestors, ending at the seed.
 
 - [x] **Phase 3f — "What's Evolved Since" lecture mode** *(v2.7.0)* — a **third
       lecture button** alongside "How We Got Here" (history) and "This Paper's
@@ -315,10 +318,10 @@ optional, behind a key.
       seed and move forward to the current frontier. Kept deterministic and
       LLM-free like the history walk — the roadmap's optional `search_papers`
       frontier-grab was deferred. *(From the `todos.md` inbox, 2026-07-07.)*
-      **Next (tight dependency):** **Recency preference for citations** (below) —
-      the forward walk's runway depends on the visible citations skewing *older*
-      (closer to the seed); when they're all near-present, the newest-visible
-      descendants are already at the frontier with little to expand into.
+      **Walk retired in v3.0.0** — lectures no longer expand the graph; the
+      mode (button, intent, seed-onward scoping) lives on, narrating the
+      descendants the even-by-year citation spread puts on screen (see
+      "Lectures never expand the graph" under Enhancements).
 
 **Beyond the teacher**
 
@@ -416,6 +419,53 @@ optional, behind a key.
 
 **Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
 
+- [x] **Even citation spread across the years** *(v3.0.0 — supersedes "Recency
+      preference for citations")* — instead of a user-facing older/newer knob,
+      the seed's citations are now **always** selected **evenly across
+      publication years**: the pool is bucketed by year (most-cited first
+      within each) and round-robined, so sparse early years surface and no
+      busy year monopolizes the count. For mega-cited seeds (beyond the
+      1000-paper page), the pool is built by **stratified offset sampling**
+      across S2's newest-first citation list (5 windows from the newest to the
+      deepest reachable under S2's ~9k offset ceiling; windows S2 rejects
+      degrade gracefully), so the spread covers the seed's whole descendant
+      era instead of just the recent tip. No toggle shipped — even-by-year is
+      simply how graphs build now (references keep the most-cited ranking; a
+      reference list is naturally year-spread already). This is what gives
+      "What's evolved since" a real timeline to narrate.
+- [x] **Lectures never expand the graph — backfill walks removed** *(v3.0.0)* —
+      a doctrine change: a lecture narrates the graph **as the user built
+      it**; only the researcher (explicit Q&A) may pull new papers onto the
+      canvas. The deterministic history/evolution backfill walks (Phase
+      3e/3f) were removed end-to-end — `orchestrator/backfill.py` + tests
+      deleted, the lecture intent is pure delegation, `BackfillTrace` left
+      the event vocabulary, the `graph.backfill` config knobs are gone, and
+      the panel's "⏳/⏩ Traced…" chips + the saved-session `hist_trace`
+      field were retired (old saves still restore; the field is ignored).
+      The **directional modes are also scoped to their side of the seed**
+      (`_story_nodes`): "How we got here" receives only the seed + papers
+      published in or before its year — the story ends AT the seed — while
+      "What's evolved since" receives the seed onward; intuition/bridge see
+      everything (undated papers sit out of the clamped modes; an undated
+      seed disables the clamp).
+- [x] **Refocus "This paper's intuition" on the seed itself** *(v3.0.0)* — the
+      intuition lecture no longer reads like a second "How we got here": its
+      mode-intent now walks the paper's own components (the problem, the core
+      idea, how the method actually works, what the results showed, why it
+      works), naming surrounding papers only in passing for contrast. It's
+      also **grounded in the seed itself, deterministically** (the lecturer
+      stays tool-free): the seed's own **ar5iv figures** are fetched before
+      the run and listed by caption — the model attaches the most
+      illuminating one to the beat it belongs to (a `figure` number resolved
+      to a proxied image on the beat; hallucinated numbers just mean no
+      figure) and the panel renders it inline under the beat (click to
+      enlarge) — and, when a **local library** exists, hybrid retrieval on
+      the seed's title supplies passages the lecture may draw on, attributed
+      inline. **History and evolution are illustrated too:** their figure
+      pool draws from the seed plus the story's landmark papers (the 4
+      most-cited arXiv papers on the mode's side of the seed, 3 figures
+      each, source-paper attributed on the card); bridge stays figure-free.
+      *(From the `todos.md` inbox, 2026-07-07.)*
 - [x] **Offline chat mode** *(v1.12.0)* — a graph-free RAG chat straight over the
       local library. `teacher.answer_from_sources` retrieves the top passages
       (`SOURCES_CHAT_K`) and answers grounded only in them, citing inline by page —
@@ -764,19 +814,6 @@ optional, behind a key.
       larger pool per seed (see the citation-ranking fix, v2.1.1, which
       already over-fetches up to S2's 1000-per-call cap) or support paging
       further into it on demand. *(From the `todos.md` inbox, 2026-07-06.)*
-- [ ] **Recency preference for citations** — let the user choose whether the
-      papers citing the seed skew **older** (closer to the seed's own year —
-      the field's early response) or **more recent** (the current frontier),
-      rather than always ranking purely by citation count (v2.1.1). Probably
-      a control alongside the citation-count ranking rather than a
-      replacement for it — citation count is what rescued citations from
-      S2's recency-biased default order in the first place; this would be a
-      second axis (age vs. count) the user tunes, not a reversion.
-      **Now doubly motivated (v2.7.0):** it feeds the Phase 3f "What's Evolved
-      Since" forward walk — skewing the visible citations *older* gives the
-      forward citation-walk room to march toward the present, where an
-      all-near-present neighborhood leaves it no runway. *(From the `todos.md`
-      inbox, 2026-07-07.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the

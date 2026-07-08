@@ -30,9 +30,25 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..services.graph import Edge, Node
 
 
+class BeatFigure(BaseModel):
+    """A real paper figure attached to a lecture beat: a same-origin proxied
+    image URL, the paper's own caption, and the figure's number in the
+    lecture's figure list. ``title`` names the source paper when the lecture
+    drew from several (history/evolution); None when every figure is the
+    seed's own (intuition)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image: str
+    caption: str
+    number: int
+    title: str | None = None
+
+
 class Beat(BaseModel):
     """One lecture beat: a signpost heading, one tight narration paragraph,
-    and the nodes to light up on the graph while it's spoken."""
+    the nodes to light up on the graph while it's spoken, and optionally one
+    of the seed paper's own figures to show inline (intuition mode)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,6 +56,7 @@ class Beat(BaseModel):
     heading: str
     text: str
     node_ids: list[str]
+    figure: BeatFigure | None = None
 
 
 class Token(BaseModel):
@@ -57,8 +74,8 @@ class DiscoveredNode(Node):
     Exactly a graph ``Node`` plus two annotations: ``discovered`` marks it as
     agent-found (the frontend styles these differently), and ``idx`` is the
     number the model knows it by — set when a researcher tool added it to the
-    numbered list, ``None`` when the history backfill found it (backfill runs
-    *before* the lecturer numbers anything).
+    numbered list. (``None`` is tolerated for saved sessions from the era
+    when lecture backfills discovered un-numbered papers.)
     """
 
     idx: int | None = None
@@ -68,9 +85,10 @@ class DiscoveredNode(Node):
 class Discovery(BaseModel):
     """Papers (and the edges linking them) to merge into the live graph.
 
-    Emitted when expansion, search, or the history backfill finds papers not
-    yet on screen. A free-text search discovery carries no edges — a topic
-    search links its hits to no specific paper.
+    Emitted when the researcher's expansion or search tools find papers not
+    yet on screen — only the researcher ever grows the graph; lectures
+    narrate it as-is. A free-text search discovery carries no edges — a
+    topic search links its hits to no specific paper.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -209,34 +227,6 @@ class FigureTrace(BaseModel):
     figure: int | None
 
 
-class BackfillTrace(BaseModel):
-    """One hop of a lecture backfill walk — backward (history) or forward
-    (evolution).
-
-    ``direction`` says which way the walk ran: ``"back"`` (the history mode's
-    reference-walk to the field's roots) or ``"forward"`` (the evolution
-    mode's citation-walk to the current frontier). The boundary year this hop
-    reached is reported in the field matching the direction — ``oldest`` for a
-    backward hop, ``newest`` for a forward one; the other stays None. ``error``
-    is set on the final empty trace when nothing was found *and* at least one
-    hop failed — "we found nothing" and "we couldn't look" read differently.
-
-    (``direction``/``newest`` default to the backward shape so frames from
-    before evolution mode existed — and saved sessions — still validate.)
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["trace"] = "trace"
-    action: Literal["backfill"] = "backfill"
-    direction: Literal["back", "forward"] = "back"
-    hop: int
-    found: int
-    oldest: int | None = None
-    newest: int | None = None
-    error: bool = False
-
-
 class RetrievalTrace(BaseModel):
     """The librarian's pre-answer retrieval: how many passages matched and
     the distinct source titles they came from."""
@@ -255,7 +245,6 @@ Trace: TypeAlias = Annotated[
     | SearchTrace
     | SourceSearchTrace
     | FigureTrace
-    | BackfillTrace
     | RetrievalTrace,
     Field(discriminator="action"),
 ]

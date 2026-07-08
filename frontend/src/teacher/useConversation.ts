@@ -19,7 +19,6 @@ import {
   citedSet,
   cleared,
   figureAdded,
-  histTraceAdded,
   lectureStarted,
   retrieveSet,
   tokenAppended,
@@ -124,10 +123,6 @@ export function useConversation() {
               highlight(beat.node_ids)
               beatCount += 1
             },
-            // History mode first walks back through references to the field's
-            // roots: show the hops, and merge the ancestors into the graph.
-            onTrace: (trace) => dispatch(histTraceAdded(trace)),
-            onDiscovery: (discovery) => dispatch(discoveryMerged(discovery)),
             onError: (message) => setError(message),
           },
         )

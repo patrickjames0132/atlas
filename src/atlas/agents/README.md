@@ -36,25 +36,25 @@ protocol for every workflow, declared in one file.
 Design points worth knowing:
 
 - **Two nested discriminated unions.** `Event` discriminates on `type`;
-  its trace member is itself a union of seven variants (`ReadTrace`,
+  its trace member is itself a union of six variants (`ReadTrace`,
   `ExpandTrace`, `SearchTrace`, `SourceSearchTrace`, `FigureTrace`,
-  `BackfillTrace`, `RetrievalTrace`) discriminating on `action`. One
+  `RetrievalTrace`) discriminating on `action`. One
   `validate_python` call resolves both levels — a raw
   `{"type": "trace", "action": "read", ...}` dict comes back as a
   `ReadTrace`. The old teacher passed loose `{"action": ..., ...}` dicts
   whose shapes you had to reverse-engineer from five `_run_*` functions.
 - **`Discovery` reuses the graph's own models.** `DiscoveredNode`
   *inherits* `services.graph.Node`, adding only `discovered: Literal[True]`
-  and `idx` — the number the model knows the paper by (`None` when the
-  history backfill found it, since backfill runs before the lecturer
-  numbers anything). Because `extra="forbid"` is inherited, an agent-found
+  and `idx` — the number the model knows the paper by (`None` tolerated
+  for saved sessions from the era when lecture backfills discovered
+  un-numbered papers). Because `extra="forbid"` is inherited, an agent-found
   paper is guaranteed to have exactly the shape `build_graph` produces:
   the frontend merges both into one canvas and can't tell the difference,
   and a drifted node shape fails loudly at the event boundary instead of
   rendering a half-empty node. Edges are `services.graph.Edge`, unchanged.
 - **Each workflow's legal event sequence** (its "event grammar") is spelled
   out in its `skills/workflows/` playbook — e.g. the lecture's
-  `[Trace* Discovery*] Beat+ Done | Error`.
+  `Beat+ Done | Error`.
 - **Two wire renames from the old protocol** (frontend adapts in Phase 6):
   the old `nodes` SSE event is now `discovery` (a `Discovery` model
   emitting an event called "nodes" read wrong), and `Error` carries
@@ -70,20 +70,18 @@ year_to)` runs a free-text S2 search, and both cache their results for
 `config.graph.cache_ttl` (the same day-long TTL as a graph snapshot —
 citation data changes slowly).
 
-Two consumers, using it differently:
+One consumer today:
 
-- **The orchestrator's backfill walks** loop over `neighbors(...)` raw, hop
-  after hop — `history_backfill` over `"references"` toward a field's roots
-  (history lecture), `forward_backfill` over `"citations"` toward the
-  frontier (evolution lecture).
 - **The researcher's `expand_node` / `search_papers` tools** wrap `neighbors` /
   `search` with everything agentic: budgets, visited-sets, numbering the
-  finds, building `Discovery` events.
+  finds, building `Discovery` events. (The lecture backfill walks that
+  also used to loop over `neighbors` are gone — lectures never expand the
+  graph.)
 
 Design points worth knowing:
 
-- **The cache is the point.** Both consumers re-hit the same hops
-  constantly within a session (the agent re-expands, the user re-lectures),
+- **The cache is the point.** The researcher re-hits the same hops
+  constantly within a session (re-expansions across follow-up questions),
   and the rate-limited S2 API must not pay for each repeat. This is the
   *cached, agent-tuned* layer over `integrations.semantic_scholar.traversal`
   — the deliberate name-cousin that talks to the live API and caches
@@ -185,7 +183,7 @@ agents/
     citation-discipline.md  ground only in provided/read material; never invent
     figures.md              real figures only; <<FIG n>> marker placement
     workflows/              ← the orchestrator's playbooks, one per intent
-      lecture.md              backfill → lecturer
+      lecture.md              the lecturer (narrates the visible graph as-is)
       research.md                  the researcher Q&A
       librarian.md            the librarian RAG chat
   orchestrator/      ← an agent: main.py, tools.py, config.py, README.md
@@ -245,27 +243,22 @@ prompt. Two kinds live side by side:
 The front door. `run(intent, ...)` takes the UI's intent hint + the request
 payload, dispatches the matching workflow deterministically, and is the one
 place the termination contract is enforced: every stream ends with exactly
-one `Done` or `Error`. Its `backfill.py` holds the deterministic lecture
-walks — one shared `_walk(direction=…)` behind **`history_backfill`**
-(backward, before a history lecture: launch from the oldest visible papers,
-hop day-cached references, add the most-cited new ancestors per hop, stop at
-a year floor or the hop budget) and **`forward_backfill`** (forward, before
-an evolution lecture: launch from the newest visible papers, hop citations,
-march to the frontier with no year ceiling), both emitting `Trace`/
-`Discovery` events per productive hop. Not an agent —
-no LLM ever touches it; its knobs are typed config (`config.graph.backfill`),
-not `llm.agents` extras. **No model lives in the orchestrator yet,
-deliberately:** every current entry point passes a known intent, so the
-hybrid design's model half (ambiguous/multi-step requests) is a documented
-seam in `main.py`, not speculative plumbing — same call as the
-query-expansion seam in Phase 3. See its own README.
+one `Done` or `Error`. Lectures are pure delegation — **a lecture never
+expands the graph**; every mode narrates the visible node set as-is (the
+old backfill walks are gone; only the researcher grows the graph). **No
+model lives in the orchestrator yet, deliberately:** every current entry
+point passes a known intent, so the hybrid design's model half
+(ambiguous/multi-step requests) is a documented seam in `main.py`, not
+speculative plumbing — same call as the query-expansion seam in Phase 3.
+See its own README.
 
 ### `lecturer` — the streamed graph lecture *(built)*
 
 - **Input:** seed, visible nodes (numbered), mode
   (`history` / `intuition` / `evolution` / `bridge`), target paper (bridge
-  only). History and evolution modes receive the backfill-enriched node set
-  from the orchestrator (ancestors backward / descendants forward).
+  only). Lectures never expand the graph, and the orchestrator scopes the
+  directional modes to their side of the seed (history: ancestors only,
+  ending at the seed; evolution: the seed onward).
 - **Tools:** none.
 - **Output:** a streamed sequence of typed `Beat` objects
   (`heading`, `text`, `node_indices` → mapped back to node ids) so the
@@ -364,14 +357,12 @@ every agent builds its model via `factory.build_model` and its instruction
 parts via `prompts.skill`; the librarian (and next the researcher) converts route
 turns with `prompts.history`; the lecturer (and next the researcher) numbers
 papers with `prompts.node_lines` / `idx_to_id`; every workflow yields
-`events` models; `traversal.py` waits on the researcher's expand/search tools and
-the orchestrator's `history_backfill` (traced from the old repo's
-`neighbors.py` callers, not yet ported).
+`events` models; `traversal.py` serves the researcher's expand/search tools.
 
 ## Testing
 
 Agent loops are tested with PydanticAI's `TestModel` / `FunctionModel`
 (scripted model behavior, no network) — replacing the old `fake_claude`
 fixture built from raw Anthropic SDK events. Deterministic pieces
-(`traversal.py`, `history_backfill`, skill loading, event models) get plain
-unit tests. As everywhere in this repo: no live API calls, ever.
+(`traversal.py`, skill loading, event models) get plain unit tests. As
+everywhere in this repo: no live API calls, ever.

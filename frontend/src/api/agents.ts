@@ -21,6 +21,14 @@ export interface Beat {
   text: string
   /** Ids of the graph nodes to highlight while this beat is on screen. */
   node_ids: string[]
+  /**
+   * A real paper figure attached to this beat (proxied image + the paper's
+   * caption + the figure's number in the lecture's pool). `title` names the
+   * source paper when the lecture drew from several (history/evolution);
+   * null when every figure is the seed's own (intuition). Absent on bridge
+   * lectures and older saved sessions.
+   */
+  figure?: { image: string; caption: string; number: number; title?: string | null } | null
 }
 
 /**
@@ -31,30 +39,9 @@ export interface Beat {
 export type LectureMode = 'history' | 'intuition' | 'evolution' | 'bridge'
 
 /**
- * A hop a lecture's backfill walk took before narrating — backward (history)
- * or forward (evolution): how many papers it pulled in and the boundary year
- * it reached (`oldest` for a backward hop, `newest` for a forward one).
- * (`action`/`direction`/`newest`/`error` are absent on sessions saved by an
- * older app; live frames carry them, and `direction` defaults to `'back'`.)
- */
-export interface BackfillTrace {
-  action?: 'backfill'
-  /** Which way the walk ran; absent (old sessions) reads as `'back'`. */
-  direction?: 'back' | 'forward'
-  hop: number
-  found: number
-  /** Oldest year reached — backward hops only. */
-  oldest?: number | null
-  /** Newest year reached — forward hops only. */
-  newest?: number | null
-  /** True when a hop hit an S2 error — "couldn't look" vs "found nothing". */
-  error?: boolean
-}
-
-/**
- * New papers (+ the edges connecting them) a workflow pulled in — the
- * lecture's backward walk, or the researcher's expand_node / search_papers tools
- * — to be merged into the live graph.
+ * New papers (+ the edges connecting them) the researcher pulled in via its
+ * expand_node / search_papers tools — to be merged into the live graph.
+ * (Lectures never emit these: a lecture narrates the visible graph as-is.)
  */
 export interface Discovery {
   nodes: GraphNode[]
@@ -65,10 +52,6 @@ export interface Discovery {
 export interface LectureHandlers {
   /** A new beat arrived — append it to the lecture panel. */
   onBeat: (beat: Beat) => void
-  /** History-mode backward hop progress (precedes the beats). */
-  onTrace?: (t: BackfillTrace) => void
-  /** Ancestors pulled in by the backward walk, to merge into the graph. */
-  onDiscovery?: (d: Discovery) => void
   onDone?: () => void
   onError?: (message: string) => void
   /** Abort to cancel the stream (e.g. when the user closes the panel). */
@@ -76,9 +59,8 @@ export interface LectureHandlers {
 }
 
 /**
- * Stream a lecture over the visible graph. Beats arrive one at a time. In
- * history mode, trace + discovery events (the backward walk to the field's
- * roots) precede them.
+ * Stream a lecture over the visible graph. Beats arrive one at a time; a
+ * lecture never expands the graph, so beats are the only payload frames.
  *
  * @param body The seed, the visible nodes, the lecture mode, and (bridge
  *             mode only) the target paper. Nodes are the FULL graph-node
@@ -97,8 +79,6 @@ export async function streamLecture(
   })
   await readSSE(res, (event, data) => {
     if (event === 'beat') h.onBeat(data as Beat)
-    else if (event === 'trace') h.onTrace?.(data as BackfillTrace)
-    else if (event === 'discovery') h.onDiscovery?.(data as Discovery)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })

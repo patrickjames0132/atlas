@@ -28,13 +28,14 @@ you upload (embedded locally; nothing leaves your machine).
 >   the hits. Pasted arXiv ids/URLs still jump straight in; repeated
 >   queries answer instantly from a whole-result cache.
 > - **The AI teacher is a crew of [PydanticAI](https://ai.pydantic.dev)
->   agents** behind one orchestrator: a **lecturer** (streamed lectures in
->   typed beats — "How we got here" time-travels to a field's roots first),
->   a **researcher** (agentic Q&A that reads full text via ar5iv, expands
->   the graph, searches S2, searches *your* library, and attaches real
->   figures inline), a **librarian** (single-shot RAG over your uploads,
->   cited by page), and the **query analyst**. Everything streams for real
->   — beats, prose, tool traces, discoveries.
+>   agents** behind one orchestrator: a **lecturer** (streamed, illustrated
+>   lectures in typed beats over the graph you built — history / intuition /
+>   evolution, each with the papers' real figures inline), a **researcher**
+>   (agentic Q&A that reads full text via ar5iv, expands the graph, searches
+>   S2, searches *your* library, and attaches real figures inline), a
+>   **librarian** (single-shot RAG over your uploads, cited by page), and
+>   the **query analyst**. Everything streams for real — beats, prose, tool
+>   traces, discoveries.
 > - **Bring-your-own sources** with hybrid retrieval (sqlite-vec semantic +
 >   FTS5 lexical, fused with RRF), parallel PDF uploads with **live
 >   embedding progress bars**, and a per-source scope picker for the agents.
@@ -116,21 +117,26 @@ The Vite dev server proxies `/api/*` to Flask.
    badge marks papers whose whole neighborhood is cached. Optional filters:
    a publication-year window (1800 → now) and S2 **fields of study**.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🟣 similar ·
-   💗 found-by-search. Node size = citations; thick links = influential
-   citations; a dashed ring = discovered by the teacher mid-chat. Click a
-   node for details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar
-   category tags, figures, code & artifacts); **double-click to re-seed** on
-   it — journal papers included.
+   💗 found-by-search. Citations are selected **evenly across the years**
+   (the most-cited per year, with stratified sampling for mega-cited seeds),
+   so the descendant side spans the seed's whole timeline, not just the
+   recent tip. Node size = citations; thick links = influential citations; a
+   dashed ring = discovered by the teacher mid-chat. Click a node for
+   details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
+   tags, figures, code & artifacts); **double-click to re-seed** on it —
+   journal papers included.
 3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
    filters, a year slider, drag-to-pin, focus-on-hover, and a **Refresh** that
    busts this seed's day-cached snapshot to re-fetch fresh from Semantic
    Scholar. Click the **Atlas** brand anytime to go home.
 4. **Learn** (the 🎓 Assistant panel):
-   - **Lectures** — "How we got here" (walks back to the field's roots
-     first, then narrates chronologically, lighting up papers beat by beat),
-     "This paper's intuition", and "What's evolved since" (walks *forward*
-     through citations to the current frontier — the past → present → future
-     triptych).
+   - **Lectures** — the past → present → future triptych, narrated over the
+     graph **as you built it** (lectures never expand it — only the research
+     agent does): "How we got here" (chronologically through the ancestors,
+     ending AT the seed), "This paper's intuition" (tightly on the seed
+     itself, drawing on your library for context), and "What's evolved
+     since" (the seed onward to the frontier). Beats light up their papers
+     and carry the papers' **real figures** inline — click to enlarge.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search
      your sources / show a figure). Answers cite their papers — click one to

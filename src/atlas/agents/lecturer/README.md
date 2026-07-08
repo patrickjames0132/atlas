@@ -35,9 +35,22 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
   `SYSTEM_PROMPT`, and the three `MODE_INTENTS` paragraphs.
 - **`main.py`** — `LectureBeat` (the model-facing beat: indices, not ids),
   the `Agent`, and `lecture`.
-- No `tools.py` — the lecturer narrates what it's given; enrichment
-  (the history backfill) is the orchestrator's job, done *before* the
-  lecturer runs.
+- No `tools.py` — the lecturer narrates what it's given. Lectures never
+  expand the graph: every mode works from the visible node set exactly as
+  handed in (only the researcher, on explicit questions, pulls new papers
+  onto the canvas).
+- **Lectures are illustrated — deterministically, not via tools.** Before
+  the run, `_figure_pool` builds the mode's figure pool (cached ar5iv
+  fetches; captions listed in the prompt, attachable to a beat via the
+  beat's `figure` number → resolved to a proxied image + source-paper title
+  on `events.Beat.figure`): intuition pools the **seed's own** figures;
+  history/evolution pool the seed plus the story's **landmark papers'**
+  (the most-cited arXiv papers in the mode-scoped node set — `_FIGURE_PAPERS`
+  papers, `_FIGURES_PER_PAPER` each); bridge pools none. Intuition
+  additionally grounds in `_seed_passages` — library passages about the
+  seed (the librarian's hybrid retrieval, queried with the seed's title —
+  optional context, attributed inline). Everything degrades to empty on
+  any failure; a lecture never blocks on its illustrations.
 
 ## Design decisions worth knowing
 
@@ -71,18 +84,14 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 
 ## Who uses it, and how/why
 
-- **`agents/orchestrator` (Phase 4d).** The `lecture` intent
-  per `skills/workflows/lecture.md`: in history/evolution mode it runs its
-  deterministic backfill walk first (`history_backfill` backward /
-  `forward_backfill` forward, streaming `Trace`/`Discovery` events), then
-  calls `lecture(...)` with the enriched node set and relays the `Beat`
-  stream, appending `Done`/`Error`.
+- **`agents/orchestrator` (Phase 4d).** The `lecture` intent per
+  `skills/workflows/lecture.md`: pure delegation — it calls `lecture(...)`
+  with the visible node set and relays the `Beat` stream, appending
+  `Done`/`Error`.
 - **Old repo, traced (not yet ported):** `routes/teacher.py`'s lecture SSE
   endpoint calls `teacher.lecture_beats(seed, nodes, mode, target)` directly
   and serializes each beat dict as a `beat` SSE frame. Phase 5 rewrites that
-  route to call the orchestrator instead. Note: old `teacher/lecture.py`
-  still hosts `history_backfill`, which is NOT superseded until Phase 4d —
-  don't retire that file yet.
+  route to call the orchestrator instead.
 
 ## Testing
 

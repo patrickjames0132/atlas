@@ -48,8 +48,10 @@ api/
   `nodes` frames → `discovery`; error frames carry `{message}` (was
   `{error}`); the `discard` frame is **gone** (pre-answer narration is never
   streamed, so nothing is disavowed); traces always carry their `action`
-  tag. `BackfillTrace`/`RetrieveEvent` keep `action` optional only so
-  sessions saved by the pre-rewrite app still type-check on restore.
+  tag. `RetrieveEvent` keeps `action` optional only so sessions saved by
+  the pre-rewrite app still type-check on restore. Lecture streams carry
+  beats only — lectures never expand the graph, so no trace/discovery
+  frames appear (old saves' `hist_trace` field is tolerated and ignored).
 - **`searchLive` rides the analyst invisibly.** Free-text queries are
   expanded (and famous papers title-resolved) server-side; a pasted arXiv
   id/URL resolves to exactly that paper with filters skipped. The client

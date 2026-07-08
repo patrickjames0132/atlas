@@ -136,13 +136,13 @@ degrade to plain expansion the same way.
 | `DELETE /api/sessions/<id>` | delete — `{deleted: bool}`, idempotent |
 
 Thin CRUD over `storage/sessions.py`. The workspace blob (`{name, seed,
-layout, nodes, edges, chat, beats, hist_trace}`) is **frontend-owned and
-deliberately unvalidated** beyond `nodes` being a non-empty list — the store
-treats it as opaque JSON, and validating its shape here would create a
-second place that has to track the frontend's workspace format. Delete
-returns `{deleted: false}` rather than 404 (idempotent); a store failure is
-a canned 500 with details in the log. Phase 6 note: a restored `hist_trace`
-now replays typed `BackfillTrace` shapes.
+layout, nodes, edges, chat, beats}`) is **frontend-owned and deliberately
+unvalidated** beyond `nodes` being a non-empty list — the store treats it
+as opaque JSON, and validating its shape here would create a second place
+that has to track the frontend's workspace format. (Old saves may carry a
+`hist_trace` field from the retired lecture backfill; it's simply ignored
+on restore.) Delete returns `{deleted: false}` rather than 404
+(idempotent); a store failure is a canned 500 with details in the log.
 
 ## `sources.py` — the local library
 
@@ -180,7 +180,7 @@ Thin wrappers over `services/sources`. Points worth knowing:
 
 | Endpoint | Intent | Job |
 | --- | --- | --- |
-| `POST /api/lecture` | `lecture` | streamed lecture (history mode backfills first) |
+| `POST /api/lecture` | `lecture` | streamed lecture over the visible graph |
 | `POST /api/ask` | `research` | agentic Q&A over the graph |
 | `POST /api/ask_sources` | `librarian` | offline library chat |
 

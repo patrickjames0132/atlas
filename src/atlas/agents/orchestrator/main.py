@@ -6,10 +6,12 @@ is the one place that contract is enforced, so the frontend never hangs on
 a dead stream. Known intents dispatch deterministically per the playbooks
 in ``skills/workflows/``:
 
-* ``lecture``   — history and evolution modes run a ``backfill`` walk first
-  (backward to the roots / forward to the frontier; its discoveries stream
-  out AND enrich the node set the lecturer narrates), then delegate to
-  ``lecturer.lecture``.
+* ``lecture``   — delegation to ``lecturer.lecture``. A lecture narrates
+  the graph *as the user sees it* — it never expands nodes (that's the
+  researcher's job, on explicit questions). The directional modes are
+  scoped to their side of the seed's publication year (``_story_nodes``):
+  history ends AT the seed, evolution starts from it; intuition and bridge
+  see the whole visible set.
 * ``research``  — pure delegation to ``researcher.answer``.
 * ``librarian`` — pure delegation to ``librarian.answer``.
 
@@ -29,9 +31,42 @@ from typing import Iterator
 from ...services.graph import Node
 from .. import events, lecturer, librarian, researcher
 from ..models import Intent, LectureMode
-from . import backfill
 
 log = logging.getLogger(__name__)
+
+
+def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]:
+    """The node set a lecture mode may narrate.
+
+    A lecture never expands the graph — but the directional modes also
+    shouldn't wander onto the wrong side of the seed's own story. HISTORY
+    tells the story *up to* the seed, so it only sees the seed plus papers
+    published in or before the seed's year; EVOLUTION tells the story
+    *since* it (in or after). INTUITION and BRIDGE see everything. Undated
+    papers are left out of the clamped modes — they can't be placed in a
+    chronological story. No seed year -> no clamp.
+
+    Args:
+        seed: The seed paper (its year anchors the clamp).
+        nodes: The visible graph nodes.
+        mode: The lecture mode being narrated.
+
+    Returns:
+        The (possibly narrowed) node list to hand the lecturer.
+    """
+    if seed.year is None or mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION):
+        return list(nodes)
+    backward = mode is LectureMode.HISTORY
+    return [
+        node
+        for node in nodes
+        if node.is_seed
+        or node.id == seed.id
+        or (
+            node.year is not None
+            and (node.year <= seed.year if backward else node.year >= seed.year)
+        )
+    ]
 
 
 def run(
@@ -67,21 +102,12 @@ def run(
             if seed is None or nodes is None:
                 yield events.Error(message="lecture needs a seed and the visible nodes")
                 return
-            work_nodes = list(nodes)
-            # History and evolution both enrich the graph before narrating —
-            # history walks backward to the roots, evolution forward to the
-            # frontier. The discoveries stream to the frontend AND join the
-            # node set, so the lecturer can narrate the papers each walk found.
-            walk = {
-                LectureMode.HISTORY: backfill.history_backfill,
-                LectureMode.EVOLUTION: backfill.forward_backfill,
-            }.get(mode)
-            if walk is not None:
-                for event in walk(seed, work_nodes):
-                    if isinstance(event, events.Discovery):
-                        work_nodes.extend(event.nodes)
-                    yield event
-            yield from lecturer.lecture(seed, work_nodes, mode, target)
+            # A lecture never expands the graph — every mode narrates only
+            # nodes the user can see (only the researcher, on explicit Q&A,
+            # may pull new papers in) — and the directional modes are scoped
+            # to their side of the seed: history ends AT the seed, evolution
+            # starts from it.
+            yield from lecturer.lecture(seed, _story_nodes(seed, nodes, mode), mode, target)
         elif intent is Intent.RESEARCH:
             if question is None or seed is None or nodes is None:
                 yield events.Error(message="research needs a question, a seed, and the visible nodes")

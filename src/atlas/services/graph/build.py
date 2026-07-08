@@ -80,7 +80,14 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     # already hydrated with light display fields, so there's no extra batch
     # call to flesh them out — what a traversal returns is ready to render.
     refs = s2.references(seed_id, config.graph.ref_limit)
-    cites = s2.citations(seed_id, config.graph.cite_limit)
+    # The seed's citation count drives stratified sampling of the citation
+    # pool — a mega-cited seed's pool spans its whole descendant era, not just
+    # the recent tip — before the even-by-year selection trims it.
+    cites = s2.citations(
+        seed_id,
+        config.graph.cite_limit,
+        total_count=seed_paper.get("citation_count"),
+    )
     similar = s2.recommendations(seed_id, config.graph.similar_limit)
 
     # --- Dedupe neighbors into a single node table keyed by paperId. The same

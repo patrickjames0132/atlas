@@ -85,7 +85,7 @@ def test_discovered_node_extends_the_graph_node():
     node = events.DiscoveredNode.model_validate(make_node_payload(idx=12))
     assert node.discovered is True
     assert node.idx == 12
-    # Backfill nodes are found before anything is numbered — idx defaults to None.
+    # idx defaults to None — old saved sessions carry un-numbered discoveries.
     unnumbered = events.DiscoveredNode.model_validate(make_node_payload())
     assert unnumbered.idx is None
     # extra="forbid" is inherited: a drifted field fails loudly.

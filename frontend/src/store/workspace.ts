@@ -92,10 +92,11 @@ export const restoreSession = createAsyncThunk(
     return {
       graph,
       layout: data.layout ?? ('timeline' as const),
+      // (Old saves may carry a hist_trace field from the retired lecture
+      // backfill — ignored; lectures no longer expand the graph.)
       transcript: {
         chat: data.chat ?? [],
         beats: data.beats ?? [],
-        histTrace: data.hist_trace ?? [],
       },
     }
   },
@@ -126,7 +127,6 @@ export const saveWorkspace = createAsyncThunk<
     edges: [...graph.edges, ...workspace.discoveredEdges],
     chat: transcript.chat,
     beats: transcript.beats,
-    hist_trace: transcript.histTrace,
   })
 })
 

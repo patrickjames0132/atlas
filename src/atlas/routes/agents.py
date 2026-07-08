@@ -153,14 +153,14 @@ def api_lecture() -> ResponseReturnValue:
 
     Body:
         ``{seed: {node fields}, nodes: [visible node objects], mode:
-        history|intuition|bridge, target?: {node fields}}``.
+        history|intuition|evolution|bridge, target?: {node fields}}``.
 
     Returns:
-        An SSE stream — history mode opens with the backfill's ``trace`` +
-        ``discovery`` frames (the found ancestors join the narrated set),
-        then ``beat`` frames ``{heading, text, node_ids}``, ending with
-        ``done`` or ``error``. HTTP 400 for missing/malformed nodes or an
-        unknown mode.
+        An SSE stream of ``beat`` frames ``{heading, text, node_ids}``,
+        ending with ``done`` or ``error``. A lecture narrates the visible
+        nodes as-is — it never expands the graph, so no ``trace`` or
+        ``discovery`` frames appear. HTTP 400 for missing/malformed nodes or
+        an unknown mode.
     """
     payload = request.get_json(silent=True) or {}
     raw_nodes = payload.get("nodes")

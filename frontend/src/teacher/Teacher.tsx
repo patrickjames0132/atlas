@@ -21,7 +21,6 @@ import ScopePicker from './ScopePicker'
 import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
 import ChatMessage from './transcript/ChatMessage'
-import HistTrace from './transcript/HistTrace'
 import { useConversation } from './useConversation'
 import './teacher.css'
 
@@ -40,7 +39,7 @@ export default function Teacher({
   /** Collapse the panel (the header ✕). */
   onClose?: () => void
 }) {
-  const { chat, beats, histTrace } = useAppSelector(selectTranscript)
+  const { chat, beats } = useAppSelector(selectTranscript)
   const {
     hasGraph,
     teaching,
@@ -139,8 +138,12 @@ export default function Teacher({
       </div>
 
       <div className="teacher-scroll">
-        <HistTrace trace={histTrace} />
-        <BeatList beats={beats} activeBeat={activeBeat} onBeatClick={onBeatClick} />
+        <BeatList
+          beats={beats}
+          activeBeat={activeBeat}
+          onBeatClick={onBeatClick}
+          onEnlarge={setLightbox}
+        />
 
         {chat.map((message, index) => {
           const clickable =

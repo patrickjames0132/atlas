@@ -15,7 +15,6 @@ teacher/
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
   transcript/        ← sub-package: rendering the conversation
-    HistTrace.tsx    — the history lecture's backfill hops
     BeatList.tsx     — lecture beats (click to light their papers)
     ChatMessage.tsx  — one turn: retrieval line, trace chips, prose+figures
   teacher.css
@@ -26,7 +25,7 @@ structure rule's nesting case (the `graph/hooks` precedent).
 
 ## The state split (the directive, applied to the hardest case)
 
-- **In the store:** the transcript (chat/beats/histTrace — Save needs it),
+- **In the store:** the transcript (chat/beats — Save needs it),
   the highlight ids (the canvas needs them), discoveries (the graph and
   Save need them). `useConversation` dispatches; nothing is reported
   upward through props anymore — the old `onStateChange`/`initial*` prop
@@ -59,7 +58,8 @@ structure rule's nesting case (the `graph/hooks` precedent).
   restores via the store, not via remount props.
 - **Wire deltas absorbed here:** `onDiscovery` (was `onNodes`), error
   `{message}`, no `discard` handler (the researcher's pre-answer narration is
-  never streamed), `BackfillTrace` naming.
+  never streamed). Lectures stream beats only — they never expand the
+  graph, so the lecture handler has no trace/discovery callbacks.
 
 ## Who uses it, and how/why
 

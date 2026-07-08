@@ -41,7 +41,7 @@ export interface GraphNode {
   discovered?: boolean
   /**
    * The [n] index the researcher knows the paper by (discovered papers only;
-   * null when the lecture backfill found it, before numbering exists).
+   * null on discoveries restored from old saves, from before numbering).
    */
   idx?: number | null
 }

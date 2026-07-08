@@ -118,29 +118,6 @@ class SemanticScholarConfig(ConfigModel):
     )
 
 
-class Backfill(ConfigModel):
-    """The "How we got here" reference walk run before a history lecture.
-
-    Deterministic graph enrichment (no LLM): hop backward through references
-    from the oldest visible papers so the lecture can open at the field's
-    roots. See docs/configuration.md for how the knobs bound the walk.
-    """
-
-    hops: PositiveInt = Field(description="Max backward hops per walk.")
-    per_hop: PositiveInt = Field(
-        description="Most-cited new ancestors kept per hop (the seminal ones)."
-    )
-    frontier: PositiveInt = Field(
-        description="Oldest papers carried into the next hop as launch points."
-    )
-    lookback_years: PositiveInt = Field(
-        description="Stop once additions are this many years older than the seed."
-    )
-    fetch_limit: PositiveInt = Field(
-        description="References fetched per frontier paper on each hop."
-    )
-
-
 class GraphConfig(ConfigModel):
     """How big a neighborhood one seed paper pulls onto the canvas.
 
@@ -148,7 +125,6 @@ class GraphConfig(ConfigModel):
     limits and why ``recs_pool`` must stay "all-cs".
     """
 
-    backfill: Backfill
     ref_limit: PositiveInt = Field(description="Max references (papers it cites) to pull in.")
     cite_limit: PositiveInt = Field(description="Max citations (papers citing it) to pull in.")
     similar_limit: PositiveInt = Field(

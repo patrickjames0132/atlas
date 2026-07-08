@@ -4,15 +4,13 @@ references / citations / similar work, and a free-text paper search.
 This is the cached, agent-tuned layer over
 ``integrations.semantic_scholar.traversal`` (which talks to the live API and
 caches nothing) — same name, different job, and the cache is the point: the
-orchestrator's history backfill and the researcher's ``expand_node`` /
-``search_papers`` tools re-hit the same hops constantly within a session, and
-the rate-limited S2 API must not pay for each repeat. Results are cached for
-``config.graph.cache_ttl`` (the same day-long TTL as a graph snapshot —
-citation data changes slowly).
+researcher's ``expand_node`` / ``search_papers`` tools re-hit the same hops
+constantly within a session, and the rate-limited S2 API must not pay for
+each repeat. Results are cached for ``config.graph.cache_ttl`` (the same
+day-long TTL as a graph snapshot — citation data changes slowly).
 
 Plumbing, not tools: no model ever calls these directly. The researcher's tools
-wrap them with budgets, visited-sets, and numbering; the backfill loops over
-``neighbors`` raw.
+wrap them with budgets, visited-sets, and numbering.
 """
 
 from __future__ import annotations
@@ -55,7 +53,9 @@ def neighbors(paper_id: str, relation: Relation, limit: int) -> list[dict]:
         s2.S2Error: When the S2 request fails after retries (cache misses
             only — cached hops never touch the network).
     """
-    cache_key = f"expand:{relation}:{paper_id}:{limit}"
+    # v2 key: citation hops switched from most-cited to even-by-year selection
+    # — entries cached under the old ranking must not serve for the new one.
+    cache_key = f"expand:v2:{relation}:{paper_id}:{limit}"
     cached = cache.get(cache_key, config.graph.cache_ttl)
     if cached is not None:
         return cached

@@ -28,13 +28,25 @@ MODE_INTENTS: dict[LectureMode, str] = {
     LectureMode.HISTORY: (
         "Mode: HOW WE GOT HERE. Tell the story chronologically — from the "
         "oldest roots among the references, through the key ideas that made "
-        "each next step possible, to the SEED paper and the work it went on "
-        "to spawn (its citations)."
+        "each next step possible — and END AT the SEED paper: the seed is "
+        "the destination and the final beat. Never discuss work that came "
+        "after the seed (that story belongs to WHAT'S EVOLVED SINCE). When "
+        "figures from the story's papers are listed, attach the most "
+        "illuminating one to the beat about that paper (set the beat's "
+        "`figure` to its number) and weave what it shows into the narration."
     ),
     LectureMode.INTUITION: (
-        "Mode: INTUITION OF THIS PAPER. Center the SEED paper: what problem "
-        "it solved, the core idea, and why it works — using the surrounding "
-        "papers only for context and contrast."
+        "Mode: INTUITION OF THIS PAPER. Stay tightly on the SEED paper "
+        "itself — do NOT retell the field's history or tour the surrounding "
+        "graph (those are other modes' jobs). Walk through the paper's own "
+        "components: the problem it tackles, the core idea, how the method "
+        "actually works (architecture / algorithm / training), what the "
+        "results showed, and WHY the idea works. A surrounding paper may be "
+        "named only in passing, for contrast. When the SEED's figures are "
+        "listed, attach the most illuminating one to the beat it belongs to "
+        "(set the beat's `figure` to its number) and weave what the figure "
+        "shows into that beat's narration. When library passages are "
+        "provided, draw on them for extra context and attribute them inline."
     ),
     LectureMode.EVOLUTION: (
         "Mode: WHAT'S EVOLVED SINCE. Start at the SEED paper and move FORWARD "
@@ -42,7 +54,10 @@ MODE_INTENTS: dict[LectureMode, str] = {
         "architectures, and refinements its citations represent — showing how "
         "each step advanced the idea, and ending at the current frontier / "
         "state of the art. The reverse of HOW WE GOT HERE: tell the future, "
-        "not the past."
+        "not the past. When figures from the story's papers are listed, "
+        "attach the most illuminating one to the beat about that paper (set "
+        "the beat's `figure` to its number) and weave what it shows into the "
+        "narration."
     ),
     LectureMode.BRIDGE: (
         "Mode: BRIDGE. Build a conceptual bridge between the SEED paper and "

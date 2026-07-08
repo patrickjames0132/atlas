@@ -10,7 +10,7 @@ distant parts of the tree earns a slice.**
 store/
   index.ts       — configureStore + the typed useAppDispatch/useAppSelector
   workspace.ts   — the graph, discoveries, layout + load/restore/save thunks
-  transcript.ts  — the teacher's conversation (chat, beats, backfill trace)
+  transcript.ts  — the teacher's conversation (chat, beats)
   highlight.ts   — the papers the teacher is currently talking about
 ```
 

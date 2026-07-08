@@ -4,24 +4,19 @@
 graph.
 
 **Input:** seed paper, the visible graph nodes, a mode
-(`history` | `intuition` | `bridge`), and — bridge mode only — a target
-paper.
+(`history` | `intuition` | `evolution` | `bridge`), and — bridge mode only —
+a target paper.
 
 **Steps:**
 
-1. **History mode only, when the seed has an id:** run the
-   `history_backfill` tool first. It walks backward through references from
-   the oldest visible papers (day-cached hops, capped per hop, stopping at a
-   year floor or the hop budget) so the story can open at the field's roots
-   instead of mid-stream. Stream its `Trace` events (hop progress) and
-   `Discovery` events (ancestor nodes + edges for the live graph), and merge
-   the discovered nodes into the node set the lecturer will narrate over.
-   S2 failures on a hop are noted and skipped — a failed hop never aborts
-   the lecture. If nothing older was found, one final `Trace` says so.
-2. Delegate to the **lecturer** with the (possibly enriched) node set, mode,
-   and target. Stream its `Beat` events — each carries a heading, one tight
+1. Scope the visible nodes to the mode's side of the story
+   (`_story_nodes`): history ends AT the seed (only papers published in or
+   before the seed's year), evolution starts from it (in or after);
+   intuition and bridge see everything. A lecture never expands nodes —
+   pulling new papers in is the researcher's job, on explicit questions.
+2. Delegate to the **lecturer** with the scoped node set, mode, and
+   target. Stream its `Beat` events — each carries a heading, one tight
    narration paragraph, and the node ids to light up — as they arrive.
-3. Emit `Done` (or `Error` if the lecturer failed; backfill problems are
-   never fatal).
+3. Emit `Done` (or `Error` if the lecturer failed).
 
-**Events, in order:** [`Trace`* `Discovery`*] `Beat`+ `Done` | `Error`
+**Events, in order:** `Beat`+ `Done` | `Error`

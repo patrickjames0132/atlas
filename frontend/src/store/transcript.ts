@@ -1,7 +1,7 @@
 /**
- * The transcript slice: the teacher's conversation — chat turns, lecture
- * beats, and the history-backfill trace. The teacher panel dispatches as
- * streams arrive; Save selects it; restore repopulates it.
+ * The transcript slice: the teacher's conversation — chat turns and lecture
+ * beats. The teacher panel dispatches as streams arrive; Save selects it;
+ * restore repopulates it.
  *
  * This slice is why the old `onStateChange`/`teacherStateRef` plumbing died:
  * the transcript used to live in Teacher.tsx with a live duplicate hoisted
@@ -13,7 +13,6 @@ import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import type {
   AnswerFigure,
-  BackfillTrace,
   Beat,
   ChatMsg,
   RetrieveEvent,
@@ -24,10 +23,9 @@ import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 export interface TranscriptState {
   chat: ChatMsg[]
   beats: Beat[]
-  histTrace: BackfillTrace[]
 }
 
-const initialState: TranscriptState = { chat: [], beats: [], histTrace: [] }
+const initialState: TranscriptState = { chat: [], beats: [] }
 
 /** The in-flight assistant message — streams always write to the last turn. */
 const lastMsg = (state: TranscriptState) => state.chat[state.chat.length - 1]
@@ -36,16 +34,12 @@ const transcriptSlice = createSlice({
   name: 'transcript',
   initialState,
   reducers: {
-    /** A lecture starts: clear beats + backfill trace, keep the chat. */
+    /** A lecture starts: clear the beats, keep the chat. */
     lectureStarted(state) {
       state.beats = []
-      state.histTrace = []
     },
     beatAdded(state, action: PayloadAction<Beat>) {
       state.beats.push(action.payload)
-    },
-    histTraceAdded(state, action: PayloadAction<BackfillTrace>) {
-      state.histTrace.push(action.payload)
     },
     /** A question begins: the user turn plus the empty assistant turn the
      * answer streams into. */
@@ -91,7 +85,6 @@ const transcriptSlice = createSlice({
 export const {
   lectureStarted,
   beatAdded,
-  histTraceAdded,
   turnStarted,
   tokenAppended,
   traceAdded,

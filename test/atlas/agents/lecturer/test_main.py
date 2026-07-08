@@ -1,5 +1,7 @@
 """The lecturer: typed beats stream out with indices mapped to node ids,
-junk beats/indices are dropped, and each mode shapes the prompt."""
+junk beats/indices are dropped, each mode shapes the prompt, and lectures
+are illustrated — intuition pools the seed's own figures (+ library
+passages); history/evolution pool the story's landmark papers' figures."""
 
 from __future__ import annotations
 
@@ -8,6 +10,7 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from atlas.agents import events, lecturer
+from atlas.agents.lecturer import main as lecturer_main
 from atlas.agents.models import LectureMode
 from atlas.services.graph import Node
 
@@ -124,3 +127,158 @@ def test_model_failure_propagates_to_the_caller():
     with lecturer.agent.override(model=FunctionModel(stream_function=boom)):
         with pytest.raises(RuntimeError, match="api down"):
             list(lecturer.lecture(SEED, NODES))
+
+
+# --- Intuition mode: grounded in the seed itself ------------------------------
+
+ARXIV_SEED = make_node(
+    "seed01", "Playing Atari with Deep RL", is_seed=True, rels=[], arxiv_id="1312.5602"
+)
+FIGS = [
+    {"image": "https://ar5iv.org/fig1.png", "caption": "The DQN architecture"},
+    {"image": "https://ar5iv.org/fig2.png", "caption": "Training curves"},
+]
+
+
+def _ground(monkeypatch, figures=FIGS, passages=()):
+    """Fake the intuition grounding fetches (no ar5iv, no library DB)."""
+    seen: dict = {}
+
+    def fake_figures(arxiv_id):
+        seen["arxiv_id"] = arxiv_id
+        return {"figures": list(figures)}
+
+    def fake_search(query, top_k=None, source_ids=None):
+        seen["query"] = query
+        return list(passages)
+
+    monkeypatch.setattr(lecturer_main.figures_mod, "get_figures", fake_figures)
+    monkeypatch.setattr(lecturer_main.retrieval, "search", fake_search)
+    return seen
+
+
+def test_intuition_prompt_lists_seed_figures_and_library_passages(monkeypatch):
+    passages = [{"source_title": "Sutton & Barto", "page": 131, "text": "Q-learning is..."}]
+    seen_ground = _ground(monkeypatch, passages=passages)
+    seen: dict = {}
+    with lecturer.agent.override(model=record_model(seen)):
+        with pytest.raises(RuntimeError):
+            list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
+    prompt = seen["request"].parts[-1].content
+    assert prompt.startswith("Mode: INTUITION OF THIS PAPER")
+    # The seed's own figures, numbered for the beat's `figure` field...
+    assert "Figures of the SEED paper" in prompt
+    assert "1. The DQN architecture" in prompt and "2. Training curves" in prompt
+    # ...and the library passages, attributed.
+    assert "[Sutton & Barto, p.131] Q-learning is..." in prompt
+    # Grounding queried the right things: the seed's arXiv id and title.
+    assert seen_ground["arxiv_id"] == "1312.5602"
+    assert seen_ground["query"] == "Playing Atari with Deep RL"
+
+
+def test_intuition_beats_carry_the_attached_seed_figure(monkeypatch):
+    _ground(monkeypatch)
+    model = beats_model(
+        [
+            {"heading": "The idea", "text": "One net.", "nodes": [1], "figure": 1},
+            {"heading": "Junk", "text": "Bad number.", "nodes": [], "figure": 99},
+            {"heading": "Plain", "text": "No figure.", "nodes": []},
+        ]
+    )
+    with lecturer.agent.override(model=model):
+        out = list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
+    assert out[0].figure == events.BeatFigure(
+        image="/api/figure_proxy?src=https%3A%2F%2Far5iv.org%2Ffig1.png",
+        caption="The DQN architecture",
+        number=1,
+    )
+    # A hallucinated number and an omitted one both mean "no figure".
+    assert out[1].figure is None and out[2].figure is None
+
+
+def test_story_modes_pool_the_landmark_papers_figures(monkeypatch):
+    calls: list[str] = []
+
+    def fake_figures(arxiv_id):
+        calls.append(arxiv_id)
+        return {"figures": [
+            {"image": f"https://ar5iv.org/{arxiv_id}/f{number}.png",
+             "caption": f"{arxiv_id} fig {number}"}
+            for number in range(1, 6)  # five figures — the per-paper cap keeps 3
+        ]}
+
+    monkeypatch.setattr(lecturer_main.figures_mod, "get_figures", fake_figures)
+    monkeypatch.setattr(
+        lecturer_main.retrieval, "search",
+        lambda query, top_k=None, source_ids=None: pytest.fail(
+            "the library must not be searched outside intuition mode"
+        ),
+    )
+    ancestors = [
+        make_node(f"anc{number}", f"Ancestor {number}", year=1990 + number,
+                  arxiv_id=f"90{number}.0000{number}", citation_count=number * 100)
+        for number in range(1, 7)  # six arXiv ancestors — the pool keeps the top 4
+    ]
+    # A mega-cited journal paper with no arXiv render contributes nothing.
+    plain = make_node("noarxiv", "Journal Paper", year=1995, citation_count=10**6)
+    seen: dict = {}
+    with lecturer.agent.override(model=record_model(seen)):
+        with pytest.raises(RuntimeError):
+            list(lecturer.lecture(ARXIV_SEED, [ARXIV_SEED, plain, *ancestors]))  # history
+    prompt = seen["request"].parts[-1].content
+    assert "Figures from the story's papers" in prompt
+    # The seed leads, then the 4 most-cited arXiv papers.
+    assert calls == ["1312.5602", "906.00006", "905.00005", "904.00004", "903.00003"]
+    # Entries carry their source paper, 3 figures per paper (5 x 3 = 15).
+    assert "[Ancestor 6] 906.00006 fig 1" in prompt
+    assert prompt.count("[Ancestor 6]") == 3
+    assert "\n15. " in prompt and "\n16. " not in prompt
+
+
+def test_story_beat_figures_carry_the_source_paper(monkeypatch):
+    monkeypatch.setattr(
+        lecturer_main.figures_mod, "get_figures",
+        lambda arxiv_id: {"figures": [{"image": "https://ar5iv.org/f1.png", "caption": "Arch"}]},
+    )
+    model = beats_model([{"heading": "H", "text": "T.", "nodes": [1], "figure": 1}])
+    with lecturer.agent.override(model=model):
+        out = list(lecturer.lecture(ARXIV_SEED, NODES))  # history; pool = the seed's figure
+    assert out[0].figure == events.BeatFigure(
+        image="/api/figure_proxy?src=https%3A%2F%2Far5iv.org%2Ff1.png",
+        caption="Arch",
+        number=1,
+        title="Playing Atari with Deep RL",
+    )
+
+
+def test_bridge_mode_fetches_no_grounding(monkeypatch):
+    monkeypatch.setattr(
+        lecturer_main.figures_mod, "get_figures",
+        lambda arxiv_id: pytest.fail("bridge lectures show no figures"),
+    )
+    monkeypatch.setattr(
+        lecturer_main.retrieval, "search",
+        lambda query, top_k=None, source_ids=None: pytest.fail(
+            "the library must not be searched outside intuition mode"
+        ),
+    )
+    seen: dict = {}
+    target = make_node("node04", "Attention Is All You Need", year=2017)
+    with lecturer.agent.override(model=record_model(seen)):
+        with pytest.raises(RuntimeError):
+            list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.BRIDGE, target=target))
+    prompt = seen["request"].parts[-1].content
+    assert "Figures" not in prompt and "library" not in prompt
+
+
+def test_intuition_grounding_failures_never_block_the_lecture(monkeypatch):
+    def explode(*args, **kwargs):
+        raise RuntimeError("ar5iv down")
+
+    monkeypatch.setattr(lecturer_main.figures_mod, "get_figures", explode)
+    monkeypatch.setattr(lecturer_main.retrieval, "search", explode)
+    model = beats_model([{"heading": "H", "text": "Still lectures.", "nodes": [1]}])
+    with lecturer.agent.override(model=model):
+        out = list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
+    assert [beat.text for beat in out] == ["Still lectures."]
+    assert out[0].figure is None
