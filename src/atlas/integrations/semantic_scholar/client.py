@@ -80,7 +80,7 @@ def headers() -> dict:
     return request_headers
 
 
-def request(url: str, *, method: str = "GET", body: dict | None = None, tries: int = 4) -> object:
+def request(url: str, *, method: str = "GET", body: dict | None = None, tries: int = 6) -> object:
     """Perform one throttled S2 HTTP request with 429 backoff.
 
     Args:
@@ -88,7 +88,11 @@ def request(url: str, *, method: str = "GET", body: dict | None = None, tries: i
         method: HTTP method, ``"GET"`` or ``"POST"``.
         body: JSON-serializable request body for POSTs, or None.
         tries: Total attempts before giving up on repeated 429s. Backoff
-            between attempts is exponential (1, 2, 4 seconds).
+            between attempts is exponential (1, 2, 4, 8, 16 seconds) — patient
+            enough to ride out a sustained 429 burst, which matters now that a
+            mega seed build pages the citation list up to ~10 times (plus mining
+            batches). If 429s still bite, raise ``s2.min_interval`` in config to
+            space requests further apart.
 
     Returns:
         The decoded JSON response (a dict or list, per endpoint).
@@ -108,7 +112,7 @@ def request(url: str, *, method: str = "GET", body: dict | None = None, tries: i
         except urllib.error.HTTPError as exc:
             last_error = exc
             if exc.code == 429 and attempt < tries - 1:
-                wait = 2**attempt  # 1, 2, 4 seconds
+                wait = 2**attempt  # 1, 2, 4, 8, 16 seconds
                 log.warning("S2 429 on %s; backing off %ss", url, wait)
                 time.sleep(wait)
                 continue

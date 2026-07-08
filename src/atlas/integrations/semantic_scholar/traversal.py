@@ -22,8 +22,15 @@ _BATCH_MAX = 500  # S2 caps /paper/batch at 500 ids per call.
 # up entirely with this year's obscure citing papers before a single famous,
 # decades-old citing paper is ever seen. So we over-fetch up to this many
 # candidates in one call (S2 accepts it; still one request) and rank locally
-# by citation count before trimming to the caller's `limit`.
+# by citation count before trimming to the caller's `limit`. Also the page
+# size for deep paging (below): S2's max per-request `limit`.
 _RANK_POOL = 1000
+
+# Deepest offset a citations page may request. S2 rejects offset+limit past
+# ~10k, so with a 1000-id page the last servable window is offset 9000
+# (9000+1000 = 10000). Deep paging stops here; anything older is only
+# reachable via landmark mining.
+_MAX_OFFSET = 9000
 
 # The "latest" citation window: a citer whose publication date falls within
 # this many months of today is the recent *frontier* (its own graph relation),
@@ -323,37 +330,96 @@ def references(paper_id: str, limit: int) -> list[dict]:
     return _neighbors(f"{client.quote(paper_id)}/references", "citedPaper", limit)
 
 
-def _citation_pool(paper_id: str, total_count: int | None, year: int | None) -> list[dict]:
-    """The raw citer pool a citation build draws from — one newest page, plus
-    mined landmarks when the list overflows that page.
+def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
+    """Fetch the reachable citer pool, newest-first, deduped.
 
-    S2 lists citing papers newest-first, so one over-fetched page (``_RANK_POOL``)
-    is the recent tip. When the paper has more citers than fit that page
-    (``total_count > _RANK_POOL``), its big historic citers sit deeper than any
-    offset can safely reach, so we recover them by *mining* — the primary source
-    of a mega paper's landmarks now that stratified offset sampling is gone. The
-    newest page still matters even for a mega seed: it supplies the recent
-    ``latest`` citers and the mining sources. A modestly-cited paper's page IS
-    its complete citation list, so mining is skipped.
+    ``deep=False`` (graph expansion) is a single newest page — the recent tip.
+    ``deep=True`` (the seed build) pages S2's newest-first citation list until
+    the whole rolling ``latest`` window is captured: it keeps fetching 1000-id
+    pages (offset 0, 1000, 2000, …) and stops once a page holds NO in-window
+    citer (so the window boundary is behind us), the list runs out, or the
+    ``_MAX_OFFSET`` ceiling is hit. For a hyper-cited seed whose newest 1000
+    citers are all inside the window, that means paging deep — up to ~10k
+    citers — which is the point: it both completes ``latest`` and surfaces the
+    mid-era citers just past the boundary (the landmark "middle band" one page
+    overshoots).
+
+    Args:
+        paper_id: An S2 paperId or prefixed id.
+        deep: Page to the window boundary/ceiling (seed build) vs. one page.
+
+    Returns:
+        The deduped ``[{"node", "influential"}]`` pool, newest-first.
+
+    Raises:
+        client.S2Error: When the *newest* page (offset 0) fails — a real
+            outage. A deeper page S2 rejects is swallowed (degrade to the
+            range reached), matching the offset-ceiling reality.
+    """
+    path = f"{client.quote(paper_id)}/citations"
+    if not deep:
+        return _fetch_page(path, "citingPaper", _RANK_POOL)
+
+    cutoff = _latest_cutoff()
+    pool: list[dict] = []
+    seen: set[str] = set()
+    offset = 0
+    while True:
+        try:
+            page = _fetch_page(path, "citingPaper", _RANK_POOL, offset=offset)
+        except client.S2Error:
+            if offset == 0:
+                raise  # the newest page failing is an outage, not a deep-window skip
+            break  # a page past the ceiling / list end S2 won't serve — take what we have
+        if not page:
+            break  # ran off the end of the citation list
+        for entry in page:
+            paper = entry["node"]["id"]
+            if paper not in seen:
+                seen.add(paper)
+                pool.append(entry)
+        # Newest-first: once a page holds no in-window citer, the rolling window
+        # is fully behind us — stop. Otherwise keep paging (bounded by the ceiling).
+        if not any(_is_latest(entry, cutoff) for entry in page):
+            break
+        offset += _RANK_POOL
+        if offset > _MAX_OFFSET:
+            break
+    return pool
+
+
+def _citation_pool(
+    paper_id: str, total_count: int | None, year: int | None, *, deep: bool
+) -> list[dict]:
+    """The raw citer pool a citation build draws from — the reachable citers
+    (one page, or paged to the window boundary when ``deep``), plus mined
+    landmarks when the list overflows what paging can reach.
+
+    When the paper has more citers than deep paging can reach
+    (``total_count > _RANK_POOL``), its oldest big citers sit past the offset
+    ceiling, so we recover them by *mining* — from the reference lists of the
+    most-cited reachable citers (now drawn across the whole paged pool, so
+    deeper paging yields better mining sources too). A modestly-cited paper's
+    page IS its complete citation list, so mining is skipped.
 
     Args:
         paper_id: An S2 paperId or prefixed id.
         total_count: The paper's total citation count, when known (decides
-            whether mining runs). Omitted/None = treat the page as complete.
+            whether mining runs). Omitted/None = treat the pool as complete.
         year: The paper's publication year, when known — bounds mining's
             candidate window (see ``_mined_landmarks``).
+        deep: Page to the window boundary (seed build) vs. one page (expansion).
 
     Returns:
-        The deduped ``[{"node", "influential"}]`` pool (newest page ∪ mined).
+        The deduped ``[{"node", "influential"}]`` pool (reachable ∪ mined).
 
     Raises:
         client.S2Error: When the newest-page request fails (mining never
-            raises — it degrades to the page alone).
+            raises — it degrades to the reachable pool).
     """
-    path = f"{client.quote(paper_id)}/citations"
-    pool = _fetch_page(path, "citingPaper", _RANK_POOL)
+    pool = _fetch_citers(paper_id, deep=deep)
     if total_count and total_count > _RANK_POOL:
-        # The page can't reach the older landmarks — mine them from reachable
+        # Older landmarks sit past what paging reaches — mine them from reachable
         # citers' reference lists and verify each actually cites the seed.
         pool = pool + _mined_landmarks(paper_id, pool, year)
     return pool
@@ -364,9 +430,10 @@ def citations(
 ) -> list[dict]:
     """Fetch the papers that CITE this one, most-cited first (its landmarks).
 
-    The single-relation view used by on-demand graph expansion: the pool from
-    ``_citation_pool`` ranked by citation count. The seed-build path instead
-    calls ``citation_relations`` to split the pool into landmark vs recent
+    The single-relation view used by on-demand graph expansion: one newest page
+    (no deep paging — expansion wants the tip, fast), ranked by citation count.
+    The seed-build path instead calls ``citation_relations``, which pages to the
+    latest-window boundary and splits the pool into landmark vs recent
     (``latest``) citers.
 
     Args:
@@ -384,7 +451,7 @@ def citations(
         client.S2Error: When the request fails after retries (landmark
             mining never raises — it degrades to the newest page).
     """
-    return _select_by_influence(_citation_pool(paper_id, total_count, year), limit)
+    return _select_by_influence(_citation_pool(paper_id, total_count, year, deep=False), limit)
 
 
 def citation_relations(
@@ -397,11 +464,14 @@ def citation_relations(
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's citers into two relations: landmarks and the latest frontier.
 
-    One citer pool (``_citation_pool``) partitioned by publication date: citers
-    inside the rolling ``_LATEST_WINDOW_MONTHS`` window are the recent
-    **frontier** (``latest``, newest-first), and everything older competes as a
-    historic **landmark** (``citation``, most-cited first). The two are disjoint,
-    so a recent-but-highly-cited paper shows once, as ``latest``.
+    The citer pool is paged to the latest-window boundary (``_citation_pool``
+    with ``deep=True``) then partitioned by publication date: citers inside the
+    rolling ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier**
+    (``latest``, newest-first), and everything older competes as a historic
+    **landmark** (``citation``, most-cited first). Deep paging means ``latest``
+    covers the whole window (not just the newest page) and the citers just past
+    the boundary fill the landmark middle band. The two are disjoint, so a
+    recent-but-highly-cited paper shows once, as ``latest``.
 
     Args:
         paper_id: An S2 paperId or prefixed id.
@@ -418,7 +488,7 @@ def citation_relations(
         client.S2Error: When the request fails after retries (landmark
             mining never raises — it degrades to the newest page).
     """
-    pool = _citation_pool(paper_id, total_count, year)
+    pool = _citation_pool(paper_id, total_count, year, deep=True)
     cutoff = _latest_cutoff()
     recent = [entry for entry in pool if _is_latest(entry, cutoff)]
     older = [entry for entry in pool if not _is_latest(entry, cutoff)]

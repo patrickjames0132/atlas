@@ -93,6 +93,8 @@ def test_citation_relations_splits_latest_from_landmark(monkeypatch):
     most-cited first. The two partitions are disjoint."""
 
     def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}  # one page is the whole list here
         return {
             "data": [
                 {"citingPaper": {"paperId": "fresh", "citationCount": 2, "publicationDate": _iso(40)}},
@@ -113,6 +115,8 @@ def test_citation_relations_undated_citer_is_landmark_not_latest(monkeypatch):
     so it competes as a historic landmark rather than being guessed into latest."""
 
     def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
         return {
             "data": [
                 {"citingPaper": {"paperId": "undated", "citationCount": 9999}},
@@ -130,6 +134,8 @@ def test_citation_relations_respects_each_limit(monkeypatch):
     """landmark_limit and latest_limit trim their partitions independently."""
 
     def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
         return {
             "data": [
                 {"citingPaper": {"paperId": f"old{index}", "citationCount": 100 - index,
@@ -154,7 +160,36 @@ def _offset_of(url: str) -> int:
     return int(match.group(1)) if match else 0
 
 
-def test_citations_mega_fetches_one_page_then_mines(monkeypatch):
+def test_citation_relations_pages_until_the_window_boundary(monkeypatch):
+    """The seed build pages newest-first while pages hold in-window citers and
+    stops at the first page fully past the window — so `latest` spans multiple
+    pages and the boundary page's older citers become landmark candidates."""
+    seen_offsets = []
+
+    def fake_request(url, method="GET", body=None, **kw):
+        if "/paper/batch" in url:
+            return []  # mining harvest/verify — empty, isolate the paging
+        offset = _offset_of(url)
+        seen_offsets.append(offset)
+        if offset == 0:
+            return {"data": [{"citingPaper": {"paperId": "new0", "citationCount": 1,
+                                              "publicationDate": _iso(10)}}]}
+        if offset == 1000:
+            return {"data": [{"citingPaper": {"paperId": "new1", "citationCount": 1,
+                                              "publicationDate": _iso(200)}}]}
+        # offset 2000: all older than the 12-month window → boundary crossed.
+        return {"data": [{"citingPaper": {"paperId": "old", "citationCount": 500,
+                                          "publicationDate": _iso(3000)}}]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    landmark, latest = traversal.citation_relations(
+        "p1", landmark_limit=10, latest_limit=10, total_count=150000, year=2013)
+    assert seen_offsets == [0, 1000, 2000]  # paged through the boundary page, then stopped
+    assert {hit["node"]["id"] for hit in latest} == {"new0", "new1"}  # both in-window pages
+    assert "old" in {hit["node"]["id"] for hit in landmark}  # boundary page → landmark
+
+
+def test_citations_expansion_fetches_one_page_then_mines(monkeypatch):
     """A mega seed fetches exactly ONE newest page (offset 0) and recovers its
     landmarks by mining — the old stratified offset windows are gone."""
     offsets = []

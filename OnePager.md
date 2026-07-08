@@ -824,7 +824,9 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 - **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
   last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
 
-Shipped as three small, browser-testable increments:
+Shipped as small, browser-testable increments. **Remaining order: D → B → C**
+(Ship D lands first — it improves the citation *data* the lecture will narrate
+and closes a real coverage gap).
 
 - [x] **Ship A — backend split + `latest` relation** *(v3.3.0)*. New `latest`
       edge type through `model.py`/`build.py`/counts; `citation_relations()`
@@ -840,22 +842,44 @@ Shipped as three small, browser-testable increments:
       `integrations/semantic_scholar/README.md`. *Known ceiling: hyper-cited
       seeds (DQN ~16 landmarks) are capped by S2 truncating nested `references`
       arrays + the "invisible unless a source cites it" limit — see README.*
-- [ ] **Ship B — "The current frontier" lecture** *(v3.4.0)*. New
+- [x] **Ship D — page deeper to complete the latest window + fill the landmark
+      middle band** *(v3.4.0)*. `_fetch_citers(deep=True)` pages the citer list
+      (offsets 0, 1000, 2000…), stopping at the first page with no in-window
+      citer, the list end, or the `_MAX_OFFSET` (~10k) ceiling. `latest` now
+      covers the *whole* rolling window; the citers just past the boundary fill
+      the landmark middle band. **Verified on DQN: ~3k citers paged, landmark
+      relation went 16 → the full `cite_limit` (60) of real 2016–2024 citers,
+      evenly spread.** For hyper-cited seeds (AIAYN) the past-ceiling tail still
+      comes from mining — complementary. Graph expansion (`citations()`) stays
+      one page. Paired **429 hardening**: `client.request` default `tries` 4 → 6
+      (backoff to 16s) so a mega build's ~10 pages ride out sustained 429s;
+      `min_interval` is the further lever. *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Ship B — "The current frontier" lecture** *(v3.5.0)*. New
       `LectureMode.FRONTIER` ("The current frontier"); the orchestrator's
       `_story_nodes` scopes it to seed + any-relation nodes within the last 12
       months — which **automatically folds in recent `similar` nodes too**, the
       same way `EVOLUTION` already time-scopes (relation-agnostic; verified in
       `orchestrator/main.py:_story_nodes`). Config `MODE_INTENTS` entry + frontend
       mode button (`Teacher.tsx`).
-- [ ] **Ship C — live per-relation count sliders** *(v3.5.0)*. Sliders to control
-      how many references/citations/similar/**latest** papers are shown, live
-      (today's counts fixed at build time by `ref_limit`/`cite_limit`/
-      `similar_limit`). Raising a slider reveals more of an already-cached pool
-      rather than re-querying: backend over-fetches & caches a ranked pool per
-      relation (config `graph.pool_limit`) with each `Edge` carrying a `rank`.
-      **Salvage from `stash@{0}`** — this mechanism (pool_limit/rank + chip-toggle
-      +slider UI) was already built there. *(From the `todos.md` inbox,
-      2026-07-06; folded into this phase.)*
+- [ ] **Ship C — live per-relation count sliders** *(v3.6.0)*. Sliders to control
+      how many references/citations/similar/**latest** papers are shown, live.
+      **Design (Patrick, 2026-07-08): no `pool_limit` cap — fetch as many nodes as
+      possible per relation in the backend and ship them all**; each slider
+      *defaults to a modest 25* (all relation types) and its **max is that
+      relation's available count** (whatever was fetched). So the slider is a pure
+      client-side reveal over an already-shipped, fully-ranked set — raising it
+      never re-queries. (Backend already ranks each relation and the deep-paged
+      citation pool can be large, so "ship everything" means dropping the
+      `cite_limit`/`latest_limit`/etc. *display* trims — they become fetch-side
+      bounds only, or go away — and letting the 25-default slider do the trimming;
+      keep the `rank` edge field as the reveal order.) **Salvage from `stash@{0}`**
+      the chip-toggle+slider UI + `rank` mechanism (its `pool_limit` cap is the one
+      part we're *dropping* per the new design). Also **fold in the citation-chip
+      relabel** (`todos.md`, 2026-07-08): section the two citation chips under a
+      "Citations" heading in `GraphControls`, and rename `citation` → **"Field
+      Landmarks"** and `latest` → **"Latest Publications"** (`REL_LABEL` + Legend
+      to match). *(Slider from the `todos.md` inbox, 2026-07-06; fetch-everything +
+      relabel 2026-07-08; folded into this phase.)*
 
   - **Shelved WIP — `stash@{0}`** ("WIP v3.3.0-candidate: velocity reveal-order +
     configurable citation_pool …"), sitting on top of the earlier

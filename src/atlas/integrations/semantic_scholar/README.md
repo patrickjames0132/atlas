@@ -87,7 +87,7 @@ package needs to know it's a package internally.
 ## Citations: landmark vs latest, and the mining flow
 
 A seed's citers are split into **two relations** by `citation_relations()`, both
-built from **one** `citations` fetch (offset 0, the 1000 newest citers):
+built from **one paged citer fetch** (`_fetch_citers(deep=True)`):
 
 - **latest** (light-green nodes) — citers published within the rolling last
   `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. The recent
@@ -99,36 +99,53 @@ The two are **disjoint**: a recent-but-highly-cited paper shows once, as
 `latest`. A citer with no `pub_date` can't be placed in the window, so it
 competes as a `landmark`.
 
-### Why landmarks have to be *mined*
+### Deep paging: completing the window and filling the middle band
 
-S2 lists citing papers newest-first and won't page past a ~10k offset ceiling.
-For a mega-cited seed (e.g. DQN, ~14k citations; *Attention*, ~150k) the newest
-1000-citer page is **entirely recent** — so it's all `latest`, and it contains
-*none* of the historic landmarks. Those landmarks are unreachable by any offset.
+S2 lists citers newest-first, and one page is only 1000 citers. For a heavily-
+cited seed that page can span *less than a year* — so a single page (a) truncates
+the `latest` window and (b) never reaches the mid-era citers, leaving a gap
+between the recent frontier and the (mined) historic landmarks. So the seed build
+**pages** (offsets 0, 1000, 2000, …), stopping at the first page that holds no
+in-window citer (the rolling window is fully behind us), the list end, or the
+`_MAX_OFFSET` (~10k) ceiling. Two payoffs from one loop: `latest` now covers the
+*whole* window, and the citers just past the boundary are exactly the mid-era
+landmarks a single page overshot — so for a seed whose middle band is reachable
+(DQN: ~3k citers paged, `cite_limit` fully filled with real 2016–2024 citers) the
+"peter out toward recent" gap closes. Graph expansion (`citations()`, `deep=
+False`) stays one page — it wants the tip, fast.
 
-But landmarks are exactly the papers everyone *else* cites. So we recover them
-sideways, from the reference lists of the recent citers we *can* reach. The flow
-in `_mined_landmarks` (runs only when `total_count` overflows one page):
+For the truly hyper-cited (e.g. *Attention*, ~150k), the middle band sits *past*
+the ceiling even when paged, so mining (below) is still the only way to reach it.
+Paging and mining are complementary, not competing.
 
-1. **Page** — fetch offset 0 → the 1000 newest citers.
-2. **Sources** — keep the top `citation_mining.sources` (100) of them by citation
-   count. These are the mining sources (recent surveys are goldmines — they cite
-   every landmark).
-3. **Harvest** — one batch call pulls those 100 sources' **reference lists** (the
+### Why the deepest landmarks still have to be *mined*
+
+Deep paging reaches everything up to the ~10k offset ceiling. But a seed cited
+past that (e.g. *Attention*, ~150k) has its oldest landmarks sitting *beyond* the
+ceiling — unreachable by any offset, paged or not. Those we recover sideways:
+landmarks are exactly the papers everyone *else* cites, so we harvest them from
+the reference lists of the citers we *can* reach. The flow in `_mined_landmarks`
+(runs whenever `total_count` overflows what one page holds):
+
+1. **Sources** — from the (deep-paged) citer pool, keep the top
+   `citation_mining.sources` (100) by citation count. These are the mining
+   sources (recent surveys are goldmines — they cite every landmark); paging
+   deeper means they're drawn across a larger pool, so they're better sources.
+2. **Harvest** — one batch call pulls those 100 sources' **reference lists** (the
    papers *they* cite). That union is the raw candidate pool. *(The candidates are
    what the sources cite — not the sources themselves.)*
-4. **Filter** — dedup; keep only candidates published from the seed's year up to
+3. **Filter** — dedup; keep only candidates published from the seed's year up to
    *last* year (a pre-seed paper can't cite the seed; a current-year one is the
    `latest` frontier, not a landmark); drop any already on the graph.
-5. **Rank & cap** — sort by **co-citation frequency** (how many of the 100 sources
+4. **Rank & cap** — sort by **co-citation frequency** (how many of the 100 sources
    reference each candidate), tie-broken by raw citation count, and keep the top
    `citation_mining.candidates` (1000).
-6. **Verify** — check each candidate's *own* reference list for the seed and
+5. **Verify** — check each candidate's *own* reference list for the seed and
    **drop any that don't actually cite it**. The graph never invents an edge.
    Chunked at 500 ids/batch (so `candidates` may exceed S2's batch cap), and
    best-effort per chunk (one chunk's 429 doesn't nuke the rest).
-7. What survives → merged with the page's own older citers, ranked, trimmed to
-   `cite_limit` for display.
+6. What survives → merged with the paged pool's own older citers, ranked, trimmed
+   to `cite_limit` for display.
 
 ### The two knobs, and why co-citation ranking matters
 
@@ -147,15 +164,17 @@ they burn the verification budget before the real mid-tier citers are ever
 checked. Co-citation frequency instead surfaces the papers many seed-citers agree
 are foundational — which are overwhelmingly the ones that *also* cite the seed.
 
-### Known ceiling
+### Known ceiling (mining only)
 
-Mining can only find a landmark that **at least one sampled source references**;
-a genuine citer that none of the 100 recent sources happen to cite is invisible
-to this method. And S2 can **truncate the nested `references` arrays** in batch
-responses, so a landmark deep in a source's list (harvest) or a citer whose own
-reference list is truncated past the seed (verify) can be missed. Together these
-cap yield for hyper-cited seeds (DQN tops out around ~16 landmarks) — turning the
-knobs up helps but doesn't fully escape it.
+Deep paging removed the mid-era gap for seeds whose middle band is *reachable*
+(DQN now fills `cite_limit` from real paged citers, not just mining). The ceiling
+below only bites the *mined* tail — the past-10k-ceiling landmarks of a truly
+hyper-cited seed (*Attention*-scale): mining can only find a landmark that **at
+least one sampled source references**, and S2 can **truncate the nested
+`references` arrays** in batch responses, so a landmark deep in a source's list
+(harvest) or a citer whose own reference list is truncated past the seed (verify)
+can be missed. Turning the knobs up helps but doesn't fully escape it — but it now
+affects far fewer seeds than before paging.
 
 ## Field lists: three tiers on purpose
 
