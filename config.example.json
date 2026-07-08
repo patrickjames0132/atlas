@@ -12,7 +12,12 @@
   "graph": {
     "ref_limit": 25,
     "cite_limit": 25,
+    "latest_limit": 20,
     "similar_limit": 15,
+    "citation_mining": {
+      "sources": 100,
+      "candidates": 1000
+    },
     "recs_pool": "all-cs",
     "cache_ttl": 86400
   },

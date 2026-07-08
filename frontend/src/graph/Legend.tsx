@@ -31,6 +31,10 @@ export default function Legend({ hasDiscovered, hasSearchHits }: LegendProps) {
         Citations
       </span>
       <span>
+        <i style={{ background: REL_COLOR.latest }} />
+        Latest
+      </span>
+      <span>
         <i style={{ background: REL_COLOR.similar }} />
         Similar
       </span>

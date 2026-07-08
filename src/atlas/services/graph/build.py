@@ -80,13 +80,15 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     # already hydrated with light display fields, so there's no extra batch
     # call to flesh them out — what a traversal returns is ready to render.
     refs = s2.references(seed_id, config.graph.ref_limit)
-    # The seed's citation count drives stratified sampling of the citation
-    # pool — a mega-cited seed's pool spans its whole descendant era, not just
-    # the recent tip — before the even-by-year selection trims it; its year
-    # lets landmark mining prune candidates that predate it.
-    cites = s2.citations(
+    # Citations split into two relations from ONE newest-page fetch: landmark
+    # citers (the most-cited historic papers, up to last year — mined for a
+    # mega seed whose big citers sit past S2's offset ceiling) and the latest
+    # frontier (citers from the last ~12 months). total_count decides whether
+    # mining runs; year bounds the mining candidate window.
+    landmark_cites, latest_cites = s2.citation_relations(
         seed_id,
-        config.graph.cite_limit,
+        landmark_limit=config.graph.cite_limit,
+        latest_limit=config.graph.latest_limit,
         total_count=seed_paper.get("citation_count"),
         year=seed_paper.get("year"),
     )
@@ -108,7 +110,7 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
         Args:
             node_data: The normalized S2 node dict.
             rel: The relation that surfaced it (``reference | citation |
-                similar``).
+                similar | latest``).
         """
         existing = nodes.get(node_data["id"])
         if existing is None:
@@ -139,13 +141,23 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
 
     # Citations: papers that cite the SEED. Now the neighbor is the citer, so
     # the arrow runs descendant -> seed (the opposite direction from above).
-    for citation in cites:
+    # Two disjoint relations from the same split: landmark citers ("citation")
+    # and the recent frontier ("latest"), both citer -> seed.
+    for citation in landmark_cites:
         add_neighbor(citation["node"], "citation")
         edges.append(Edge(
             source=citation["node"]["id"],
             target=seed_id,
             type="citation",
             influential=citation["influential"],
+        ))
+    for latest in latest_cites:
+        add_neighbor(latest["node"], "latest")
+        edges.append(Edge(
+            source=latest["node"]["id"],
+            target=seed_id,
+            type="latest",
+            influential=latest["influential"],
         ))
 
     # Recommendations: embedding-similar papers. These are NOT citations, so
@@ -164,12 +176,13 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
         nodes=list(nodes.values()),
         edges=edges,
         # Raw traversal sizes (not deduped) plus the final node count. Note
-        # ``nodes`` < references + citations + similar whenever a paper appeared
-        # in more than one relation and got merged above.
+        # ``nodes`` < references + citations + similar + latest whenever a paper
+        # appeared in more than one relation and got merged above.
         counts=Counts(
             references=len(refs),
-            citations=len(cites),
+            citations=len(landmark_cites),
             similar=len(similar),
+            latest=len(latest_cites),
             nodes=len(nodes),
         ),
     )

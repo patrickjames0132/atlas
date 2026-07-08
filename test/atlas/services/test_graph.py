@@ -32,14 +32,16 @@ def fake_s2(monkeypatch):
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    def citations(pid, limit, total_count=None, year=None):
+    def citation_relations(pid, *, landmark_limit, latest_limit, total_count=None, year=None):
         calls["total_count"], calls["seed_year"] = total_count, year
-        return [{"node": make_node("cite1"), "influential": False}]
+        landmark = [{"node": make_node("cite1"), "influential": False}]
+        latest = [{"node": make_node("latest1", pub_date="2026-06-01"), "influential": False}]
+        return landmark, latest
 
     monkeypatch.setattr(build.s2, "get_paper", get_paper)
     monkeypatch.setattr(build.s2, "references",
                         lambda pid, limit: [{"node": make_node("ref1"), "influential": True}])
-    monkeypatch.setattr(build.s2, "citations", citations)
+    monkeypatch.setattr(build.s2, "citation_relations", citation_relations)
     # The similar hit overlaps ref1 — must accumulate rels, not duplicate.
     monkeypatch.setattr(build.s2, "recommendations",
                         lambda pid, limit: [{"node": make_node("sim1")}, {"node": make_node("ref1")}])
@@ -57,16 +59,18 @@ def test_build_graph_shape(fake_s2):
     assert by_id["seed"].is_seed is True and by_id["seed"].rels == ["seed"]
     # ref1 was surfaced by both references and recommendations — one node, both rels.
     assert by_id["ref1"].rels == ["reference", "similar"]
-    assert len(graph.nodes) == 4  # seed, ref1, cite1, sim1 — deduped
+    assert len(graph.nodes) == 5  # seed, ref1, cite1, sim1, latest1 — deduped
 
     # Edge directions: seed cites ref (seed->ref); citer cites seed (cite->seed).
     assert Edge(source="seed", target="ref1", type="reference", influential=True) in graph.edges
     assert Edge(source="cite1", target="seed", type="citation", influential=False) in graph.edges
+    # latest citers run citer->seed too, on their own relation.
+    assert Edge(source="latest1", target="seed", type="latest", influential=False) in graph.edges
     # similar edges carry no influential (None).
     assert Edge(source="seed", target="sim1", type="similar") in graph.edges
-    assert graph.counts == Counts(references=1, citations=1, similar=2, nodes=4)
-    # The seed's citation count rode along so the citation pool can stratify,
-    # and its year so landmark mining can prune pre-seed candidates.
+    assert graph.counts == Counts(references=1, citations=1, similar=2, latest=1, nodes=5)
+    # The seed's citation count rode along so mining can trigger, and its year
+    # so landmark mining can bound the candidate window.
     assert fake_s2["total_count"] == 1 and fake_s2["seed_year"] == 2020
 
 

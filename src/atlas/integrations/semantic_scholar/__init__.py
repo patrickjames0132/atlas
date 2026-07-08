@@ -33,10 +33,18 @@ from __future__ import annotations
 from . import vocab
 from .client import S2Error
 from .search import match_title, search_papers
-from .traversal import citations, get_paper, get_papers, recommendations, references
+from .traversal import (
+    citation_relations,
+    citations,
+    get_paper,
+    get_papers,
+    recommendations,
+    references,
+)
 
 __all__ = [
     "S2Error",
+    "citation_relations",
     "citations",
     "get_paper",
     "get_papers",

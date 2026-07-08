@@ -4,7 +4,7 @@
  */
 
 /** How two papers on the graph relate. */
-export type EdgeType = 'reference' | 'citation' | 'similar'
+export type EdgeType = 'reference' | 'citation' | 'similar' | 'latest'
 
 /**
  * One paper on the graph. Shape mirrors the backend's `services.graph.Node`
@@ -34,7 +34,7 @@ export interface GraphNode {
    * them on open; a restored pre-v2.6 session may omit it entirely.
    */
   fields_of_study?: string[]
-  /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'similar' | 'search'. */
+  /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean
   /** Added mid-conversation by the researcher's expand_node / search_papers tools. */
@@ -68,6 +68,7 @@ export interface GraphResponse {
     references: number
     citations: number
     similar: number
+    latest: number
     nodes: number
   }
 }

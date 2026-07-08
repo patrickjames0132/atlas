@@ -118,6 +118,36 @@ class SemanticScholarConfig(ConfigModel):
     )
 
 
+class CitationMiningConfig(ConfigModel):
+    """Landmark mining budgets (see ``integrations/semantic_scholar/traversal.py``
+    ``_mined_landmarks``).
+
+    Mining recovers a mega paper's big citers from the reference lists of its
+    reachable citers, then verifies each actually cites the seed. Two knobs
+    trade coverage against S2 load:
+
+    * ``sources`` widens the *net* — more reference lists harvested means a
+      larger, less-overlapping union of candidate landmarks (still ONE harvest
+      batch, so it costs payload, not requests).
+    * ``candidates`` widens *how many* of that pool get verified. It matters
+      more than it looks: candidates are ranked by citation count, and the very
+      top is dominated by post-seed giants that DON'T cite the seed, so a small
+      cap wastes its slots on them and starves the real mid-tier citers. Raising
+      it reaches those — at the cost of one extra verification batch per 500
+      (verification chunks to respect S2's 500-id batch cap).
+    """
+
+    sources: PositiveInt = Field(
+        description="Reachable citers whose reference lists are harvested for landmark "
+        "candidates. Wider = more distinct mid-era landmarks surfaced; one harvest batch."
+    )
+    candidates: PositiveInt = Field(
+        description="Top candidates (ranked by citation count) sent to citation "
+        "verification. Higher reaches past the non-citing giants to the real mid-tier "
+        "citers; costs one verification batch per 500 candidates."
+    )
+
+
 class GraphConfig(ConfigModel):
     """How big a neighborhood one seed paper pulls onto the canvas.
 
@@ -126,9 +156,19 @@ class GraphConfig(ConfigModel):
     """
 
     ref_limit: PositiveInt = Field(description="Max references (papers it cites) to pull in.")
-    cite_limit: PositiveInt = Field(description="Max citations (papers citing it) to pull in.")
+    cite_limit: PositiveInt = Field(
+        description="Max LANDMARK citations (the most-cited historic papers citing it, "
+        "up to last year) to pull in as 'citation' nodes."
+    )
+    latest_limit: PositiveInt = Field(
+        description="Max LATEST citations (the recent frontier — citers from the last "
+        "~12 months) to pull in as 'latest' nodes, a relation of their own."
+    )
     similar_limit: PositiveInt = Field(
         description="Max SPECTER2-embedding neighbors to pull in as 'similar' nodes."
+    )
+    citation_mining: CitationMiningConfig = Field(
+        description="Landmark-mining budgets for mega-cited seeds (see CitationMiningConfig)."
     )
     recs_pool: Literal["all-cs", "recent"] = Field(
         description="Candidate pool for similar-paper recommendations. 'recent' "

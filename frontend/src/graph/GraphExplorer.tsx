@@ -92,7 +92,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     const years = nodes
       .map((node) => node.year)
       .filter((year): year is number => typeof year === 'number')
-    const counts: Record<string, number> = { reference: 0, citation: 0, similar: 0 }
+    const counts: Record<string, number> = { reference: 0, citation: 0, latest: 0, similar: 0 }
     nodes.forEach((node) =>
       node.rels.forEach((rel) => {
         if (rel in counts) counts[rel]++

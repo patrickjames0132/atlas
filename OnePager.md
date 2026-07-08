@@ -809,49 +809,63 @@ optional, behind a key.
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
-- [ ] **Live per-relation count sliders** — in the graph workspace, sliders to
-      control how many references/citations/similar papers are shown, live
-      (today's counts are fixed at build time by `ref_limit`/`cite_limit`/
-      `similar_limit`). Raising a slider past what's already on screen should
-      pull more from the *original* search results rather than re-querying
-      from scratch — needs the backend to either over-fetch and cache a
-      larger pool per seed (see the citation-ranking fix, v2.1.1, which
-      already over-fetches up to S2's 1000-per-call cap) or support paging
-      further into it on demand. *(From the `todos.md` inbox, 2026-07-06.)*
-  - **⏸ IN PROGRESS — stashed** as `stash@{0}` ("WIP: live per-relation count
-    sliders + agent grounding fix + citation clutter retune (v3.3.0
-    candidate)"), 16 files, all gates green at stash time. **Resume:**
-    `git stash pop`, then flip gitignored `config.json`'s `graph` block from
-    the 3 limits back to `"pool_limit": 250` (the pop restores `config.py`'s
-    new schema but not the ignored config), then clear `graph:*` cache.
-    **Built:**
-    - Backend over-fetches & caches the whole ranked pool per relation (config
-      `graph.pool_limit`, replacing `ref_limit`/`cite_limit`/`similar_limit`);
-      each `Edge` carries a `rank` (its index in the selection order). Default
-      slider positions moved to frontend constants (`theme.ts REL_DEFAULT_LIMIT`
-      25/25/15). Chosen: chip toggle **+** slider per relation; pool cap 250.
-    - **Agent grounding fix** (regression the bigger pool exposed): agents were
-      grounding on the *whole* cached pool, not the visible view.
-      `GraphExplorer` now publishes visible node ids (`visibleNodesSet`);
-      `selectGroundingNodes` returns **visible ∪ discoveries**. ✅ verified in
-      browser.
-    - **Citation clutter retune** (built, NOT yet browser-verified): the same-
-      `(year,month)` stacks were stratified offset windows (200 *consecutive*
-      citations → one month → one x). Fix: `_select_even_by_month` buckets by
-      `(year, month)`, round-robins, most-cited within, capped `_MONTH_CAP=6`;
-      mining raised (`_MINE_SOURCES` 18, `_MINE_CANDIDATES` 400); Timeline
-      layout now uses **day-of-year** (`withinYearFraction` from `pub_date`) so
-      same-month papers spread by day instead of stacking.
-    - **Open thread — combined-score reveal ordering (NOT built):** current
-      reveal order is oldest-month-first, so the default slider shows the oldest
-      citers, not the important/recent ones. Patrick's idea: a **citation-
-      velocity** score `citation_count / (years_since_pub + 1)` (citations +
-      recency in one heuristic) driving the rank/reveal order *and* mining
-      priority. Key insight captured: time-spread (buckets) and importance
-      (score) are separate axes; they only converge at a wide slider, so at a
-      low slider it's "even spread" **vs** "most-important-first" — velocity
-      score picks the latter. Would change `_select_even_by_month`'s return
-      order + a few tests (which currently assert oldest-first round-robin).
+### Phase — Current frontier: landmark vs latest citations *(active, 2026-07-08)*
+
+A reframe of the mega-paper citation story, decided with Patrick after we shelved
+the stratified-sampling + velocity WIP. **Drop stratified offset windows
+entirely.** One newest-≤1000 citation fetch does double duty, splitting citations
+into two relations with distinct meaning, colour, filter, and (later) slider:
+
+- **Landmark citations** (keep green `#4ade80`) — the most-cited papers citing the
+  seed, "the giants that built on this." Reachable citation list ranked by citation
+  count for normal papers; **mining-first** for mega papers (mine reachable citers'
+  reference lists → verify → rank by citations, pruned to ≤ last year). No
+  stratified windows → a mega build is ~3 S2 requests (1 fetch + 2 mining batches).
+- **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
+  last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
+
+Shipped as three small, browser-testable increments:
+
+- [x] **Ship A — backend split + `latest` relation** *(v3.3.0)*. New `latest`
+      edge type through `model.py`/`build.py`/counts; `citation_relations()`
+      splits one newest-page fetch into mining-first landmark selection + a
+      12-month `latest` partition (dropped the `_STRATA`/`_STRATUM_LIMIT`/
+      `_MAX_OFFSET` sampling). Frontend: light-green colour + an on/off **filter
+      chip** for latest (no slider — deferred to Ship C). **Mining hardened
+      while testing:** budgets made operator-tunable (`graph.citation_mining.
+      sources`/`.candidates`), candidate ranking switched from raw citations to
+      **co-citation frequency** (so off-topic giants don't burn verification
+      slots), and verification **chunked + best-effort per chunk** (survives a
+      429, and `candidates` may exceed the 500-id batch cap). Flow documented in
+      `integrations/semantic_scholar/README.md`. *Known ceiling: hyper-cited
+      seeds (DQN ~16 landmarks) are capped by S2 truncating nested `references`
+      arrays + the "invisible unless a source cites it" limit — see README.*
+- [ ] **Ship B — "The current frontier" lecture** *(v3.4.0)*. New
+      `LectureMode.FRONTIER` ("The current frontier"); the orchestrator's
+      `_story_nodes` scopes it to seed + any-relation nodes within the last 12
+      months — which **automatically folds in recent `similar` nodes too**, the
+      same way `EVOLUTION` already time-scopes (relation-agnostic; verified in
+      `orchestrator/main.py:_story_nodes`). Config `MODE_INTENTS` entry + frontend
+      mode button (`Teacher.tsx`).
+- [ ] **Ship C — live per-relation count sliders** *(v3.5.0)*. Sliders to control
+      how many references/citations/similar/**latest** papers are shown, live
+      (today's counts fixed at build time by `ref_limit`/`cite_limit`/
+      `similar_limit`). Raising a slider reveals more of an already-cached pool
+      rather than re-querying: backend over-fetches & caches a ranked pool per
+      relation (config `graph.pool_limit`) with each `Edge` carrying a `rank`.
+      **Salvage from `stash@{0}`** — this mechanism (pool_limit/rank + chip-toggle
+      +slider UI) was already built there. *(From the `todos.md` inbox,
+      2026-07-06; folded into this phase.)*
+
+  - **Shelved WIP — `stash@{0}`** ("WIP v3.3.0-candidate: velocity reveal-order +
+    configurable citation_pool …"), sitting on top of the earlier
+    sliders/grounding/clutter stash — **superseded by the plan above** but kept
+    for cherry-picking. Reusable bits: the **agent-grounding fix** (`GraphExplorer`
+    publishes `visibleNodesSet`; `selectGroundingNodes` → visible ∪ discoveries —
+    was browser-verified), the **clutter retune** (Timeline day-of-year spread via
+    `withinYearFraction`), the **pool_limit/rank slider mechanism** (for Ship C),
+    and a **`_velocity` helper** (`citation_count / (age + 1)`). Patrick chose to
+    keep the grounding fix + clutter retune out of Ship A for now — revisit.
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the

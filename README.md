@@ -116,13 +116,14 @@ The Vite dev server proxies `/api/*` to Flask.
    URL** to jump straight in. Cached papers appear instantly; an **instant**
    badge marks papers whose whole neighborhood is cached. Optional filters:
    a publication-year window (1800 → now) and S2 **fields of study**.
-2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🟣 similar ·
-   💗 found-by-search. Citations are selected **evenly across the years**
-   (the most-cited per year, with stratified sampling for mega-cited seeds —
-   and for truly mega-cited ones, landmark citers **mined from reachable
-   papers' reference lists and verified** to cite the seed, since S2's
-   citation list stops paging around 10k), so the descendant side spans the
-   seed's whole timeline, not just the recent tip. Node size = citations; thick links = influential citations; a
+2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🌱 latest ·
+   🟣 similar · 💗 found-by-search. Citers split into two relations: **citations**
+   (green) are the **landmark** descendants — the most-cited papers citing the
+   seed, and for mega-cited seeds these are **mined from reachable citers'
+   reference lists and verified** to cite the seed (since S2 stops paging its
+   citation list around 10k); **latest** (light green) is the recent frontier —
+   citers from the last ~12 months — as a filterable relation of its own. Node
+   size = citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
    tags, figures, code & artifacts); **double-click to re-seed** on it —

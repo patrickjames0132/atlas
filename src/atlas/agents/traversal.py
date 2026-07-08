@@ -53,9 +53,9 @@ def neighbors(paper_id: str, relation: Relation, limit: int) -> list[dict]:
         s2.S2Error: When the S2 request fails after retries (cache misses
             only — cached hops never touch the network).
     """
-    # v2 key: citation hops switched from most-cited to even-by-year selection
-    # — entries cached under the old ranking must not serve for the new one.
-    cache_key = f"expand:v2:{relation}:{paper_id}:{limit}"
+    # v3 key: citation hops are back to most-cited (landmark) selection — the
+    # even-by-year v2 ranking is gone — so entries cached under it must not serve.
+    cache_key = f"expand:v3:{relation}:{paper_id}:{limit}"
     cached = cache.get(cache_key, config.graph.cache_ttl)
     if cached is not None:
         return cached

@@ -12,7 +12,8 @@ import type { EdgeType } from '../api'
 export const REL_COLOR: Record<string, string> = {
   seed: '#ffd166', // gold — the paper you're exploring
   reference: '#6ea8fe', // blue — ancestors it cites
-  citation: '#4ade80', // green — descendants that cite it
+  citation: '#4ade80', // green — landmark descendants that cite it
+  latest: '#86efac', // light green — recent citers (the last ~12 months' frontier)
   similar: '#c084fc', // purple — embedding-similar papers
   search: '#f472b6', // pink — pulled in by the teacher's topic search (3c.2)
 }
@@ -21,6 +22,7 @@ export const REL_COLOR: Record<string, string> = {
 export const EDGE_COLOR: Record<EdgeType, string> = {
   reference: 'rgba(110,168,254,0.30)',
   citation: 'rgba(74,222,128,0.30)',
+  latest: 'rgba(134,239,172,0.32)',
   similar: 'rgba(192,132,252,0.24)',
 }
 
@@ -36,11 +38,12 @@ export const DIM_EDGE = 'rgba(120,130,150,0.05)'
 export const YEAR_SPACING = 120
 
 /** The relation types the user can filter by (seed/search are always shown). */
-export const REL_TYPES = ['reference', 'citation', 'similar'] as const
+export const REL_TYPES = ['reference', 'citation', 'latest', 'similar'] as const
 
 /** Display labels for the filter chips. */
 export const REL_LABEL: Record<string, string> = {
   reference: 'References',
   citation: 'Citations',
+  latest: 'Latest',
   similar: 'Similar',
 }

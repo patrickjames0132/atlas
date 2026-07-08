@@ -47,16 +47,19 @@ class Edge(BaseModel):
     """A directed edge between two nodes, tagged by relation.
 
     Direction encodes citation semantics: an edge always points from the citing
-    paper to the cited one. ``influential`` (S2's "highly influential citation"
-    flag) is carried on ``reference``/``citation`` edges and is ``None`` on
-    ``similar`` edges, which aren't citations.
+    paper to the cited one — so both ``citation`` (landmark citers) and
+    ``latest`` (recent citers, last ~12 months) run citer -> seed.
+    ``influential`` (S2's "highly influential citation" flag) is carried on the
+    citing relations and is ``None`` on ``similar`` edges, which aren't
+    citations. ``latest`` and ``citation`` are disjoint: a citer in the recent
+    window is a ``latest`` edge, everything older competes as a ``citation``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     source: str
     target: str
-    type: Literal["reference", "citation", "similar"]
+    type: Literal["reference", "citation", "similar", "latest"]
     influential: bool | None = None
 
 
@@ -78,6 +81,7 @@ class Counts(BaseModel):
     references: int
     citations: int
     similar: int
+    latest: int
     nodes: int
 
 

@@ -119,12 +119,13 @@ export function cleanNode(node: VNode): GraphNode {
  * discovered papers).
  */
 export function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
-  const counts = { references: 0, citations: 0, similar: 0, nodes: nodes.length }
+  const counts = { references: 0, citations: 0, similar: 0, latest: 0, nodes: nodes.length }
   nodes.forEach((node) =>
     node.rels.forEach((rel) => {
       if (rel === 'reference') counts.references++
       else if (rel === 'citation') counts.citations++
       else if (rel === 'similar') counts.similar++
+      else if (rel === 'latest') counts.latest++
     }),
   )
   return counts

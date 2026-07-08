@@ -18,7 +18,7 @@ def make_graph() -> Graph:
         seed=Seed(arxiv_id="1312.5602", id="s2id01", title="Playing Atari"),
         nodes=[seed_node],
         edges=[],
-        counts=Counts(references=0, citations=0, similar=0, nodes=1),
+        counts=Counts(references=0, citations=0, similar=0, latest=0, nodes=1),
     )
 
 
