@@ -928,6 +928,15 @@ optional, behind a key.
       LaTeX instead — see [BUGS.md](BUGS.md). Deferred to a later ticket:
       user-uploaded source titles and researcher trace chips.
       *(From the `todos.md` inbox, 2026-07-08; shipped 2026-07-08.)*
+- [ ] **Q&A answers need full Markdown + LaTeX rendering** — the research
+      agent's answers come back as **Markdown**, but `ChatMessage.tsx` renders
+      the prose as plain text wrapped in `<MathText>` (v3.2.0): LaTeX math now
+      renders, but Markdown structure (headers, **bold**, lists) still shows as
+      raw `#`/`**`. The lecturer's beats read cleaner by comparison. Render
+      answers as Markdown *and* math — likely a Markdown renderer whose text
+      nodes pass through `<MathText>` (or a combined markdown-it + KaTeX plugin),
+      reused wherever agent prose is shown. *(From the `todos.md` inbox,
+      2026-07-08.)*
 - [ ] **Tidy the lecture-mode buttons** — the three lecture buttons ("How we
       got here" / "This paper's intuition" / "What's evolved since", defined in
       `frontend/src/teacher/Teacher.tsx`, styled in `teacher/teacher.css`) look
