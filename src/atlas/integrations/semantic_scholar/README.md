@@ -176,6 +176,26 @@ least one sampled source references**, and S2 can **truncate the nested
 can be missed. Turning the knobs up helps but doesn't fully escape it — but it now
 affects far fewer seeds than before paging.
 
+## Relation ordering (what each traversal returns — and the slider walks)
+
+Every relation comes back **already ranked**, by the one key that fits *its*
+meaning. The frontend shows a modest prefix and reveals more on demand — the
+planned per-relation count slider walks exactly this order, no re-query — so the
+order the backend returns *is* the order the user reveals through:
+
+| Relation | Returned by | Ordered by |
+|----------|-------------|-----------|
+| references | `references()` | citation count — most-cited ancestors first |
+| `citation` (landmark) | `citation_relations()` landmark half | citation count — biggest landmarks first |
+| `latest` | `citation_relations()` latest half | `pub_date`, newest first |
+| similar | `recommendations()` | S2 embedding similarity, as returned |
+
+Each uses **one** key — *popularity* for references/landmarks, *recency* for
+`latest`, *similarity* for similar — never a blended score, so "landmark = the
+giants" and "latest = the freshest" stay honest. (If landmark order should ever
+reward recency too, that's a *velocity* key — `citation_count / age` — a
+deliberate swap, not the default.)
+
 ## Field lists: three tiers on purpose
 
 `nodes.py` defines what each request asks S2 for: `DETAIL_FIELDS` (one

@@ -854,13 +854,14 @@ and closes a real coverage gap).
       one page. Paired **429 hardening**: `client.request` default `tries` 4 → 6
       (backoff to 16s) so a mega build's ~10 pages ride out sustained 429s;
       `min_interval` is the further lever. *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Ship B — "The current frontier" lecture** *(v3.5.0)*. New
-      `LectureMode.FRONTIER` ("The current frontier"); the orchestrator's
-      `_story_nodes` scopes it to seed + any-relation nodes within the last 12
-      months — which **automatically folds in recent `similar` nodes too**, the
-      same way `EVOLUTION` already time-scopes (relation-agnostic; verified in
-      `orchestrator/main.py:_story_nodes`). Config `MODE_INTENTS` entry + frontend
-      mode button (`Teacher.tsx`).
+- [x] **Ship B — "The current frontier" lecture** *(v3.5.0)*. New
+      `LectureMode.FRONTIER` ("The current frontier"); `_story_nodes` scopes it to
+      seed + any-relation nodes from the last ~12 months (absolute recency, not
+      relative to the seed) — so it **folds in recent `similar` nodes too**,
+      alongside the `latest` citers. `MODE_INTENTS` intent (survey the newest work
+      as current threads, distinct from EVOLUTION's full arc), figure pool wired,
+      frontend mode button + `LectureMode` type. Completeness guard added
+      (`set(MODE_INTENTS) == set(LectureMode)`).
 - [ ] **Ship C — live per-relation count sliders** *(v3.6.0)*. Sliders to control
       how many references/citations/similar/**latest** papers are shown, live.
       **Design (Patrick, 2026-07-08): no `pool_limit` cap — fetch as many nodes as

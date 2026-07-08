@@ -8,9 +8,10 @@ spoken.
 ## Why it exists
 
 The lecture is the app's showpiece: press the button and the teacher
-narrates the intellectual history (or intuition, or the forward evolution to
-the frontier, or a bridge between two areas) over the citation graph you're
-looking at, highlighting papers as the story reaches them. The old repo did this by begging the model for
+narrates the intellectual history (or intuition, the forward evolution since
+the seed, a survey of the current frontier, or a bridge between two areas) over
+the citation graph you're looking at, highlighting papers as the story reaches
+them. The old repo did this by begging the model for
 newline-delimited JSON and armoring a parser against disobedience
 (fence-stripping, line buffering, malformed-JSON tolerance). Here the shape
 is *enforced*, not requested: the model's output type IS `list[LectureBeat]`,
@@ -44,7 +45,7 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
   fetches; captions listed in the prompt, attachable to a beat via the
   beat's `figure` number → resolved to a proxied image + source-paper title
   on `events.Beat.figure`): intuition pools the **seed's own** figures;
-  history/evolution pool the seed plus the story's **landmark papers'**
+  history/evolution/frontier pool the seed plus the story's **landmark papers'**
   (the most-cited arXiv papers in the mode-scoped node set — `_FIGURE_PAPERS`
   papers, `_FIGURES_PER_PAPER` each); bridge pools none. Intuition
   additionally grounds in `_seed_passages` — library passages about the
@@ -55,9 +56,9 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
 ## Design decisions worth knowing
 
 - **Modes are input, not agents.** `history` / `intuition` / `evolution` /
-  `bridge` are one `Literal` parameter selecting an intent paragraph — four
-  stories, one storyteller. A typo'd mode is a `KeyError` at the call
-  boundary, not a silent fall-back to `history` (the old behavior).
+  `frontier` / `bridge` are one `Literal` parameter selecting an intent
+  paragraph — five stories, one storyteller. A typo'd mode is a `KeyError` at
+  the call boundary, not a silent fall-back to `history` (the old behavior).
 - **Two beat models on purpose.** The model emits `LectureBeat` with
   numbered-list *indices* (it never sees Semantic Scholar ids — see the
   `numbered-papers` skill); the frontend receives `events.Beat` with node

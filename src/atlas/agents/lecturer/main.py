@@ -104,9 +104,9 @@ def _figure_pool(seed: Node, nodes: list[Node], mode: LectureMode) -> list[dict]
     """The figures a lecture may attach to its beats, as a flat numbered pool.
 
     Intuition stays on the seed, so its pool is the seed's own figures
-    (untitled — there's only one paper in play). History and evolution tell
-    a many-paper story, so their pool draws from the seed plus the
-    ``_FIGURE_PAPERS`` most-cited arXiv papers among the (already
+    (untitled — there's only one paper in play). History, evolution, and the
+    current frontier tell a many-paper story, so their pool draws from the seed
+    plus the ``_FIGURE_PAPERS`` most-cited arXiv papers among the (already
     mode-scoped) visible nodes, ``_FIGURES_PER_PAPER`` figures each — every
     entry titled with its source paper so both the model and the beat card
     can attribute it. Bridge shows no figures.
@@ -117,7 +117,7 @@ def _figure_pool(seed: Node, nodes: list[Node], mode: LectureMode) -> list[dict]
     """
     if mode is LectureMode.INTUITION:
         return [{**figure, "title": None} for figure in _paper_figures(seed)]
-    if mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION):
+    if mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION, LectureMode.FRONTIER):
         return []
     landmarks = sorted(
         (node for node in nodes if node.arxiv_id and not node.is_seed),

@@ -30,7 +30,7 @@ you upload (embedded locally; nothing leaves your machine).
 > - **The AI teacher is a crew of [PydanticAI](https://ai.pydantic.dev)
 >   agents** behind one orchestrator: a **lecturer** (streamed, illustrated
 >   lectures in typed beats over the graph you built — history / intuition /
->   evolution, each with the papers' real figures inline), a **researcher**
+>   evolution / current frontier, each with the papers' real figures inline), a **researcher**
 >   (agentic Q&A that reads full text via ar5iv, expands the graph, searches
 >   S2, searches *your* library, and attaches real figures inline), a
 >   **librarian** (single-shot RAG over your uploads, cited by page), and
@@ -134,12 +134,14 @@ The Vite dev server proxies `/api/*` to Flask.
    busts this seed's day-cached snapshot to re-fetch fresh from Semantic
    Scholar. Click the **Atlas** brand anytime to go home.
 4. **Learn** (the 🎓 Assistant panel):
-   - **Lectures** — the past → present → future triptych, narrated over the
+   - **Lectures** — the past → present → future arc, narrated over the
      graph **as you built it** (lectures never expand it — only the research
      agent does): "How we got here" (chronologically through the ancestors,
      ending AT the seed), "This paper's intuition" (tightly on the seed
-     itself, drawing on your library for context), and "What's evolved
-     since" (the seed onward to the frontier). Beats light up their papers
+     itself, drawing on your library for context), "What's evolved
+     since" (the seed onward through the work that built on it), and "The
+     current frontier" (a survey of just the newest work — recent citations
+     and similar papers from the last ~12 months). Beats light up their papers
      and carry the papers' **real figures** inline — click to enlarge.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search

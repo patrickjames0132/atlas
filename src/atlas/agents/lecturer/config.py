@@ -59,6 +59,18 @@ MODE_INTENTS: dict[LectureMode, str] = {
         "the beat's `figure` to its number) and weave what it shows into the "
         "narration."
     ),
+    LectureMode.FRONTIER: (
+        "Mode: THE CURRENT FRONTIER. Survey the NEWEST work around the seed — "
+        "only the papers of the last year or so, both recent citations and "
+        "recent similar work — to show what is active RIGHT NOW. This is NOT "
+        "the whole arc since the seed (that is WHAT'S EVOLVED SINCE); stay at "
+        "the leading edge. Group the recent papers into a few coherent current "
+        "threads (open problems, hot directions, the latest advances) rather "
+        "than a flat list, and say where the frontier seems to be heading. "
+        "When figures from the story's papers are listed, attach the most "
+        "illuminating one to the beat about that paper (set the beat's "
+        "`figure` to its number) and weave what it shows into the narration."
+    ),
     LectureMode.BRIDGE: (
         "Mode: BRIDGE. Build a conceptual bridge between the SEED paper and "
         "the TARGET paper, tracing the ideas that connect two areas that may "

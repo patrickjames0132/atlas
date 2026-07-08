@@ -28,4 +28,5 @@ class LectureMode(StrEnum):
     HISTORY = "history"
     INTUITION = "intuition"
     EVOLUTION = "evolution"
+    FRONTIER = "frontier"
     BRIDGE = "bridge"

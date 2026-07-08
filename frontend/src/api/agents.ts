@@ -36,7 +36,7 @@ export interface Beat {
  * intuition, how the field evolved forward from the seed, or a conceptual
  * bridge from the seed to a target paper.
  */
-export type LectureMode = 'history' | 'intuition' | 'evolution' | 'bridge'
+export type LectureMode = 'history' | 'intuition' | 'evolution' | 'frontier' | 'bridge'
 
 /**
  * New papers (+ the edges connecting them) the researcher pulled in via its

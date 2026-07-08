@@ -282,3 +282,12 @@ def test_intuition_grounding_failures_never_block_the_lecture(monkeypatch):
         out = list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
     assert [beat.text for beat in out] == ["Still lectures."]
     assert out[0].figure is None
+
+
+def test_every_lecture_mode_has_an_intent():
+    """The prompt does ``MODE_INTENTS[mode]`` with no fallback, so a mode
+    missing its intent paragraph is a KeyError at lecture time. Guard it: every
+    LectureMode must have an entry (catches a new mode added without a prompt)."""
+    from atlas.agents.lecturer.config import MODE_INTENTS
+
+    assert set(MODE_INTENTS) == set(LectureMode)

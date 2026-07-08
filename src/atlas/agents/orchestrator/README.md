@@ -24,18 +24,20 @@ orchestrator.run(intent, **payload)                    main.py
 - **`main.py`** — `run`, the dispatcher (and the documented model seam).
 
 **Lectures never expand the graph.** Every lecture mode — history,
-intuition, evolution, bridge — narrates only nodes the user can see. Only
+intuition, evolution, frontier, bridge — narrates only nodes the user can see. Only
 the **researcher** (explicit Q&A) may pull new papers onto the canvas, via
 its `expand_node`/`search_papers` tools. (The deterministic "backfill"
 walks that used to enrich history/evolution lectures were removed for
 exactly this reason — a lecture should tell the story of the graph you
 built, not silently grow it.)
 
-**The directional modes are scoped to their side of the seed**
-(`_story_nodes`): history's story ends AT the seed, so the lecturer only
-receives the seed plus papers published in or before its year; evolution
-starts from the seed (in or after). Undated papers are dropped from the
-clamped modes — they can't be placed in a chronological story. Intuition
+**Modes are scoped by `_story_nodes`:** history's story ends AT the seed, so
+the lecturer only receives the seed plus papers published in or before its year;
+evolution starts from the seed (in or after); frontier keeps the seed plus only
+papers from the last ~12 months (the leading edge, any relation — recent
+citations and recent similar work). Undated papers are dropped from the
+year-clamped directional modes — they can't be placed in a chronological story.
+Intuition
 and bridge see the whole visible set; an undated seed disables the clamp.
 
 ## Design decisions worth knowing
@@ -77,7 +79,7 @@ and bridge see the whole visible set; an undated seed disables the clamp.
 
 `test_main.py` fakes the three sub-agents at the module seam: relay +
 `Done` appending, full kwargs passthrough, the per-mode lecture scoping
-(history ancestors-only, evolution descendants-only, intuition everything,
-undated seed → no clamp; no trace/discovery frames ever precede a
-lecture), mid-stream failure → `Error` (and no `Done`), and bad input →
-`Error`.
+(history ancestors-only, evolution descendants-only, frontier last-~12-months
+any-relation, intuition everything, undated seed → no clamp; no trace/discovery
+frames ever precede a lecture), mid-stream failure → `Error` (and no `Done`),
+and bad input → `Error`.

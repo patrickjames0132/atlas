@@ -28,6 +28,7 @@ const MODES: { key: LectureMode; label: string }[] = [
   { key: 'history', label: 'How we got here' },
   { key: 'intuition', label: "This paper's intuition" },
   { key: 'evolution', label: "What's evolved since" },
+  { key: 'frontier', label: 'The current frontier' },
 ]
 
 export default function Teacher({
