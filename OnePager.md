@@ -419,6 +419,20 @@ optional, behind a key.
 
 **Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
 
+- [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
+      `todos.md` inbox, 2026-07-08.)*
+- [ ] **Cached papers don't match the query agent's expanded query** — papers
+      served from the local sources cache don't seem to line up with the query
+      the query-analyst expanded to, so the researcher may ground on the wrong
+      cached hits. Investigate the retrieval/cache-key path vs. the expanded
+      query (query_analyst → researcher/retrieval). *(From the `todos.md` inbox,
+      2026-07-08.)*
+- [ ] **Graph build should survive S2 being down without trapping the user** —
+      if Semantic Scholar is unavailable mid-build, the error message should be
+      **dismissible** and the graph currently on screen restored (it must not stay
+      greyed out). Frontend error handling around `fetchGraph`/`GraphExplorer`.
+      *(From the `todos.md` inbox, 2026-07-08.)*
+
 - [x] **Even citation spread across the years** *(v3.0.0 — supersedes "Recency
       preference for citations")* — instead of a user-facing older/newer knob,
       the seed's citations are now **always** selected **evenly across
