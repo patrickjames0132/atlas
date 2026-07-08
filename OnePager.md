@@ -873,6 +873,20 @@ optional, behind a key.
       API** — the only sanctioned full enumeration, but it means downloading
       and indexing a citations dump, against the "no local corpus"
       philosophy. *(From a live v3.0.0 session on 1706.03762, 2026-07-07.)*
+- [ ] **Adjustable side panels** — every docked side panel (the detail panel,
+      the assistant panel) is a fixed width today; make them all user-resizable
+      (a drag handle on the panel edge), ideally remembering the chosen size
+      across sessions. *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Search cache refresh override** — seed-search results are served from
+      the whole-result cache (v2.0.0) with no way to bypass a stale entry; add
+      a refresh/override button to the search surface, mirroring the graph's
+      per-seed **Refresh** button (v2.5.0) that busts the snapshot cache.
+      *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Proper subscripts & math notation** — paper text surfaces (titles,
+      abstracts, TL;DRs, lecture beats, answers) show raw LaTeX / plain-text
+      math today (e.g. `$\beta_2$`, "CO2") instead of rendered subscripts and
+      notation; render math properly wherever paper text is displayed (KaTeX
+      is the natural frontend fit). *(From the `todos.md` inbox, 2026-07-08.)*
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
