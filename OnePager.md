@@ -1046,6 +1046,29 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
+- [ ] **Iterative (multi-round) landmark mining to beat recency bias** — landmark
+      mining today is a **single round** (`integrations/semantic_scholar/traversal.py`,
+      `_mined_landmarks`): candidates are harvested from the reference lists of
+      the **newest** citation page's most-cited citers, then verified to actually
+      cite the seed. Because the source net is anchored on the *newest* citers,
+      coverage skews recent — and this gets **worse as a seed ages**: the big
+      citers clustered near the seed's own publication date drift ever further
+      from "newest" and start dropping out of the harvest. Visible today on old
+      seeds — e.g. Hawking's 1974 "Black hole explosions?" shows a dense green
+      cloud of landmarks bunched near the present with the 1974–~2010 band sparse,
+      even though that early band holds the most important citing work.
+      **Idea to experiment with:** after round 1's verified landmark citers are
+      in, feed *them* back as new mining sources (harvest their reference lists →
+      new seed-citing candidates → verify → keep), and **loop**, until the year
+      spread is "sufficiently" covered (a coverage metric over the seed→today
+      band, or a round cap). This snowballs into the sparse early/middle years a
+      single newest-anchored pass can't reach. **Cost is the catch:** each round
+      adds ≥1 batch S2 call (reference-list fetch) plus a verification batch, so
+      it's notoriously slow for a cold build — needs cross-round dedup, a hard
+      stopping criterion, and probably a budget in `config.graph.citation_mining`;
+      the snapshot cache softens re-exploration but not the first build. An
+      experiment, not a commitment — measure the coverage gain vs. the latency
+      hit. *(From a session observation, 2026-07-08.)*
 - [ ] **Tune the agents' citation-count weighting via a skill** — today a strong
       preference for highly-cited papers is *implicit*: the graph hands both
       agents a pool already ranked by citations (references/citations most-cited
