@@ -75,7 +75,12 @@ sentence-transformers + sqlite-vec for the local library. Runs locally.
 
 ## Setup
 
-`uv` and `Node.js` are assumed installed.
+The toolchain (python, uv, nodejs, trivy) is pinned in `.tool-versions` —
+[mise](https://mise.jdx.dev) installs it all with `mise install` (mise reads
+the asdf-format file and works on Windows and macOS alike). With mise in
+place, `bin/setup.bat` (Windows) or `bin/setup.sh` (macOS/Linux) does the full
+bootstrap: pinned tools, `uv sync`, and the frontend install + build. Without
+mise, `uv` and `Node.js` installed any other way work fine too.
 
 ### 1. Configure
 

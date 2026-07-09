@@ -1,0 +1,4 @@
+python 3.14.0
+uv 0.11.25
+nodejs 24.18.0
+trivy 0.72.0

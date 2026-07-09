@@ -930,6 +930,19 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).
+- [x] **Session bootstrap scripts + pinned toolchain via mise** *(2026-07-09,
+      no version bump — dev tooling, not the app)* — a session that opened on a
+      stale env used to fail confusingly (v3.8.0's markdown deps missing from
+      `node_modules` broke the frontend build; trivy absent meant nox silently
+      skipped the security scan). Now `.tool-versions` pins the toolchain
+      (python 3.14.0, uv 0.11.25, nodejs 24.18.0, trivy 0.72.0) and
+      **`bin/setup.bat`** (Windows) / **`bin/setup.sh`** (macOS/Linux) — the
+      mandated first step of every Claude session, per `CLAUDE.md` — runs
+      `mise install` + `reshim`, `uv sync`, and `npm install` + `npm run build`
+      for the frontend. **mise** was chosen over asdf deliberately: asdf has no
+      Windows support at all (Patrick's primary machine), while mise runs on
+      Windows *and* macOS and reads the same asdf-format `.tool-versions`, so
+      the pin file stays portable either way.
 
 ## Backlog — not yet shipped
 

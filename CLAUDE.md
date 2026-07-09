@@ -17,6 +17,17 @@ digest app; that era is being retired).
   installed editable). Frontend: React + TS +
   Vite (`frontend/`). Graph rendering via `react-force-graph-2d`.
 
+## Session start — bootstrap first
+
+**First thing when a session opens, run the setup script**: `bin\setup.bat` on
+Windows, `bin/setup.sh` on macOS/Linux. It installs the toolchain pinned in
+`.tool-versions` via **mise** (python, uv, nodejs, trivy — mise reads the
+asdf-format file but, unlike asdf, works on Windows too), then `uv sync`s the
+backend and `npm install` + `npm run build`s the frontend. It's cheap when
+everything is already current, and it prevents a whole class of stale-env
+surprises (missing node modules, an out-of-date lockfile, nox silently
+skipping the Trivy scan).
+
 ## How we work together — the loop
 
 For each feature, follow this cycle:
@@ -143,7 +154,8 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
   (deterministic hash embedder, no torch). Put new tests in the folder matching
   the module under test; pass args through with `uv run nox -s tests -- -k foo`.
 - **`security`** — **Trivy** filesystem scan; **skips cleanly when `trivy`
-  isn't on PATH**, so the gate stays green locally without it (install Trivy to
-  enable).
+  isn't on PATH**, so the gate stays green locally without it. Trivy is pinned
+  in `.tool-versions`, so the session-start `bin/setup` script installs it via
+  mise — after bootstrap the scan should actually run, not skip.
 
 Run a single session with `uv run nox -s <name>` (e.g. `-s mypy`).
