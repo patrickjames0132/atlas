@@ -88,8 +88,9 @@ def test_citations_ranked_by_citation_count_not_s2_order(monkeypatch):
 
 def test_citation_relations_splits_latest_from_landmark(monkeypatch):
     """The seed-build view splits citers by publication date: recent ones (last
-    ~12 months) are `latest`, newest-first; older ones are `landmark`,
-    most-cited first. The two partitions are disjoint."""
+    ~12 months) are `latest`, shipped oldest-first (the reveal slider walks
+    toward the present); older ones are `landmark`, most-cited first. The two
+    partitions are disjoint."""
 
     def fake_request(url, **kw):
         if _offset_of(url):
@@ -106,7 +107,7 @@ def test_citation_relations_splits_latest_from_landmark(monkeypatch):
     monkeypatch.setattr(client, "request", fake_request)
     landmark, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
     assert [hit["node"]["id"] for hit in landmark] == ["old-giant", "old-mid"]  # most-cited first
-    assert [hit["node"]["id"] for hit in latest] == ["fresher", "fresh"]  # newest-first
+    assert [hit["node"]["id"] for hit in latest] == ["fresh", "fresher"]  # oldest-first
 
 
 def test_citation_relations_undated_citer_is_landmark_not_latest(monkeypatch):

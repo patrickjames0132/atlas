@@ -82,8 +82,9 @@ def _split_years():
 def test_landmark_is_all_time_latest_is_window_plus_year_bands(monkeypatch):
     """Field Landmarks = the all-time cited_by_count query only. Latest = the
     newest date window PLUS one cited_by_count query per recent year (below the
-    window), newest-first — and a recent paper that's also an all-time giant
-    stays a landmark, excluded from latest (not double-shown)."""
+    window), shipped oldest-first so the reveal slider walks toward the present
+    — and a recent paper that's also an all-time giant stays a landmark,
+    excluded from latest (not double-shown)."""
     monkeypatch.setattr(config.graph, "latest_band_years", 3)
     monkeypatch.setattr(config.graph, "latest_per_year", 40)
     _, latest_from, landmark_max = _split_years()
@@ -119,7 +120,9 @@ def test_landmark_is_all_time_latest_is_window_plus_year_bands(monkeypatch):
     latest_ids = [entry["node"]["id"] for entry in latest]
     assert "DOI:10/rg" not in latest_ids  # the recent giant stays a landmark
     assert "DOI:10/win" in latest_ids and f"DOI:10/b{landmark_max}" in latest_ids
-    assert latest[0]["node"]["id"] == "DOI:10/win"  # newest-first (window year leads)
+    # Oldest-first: the earliest band year leads, the newest window paper ends.
+    assert latest[0]["node"]["id"] == f"DOI:10/b{landmark_max - 2}"
+    assert latest[-1]["node"]["id"] == "DOI:10/win"
     assert latest[0]["influential"] is False
 
 
@@ -140,6 +143,30 @@ def test_latest_uses_year_window_not_exact_date(monkeypatch):
     monkeypatch.setattr(client, "request", fake_request)
     traversal.citation_relations("W5", landmark_limit=None, latest_limit=None)
     assert windows == [f"cites:W5,from_publication_date:{latest_from}-01-01"]
+
+
+def test_latest_limit_keeps_newest_but_ships_oldest_first(monkeypatch):
+    """A latest_limit trims to the NEWEST N citers (the frontier is what the
+    relation is for), but the survivors ship oldest-first — the enumeration
+    rank drives the reveal slider, which walks toward the present."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 1)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    current_year, latest_from, _ = _split_years()
+
+    def fake_request(url):
+        params = _query(url)
+        if params["sort"] == "publication_date:desc":  # newest window
+            return {"results": [
+                _work("Wnew", doi="10/new", year=current_year, date=f"{current_year}-06-01"),
+                _work("Wmid", doi="10/mid", year=current_year, date=f"{current_year}-02-01"),
+                _work("Wold", doi="10/old", year=latest_from, date=f"{latest_from}-03-01"),
+            ], "meta": {"next_cursor": None}}
+        return {"results": [], "meta": {"next_cursor": None}}  # bands + landmarks empty
+
+    monkeypatch.setattr(client, "request", fake_request)
+    _, latest = traversal.citation_relations("W5", landmark_limit=None, latest_limit=2)
+    # Wold (the oldest) is trimmed away; the kept two run oldest → newest.
+    assert [entry["node"]["id"] for entry in latest] == ["DOI:10/mid", "DOI:10/new"]
 
 
 def test_landmark_limit_caps_all_time_query(monkeypatch):

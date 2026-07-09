@@ -302,8 +302,9 @@ def citation_relations(
     pool is paged to the latest-window boundary (``_fetch_citers`` with
     ``deep=True``) then partitioned by publication date: citers inside the
     rolling ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier**
-    (``latest``, newest-first), and everything older competes as a historic
-    **landmark** (``citation``, most-cited first). Deep paging means ``latest``
+    (``latest``, shipped oldest-first so the reveal slider walks toward the
+    present; a limit keeps the newest), and everything older competes as a
+    historic **landmark** (``citation``, most-cited first). Deep paging means ``latest``
     covers the whole window (not just the newest page) and the citers just past
     the boundary fill the landmark middle band. The two are disjoint, so a
     recent-but-highly-cited paper shows once, as ``latest``. Without OpenAlex's
@@ -326,9 +327,14 @@ def citation_relations(
     cutoff = _latest_cutoff()
     recent = [entry for entry in pool if _is_latest(entry, cutoff)]
     older = [entry for entry in pool if not _is_latest(entry, cutoff)]
-    # Latest: newest first, by publication date. Landmark: most-cited first.
+    # Latest: selected newest-first by publication date (a limit keeps the
+    # newest N) then flipped oldest-first to match the OpenAlex path — the
+    # frontend's reveal slider walks toward the present. Landmark: most-cited
+    # first.
     latest = sorted(recent, key=lambda entry: entry["node"].get("pub_date") or "", reverse=True)
-    return _select_by_influence(older, landmark_limit), latest[:latest_limit]
+    latest = latest[:latest_limit]
+    latest.reverse()
+    return _select_by_influence(older, landmark_limit), latest
 
 
 def recommendations(paper_id: str, limit: int | None, pool: str | None = None) -> list[dict]:

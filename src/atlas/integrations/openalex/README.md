@@ -47,7 +47,8 @@ So the two relations are:
   `latest_band_years` (config; default 5) separate `publication_year:<Y>` queries,
   each top `latest_per_year` (config; default 50) by citations. Anything already a
   Field Landmark is excluded (a recent *giant* stays a landmark, not double-shown);
-  the rest sort newest-first.
+  the rest ship **oldest-first** (a `latest_limit` still keeps the newest N), so
+  the frontend's reveal slider walks forward through time toward the present.
 
 The recent papers are deliberately **Latest Publications, not landmarks** — they
 *are* recent work, and the old giants are the true field landmarks. Together the

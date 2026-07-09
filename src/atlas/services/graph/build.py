@@ -211,9 +211,10 @@ def build_graph(
     edges: list[Edge] = []
 
     # Each relation arrives already ranked (references/citations by citation
-    # count, latest by recency, similar by S2 similarity), so an edge's
-    # enumeration index within its relation IS its `rank` — the order the
-    # frontend's per-relation count slider reveals through.
+    # count, latest oldest-first so the reveal walks toward the present,
+    # similar by S2 similarity), so an edge's enumeration index within its
+    # relation IS its `rank` — the order the frontend's per-relation count
+    # slider reveals through.
 
     # References: papers the SEED cites. The seed is the citer, so the arrow
     # runs seed -> ancestor. ``influential`` flags S2's "highly influential

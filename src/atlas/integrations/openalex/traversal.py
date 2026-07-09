@@ -13,7 +13,7 @@ citation endpoint. The citation relation is:
   plus per-year bands over the years just below it (one ``cited_by_count:desc``
   query *per year*, so no single year dominates — a subtlety we hit live). A
   recent paper that's also an all-time giant stays a landmark, not double-shown;
-  the rest sort newest-first.
+  the rest ship oldest-first (the reveal slider walks toward the present).
 
 The landmark/latest split is by **publication year**, not an exact date, because
 OpenAlex dating is coarse (many works are year-only, defaulted to ``01-01``) —
@@ -208,7 +208,9 @@ def citation_relations(
         ``publication_year:<Y>`` queries (each top ``latest_per_year`` by
         citations) over the years just below the window.
       Anything already a Field Landmark is excluded (a recent *giant* stays a
-      landmark, not double-shown), and the rest are sorted newest-first.
+      landmark, not double-shown). A ``latest_limit`` keeps the **newest** N,
+      but the returned order is **oldest-first** — the enumeration rank drives
+      the frontend's reveal slider, which should walk toward the present.
 
     The split is by **publication year**, not an exact date, because OpenAlex
     dating is coarse — many works are year-only, defaulted to ``<year>-01-01``,
@@ -219,7 +221,7 @@ def citation_relations(
     Args:
         work_id: The seed's bare OpenAlex id (``W…``).
         landmark_limit: Max all-time landmarks, or None for the unbounded cap.
-        latest_limit: Max latest citers (newest-first), or None for all.
+        latest_limit: Max latest citers (keeps the newest), or None for all.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -265,9 +267,13 @@ def citation_relations(
         if node_id not in seen and node_id not in landmark_ids:
             seen.add(node_id)
             latest.append(entry)
-    latest.sort(key=_by_recency, reverse=True)  # newest first
+    # Select newest-first (so a limit keeps the newest N), then flip: rank 0 is
+    # the OLDEST banded year and the frontier comes last, so the frontend's
+    # reveal slider walks forward through time toward the present.
+    latest.sort(key=_by_recency, reverse=True)
     if latest_limit is not None:
         latest = latest[:latest_limit]
+    latest.reverse()
 
     return landmark, latest
 

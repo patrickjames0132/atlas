@@ -652,6 +652,16 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
         id/DOI lookups free; a per-seed build is a handful of filter calls.
         `OPENALEX_API_KEY` optional (`config.openalex`). *(Browser-tested on
         hawking radiation / attention / dqn, 2026-07-09.)*
+- [x] **Latest Publications slider reveals oldest-first** *(v4.1.0)* — the
+      reveal slider used to surface the newest citers first and work *backward*
+      into the banded years; inverted so rank 0 is the **oldest** banded-year
+      paper and the slider walks forward through time toward the present
+      (reads naturally left→right in Timeline). Selection is untouched — a
+      `latest_limit` still keeps the **newest** N; only the shipped order of
+      the survivors flips (pinned by a dedicated test). Backend-only (the
+      slider is a pure `rank < value` reveal): the flip lives in the OpenAlex
+      traversal **and** the S2 fallback, so both citation sources agree.
+      *(Patrick's browser observation, 2026-07-09.)*
 - [x] **Even citation spread across the years** *(v3.0.0 — supersedes "Recency
       preference for citations")* — instead of a user-facing older/newer knob,
       the seed's citations are now **always** selected **evenly across
