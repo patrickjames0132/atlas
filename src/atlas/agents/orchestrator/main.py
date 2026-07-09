@@ -10,8 +10,9 @@ in ``skills/workflows/``:
   the graph *as the user sees it* — it never expands nodes (that's the
   researcher's job, on explicit questions). Modes are scoped by
   ``_story_nodes``: history ends AT the seed, evolution starts from it,
-  frontier keeps only the last ~12 months (the leading edge); intuition and
-  bridge see the whole visible set.
+  frontier keeps only the configured recency window (the lecturer's
+  ``frontier_window_months`` extra, default ~5 years); intuition and bridge
+  see the whole visible set.
 * ``research``  — pure delegation to ``researcher.answer``.
 * ``librarian`` — pure delegation to ``librarian.answer``.
 
@@ -31,14 +32,10 @@ from typing import Iterator
 
 from ...services.graph import Node
 from .. import events, lecturer, librarian, researcher
+from ..lecturer.config import FRONTIER_WINDOW_MONTHS
 from ..models import Intent, LectureMode
 
 log = logging.getLogger(__name__)
-
-# The current-frontier lecture's recency window. Matches the `latest` citation
-# relation's window (semantic_scholar traversal `_LATEST_WINDOW_MONTHS`) so the
-# frontier the lecture narrates lines up with the light-green `latest` nodes.
-_FRONTIER_WINDOW_MONTHS = 12
 
 
 def _is_recent(node: Node, cutoff_iso: str, min_year: int) -> bool:
@@ -57,8 +54,11 @@ def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]
     only sees the seed plus papers published in or before the seed's year;
     EVOLUTION tells the story *since* it (in or after). FRONTIER stays at the
     leading edge: the seed plus only papers from the last
-    ``_FRONTIER_WINDOW_MONTHS`` (any relation — so recent citations AND recent
-    similar work), scoped by absolute recency, not relative to the seed.
+    ``FRONTIER_WINDOW_MONTHS`` — the lecturer's ``frontier_window_months``
+    config extra, default ~5 years so the lecture covers the same span as the
+    graph's light-green "Latest Publications" nodes (any relation — so recent
+    citations AND recent similar work), scoped by absolute recency, not
+    relative to the seed.
     INTUITION and BRIDGE see everything. Undated papers are left out of the
     year-clamped directional modes — they can't be placed in a chronological
     story. No seed year -> no history/evolution clamp (frontier still applies).
@@ -73,12 +73,15 @@ def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]
     """
     if mode is LectureMode.FRONTIER:
         today = datetime.date.today()
-        months = today.year * 12 + (today.month - 1) - _FRONTIER_WINDOW_MONTHS
+        months = today.year * 12 + (today.month - 1) - FRONTIER_WINDOW_MONTHS
         cutoff = f"{months // 12:04d}-{months % 12 + 1:02d}-{today.day:02d}"
+        # A year-only paper counts from the cutoff's year: OpenAlex dating is
+        # coarse (many works are year-only), so err toward inclusion.
+        cutoff_year = months // 12
         return [
             node
             for node in nodes
-            if node.is_seed or node.id == seed.id or _is_recent(node, cutoff, today.year - 1)
+            if node.is_seed or node.id == seed.id or _is_recent(node, cutoff, cutoff_year)
         ]
     if seed.year is None or mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION):
         return list(nodes)

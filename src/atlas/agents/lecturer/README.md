@@ -77,8 +77,21 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
   JSON server-side unless `anthropic_eager_input_streaming` is set (every
   structured output IS a tool call). Both are required for beats to
   actually stream.
+- **The `extras` knobs** (the researcher's budget pattern — unknown extras
+  keys fail at import):
+  - `frontier_window_months` — THE CURRENT FRONTIER's recency window, read
+    at import into `FRONTIER_WINDOW_MONTHS`. Default 60 (~5 years), wide on
+    purpose: since the OpenAlex hybrid the graph's light-green "Latest
+    Publications" nodes span several years, and a 12-month lecture window
+    narrated almost none of them. The orchestrator's `_story_nodes` scopes
+    with it, and the FRONTIER mode intent describes the same window
+    (`_window_phrase`), so the prompt and the filter can't drift.
+  - `min_beats` / `max_beats` — how many beats a lecture asks for (default
+    5–9), phrased into the system prompt (`_BEAT_RANGE`; pinning both ends
+    to the same value reads "exactly N"). A prompt bound, not a hard cap —
+    and it's also what keeps lecture length in check (see below).
 - **No `max_tokens` knob.** The old `TEACHER_MAX_TOKENS` (3000) died with
-  the config rewrite; the 5–9 beat bound in the prompt caps length
+  the config rewrite; the beat bound in the prompt caps length
   naturally. If runaway lectures ever appear, the knob goes in this agent's
   `extras` first.
 - **Failures propagate.** Unlike the query analyst (search must never

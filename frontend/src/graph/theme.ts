@@ -13,7 +13,7 @@ export const REL_COLOR: Record<string, string> = {
   seed: '#ffd166', // gold — the paper you're exploring
   reference: '#6ea8fe', // blue — ancestors it cites
   citation: '#4ade80', // green — landmark descendants that cite it
-  latest: '#86efac', // light green — recent citers (the last ~12 months' frontier)
+  latest: '#86efac', // light green — recent citers (the recent-years frontier)
   similar: '#c084fc', // purple — embedding-similar papers
   search: '#f472b6', // pink — pulled in by the teacher's topic search (3c.2)
 }

@@ -110,20 +110,28 @@ def test_lecture_with_an_undated_seed_skips_the_clamp(monkeypatch):
     assert [node.id for node in seen["nodes"]] == ["seed01", "node02", "desc01", "nodate"]
 
 
-def test_frontier_lecture_scopes_to_recent_nodes(monkeypatch):
-    """THE CURRENT FRONTIER keeps the seed plus only papers from the last ~12
-    months — any relation (recent citations AND recent similar) — by absolute
-    recency, not relative to the seed's (old) year."""
+def test_frontier_lecture_scopes_to_the_configured_window(monkeypatch):
+    """THE CURRENT FRONTIER keeps the seed plus only papers inside the
+    configured ``frontier_window_months`` window — any relation (recent
+    citations AND recent similar) — by absolute recency, not relative to the
+    seed's (old) year. Widening the window (the lecturer's config extra)
+    pulls older papers into the story."""
     import datetime
 
-    recent = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
-    old = (datetime.date.today() - datetime.timedelta(days=1500)).isoformat()
+    def days_ago(days: int) -> str:
+        return (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+
     seed = make_node("seed01", "Seed", is_seed=True, rels=[], year=2015)
     nodes = [
         seed,
-        make_node("fresh-cite", "Fresh citation", pub_date=recent, year=2026, rels=["latest"]),
-        make_node("fresh-sim", "Fresh similar", pub_date=recent, year=2026, rels=["similar"]),
-        make_node("old-cite", "Old citation", pub_date=old, year=2022, rels=["citation"]),
+        make_node("fresh-cite", "Fresh citation", pub_date=days_ago(30), year=2026,
+                  rels=["latest"]),
+        make_node("fresh-sim", "Fresh similar", pub_date=days_ago(30), year=2026,
+                  rels=["similar"]),
+        make_node("mid-cite", "Four-year-old citation", pub_date=days_ago(1500), year=2022,
+                  rels=["citation"]),
+        make_node("old-cite", "Ancient citation", pub_date=days_ago(3000), year=2018,
+                  rels=["citation"]),
     ]
     seen: dict = {}
 
@@ -132,9 +140,17 @@ def test_frontier_lecture_scopes_to_recent_nodes(monkeypatch):
         yield events.Beat(heading="H", text="T.", node_ids=[])
 
     monkeypatch.setattr(orchestrator_main.lecturer, "lecture", fake_lecture)
+    # A narrow 12-month window keeps only the fresh pair...
+    monkeypatch.setattr(orchestrator_main, "FRONTIER_WINDOW_MONTHS", 12)
     list(run(Intent.LECTURE, seed=seed, nodes=nodes, mode=LectureMode.FRONTIER))
-    # Seed + both recent papers (citation and similar); the old citation drops.
     assert [node.id for node in seen["nodes"]] == ["seed01", "fresh-cite", "fresh-sim"]
+    # ...and widening it to 5 years (the default) pulls the four-year-old
+    # citation in; the ancient one still drops.
+    monkeypatch.setattr(orchestrator_main, "FRONTIER_WINDOW_MONTHS", 60)
+    list(run(Intent.LECTURE, seed=seed, nodes=nodes, mode=LectureMode.FRONTIER))
+    assert [node.id for node in seen["nodes"]] == [
+        "seed01", "fresh-cite", "fresh-sim", "mid-cite",
+    ]
 
 
 def test_a_failing_workflow_ends_with_error_not_done(monkeypatch):

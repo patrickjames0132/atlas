@@ -70,7 +70,11 @@
       {
         "id": "lecturer",
         "model": "anthropic:claude-sonnet-4-6",
-        "extras": {}
+        "extras": {
+          "frontier_window_months": 60,
+          "min_beats": 5,
+          "max_beats": 9
+        }
       },
       {
         "id": "researcher",

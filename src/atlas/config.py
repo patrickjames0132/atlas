@@ -178,9 +178,9 @@ class GraphConfig(ConfigModel):
         "the Field Landmarks slider's max. null = ship the unbounded cap (500)."
     )
     latest_limit: PositiveInt | None = Field(
-        description="LATEST citations (the recent frontier — citers from the last ~12 "
-        "months) to ship as 'latest' nodes — the Latest Publications slider's max. "
-        "null = ship them all."
+        description="LATEST citations (the recent frontier — citers from the newest "
+        "years plus the per-year bands below them) to ship as 'latest' nodes — the "
+        "Latest Publications slider's max. null = ship them all."
     )
     similar_limit: PositiveInt | None = Field(
         description="SPECTER2-embedding neighbors to ship as 'similar' nodes — the "

@@ -439,6 +439,23 @@ optional, behind a key.
       "What's evolved since" receives the seed onward; intuition/bridge see
       everything (undated papers sit out of the clamped modes; an undated
       seed disables the clamp).
+- [x] **Lecturer knobs: configurable frontier window + beat-count bounds**
+      *(v4.2.0)* — the lecturer gained an `extras` staging area in its
+      `config.llm.agents` entry (the researcher's budget pattern — unknown
+      keys fail at import). **`frontier_window_months`** (default 60) widens
+      "The current frontier"'s recency window from the hardcoded 12 months
+      to **~5 years**: since the v4.0.0 OpenAlex hybrid, the light-green
+      Latest Publications nodes span the newest years plus the
+      `latest_band_years` per-year bands below them, so a 12-month lecture
+      narrated almost none of what the graph actually shows as "latest."
+      The FRONTIER mode-intent phrases the same window into the prompt
+      (`_window_phrase`) so the narration and the `_story_nodes` filter
+      can't drift, and the year-only fallback for OpenAlex's coarse dates
+      now errs toward inclusion (the cutoff's year, not a hardcoded
+      `today - 1`). **`min_beats` / `max_beats`** (default 5–9) make the
+      lecture's bubble count tunable — phrased into the system prompt
+      ("exactly N" when both ends pin to the same value); a prompt bound,
+      not a hard output cap. *(Patrick's asks, browser-tested 2026-07-09.)*
 - [x] **Refocus "This paper's intuition" on the seed itself** *(v3.0.0)* — the
       intuition lecture no longer reads like a second "How we got here": its
       mode-intent now walks the paper's own components (the problem, the core
@@ -733,7 +750,9 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       alongside the `latest` citers. `MODE_INTENTS` intent (survey the newest work
       as current threads, distinct from EVOLUTION's full arc), figure pool wired,
       frontend mode button + `LectureMode` type. Completeness guard added
-      (`set(MODE_INTENTS) == set(LectureMode)`).
+      (`set(MODE_INTENTS) == set(LectureMode)`). **Window configurable since
+      v4.2.0** (`frontier_window_months` lecturer extra, default ~5 years —
+      see "Lecturer knobs" under AI teacher & lectures).
 - [x] **Ship C — live per-relation count sliders** *(v3.6.0)*. Each `Edge`
       carries a `rank` (its index in the relation's order — references/citations by
       influence, latest by recency, similar by S2); the backend ships the whole

@@ -34,8 +34,11 @@ built, not silently grow it.)
 **Modes are scoped by `_story_nodes`:** history's story ends AT the seed, so
 the lecturer only receives the seed plus papers published in or before its year;
 evolution starts from the seed (in or after); frontier keeps the seed plus only
-papers from the last ~12 months (the leading edge, any relation — recent
-citations and recent similar work). Undated papers are dropped from the
+papers inside the configured recency window — the lecturer's
+`frontier_window_months` config extra, default 60 (~5 years) so the lecture
+covers the same span as the graph's light-green "Latest Publications" nodes
+(the leading edge, any relation — recent citations and recent similar work).
+Undated papers are dropped from the
 year-clamped directional modes — they can't be placed in a chronological story.
 Intuition
 and bridge see the whole visible set; an undated seed disables the clamp.
@@ -79,7 +82,7 @@ and bridge see the whole visible set; an undated seed disables the clamp.
 
 `test_main.py` fakes the three sub-agents at the module seam: relay +
 `Done` appending, full kwargs passthrough, the per-mode lecture scoping
-(history ancestors-only, evolution descendants-only, frontier last-~12-months
-any-relation, intuition everything, undated seed → no clamp; no trace/discovery
-frames ever precede a lecture), mid-stream failure → `Error` (and no `Done`),
-and bad input → `Error`.
+(history ancestors-only, evolution descendants-only, frontier inside the
+configured window any-relation, intuition everything, undated seed → no clamp;
+no trace/discovery frames ever precede a lecture), mid-stream failure →
+`Error` (and no `Done`), and bad input → `Error`.

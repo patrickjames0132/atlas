@@ -157,7 +157,10 @@ The Vite dev server proxies `/api/*` to Flask.
      itself, drawing on your library for context), "What's evolved
      since" (the seed onward through the work that built on it), and "The
      current frontier" (a survey of just the newest work — recent citations
-     and similar papers from the last ~12 months). Beats light up their papers
+     and similar papers inside a configurable recency window, ~5 years by
+     default to match the Latest Publications span). Lecture length is
+     tunable too (`min_beats`/`max_beats` in the lecturer's config `extras`).
+     Beats light up their papers
      and carry the papers' **real figures** inline — click to enlarge.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search / search

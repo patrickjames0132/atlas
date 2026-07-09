@@ -275,7 +275,9 @@ See its own README.
   Structured output replaces the old NDJSON protocol and its fence-stripping
   parser.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
-- **Config:** the four mode-intent paragraphs; beat count bounds (5–9).
+- **Config:** the five mode-intent paragraphs; `extras` knobs for the
+  frontier recency window (`frontier_window_months`, default 60) and the
+  beat-count bounds (`min_beats`/`max_beats`, default 5–9).
 
 ### `researcher` — agentic Q&A over the graph *(built)*
 
