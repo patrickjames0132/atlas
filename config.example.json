@@ -9,15 +9,20 @@
     "timeout": 30,
     "min_interval": 1.1
   },
+  "openalex": {
+    "api_key": "",
+    "mailto": "you@example.com",
+    "base_url": "https://api.openalex.org",
+    "timeout": 30,
+    "min_interval": 0.1
+  },
   "graph": {
     "ref_limit": 100,
     "cite_limit": 150,
     "latest_limit": 150,
     "similar_limit": 60,
-    "citation_mining": {
-      "sources": 100,
-      "candidates": 1000
-    },
+    "latest_band_years": 5,
+    "latest_per_year": 50,
     "recs_pool": "all-cs",
     "cache_ttl": 86400
   },

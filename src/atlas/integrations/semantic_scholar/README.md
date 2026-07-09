@@ -40,11 +40,11 @@ A package (not a flat module) split by concern, four files instead of one
   unresolved entries) used by both `recommendations()` and `search_papers()`
   — they had identical loops before this was factored out.
 - **`traversal.py`** — "what's connected to this paper?": `references()`
-  (blue nodes — what it cites), `citation_relations()` (which splits citers
-  into **landmark** green nodes and **latest** light-green nodes — see the
-  mining-flow section below), `citations()` (the single-relation landmark
-  view used by on-demand graph expansion), `recommendations()` (purple nodes
-  — SPECTER2 embedding similarity), plus `get_papers()`/`get_paper()` to
+  (blue nodes — what it cites), `citation_relations()` (splits citers into
+  **landmark** green nodes and **latest** light-green nodes — the **fallback**
+  path now, see the citations section below), `citations()` (the single-relation
+  landmark view for on-demand graph expansion), `recommendations()` (purple
+  nodes — SPECTER2 embedding similarity), plus `get_papers()`/`get_paper()` to
   hydrate full details for known ids. These relation types are literally the
   colors in the graph legend.
 - **`search.py`** — "search all of S2 for X," with no source paper at all.
@@ -84,97 +84,39 @@ package needs to know it's a package internally.
   `http_request`/`response` not `req`/`resp`, `year_from`/`year_to` not
   `lo`/`hi`.
 
-## Citations: landmark vs latest, and the mining flow
+## Citations: landmark vs latest (now the FALLBACK path)
 
-A seed's citers are split into **two relations** by `citation_relations()`, both
-built from **one paged citer fetch** (`_fetch_citers(deep=True)`):
+> **Since v4.0.0, citations come from OpenAlex**, not here — its sorted `cites:`
+> queries return a seed's most-cited citers directly, so the whole landmark
+> **mining + verification** apparatus this section used to document is **gone**
+> (see `integrations/openalex/README.md`). `citation_relations()`/`citations()`
+> remain as the **fallback** for when OpenAlex can't resolve a seed, and are
+> described here.
+
+A seed's citers are split into **two disjoint relations** by
+`citation_relations()`, both built from **one paged citer fetch**
+(`_fetch_citers(deep=True)`):
 
 - **latest** (light-green nodes) — citers published within the rolling last
-  `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. The recent
-  frontier. Capped at `config.graph.latest_limit`.
-- **landmark** (green nodes) — everything else, i.e. the most-cited *historic*
-  citers. Capped at `config.graph.cite_limit`.
+  `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. Capped at
+  `config.graph.latest_limit`.
+- **landmark** (green nodes) — everything else, the most-cited *historic* citers.
+  Capped at `config.graph.cite_limit`. A citer with no `pub_date` competes here.
 
-The two are **disjoint**: a recent-but-highly-cited paper shows once, as
-`latest`. A citer with no `pub_date` can't be placed in the window, so it
-competes as a `landmark`.
-
-### Deep paging: completing the window and filling the middle band
+### Deep paging
 
 S2 lists citers newest-first, and one page is only 1000 citers. For a heavily-
-cited seed that page can span *less than a year* — so a single page (a) truncates
-the `latest` window and (b) never reaches the mid-era citers, leaving a gap
-between the recent frontier and the (mined) historic landmarks. So the seed build
-**pages** (offsets 0, 1000, 2000, …), stopping at the first page that holds no
-in-window citer (the rolling window is fully behind us), the list end, or the
-`_MAX_OFFSET` (~10k) ceiling. Two payoffs from one loop: `latest` now covers the
-*whole* window, and the citers just past the boundary are exactly the mid-era
-landmarks a single page overshot — so for a seed whose middle band is reachable
-(DQN: ~3k citers paged, `cite_limit` fully filled with real 2016–2024 citers) the
-"peter out toward recent" gap closes. Graph expansion (`citations()`, `deep=
-False`) stays one page — it wants the tip, fast.
+cited seed that page can span *less than a year*, truncating the `latest` window
+and missing mid-era citers. So the fallback build **pages** (offsets 0, 1000,
+2000, …), stopping at the first page with no in-window citer, the list end, or
+the `_MAX_OFFSET` (~10k) ceiling. Graph expansion (`citations()`, `deep=False`)
+stays one page — it wants the tip, fast.
 
-For the truly hyper-cited (e.g. *Attention*, ~150k), the middle band sits *past*
-the ceiling even when paged, so mining (below) is still the only way to reach it.
-Paging and mining are complementary, not competing.
-
-### Why the deepest landmarks still have to be *mined*
-
-Deep paging reaches everything up to the ~10k offset ceiling. But a seed cited
-past that (e.g. *Attention*, ~150k) has its oldest landmarks sitting *beyond* the
-ceiling — unreachable by any offset, paged or not. Those we recover sideways:
-landmarks are exactly the papers everyone *else* cites, so we harvest them from
-the reference lists of the citers we *can* reach. The flow in `_mined_landmarks`
-(runs whenever `total_count` overflows what one page holds):
-
-1. **Sources** — from the (deep-paged) citer pool, keep the top
-   `citation_mining.sources` (100) by citation count. These are the mining
-   sources (recent surveys are goldmines — they cite every landmark); paging
-   deeper means they're drawn across a larger pool, so they're better sources.
-2. **Harvest** — one batch call pulls those 100 sources' **reference lists** (the
-   papers *they* cite). That union is the raw candidate pool. *(The candidates are
-   what the sources cite — not the sources themselves.)*
-3. **Filter** — dedup; keep only candidates published from the seed's year up to
-   *last* year (a pre-seed paper can't cite the seed; a current-year one is the
-   `latest` frontier, not a landmark); drop any already on the graph.
-4. **Rank & cap** — sort by **co-citation frequency** (how many of the 100 sources
-   reference each candidate), tie-broken by raw citation count, and keep the top
-   `citation_mining.candidates` (1000).
-5. **Verify** — check each candidate's *own* reference list for the seed and
-   **drop any that don't actually cite it**. The graph never invents an edge.
-   Chunked at 500 ids/batch (so `candidates` may exceed S2's batch cap), and
-   best-effort per chunk (one chunk's 429 doesn't nuke the rest).
-6. What survives → merged with the paged pool's own older citers, ranked, trimmed
-   to `cite_limit` for display.
-
-### The two knobs, and why co-citation ranking matters
-
-`config.graph.citation_mining` is operator-tunable (read at call time):
-
-- **`sources`** — width of the net. Each source's references are its own
-  predecessors, so more sources = a larger, less-overlapping candidate pool =
-  more distinct mid-era landmarks. One harvest batch regardless of count.
-- **`candidates`** — depth of verification (how far down the ranked pool we check
-  for real citers). One verify batch per 500.
-
-**Ranking is by co-citation frequency, not raw citation count** — and this is
-load-bearing. Rank by raw citations and the top of the pool fills with globally
-huge but *off-topic* giants (Transformer, BERT, ResNet) that don't cite the seed;
-they burn the verification budget before the real mid-tier citers are ever
-checked. Co-citation frequency instead surfaces the papers many seed-citers agree
-are foundational — which are overwhelmingly the ones that *also* cite the seed.
-
-### Known ceiling (mining only)
-
-Deep paging removed the mid-era gap for seeds whose middle band is *reachable*
-(DQN now fills `cite_limit` from real paged citers, not just mining). The ceiling
-below only bites the *mined* tail — the past-10k-ceiling landmarks of a truly
-hyper-cited seed (*Attention*-scale): mining can only find a landmark that **at
-least one sampled source references**, and S2 can **truncate the nested
-`references` arrays** in batch responses, so a landmark deep in a source's list
-(harvest) or a citer whose own reference list is truncated past the seed (verify)
-can be missed. Turning the knobs up helps but doesn't fully escape it — but it now
-affects far fewer seeds than before paging.
+**Known limit of this fallback:** without OpenAlex's sorted queries it is
+newest-first and offset-capped, so a hyper-cited seed's oldest landmarks (past
+~10k) are unreachable and the landmark relation is recency-biased. That's exactly
+the artifact OpenAlex fixed — which is why this is now only the rare-miss
+fallback, and the mining that used to paper over it has been retired.
 
 ## Relation ordering (what each traversal returns — and the slider walks)
 

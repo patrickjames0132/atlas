@@ -10,7 +10,6 @@ import datetime
 
 import pytest
 
-from atlas.config import config
 from atlas.integrations.semantic_scholar import client, nodes, traversal
 
 
@@ -209,14 +208,12 @@ def _offset_of(url: str) -> int:
 
 
 def test_citation_relations_pages_until_the_window_boundary(monkeypatch):
-    """The seed build pages newest-first while pages hold in-window citers and
-    stops at the first page fully past the window — so `latest` spans multiple
-    pages and the boundary page's older citers become landmark candidates."""
+    """The fallback build pages newest-first while pages hold in-window citers
+    and stops at the first page fully past the window — so `latest` spans
+    multiple pages and the boundary page's older citers become landmarks."""
     seen_offsets = []
 
     def fake_request(url, method="GET", body=None, **kw):
-        if "/paper/batch" in url:
-            return []  # mining harvest/verify — empty, isolate the paging
         offset = _offset_of(url)
         seen_offsets.append(offset)
         if offset == 0:
@@ -230,42 +227,24 @@ def test_citation_relations_pages_until_the_window_boundary(monkeypatch):
                                           "publicationDate": _iso(3000)}}]}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = traversal.citation_relations(
-        "p1", landmark_limit=10, latest_limit=10, total_count=150000, year=2013)
+    landmark, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
     assert seen_offsets == [0, 1000, 2000]  # paged through the boundary page, then stopped
     assert {hit["node"]["id"] for hit in latest} == {"new0", "new1"}  # both in-window pages
     assert "old" in {hit["node"]["id"] for hit in landmark}  # boundary page → landmark
 
 
-def test_citations_expansion_fetches_one_page_then_mines(monkeypatch):
-    """A mega seed fetches exactly ONE newest page (offset 0) and recovers its
-    landmarks by mining — the old stratified offset windows are gone."""
+def test_citations_expansion_fetches_one_newest_page(monkeypatch):
+    """The single-relation expansion view fetches exactly ONE newest page
+    (offset 0) — the recent tip, fast; no deep paging, no mining (retired)."""
     offsets = []
 
     def fake_request(url, method="GET", body=None, **kw):
-        if "/paper/batch" in url:
-            return []  # mining harvest — empty, to isolate the fetch behaviour
         offsets.append(_offset_of(url))
         return {"data": [{"citingPaper": {"paperId": "c1", "year": 2026, "citationCount": 5}}]}
 
     monkeypatch.setattr(client, "request", fake_request)
-    traversal.citations("p1", limit=5, total_count=150000)
-    assert offsets == [0]  # exactly one page at offset 0 — no offset windows
-
-
-def test_citations_small_paper_one_page_no_mining(monkeypatch):
-    """A modestly-cited seed's page IS its complete citation list, so it fetches
-    one page and skips mining entirely."""
-    urls = []
-
-    def fake_request(url, method="GET", body=None, **kw):
-        urls.append(url)
-        return {"data": [{"citingPaper": {"paperId": "c1", "year": 2020, "citationCount": 5}}]}
-
-    monkeypatch.setattr(client, "request", fake_request)
-    traversal.citations("p1", limit=5, total_count=300)
-    assert [_offset_of(url) for url in urls] == [0]  # one page only
-    assert all("/paper/batch" not in url for url in urls)  # complete list — no mining
+    traversal.citations("p1", limit=5)
+    assert offsets == [0]  # exactly one page at offset 0
 
 
 def test_citations_propagates_a_fetch_outage(monkeypatch):
@@ -277,180 +256,7 @@ def test_citations_propagates_a_fetch_outage(monkeypatch):
 
     monkeypatch.setattr(client, "request", boom)
     with pytest.raises(client.S2Error):
-        traversal.citations("p1", limit=5, total_count=15000)
-
-
-def test_citations_mega_mines_and_verifies_landmark_citers(monkeypatch):
-    """Past the offset ceiling the reachable windows are all recent-tip, so
-    the pool is enriched with landmark citers mined from reachable papers'
-    reference lists — kept ONLY when verified to actually cite the seed."""
-
-    def fake_request(url, method="GET", body=None, **kw):
-        if "references.title" in url:
-            # The harvest: ONE batch call returns every mined source's
-            # reference list — the seed itself (skipped), a pre-seed giant
-            # (pruned: it can't cite a paper from after its time), and two
-            # heavyweight landmark candidates.
-            return [
-                {"references": [
-                    {"paperId": "p1", "citationCount": 150000},
-                    {"paperId": "adam", "year": 2014, "citationCount": 190000},
-                    {"paperId": "bert", "year": 2019, "citationCount": 90000},
-                    {"paperId": "freeloader", "year": 2018, "citationCount": 80000},
-                ]},
-            ]
-        if "/paper/batch" in url:
-            # Verification: the pre-seed giant never reaches it; bert's
-            # references contain the seed; freeloader's don't — co-appearing
-            # in reference lists is not a citation.
-            assert body["ids"] == ["bert", "freeloader"]
-            return [
-                {"references": [{"paperId": "other"}, {"paperId": "p1"}]},
-                {"references": [{"paperId": "other"}]},
-            ]
-        # The reachable citation windows: all recent tip; the surveys are the
-        # most-cited entries, so they lead the mining sources.
-        offset = _offset_of(url)
-        return {"data": [
-            {"citingPaper": {"paperId": f"recent{offset}", "year": 2026, "citationCount": 5}},
-            {"citingPaper": {"paperId": f"survey{offset}", "year": 2026, "citationCount": 40}},
-        ]}
-
-    monkeypatch.setattr(client, "request", fake_request)
-    out = traversal.citations("p1", limit=4, total_count=150000, year=2017)
-    ids = {hit["node"]["id"] for hit in out}
-    assert "bert" in ids and "freeloader" not in ids  # verified in, unverified out
-    years = {hit["node"]["year"] for hit in out}
-    assert {2019, 2026} <= years  # the mined landmark era AND the frontier
-    mined = next(hit for hit in out if hit["node"]["id"] == "bert")
-    assert mined["influential"] is False  # unknowable off the /citations endpoint
-
-
-def test_citations_mega_mining_is_best_effort(monkeypatch):
-    """A dead batch pool means mining just bails — the reachable pool still
-    serves, and no extra requests chase the lost landmarks."""
-    urls = []
-
-    def fake_request(url, method="GET", body=None, **kw):
-        urls.append(url)
-        if "/paper/batch" in url:
-            raise client.S2Error("mining blocked")
-        offset = _offset_of(url)
-        return {"data": [
-            {"citingPaper": {"paperId": f"off{offset}", "year": 2026, "citationCount": 5}}
-        ]}
-
-    monkeypatch.setattr(client, "request", fake_request)
-    out = traversal.citations("p1", limit=3, total_count=150000)
-    assert out  # mining is best-effort; the reachable pool still serves
-    assert all(hit["node"]["year"] == 2026 for hit in out)
-    # Only the harvest batch was attempted — nothing followed its failure.
-    assert len([url for url in urls if "/paper/batch" in url]) == 1
-
-
-def test_citations_mega_unverifiable_candidates_are_dropped(monkeypatch):
-    """When the verification batch is down, NOTHING mined is kept — the
-    graph never guesses a citation edge."""
-
-    def fake_request(url, method="GET", body=None, **kw):
-        if "references.title" in url:
-            # The harvest batch succeeds and finds a landmark candidate...
-            return [
-                {"references": [{"paperId": "bert", "year": 2019, "citationCount": 90000}]}
-            ]
-        if "/paper/batch" in url:
-            raise client.S2Error("verification down")  # ...but no check can run.
-        offset = _offset_of(url)
-        return {"data": [
-            {"citingPaper": {"paperId": f"off{offset}", "year": 2026, "citationCount": 5}}
-        ]}
-
-    monkeypatch.setattr(client, "request", fake_request)
-    out = traversal.citations("p1", limit=3, total_count=150000)
-    assert all(hit["node"]["id"] != "bert" for hit in out)
-
-
-def test_cites_seed_chunks_beyond_the_batch_cap(monkeypatch):
-    """Verification splits into ≤_BATCH_MAX-id batches, so a candidate budget
-    larger than S2's 500-id cap is honoured — results unioned across chunks."""
-    chunk_sizes = []
-
-    def fake_request(url, method="GET", body=None, **kw):
-        chunk_sizes.append(len(body["ids"]))
-        # Every candidate cites the seed (its references contain 'seed').
-        return [{"references": [{"paperId": "seed"}]} for _ in body["ids"]]
-
-    monkeypatch.setattr(client, "request", fake_request)
-    candidate_ids = [f"c{index}" for index in range(traversal._BATCH_MAX + 30)]
-    verified = traversal._cites_seed(candidate_ids, "seed")
-    assert chunk_sizes == [traversal._BATCH_MAX, 30]  # two batches, chunked at the cap
-    assert len(verified) == traversal._BATCH_MAX + 30  # all verified across both
-
-
-def test_cites_seed_is_best_effort_per_chunk(monkeypatch):
-    """One chunk's batch failing drops only that chunk — the other chunk's
-    verified candidates are still kept (a 429 no longer nukes every landmark)."""
-
-    def fake_request(url, method="GET", body=None, **kw):
-        if "c0" in body["ids"]:
-            raise client.S2Error("first chunk 429")  # first chunk fails
-        return [{"references": [{"paperId": "seed"}]} for _ in body["ids"]]
-
-    monkeypatch.setattr(client, "request", fake_request)
-    candidate_ids = [f"c{index}" for index in range(traversal._BATCH_MAX + 5)]
-    verified = traversal._cites_seed(candidate_ids, "seed")
-    assert len(verified) == 5  # only the second (surviving) chunk's candidates
-
-
-def test_citations_mining_ranks_candidates_by_co_citation_not_raw_citations(monkeypatch):
-    """A candidate co-cited by MANY seed-citers beats a globally-huge but
-    off-topic giant for a scarce verification slot — so the budget isn't burnt
-    on papers that don't cite the seed."""
-
-    def fake_request(url, method="GET", body=None, **kw):
-        if "references.title" in url:
-            # Two source citers' reference lists: the giant appears in only one,
-            # the landmark in both (co-cited) — despite far fewer raw citations.
-            return [
-                {"references": [
-                    {"paperId": "giant", "year": 2019, "citationCount": 200000},
-                    {"paperId": "landmark", "year": 2019, "citationCount": 500},
-                ]},
-                {"references": [{"paperId": "landmark", "year": 2019, "citationCount": 500}]},
-            ]
-        if "/paper/batch" in url:
-            # Only one candidate slot: co-citation ranking must have sent the
-            # landmark (freq 2), not the giant (freq 1) — so 'giant' never here.
-            assert body["ids"] == ["landmark"]
-            return [{"references": [{"paperId": "p1"}]}]
-        offset = _offset_of(url)
-        return {"data": [
-            {"citingPaper": {"paperId": f"src-a{offset}", "year": 2026, "citationCount": 40}},
-            {"citingPaper": {"paperId": f"src-b{offset}", "year": 2026, "citationCount": 30}},
-        ]}
-
-    monkeypatch.setattr(client, "request", fake_request)
-    monkeypatch.setattr(config.graph.citation_mining, "candidates", 1)
-    out = traversal.citations("p1", limit=10, total_count=150000, year=2017)
-    ids = {hit["node"]["id"] for hit in out}
-    assert "landmark" in ids and "giant" not in ids  # co-cited landmark won the slot
-
-
-def test_citations_mines_whenever_list_overflows_one_page(monkeypatch):
-    """Any seed with more citers than one page (`total_count` > the ranking
-    pool) mines for landmarks — there's no separate 'reachable by windows'
-    tier any more, so a 5000-citer paper mines just like a 150k one."""
-    urls = []
-
-    def fake_request(url, method="GET", body=None, **kw):
-        urls.append(url)
-        if "/paper/batch" in url:
-            return []  # harvest returns nothing — we only assert it was attempted
-        return {"data": [{"citingPaper": {"paperId": "c1", "year": 2024, "citationCount": 5}}]}
-
-    monkeypatch.setattr(client, "request", fake_request)
-    traversal.citations("p1", limit=5, total_count=5000)
-    assert any("/paper/batch" in url for url in urls)  # mining ran
+        traversal.citations("p1", limit=5)
 
 
 def test_recommendations_pool_in_url(monkeypatch):

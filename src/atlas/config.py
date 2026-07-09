@@ -118,33 +118,37 @@ class SemanticScholarConfig(ConfigModel):
     )
 
 
-class CitationMiningConfig(ConfigModel):
-    """Landmark mining budgets (see ``integrations/semantic_scholar/traversal.py``
-    ``_mined_landmarks``).
+class OpenAlexConfig(ConfigModel):
+    """Connection settings for the OpenAlex API — the hybrid citation backbone.
 
-    Mining recovers a mega paper's big citers from the reference lists of its
-    reachable citers, then verifies each actually cites the seed. Two knobs
-    trade coverage against S2 load:
+    Since v4.0.0 OpenAlex supplies the **citation** relation (landmark + latest),
+    because sorted, year-banded ``cites:`` queries return a seed's most-cited
+    citers directly — no newest-first recency bias and no reference-list mining
+    (which S2 needed, now retired). S2 still owns references, the *Similar*
+    relation, and TL;DRs/details; the two are matched by DOI / arXiv id. See
+    ``integrations/openalex/README.md`` and the OpenAlex spike in ``OnePager.md``.
 
-    * ``sources`` widens the *net* — more reference lists harvested means a
-      larger, less-overlapping union of candidate landmarks (still ONE harvest
-      batch, so it costs payload, not requests).
-    * ``candidates`` widens *how many* of that pool get verified. It matters
-      more than it looks: candidates are ranked by citation count, and the very
-      top is dominated by post-seed giants that DON'T cite the seed, so a small
-      cap wastes its slots on them and starves the real mid-tier citers. Raising
-      it reaches those — at the cost of one extra verification batch per 500
-      (verification chunks to respect S2's 500-id batch cap).
+    Pricing is metered (verified live 2026-07-09): a free API key grants $1/day,
+    keyless (``mailto`` polite pool) $0.10/day; **id/DOI lookups are free**,
+    search/filter ~$1 per 1,000 calls. A per-seed citation build is a handful of
+    filter calls, so the free tier is ample — but keep the throttle polite.
     """
 
-    sources: PositiveInt = Field(
-        description="Reachable citers whose reference lists are harvested for landmark "
-        "candidates. Wider = more distinct mid-era landmarks surfaced; one harvest batch."
+    api_key: str = Field(
+        description="Free key from https://openalex.org/settings/api — grants "
+        "$1/day of metered usage. Empty string works (keyless polite pool, "
+        "$0.10/day). Sent as the ``api_key`` query param when set."
     )
-    candidates: PositiveInt = Field(
-        description="Top candidates (ranked by citation count) sent to citation "
-        "verification. Higher reaches past the non-citing giants to the real mid-tier "
-        "citers; costs one verification batch per 500 candidates."
+    mailto: str = Field(
+        description="Contact email for OpenAlex's 'polite pool' (sent as the "
+        "``mailto`` query param) — faster, more reliable service and the courteous "
+        "default even keyless. Empty string omits it."
+    )
+    base_url: str = Field(description="Base URL of the OpenAlex API (one unified endpoint).")
+    timeout: PositiveInt = Field(description="HTTP timeout in seconds for OpenAlex requests.")
+    min_interval: NonNegativeFloat = Field(
+        description="Minimum seconds between OpenAlex requests (self-imposed throttle; "
+        "OpenAlex allows ~10 req/sec, so this stays well under). 0 disables it — tests do."
     )
 
 
@@ -170,8 +174,8 @@ class GraphConfig(ConfigModel):
         "null = ship them all."
     )
     cite_limit: PositiveInt | None = Field(
-        description="LANDMARK citations (most-cited historic citers, up to last year) to "
-        "ship as 'citation' nodes — the Field Landmarks slider's max. null = ship them all."
+        description="Max all-time-most-cited LANDMARK citations ('citation' nodes) to ship — "
+        "the Field Landmarks slider's max. null = ship the unbounded cap (500)."
     )
     latest_limit: PositiveInt | None = Field(
         description="LATEST citations (the recent frontier — citers from the last ~12 "
@@ -182,8 +186,16 @@ class GraphConfig(ConfigModel):
         description="SPECTER2-embedding neighbors to ship as 'similar' nodes — the "
         "Similar slider's max. null = as many as S2 will return."
     )
-    citation_mining: CitationMiningConfig = Field(
-        description="Landmark-mining budgets for mega-cited seeds (see CitationMiningConfig)."
+    latest_band_years: PositiveInt = Field(
+        description="How many years of per-year 'Latest Publications' bands sit just below "
+        "the newest date window — one cited_by_count:desc query per year, each feeding the "
+        "LATEST relation (not landmarks). Fills recent years evenly. See "
+        "openalex/traversal.py citation_relations."
+    )
+    latest_per_year: PositiveInt = Field(
+        description="Top-N most-cited citers kept from each Latest-Publications year band "
+        "(≤200, OpenAlex's page cap). Per-year banding gives even coverage; a single "
+        "recent-window query sorted by citations would let its oldest year dominate."
     )
     recs_pool: Literal["all-cs", "recent"] = Field(
         description="Candidate pool for similar-paper recommendations. 'recent' "
@@ -413,6 +425,7 @@ class Config(ConfigModel):
 
     storage: StorageConfig
     s2: SemanticScholarConfig
+    openalex: OpenAlexConfig
     graph: GraphConfig
     sources: SourcesConfig
     server: ServerConfig

@@ -24,16 +24,21 @@ def make_node(paper_id: str, **extra) -> dict:
 
 @pytest.fixture()
 def fake_s2(monkeypatch):
-    """Canned S2: seed detail + one ref, one cite, one similar (with overlap)."""
+    """Canned S2: seed detail + one ref, one cite, one similar (with overlap).
+
+    OpenAlex resolution is stubbed to return no work, so citations take the S2
+    fallback path — this fixture exercises the S2 traversal + assembly. The
+    OpenAlex-citations path has its own test below.
+    """
     calls = {"get_paper": 0}
+    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: None)
 
     def get_paper(lookup):
         calls["get_paper"] += 1
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    def citation_relations(pid, *, landmark_limit, latest_limit, total_count=None, year=None):
-        calls["total_count"], calls["seed_year"] = total_count, year
+    def citation_relations(pid, *, landmark_limit, latest_limit):
         landmark = [{"node": make_node("cite1"), "influential": False}]
         latest = [{"node": make_node("latest1", pub_date="2026-06-01"), "influential": False}]
         return landmark, latest
@@ -71,9 +76,45 @@ def test_build_graph_shape(fake_s2):
     assert Edge(source="seed", target="sim1", type="similar", rank=0) in graph.edges
     assert Edge(source="seed", target="ref1", type="similar", rank=1) in graph.edges
     assert graph.counts == Counts(references=1, citations=1, similar=2, latest=1, nodes=5)
-    # The seed's citation count rode along so mining can trigger, and its year
-    # so landmark mining can bound the candidate window.
-    assert fake_s2["total_count"] == 1 and fake_s2["seed_year"] == 2020
+
+
+def test_citations_come_from_openalex_when_seed_resolves(fake_s2, monkeypatch):
+    """The hybrid: when OpenAlex resolves the seed, its citer nodes populate the
+    citation/latest relations instead of S2's (references + similar stay S2)."""
+    resolved = {"id": "https://openalex.org/W99"}
+    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: resolved)
+
+    captured = {}
+
+    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+        captured["work_id"] = work_id
+        landmark = [{"node": make_node("DOI:10/oa-cite"), "influential": False}]
+        latest = [{"node": make_node("DOI:10/oa-latest", pub_date="2026-06-01"),
+                   "influential": False}]
+        return landmark, latest
+
+    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
+
+    graph = build.build_graph("1706.03762")
+    by_id = {node.id: node for node in graph.nodes}
+    assert captured["work_id"] == "W99"  # bare OpenAlex id handed to the cites: query
+    # OpenAlex citer + latest nodes are present; the S2 canned cite1/latest1 are not.
+    assert "DOI:10/oa-cite" in by_id and by_id["DOI:10/oa-cite"].rels == ["citation"]
+    assert "DOI:10/oa-latest" in by_id and by_id["DOI:10/oa-latest"].rels == ["latest"]
+    assert "cite1" not in by_id and "latest1" not in by_id
+    # References + similar still come from S2.
+    assert by_id["ref1"].rels == ["reference", "similar"]
+
+
+def test_openalex_failure_falls_back_to_s2_citations(fake_s2, monkeypatch):
+    """An OpenAlex error never fails the build — it degrades to S2 citations."""
+    monkeypatch.setattr(
+        build.openalex, "resolve_work",
+        lambda **kwargs: (_ for _ in ()).throw(build.openalex.OpenAlexError("down")),
+    )
+    graph = build.build_graph("1706.03762")
+    by_id = {node.id: node for node in graph.nodes}
+    assert "cite1" in by_id and "latest1" in by_id  # S2 fallback citers present
 
 
 def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):

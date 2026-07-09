@@ -32,10 +32,11 @@ def _isolate(monkeypatch, tmp_path):
     """Point all storage at a per-test temp dir; disable the S2 throttle.
 
     The three DB paths derive from ``data_dir``, so one override relocates
-    them all. Zeroing ``min_interval`` keeps tests from sleeping.
+    them all. Zeroing the ``min_interval`` throttles keeps tests from sleeping.
     """
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
     monkeypatch.setattr(config.s2, "min_interval", 0.0)
+    monkeypatch.setattr(config.openalex, "min_interval", 0.0)
 
 
 # --- deterministic offline embeddings -----------------------------------------

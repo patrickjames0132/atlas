@@ -46,20 +46,26 @@ you upload (embedded locally; nothing leaves your machine).
 > and the roadmap.
 
 ```
-┌──────────┐  find seed   ┌─────────┐  graph/refs/cites/recs  ┌──────────────────┐
-│  search  │ ───────────▶ │ backend │ ──────────────────────▶ │ Semantic Scholar │
-│  (S2+LLM)│  (title/id)  │ (Flask) │      (dynamic API)      │  Academic Graph  │
-└──────────┘              └────┬────┘                         └──────────────────┘
-                               │ /api/graph  (thin cache only)
-                               ▼
+┌──────────┐  find seed   ┌─────────┐  citations         ┌──────────┐
+│  search  │ ───────────▶ │ backend │ ─────────────────▶ │ OpenAlex │
+│  (S2+LLM)│  (title/id)  │ (Flask) │  refs/similar/TLDR  └──────────┘
+└──────────┘              └────┬────┘ ─────────────────▶ ┌──────────────────┐
+                               │ /api/graph (thin cache) │ Semantic Scholar │
+                               ▼                         └──────────────────┘
                      ┌───────────────────────┐
                      │  React + force graph  │  ← the interactive map you explore
                      └───────────────────────┘
 ```
 
+Since **v4.0.0** the citation graph is a **hybrid**: OpenAlex supplies the
+citation relations (its sorted `cites:` queries return a seed's landmark citers
+directly — no recency bias), while Semantic Scholar keeps the seed resolve,
+references, similar papers, and TL;DRs. The two are matched by DOI / arXiv id.
+
 **Stack:** Python/Flask + uv · [PydanticAI](https://ai.pydantic.dev) agents on
 Claude · React + TypeScript (strict) + Vite + Redux Toolkit ·
 [`react-force-graph-2d`](https://github.com/vasturiano/react-force-graph) ·
+[OpenAlex](https://openalex.org) (citations) +
 [Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/) ·
 [ar5iv](https://ar5iv.org) for figures/full text ·
 [Hugging Face Papers](https://huggingface.co/papers) for code & artifacts ·
@@ -85,6 +91,10 @@ by Pydantic; the value-by-value rationale lives in
 - **`s2.api_key`** — a free
   [Semantic Scholar API key](https://www.semanticscholar.org/product/api).
   Optional but strongly recommended; the unauthenticated pool is tight.
+- **`openalex.api_key`** — optional. OpenAlex (the citation source) runs keyless
+  on its `mailto` polite pool ($0.10/day of metered search — plenty for browsing);
+  a free key at [openalex.org/settings/api](https://openalex.org/settings/api)
+  lifts it to $1/day. Set `openalex.mailto` to your email either way.
 - **`llm.providers.anthropic.api_key`** — powers the whole agent crew
   (lecture, research Q&A, library chat, query analysis). The per-agent model
   choices live under `llm.agents`.
@@ -117,13 +127,12 @@ The Vite dev server proxies `/api/*` to Flask.
    badge marks papers whose whole neighborhood is cached. Optional filters:
    a publication-year window (1800 → now) and S2 **fields of study**.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🌱 latest ·
-   🟣 similar · 💗 found-by-search. Citers split into two relations: **citations**
-   (green) are the **landmark** descendants — the most-cited papers citing the
-   seed, and for mega-cited seeds these are **mined from reachable citers'
-   reference lists and verified** to cite the seed (since S2 stops paging its
-   citation list around 10k); **latest** (light green) is the recent frontier —
-   citers from the last ~12 months — as a filterable relation of its own. Node
-   size = citations; thick links = influential citations; a
+   🟣 similar · 💗 found-by-search. Citers (from **OpenAlex**) split into two
+   relations: **Field Landmarks** (green) are the all-time most-cited papers
+   citing the seed — the historic giants, returned directly by a sorted `cites:`
+   query (no recency bias, no mining); **Latest Publications** (light green) is
+   the recent frontier — recent citers, per-year banded for even coverage — as a
+   filterable relation of its own. Node size = citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
    tags, figures, code & artifacts); **double-click to re-seed** on it —

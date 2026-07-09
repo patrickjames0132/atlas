@@ -1,9 +1,13 @@
-"""Assemble a paper's neighborhood graph from Semantic Scholar.
+"""Assemble a paper's neighborhood graph from a hybrid of OpenAlex + S2.
 
 Given a seed paper, build a Connected-Papers-style graph: the seed plus its
 references (papers it cites — its intellectual ancestors), its citations (papers
 that cite it — its descendants), and recommendation neighbors (embedding-similar
-papers S2 suggests). Nodes are deduped by S2 ``paperId``; edges are tagged
+papers S2 suggests). The seed, references, and similar come from Semantic
+Scholar; the **citations** come from OpenAlex (``_citation_relations``), whose
+server-sorted ``cites:`` queries surface the landmark citers directly — with an
+S2 fallback. Cross-source nodes carry S2-resolvable ids so they dedupe, hydrate,
+and re-seed uniformly. Edges are tagged
 ``reference | citation | similar`` so the frontend can colour and route them.
 The whole snapshot is cached (see ``storage/cache.py``) so re-exploring a paper
 doesn't re-hit the rate-limited S2 API.
@@ -27,12 +31,63 @@ import logging
 from typing import Callable
 
 from ...config import config
-from ...integrations import arxiv
+from ...integrations import arxiv, openalex
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
 from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
+
+
+def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], list[dict]]:
+    """The seed's landmark + latest citers — from OpenAlex, falling back to S2.
+
+    The v4.0.0 hybrid: OpenAlex owns the citation relation because a server-
+    sorted ``cites:`` query returns the most-cited citers directly, killing the
+    landmark recency bias without S2's reference-list mining (see the OpenAlex
+    spike in ``OnePager.md``). We resolve the S2-known seed to its OpenAlex work
+    (by arXiv id / title+year), then split its citers into landmark (historic,
+    most-cited) and latest (recent frontier).
+
+    Falls back to S2's ``citation_relations`` whenever OpenAlex can't help — no
+    work resolved, or the API errored — so the graph is never *worse* than the
+    S2-only build, only better when OpenAlex succeeds. S2 keeps references, the
+    *Similar* relation, and (via each citer's S2-resolvable id) TL;DR hydration.
+
+    Args:
+        seed_paper: The normalized S2 seed node (source of arXiv id / title for
+            OpenAlex resolution).
+        seed_id: The seed's S2 paperId (the S2 fallback's traversal target).
+
+    Returns:
+        ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
+
+    Raises:
+        s2.S2Error: Only from the S2 fallback path (OpenAlex errors are caught
+            and degrade to that fallback).
+    """
+    try:
+        work = openalex.resolve_work(
+            arxiv_id=seed_paper.get("arxiv_id"),
+            title=seed_paper.get("title"),
+        )
+        work_id = openalex.bare_work_id(work) if work else None
+        if work_id:
+            landmark, latest = openalex.citation_relations(
+                work_id,
+                landmark_limit=config.graph.cite_limit,
+                latest_limit=config.graph.latest_limit,
+            )
+            log.info("citations via OpenAlex for seed %s (work %s)", seed_id, work_id)
+            return landmark, latest
+        log.info("OpenAlex resolved no work for seed %s; using S2 citations", seed_id)
+    except openalex.OpenAlexError as exc:
+        log.warning("OpenAlex citations failed for %s (%s); using S2 citations", seed_id, exc)
+    return s2.citation_relations(
+        seed_id,
+        landmark_limit=config.graph.cite_limit,
+        latest_limit=config.graph.latest_limit,
+    )
 
 #: Progress callback: ``(steps_done, steps_total, label)``. The streaming
 #: ``/api/graph/stream`` route bridges these into SSE ``progress`` frames so
@@ -110,19 +165,13 @@ def build_graph(
     # call to flesh them out — what a traversal returns is ready to render.
     report(2, "Fetching references…")
     refs = s2.references(seed_id, config.graph.ref_limit)
-    # Citations split into two relations from ONE newest-page fetch: landmark
-    # citers (the most-cited historic papers, up to last year — mined for a
-    # mega seed whose big citers sit past S2's offset ceiling) and the latest
-    # frontier (citers from the last ~12 months). total_count decides whether
-    # mining runs; year bounds the mining candidate window.
+    # Citations split into two disjoint relations — landmark (most-cited
+    # historic citers) and the latest frontier (last ~12 months) — from OpenAlex
+    # (server-sorted ``cites:`` queries, no recency bias), falling back to S2's
+    # paged+mined path when OpenAlex can't resolve the seed. See
+    # ``_citation_relations`` and the OpenAlex spike in OnePager.md.
     report(3, "Fetching citations…")
-    landmark_cites, latest_cites = s2.citation_relations(
-        seed_id,
-        landmark_limit=config.graph.cite_limit,
-        latest_limit=config.graph.latest_limit,
-        total_count=seed_paper.get("citation_count"),
-        year=seed_paper.get("year"),
-    )
+    landmark_cites, latest_cites = _citation_relations(seed_paper, seed_id)
     report(4, "Finding similar work…")
     similar = s2.recommendations(seed_id, config.graph.similar_limit)
 

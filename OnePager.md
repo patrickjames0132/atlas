@@ -621,6 +621,37 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 - **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
   last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
 
+- [x] **OpenAlex hybrid citation source** *(v4.0.0 — major; supersedes the
+      S2 mining/stratified-sampling approach for citations)* — the culmination of
+      the OpenAlex spike (below, now retired). **OpenAlex owns the citation
+      relations; S2 keeps the seed resolve, references, *Similar*, and TL;DRs**,
+      matched by DOI / arXiv id. A new `integrations/openalex/` package (client →
+      nodes → traversal) mirrors `semantic_scholar/`; `services/graph/build.py`
+      calls it via `_citation_relations`, **falling back to S2** when OpenAlex
+      can't resolve the seed (so the graph is never worse). The whole S2
+      landmark-**mining + verification** apparatus (`_mined_landmarks`,
+      `_cites_seed`, `citation_mining` config) is **deleted** — OpenAlex's sorted
+      `cites:` queries make it dead code. Highlights, each validated live and the
+      graph now builds **far faster** (no deep-paging + 429 backoffs):
+      - **Field Landmarks** = the all-time most-cited citers
+        (`cites:<id>&sort=cited_by_count:desc`) — the historic giants, returned
+        directly, no mining, edge guaranteed by the filter. Fixes the landmark
+        recency bias at the root (Hawking's 1974 early band — Page '76,
+        Gibbons–Hawking '77, Unruh '81 — surfaces immediately).
+      - **Latest Publications** = recent citers: a newest-window query plus
+        **per-year bands** (`latest_band_years`×`latest_per_year`) for even
+        coverage, excluding anything that's already a landmark. The split
+        self-adjusts per seed and leaves no gap between the relations.
+      - **Split by publication YEAR, not exact date** — OpenAlex dating is coarse
+        (year-only works default to `<year>-01-01`), so a rolling *date* window
+        silently drops recent citers (DQN: 1 vs 30). See Bugs.
+      - **Cross-source node identity** — OpenAlex citer nodes carry
+        S2-resolvable ids (`DOI:` / `ARXIV:` / bare `W…`), so the existing paper
+        routes hydrate their TL;DRs (via S2) and re-seed them unchanged.
+      - **Metered pricing handled** — free API key $1/day, keyless $0.10/day,
+        id/DOI lookups free; a per-seed build is a handful of filter calls.
+        `OPENALEX_API_KEY` optional (`config.openalex`). *(Browser-tested on
+        hawking radiation / attention / dqn, 2026-07-09.)*
 - [x] **Even citation spread across the years** *(v3.0.0 — supersedes "Recency
       preference for citations")* — instead of a user-facing older/newer knob,
       the seed's citations are now **always** selected **evenly across
@@ -902,91 +933,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ## Backlog — not yet shipped
 
-### Next up — OpenAlex hybrid data source *(v4.0.0 candidate — likely a major bump)*
-
-- [x] **Spike: OpenAlex for the citation graph, S2 for enrichment.** The next
-      version we take on. The motivation is the **landmark recency bias** (see
-      "Iterative landmark mining" under Enhancements): today's bias is an
-      artifact of two S2 citation-endpoint limits — citers come back
-      **newest-first only** (no sort control) and paging **stops at ~10k
-      offset** — which is what forces the whole `_mined_landmarks` +
-      reference-harvest + verification apparatus. **OpenAlex removes both:**
-      - `filter=cites:W<seed>&sort=cited_by_count:desc` returns the **most-cited
-        citers directly** — that *is* the landmark relation, in one call, edge
-        guaranteed by the filter (no mining, no verification), and the 10k
-        ceiling never bites because you take the top off page 1.
-      - **Cursor pagination** (`cursor=*`) traverses the full citer set when
-        depth is genuinely needed — no offset cap.
-      - **Year-band filters** (`publication_year:1974-1990`) give deliberate,
-        stratified coverage across the seed→today span — the "spread over the
-        years" the iterative-mining idea was chasing, without the loop. **This
-        spike likely subsumes / retires that backlog item.**
-      - Bonus: OpenAlex rate limits are far kinder (~100k/day, 10/s, keyless via
-        a `mailto` polite pool), which would relieve much of the S2-429 pacing
-        complexity our integration carries.
-      - Corpus: OpenAlex is the **larger** corpus (~250M+ works vs S2's ~200M+)
-        and broader across disciplines/formats — most relevant for older,
-        cross-disciplinary, or non-CS seeds (the Hawking case).
-
-      **Why hybrid, not a full switch — what S2 still owns:** OpenAlex has **no
-      TL;DRs** (we'd fall back to abstracts, which we already do via
-      `node.tldr or node.abstract`), **no recommender** for the *Similar*
-      relation (nearest sub is each work's `related_works`, concept-based, a
-      different flavor — or our own embeddings), and **no `influential`-citation
-      flag** (our heavier edges). So the shape to prototype is **OpenAlex for the
-      citation/landmark/year-band traversal, S2 kept for TL;DRs + Similar**,
-      matching works across the two by DOI / arXiv id. Downside is a second
-      integration + cross-source id-matching, and OpenAlex ergonomics differ
-      (arXiv resolved via DOI/landing page rather than a clean `ARXIV:` prefix;
-      abstracts arrive as an inverted index; batch is OR-filtered GETs (~50 ids)
-      rather than S2's `POST /paper/batch` of 500).
-
-      **Spike deliverable:** hit the live OpenAlex API on the Hawking 1974 seed,
-      confirm the sorted + year-bucketed citer queries actually recover the
-      sparse 1974–~2010 landmark band, sanity-check arXiv→work resolution and
-      `related_works` quality, verify the live corpus/rate-limit numbers, then
-      write up **migrate-fully vs. hybrid** with a recommendation before any
-      build. A new `integrations/openalex/` package mirroring the
-      `semantic_scholar/` shape (normalize → traversal → node model) is the
-      probable landing spot. *(From a session discussion, 2026-07-08.)*
-
-      **Spike result (2026-07-09) → HYBRID.** Ran the live probes on the Hawking
-      1974 seed (`W2065805883`, 5,655 citers). Every mechanical claim held:
-      - `filter=cites:W…&sort=cited_by_count:desc` returns the landmarks in one
-        call — Page 1976 (4,886), Gibbons–Hawking 1977 (3,196), Strominger–Vafa
-        1996 (3,057) — edge guaranteed by the filter, no mining/verification.
-      - `publication_year:1974-1990` sorted recovers the **sparse early band**
-        directly (Page '76, Gibbons–Hawking '77, Unruh '81, Birrell–Davies '75).
-        This is the exact band single-round mining misses (see "Iterative
-        landmark mining" below) — the spike **retires that item's need**.
-      - Cursor paging (`cursor=*`) has no offset cap; batch hydration via
-        `ids.openalex:W|W|W` returns all in one GET; abstracts are an inverted
-        index (trivial to reverse). Corpus is **319M works** live (~480M claimed
-        across all entities) — larger than S2.
-
-      **Findings that shaped the call to *hybrid, not full migrate*:**
-      - **`related_works` is a poor Similar relation** — for the Hawking seed it
-        returns obscure Planck-scale papers (0–9 citations), concept
-        co-occurrence not intellectual siblings. **Keep S2's recommender.**
-      - **arXiv→work resolution is awkward** — the arXiv DOI 404s directly; the
-        arXiv id only lives in `locations[].landing_page_url`, which **isn't
-        filterable**. Resolve via title / published DOI. S2's clean `ARXIV:`
-        prefix stays the id bridge.
-      - **Pricing is now metered** (the "100k/day free" assumption is stale): a
-        **free API key gives $1/day**, unauthenticated $0.10/day; **id/DOI
-        lookups are free**, search/filter ~$1/1,000 calls. Our per-seed
-        traversal is a handful of filter calls, so $1/day is ample — but it
-        argues for hybrid (free id-batch hydration does the bulk; spend search
-        credits only on the landmark/year-band queries). Adds an
-        `OPENALEX_API_KEY` env var mirroring `S2_API_KEY`.
-      - Data-quality wrinkle: the transformer record reported `year: 2025` with
-        churny duplicate DOIs — be defensive about merged/re-indexed records.
-
-      **Recommendation → build the hybrid:** `integrations/openalex/` (client →
-      `nodes` normalize → `traversal`) owns citation/landmark/year-band
-      traversal; S2 keeps TL;DRs, *Similar*, `influential` edges, and `ARXIV:`
-      id-matching. Cross-match on DOI / arXiv id into the existing node dict.
-
 ### Teacher & agent reach
 
 - [ ] **Graph-less research mode** — let the researcher run with no graph
@@ -1044,15 +990,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       Give them their own toggle alongside references / citations / similar so
       the user can hide/show them like any other relation. *(From the
       `todos.md` inbox, 2026-07-07.)*
-- [ ] **OpenAlex as a second citation provider** — promoted to the **Next up**
-      section above ("OpenAlex hybrid data source"), where the 2026-07-09 spike
-      validated it live and landed on a hybrid recommendation. The core insight
-      that framed it stays worth keeping: the original instinct was arXiv itself,
-      but arXiv hosts preprints and has **no citation data** — citation edges
-      only exist in citation indexes (S2, OpenAlex, OpenCitations), and
-      parallelizing requests (asyncio) can't beat a rate limiter; the fix is a
-      provider with a friendlier one. *(From a live v3.0.x session, 2026-07-07;
-      superseded by the Next-up spike.)*
 - [ ] **Search cache refresh override** — seed-search results are served from
       the whole-result cache (v2.0.0) with no way to bypass a stale entry; add
       a refresh/override button to the search surface, mirroring the graph's
@@ -1122,33 +1059,42 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
-- [ ] **Iterative (multi-round) landmark mining to beat recency bias** — landmark
-      mining today is a **single round** (`integrations/semantic_scholar/traversal.py`,
-      `_mined_landmarks`): candidates are harvested from the reference lists of
-      the **newest** citation page's most-cited citers, then verified to actually
-      cite the seed. Because the source net is anchored on the *newest* citers,
-      coverage skews recent — and this gets **worse as a seed ages**: the big
-      citers clustered near the seed's own publication date drift ever further
-      from "newest" and start dropping out of the harvest. Visible today on old
-      seeds — e.g. Hawking's 1974 "Black hole explosions?" shows a dense green
-      cloud of landmarks bunched near the present with the 1974–~2010 band sparse,
-      even though that early band holds the most important citing work.
-      **Idea to experiment with:** after round 1's verified landmark citers are
-      in, feed *them* back as new mining sources (harvest their reference lists →
-      new seed-citing candidates → verify → keep), and **loop**, until the year
-      spread is "sufficiently" covered (a coverage metric over the seed→today
-      band, or a round cap). This snowballs into the sparse early/middle years a
-      single newest-anchored pass can't reach. **Cost is the catch:** each round
-      adds ≥1 batch S2 call (reference-list fetch) plus a verification batch, so
-      it's notoriously slow for a cold build — needs cross-round dedup, a hard
-      stopping criterion, and probably a budget in `config.graph.citation_mining`;
-      the snapshot cache softens re-exploration but not the first build. An
-      experiment, not a commitment — measure the coverage gain vs. the latency
-      hit. *(From a session observation, 2026-07-08.)* **Update (2026-07-09):**
-      the OpenAlex spike above confirmed a sorted+year-banded `cites:` query
-      recovers this exact Hawking 1974 early band directly (no loop, no
-      verification), so this stays only as the **S2-only fallback** if we don't
-      adopt OpenAlex.
+- [ ] **Dynamic OpenAlex latest-window sizing** — the "Latest Publications"
+      per-year bands + newest window (`config.graph.latest_band_years` /
+      `latest_per_year`) are a **fixed** span today. But how far back the recent
+      band needs to reach depends on the seed: a heavily-cited or older seed's
+      landmarks peter out sooner, so the latest window should extend nearer/wider
+      to meet them, while a lightly-cited seed needs a shorter one. Size the
+      window (and maybe the per-year cap) **dynamically** from the seed's
+      publication year + total citation count, so the landmark↔latest handoff
+      lands in the right place for every seed instead of a one-size default.
+      *(From the v4.0.0 hybrid build sessions, 2026-07-09.)*
+- [ ] **Swap the hand-rolled `urllib` clients for `httpx`** — S2, arXiv
+      (`client`/`fulltext`/`figures`), and OpenAlex all hand-roll stdlib
+      `urllib` (manual `Request`/`urlencode`/`HTTPError` plumbing); only HF uses
+      a library, and that's the `huggingface_hub` *SDK*, not a generic HTTP lib.
+      The original "no third-party HTTP dep, tiny deploy" rationale (baked into
+      the S2 client docstring) is now **moot**: `httpx` (0.28.1) is already in
+      the tree transitively via anthropic/pydantic-ai, so adopting it for our
+      clients adds **zero new install** — and it's more readable
+      (`client.get(url, params=…).json()`, `raise_for_status()`,
+      `resp.status_code`), gives connection pooling, and makes the three REST
+      clients consistent with each other and with the httpx the app already
+      runs on. **Keep** our own throttle-lock + backoff + error-taxonomy
+      wrappers (the load-bearing logic a library doesn't replace — so the win is
+      readability/consistency, not less retry code). **Don't** adopt provider
+      SDKs (`pyalex`, `semanticscholar`): they'd hide the throttle/cache/paging
+      control we deliberately own. Before building, pin to the real `httpx` and
+      check what's pulling the odd `httpx2` (2.5.0) in the lockfile. *(From a
+      session design question, 2026-07-09; staged behind the OpenAlex hybrid
+      ship.)*
+- [x] **~~Iterative (multi-round) landmark mining to beat recency bias~~ —
+      RETIRED** *(v4.0.0)* — this was an idea to loop S2 reference-list mining to
+      fill the sparse early-landmark band. The **OpenAlex hybrid** (shipped)
+      recovers that band directly with a sorted `cites:` query — no mining, no
+      verification, no loop — and the whole S2 mining apparatus it built on was
+      deleted. Kept only as a tombstone; the live fallback path is plain deep
+      paging.
 - [ ] **Tune the agents' citation-count weighting via a skill** — today a strong
       preference for highly-cited papers is *implicit*: the graph hands both
       agents a pool already ranked by citations (references/citations most-cited
@@ -1254,6 +1200,28 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### OpenAlex's coarse dates emptied the "Latest Publications" relation
+
+*Found & fixed during the v4.0.0 OpenAlex hybrid build (2026-07-09).*
+
+- **Symptom.** For the DQN seed, the graph showed **1** "Latest Publications"
+  node — obviously wrong for a paper with hundreds of recent citers.
+- **Root cause.** The latest relation used a rolling 12-month **date** window
+  (`from_publication_date:<today − 12mo>`), ported from the S2 path. But OpenAlex
+  dating is **coarse**: a large fraction of works carry a *year-only*
+  `publication_date` that OpenAlex defaults to `<year>-01-01`. So a paper
+  "published in 2025" is stamped `2025-01-01` and falls *outside* a window that
+  starts mid-2025 — the filter silently excluded almost every recent-year citer.
+  Confirmed live: DQN had **1** citer via `from_publication_date:2025-07-09`
+  but **30** in `publication_year:2025` (6 of them dated exactly `2025-01-01`).
+- **Fix.** Split landmark/latest by **publication year**, not an exact date:
+  `latest` filters from `<first latest year>-01-01`, robust to the Jan-1 default
+  (`integrations/openalex/traversal.py`, `citation_relations`). DQN latest: 1 → 30.
+- **Lesson / guard.** Don't assume cross-source date precision. OpenAlex trades
+  exact dates for coverage; any *date*-range filter against it must be
+  year-granular (or tolerate `-01-01`) or it quietly drops year-only records.
+  Pinned by `test_latest_uses_year_window_not_exact_date`.
 
 ### Tripled MathML soup in ar5iv figure captions
 
