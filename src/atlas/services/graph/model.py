@@ -61,6 +61,13 @@ class Edge(BaseModel):
     target: str
     type: Literal["reference", "citation", "similar", "latest"]
     influential: bool | None = None
+    rank: int = 0
+    """0-based position within this edge's relation, in the relation's own
+    order (references by influence, citations by citation count, latest by
+    recency, similar by S2 similarity). The frontend ships the whole ranked set
+    and the per-relation count slider reveals a prefix — ``rank < slider`` — so
+    raising a slider shows more without a re-query. Defaults to 0 so snapshots
+    cached before this field validate."""
 
 
 class Seed(BaseModel):

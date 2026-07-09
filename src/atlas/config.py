@@ -151,21 +151,36 @@ class CitationMiningConfig(ConfigModel):
 class GraphConfig(ConfigModel):
     """How big a neighborhood one seed paper pulls onto the canvas.
 
-    See docs/configuration.md for the node-count math behind the example
-    limits and why ``recs_pool`` must stay "all-cs".
+    Each ``*_limit`` is a **ship count**, not a display cap: the backend ranks
+    the relation and ships this many nodes (each tagged with its ``rank``), and
+    the frontend's per-relation slider treats it as the **maximum** — it defaults
+    to showing a modest 25 and reveals more on demand, no re-query. So raise
+    these to give the sliders more range ("fetch as much as possible"), at some
+    payload cost; a value at or below 25 leaves that slider no room to move.
+    **``null`` means unbounded** — ship everything the paper actually has for
+    that relation, so the slider can max out to the full count (handy for
+    testing; heavy for a busy paper — a reference/similar list is naturally
+    small, but ``citation``/``latest`` on a mega seed can be thousands). See
+    docs/configuration.md for the node-count math and why ``recs_pool`` must
+    stay "all-cs".
     """
 
-    ref_limit: PositiveInt = Field(description="Max references (papers it cites) to pull in.")
-    cite_limit: PositiveInt = Field(
-        description="Max LANDMARK citations (the most-cited historic papers citing it, "
-        "up to last year) to pull in as 'citation' nodes."
+    ref_limit: PositiveInt | None = Field(
+        description="References (papers it cites) to ship — the References slider's max. "
+        "null = ship them all."
     )
-    latest_limit: PositiveInt = Field(
-        description="Max LATEST citations (the recent frontier — citers from the last "
-        "~12 months) to pull in as 'latest' nodes, a relation of their own."
+    cite_limit: PositiveInt | None = Field(
+        description="LANDMARK citations (most-cited historic citers, up to last year) to "
+        "ship as 'citation' nodes — the Field Landmarks slider's max. null = ship them all."
     )
-    similar_limit: PositiveInt = Field(
-        description="Max SPECTER2-embedding neighbors to pull in as 'similar' nodes."
+    latest_limit: PositiveInt | None = Field(
+        description="LATEST citations (the recent frontier — citers from the last ~12 "
+        "months) to ship as 'latest' nodes — the Latest Publications slider's max. "
+        "null = ship them all."
+    )
+    similar_limit: PositiveInt | None = Field(
+        description="SPECTER2-embedding neighbors to ship as 'similar' nodes — the "
+        "Similar slider's max. null = as many as S2 will return."
     )
     citation_mining: CitationMiningConfig = Field(
         description="Landmark-mining budgets for mega-cited seeds (see CitationMiningConfig)."

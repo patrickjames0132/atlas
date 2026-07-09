@@ -62,12 +62,14 @@ def test_build_graph_shape(fake_s2):
     assert len(graph.nodes) == 5  # seed, ref1, cite1, sim1, latest1 — deduped
 
     # Edge directions: seed cites ref (seed->ref); citer cites seed (cite->seed).
-    assert Edge(source="seed", target="ref1", type="reference", influential=True) in graph.edges
-    assert Edge(source="cite1", target="seed", type="citation", influential=False) in graph.edges
+    # `rank` is each edge's index within its own relation (the slider order).
+    assert Edge(source="seed", target="ref1", type="reference", influential=True, rank=0) in graph.edges
+    assert Edge(source="cite1", target="seed", type="citation", influential=False, rank=0) in graph.edges
     # latest citers run citer->seed too, on their own relation.
-    assert Edge(source="latest1", target="seed", type="latest", influential=False) in graph.edges
-    # similar edges carry no influential (None).
-    assert Edge(source="seed", target="sim1", type="similar") in graph.edges
+    assert Edge(source="latest1", target="seed", type="latest", influential=False, rank=0) in graph.edges
+    # similar edges carry no influential (None); sim1 is first (rank 0), ref1 second (rank 1).
+    assert Edge(source="seed", target="sim1", type="similar", rank=0) in graph.edges
+    assert Edge(source="seed", target="ref1", type="similar", rank=1) in graph.edges
     assert graph.counts == Counts(references=1, citations=1, similar=2, latest=1, nodes=5)
     # The seed's citation count rode along so mining can trigger, and its year
     # so landmark mining can bound the candidate window.
@@ -79,7 +81,9 @@ def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):
     dumped = graph.model_dump()
     # A callable-to-JSON shape the routes can hand to jsonify.
     assert dumped["seed"] == {"arxiv_id": None, "id": "seed", "title": "The Seed"}
-    assert {"source": "seed", "target": "sim1", "type": "similar", "influential": None} in dumped["edges"]
+    assert {
+        "source": "seed", "target": "sim1", "type": "similar", "influential": None, "rank": 0,
+    } in dumped["edges"]
     # Re-validating the dump reproduces the object (the cache-hit path).
     assert Graph.model_validate(dumped) == graph
 

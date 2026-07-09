@@ -127,48 +127,57 @@ def build_graph(seed_ref: str, *, refresh: bool = False) -> Graph | None:
     # cited one:
     edges: list[Edge] = []
 
+    # Each relation arrives already ranked (references/citations by citation
+    # count, latest by recency, similar by S2 similarity), so an edge's
+    # enumeration index within its relation IS its `rank` — the order the
+    # frontend's per-relation count slider reveals through.
+
     # References: papers the SEED cites. The seed is the citer, so the arrow
     # runs seed -> ancestor. ``influential`` flags S2's "highly influential
     # citation" (the frontend can weight the edge).
-    for reference in refs:
+    for reference_rank, reference in enumerate(refs):
         add_neighbor(reference["node"], "reference")
         edges.append(Edge(
             source=seed_id,
             target=reference["node"]["id"],
             type="reference",
             influential=reference["influential"],
+            rank=reference_rank,
         ))
 
     # Citations: papers that cite the SEED. Now the neighbor is the citer, so
     # the arrow runs descendant -> seed (the opposite direction from above).
     # Two disjoint relations from the same split: landmark citers ("citation")
     # and the recent frontier ("latest"), both citer -> seed.
-    for citation in landmark_cites:
+    for citation_rank, citation in enumerate(landmark_cites):
         add_neighbor(citation["node"], "citation")
         edges.append(Edge(
             source=citation["node"]["id"],
             target=seed_id,
             type="citation",
             influential=citation["influential"],
+            rank=citation_rank,
         ))
-    for latest in latest_cites:
+    for latest_rank, latest in enumerate(latest_cites):
         add_neighbor(latest["node"], "latest")
         edges.append(Edge(
             source=latest["node"]["id"],
             target=seed_id,
             type="latest",
             influential=latest["influential"],
+            rank=latest_rank,
         ))
 
     # Recommendations: embedding-similar papers. These are NOT citations, so
     # there's no direction meaning and no ``influential`` (left None); we draw
     # seed -> neighbor just to anchor them to the seed visually.
-    for recommendation in similar:
+    for similar_rank, recommendation in enumerate(similar):
         add_neighbor(recommendation["node"], "similar")
         edges.append(Edge(
             source=seed_id,
             target=recommendation["node"]["id"],
             type="similar",
+            rank=similar_rank,
         ))
 
     graph = Graph(

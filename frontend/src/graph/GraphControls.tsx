@@ -7,7 +7,7 @@
  * it and fires the callbacks.
  */
 
-import type { CSSProperties } from 'react'
+import { Fragment, type CSSProperties } from 'react'
 import { REL_COLOR, REL_LABEL, REL_TYPES } from './theme'
 import './graph.css'
 
@@ -21,8 +21,12 @@ export interface GraphControlsProps {
   enabled: Set<string>
   /** Toggle one relation type on/off. */
   onToggleType: (type: string) => void
-  /** Per-relation node counts (from the base graph, chips show these). */
+  /** Per-relation pool sizes — each slider's maximum (what the paper has). */
   counts: Record<string, number>
+  /** Per-relation visible count (each slider's current value). */
+  limits: Record<string, number>
+  /** Set one relation's visible count. */
+  onLimit: (type: string, value: number) => void
   /** The base graph's year range (slider bounds). */
   minYear: number
   maxYear: number
@@ -53,6 +57,8 @@ export default function GraphControls({
   enabled,
   onToggleType,
   counts,
+  limits,
+  onLimit,
   minYear,
   maxYear,
   yearLo,
@@ -86,19 +92,40 @@ export default function GraphControls({
           Timeline
         </button>
       </div>
-      <div className="ctrl-chips">
-        {REL_TYPES.map((type) => (
-          <button
-            key={type}
-            className={`chip ${enabled.has(type) ? 'on' : ''}`}
-            onClick={() => onToggleType(type)}
-            style={{ '--c': REL_COLOR[type] } as CSSProperties}
-          >
-            <i />
-            {REL_LABEL[type]}
-            <em>{counts[type]}</em>
-          </button>
-        ))}
+      <div className="ctrl-rels">
+        {REL_TYPES.map((type) => {
+          const poolMax = counts[type] ?? 0
+          const on = enabled.has(type)
+          const shown = on ? Math.min(limits[type] ?? 0, poolMax) : 0
+          return (
+            <Fragment key={type}>
+              <button
+                className={`rel-toggle ${on ? 'on' : ''}`}
+                onClick={() => onToggleType(type)}
+                style={{ '--c': REL_COLOR[type] } as CSSProperties}
+                title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
+              >
+                <i />
+                {REL_LABEL[type]}
+              </button>
+              <input
+                type="range"
+                className="rel-slider"
+                style={{ '--c': REL_COLOR[type] } as CSSProperties}
+                min={0}
+                max={poolMax}
+                value={shown}
+                disabled={!on || poolMax === 0}
+                aria-label={`${REL_LABEL[type]} shown`}
+                onChange={(event) => onLimit(type, Number(event.target.value))}
+              />
+              <em className="rel-count">
+                {shown}
+                <span className="rel-max">/{poolMax}</span>
+              </em>
+            </Fragment>
+          )
+        })}
       </div>
 
       {showYears && (

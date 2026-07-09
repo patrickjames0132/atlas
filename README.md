@@ -129,10 +129,12 @@ The Vite dev server proxies `/api/*` to Flask.
    tags, figures, code & artifacts); **double-click to re-seed** on it —
    journal papers included. LaTeX math (`$…$`) renders throughout — titles,
    abstracts, lecture beats, answers, and figure captions — via KaTeX.
-3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
-   filters, a year slider, drag-to-pin, focus-on-hover, and a **Refresh** that
-   busts this seed's day-cached snapshot to re-fetch fresh from Semantic
-   Scholar. Click the **Atlas** brand anytime to go home.
+3. **Declutter** — Force ↔ Timeline layouts (x = publication date), per-relation
+   **count sliders** (each relation ships its whole ranked pool; the slider
+   reveals more live, no re-query), relation on/off toggles, a year slider,
+   drag-to-pin, focus-on-hover, and a **Refresh** that busts this seed's
+   day-cached snapshot to re-fetch fresh from Semantic Scholar. Click the
+   **Atlas** brand anytime to go home.
 4. **Learn** (the 🎓 Assistant panel):
    - **Lectures** — the past → present → future arc, narrated over the
      graph **as you built it** (lectures never expand it — only the research

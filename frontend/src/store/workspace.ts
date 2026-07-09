@@ -36,6 +36,14 @@ export interface WorkspaceState {
   /** Papers the agent pulled in mid-conversation (deduped against the graph). */
   discoveredNodes: GraphNode[]
   discoveredEdges: GraphEdge[]
+  /**
+   * Ids of the nodes currently VISIBLE on the canvas — published by
+   * GraphExplorer's view filter (relation chips, per-relation count sliders,
+   * year range). Agents ground on what's on screen, not the whole shipped pool
+   * (which now holds far more than the sliders show), so this is the
+   * intersection `selectGroundingNodes` applies. Empty until the first render.
+   */
+  visibleNodeIds: string[]
   layout: 'force' | 'timeline'
   /** Bumps on every load/restore — the teacher panel remounts per epoch. */
   epoch: number
@@ -49,6 +57,7 @@ const initialState: WorkspaceState = {
   seedRef: null,
   discoveredNodes: [],
   discoveredEdges: [],
+  visibleNodeIds: [],
   layout: 'timeline',
   epoch: 0,
   loading: false,
@@ -162,6 +171,11 @@ const workspaceSlice = createSlice({
     layoutSet(state, action: PayloadAction<'force' | 'timeline'>) {
       state.layout = action.payload
     },
+    /** GraphExplorer publishes the on-screen node ids here whenever its view
+     * filter changes, so agent grounding tracks what's actually visible. */
+    visibleNodesSet(state, action: PayloadAction<string[]>) {
+      state.visibleNodeIds = action.payload
+    },
     /** Home: back to the default no-graph state (the page-load look). The
      * epoch bump remounts the teacher panel for fresh run state; the
      * transcript and highlights clear themselves via extraReducers. */
@@ -170,6 +184,7 @@ const workspaceSlice = createSlice({
       state.seedRef = null
       state.discoveredNodes = []
       state.discoveredEdges = []
+      state.visibleNodeIds = []
       state.layout = 'timeline'
       state.error = null
       state.epoch += 1
@@ -192,6 +207,9 @@ const workspaceSlice = createSlice({
         state.seedRef = action.meta.arg.seed
         state.discoveredNodes = []
         state.discoveredEdges = []
+        // Cleared until GraphExplorer republishes this graph's visible set —
+        // never carry the previous graph's ids into the new one's grounding.
+        state.visibleNodeIds = []
         state.epoch += 1
         state.loading = false
       })
@@ -211,6 +229,7 @@ const workspaceSlice = createSlice({
           action.payload.graph.seed.arxiv_id ?? action.payload.graph.seed.id
         state.discoveredNodes = []
         state.discoveredEdges = []
+        state.visibleNodeIds = []
         state.layout = action.payload.layout
         state.epoch += 1
         state.loading = false
@@ -222,7 +241,7 @@ const workspaceSlice = createSlice({
   },
 })
 
-export const { discoveryMerged, layoutSet, errorSet, workspaceCleared } =
+export const { discoveryMerged, layoutSet, visibleNodesSet, errorSet, workspaceCleared } =
   workspaceSlice.actions
 export default workspaceSlice.reducer
 
@@ -240,18 +259,34 @@ export const selectSeedNode = createSelector(
 )
 
 /**
- * The teacher's grounding scope: the graph plus everything discovered this
- * session, deduped (a restored session carries its discovered papers inside
- * graph.nodes already).
+ * The teacher's grounding scope: the nodes VISIBLE on the canvas plus
+ * everything discovered this session, deduped. Grounding tracks what's on
+ * screen — the graph now ships a much larger pool than the per-relation
+ * sliders show, and the agents must reason over the papers the user actually
+ * sees, not the hidden remainder. Discoveries are always kept (the agent
+ * surfaced them), even if a filter would hide them.
+ *
+ * `visibleNodeIds` is published by GraphExplorer's view filter; before it
+ * lands (e.g. the instant a graph loads) grounding is just the discoveries,
+ * which corrects on the next render.
  */
 export const selectGroundingNodes = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,
-  (graph, discovered): GraphNode[] => {
+  (state: StateWithWorkspace) => state.workspace.visibleNodeIds,
+  (graph, discovered, visibleNodeIds): GraphNode[] => {
     if (!graph) return []
+    const visible = new Set(visibleNodeIds)
     const seen = new Set<string>()
     const merged: GraphNode[] = []
-    for (const node of [...graph.nodes, ...discovered]) {
+    // On-screen graph nodes first, then all discoveries (kept regardless of
+    // the filter, since the agent pulled them in).
+    for (const node of graph.nodes) {
+      if (!visible.has(node.id) || seen.has(node.id)) continue
+      seen.add(node.id)
+      merged.push(node)
+    }
+    for (const node of discovered) {
       if (seen.has(node.id)) continue
       seen.add(node.id)
       merged.push(node)

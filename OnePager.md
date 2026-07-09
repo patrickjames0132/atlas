@@ -876,25 +876,26 @@ and closes a real coverage gap).
       as current threads, distinct from EVOLUTION's full arc), figure pool wired,
       frontend mode button + `LectureMode` type. Completeness guard added
       (`set(MODE_INTENTS) == set(LectureMode)`).
-- [ ] **Ship C — live per-relation count sliders** *(v3.6.0)*. Sliders to control
-      how many references/citations/similar/**latest** papers are shown, live.
-      **Design (Patrick, 2026-07-08): no `pool_limit` cap — fetch as many nodes as
-      possible per relation in the backend and ship them all**; each slider
-      *defaults to a modest 25* (all relation types) and its **max is that
-      relation's available count** (whatever was fetched). So the slider is a pure
-      client-side reveal over an already-shipped, fully-ranked set — raising it
-      never re-queries. (Backend already ranks each relation and the deep-paged
-      citation pool can be large, so "ship everything" means dropping the
-      `cite_limit`/`latest_limit`/etc. *display* trims — they become fetch-side
-      bounds only, or go away — and letting the 25-default slider do the trimming;
-      keep the `rank` edge field as the reveal order.) **Salvage from `stash@{0}`**
-      the chip-toggle+slider UI + `rank` mechanism (its `pool_limit` cap is the one
-      part we're *dropping* per the new design). Also **fold in the citation-chip
-      relabel** (`todos.md`, 2026-07-08): section the two citation chips under a
-      "Citations" heading in `GraphControls`, and rename `citation` → **"Field
-      Landmarks"** and `latest` → **"Latest Publications"** (`REL_LABEL` + Legend
-      to match). *(Slider from the `todos.md` inbox, 2026-07-06; fetch-everything +
-      relabel 2026-07-08; folded into this phase.)*
+- [x] **Ship C — live per-relation count sliders** *(v3.6.0)*. Each `Edge`
+      carries a `rank` (its index in the relation's order — references/citations by
+      influence, latest by recency, similar by S2); the backend ships the whole
+      ranked set per relation (the `*_limit` config values became **ship counts =
+      each slider's max**, and are now **nullable** — `null` ships *everything* the
+      paper has, so the slider maxes to the full count) and the frontend slider is
+      a **pure client-side reveal** of `rank < value`, defaulting to 25, no
+      re-query. UI: a clean aligned grid (dot+label toggle · slider · `N/max`) —
+      references/**Field Landmarks**/**Latest Publications**/**Similar** (chip
+      relabel folded in). The **agent-grounding fix** rode along (it had to —
+      sliders hide nodes, so grounding is now visible ∪ discoveries, via
+      `visibleNodeIds`). Salvaged the slider UI + `rank`/grounding mechanics from
+      `stash@{0}`; dropped its `pool_limit` cap per the new design. *(Slider from
+      the `todos.md` inbox, 2026-07-06; fetch-everything + relabel + nullable limits
+      2026-07-08.)*
+
+  **→ Phase complete (A → D → B → C shipped, v3.3.0–v3.6.0).** The mega-paper
+  citation story is now: deep-paged landmark/latest split, co-citation mining for
+  the past-ceiling tail, a current-frontier lecture, and live per-relation
+  sliders over the whole ranked pool.
 
   - **Shelved WIP — `stash@{0}`** ("WIP v3.3.0-candidate: velocity reveal-order +
     configurable citation_pool …"), sitting on top of the earlier

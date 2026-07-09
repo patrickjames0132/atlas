@@ -153,6 +153,54 @@ def test_citation_relations_respects_each_limit(monkeypatch):
     assert len(landmark) == 2 and len(latest) == 3
 
 
+def test_citation_relations_none_limit_ships_everything(monkeypatch):
+    """A null config limit (unbounded) ships the whole ranked pool for that
+    relation — so the frontend slider can max out to the paper's full count."""
+
+    def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
+        return {
+            "data": [
+                {"citingPaper": {"paperId": f"old{index}", "citationCount": 100 - index,
+                                 "publicationDate": _iso(1000 + index)}}
+                for index in range(6)
+            ] + [
+                {"citingPaper": {"paperId": f"new{index}", "citationCount": 1,
+                                 "publicationDate": _iso(index + 1)}}
+                for index in range(4)
+            ]
+        }
+
+    monkeypatch.setattr(client, "request", fake_request)
+    landmark, latest = traversal.citation_relations("p1", landmark_limit=None, latest_limit=None)
+    assert len(landmark) == 6 and len(latest) == 4  # every citer, uncapped
+
+
+def test_references_none_limit_returns_all_fetched(monkeypatch):
+    """A null ref_limit returns the whole fetched (ranked) reference page."""
+
+    def fake_request(url, **kw):
+        return {"data": [{"citedPaper": {"paperId": f"r{index}", "citationCount": index}}
+                         for index in range(7)]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    assert len(traversal.references("p1", None)) == 7
+
+
+def test_recommendations_none_limit_requests_s2_max(monkeypatch):
+    """A null similar_limit asks S2 for its max recommendations page (500)."""
+    seen = {}
+
+    def fake_request(url, **kw):
+        seen["url"] = url
+        return {"recommendedPapers": []}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    traversal.recommendations("p1", None)
+    assert "limit=500" in seen["url"]
+
+
 def _offset_of(url: str) -> int:
     import re
 

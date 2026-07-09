@@ -28,11 +28,11 @@ export default function Legend({ hasDiscovered, hasSearchHits }: LegendProps) {
       </span>
       <span>
         <i style={{ background: REL_COLOR.citation }} />
-        Citations
+        Field Landmarks
       </span>
       <span>
         <i style={{ background: REL_COLOR.latest }} />
-        Latest
+        Latest Publications
       </span>
       <span>
         <i style={{ background: REL_COLOR.similar }} />

@@ -40,10 +40,24 @@ export const YEAR_SPACING = 120
 /** The relation types the user can filter by (seed/search are always shown). */
 export const REL_TYPES = ['reference', 'citation', 'latest', 'similar'] as const
 
-/** Display labels for the filter chips. */
+/** Display labels for the filter chips. The two citing relations read as the
+ * two halves of "Citations" (grouped under that heading in GraphControls). */
 export const REL_LABEL: Record<string, string> = {
   reference: 'References',
-  citation: 'Citations',
-  latest: 'Latest',
+  citation: 'Field Landmarks',
+  latest: 'Latest Publications',
   similar: 'Similar',
+}
+
+/**
+ * Where each relation's count slider starts when a graph loads (clamped to what
+ * the paper actually has). The backend ships the whole ranked pool per relation
+ * and each slider's MAX is that relation's available count; this is just the
+ * modest initial position so a fresh graph isn't overwhelming.
+ */
+export const REL_DEFAULT_LIMIT: Record<(typeof REL_TYPES)[number], number> = {
+  reference: 25,
+  citation: 25,
+  latest: 25,
+  similar: 25,
 }

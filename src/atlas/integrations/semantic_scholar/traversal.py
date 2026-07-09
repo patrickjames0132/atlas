@@ -111,8 +111,12 @@ def _influence(entry: dict) -> int:
     return entry["node"].get("citation_count") or 0
 
 
-def _select_by_influence(entries: list[dict], limit: int) -> list[dict]:
-    """Keep the most-cited entries, most-cited first (the references default)."""
+def _select_by_influence(entries: list[dict], limit: int | None) -> list[dict]:
+    """Keep the most-cited entries, most-cited first (the references default).
+
+    ``limit=None`` keeps them all (an unbounded relation — the config ship count
+    set to ``null``); ``[:None]`` is the whole list.
+    """
     return sorted(entries, key=_influence, reverse=True)[:limit]
 
 
@@ -289,19 +293,19 @@ def _mined_landmarks(seed_id: str, pool: list[dict], year: int | None) -> list[d
     return [{"node": node, "influential": False} for node in ranked if node["id"] in verified]
 
 
-def _neighbors(path: str, key: str, limit: int) -> list[dict]:
+def _neighbors(path: str, key: str, limit: int | None) -> list[dict]:
     """Fetch one over-fetched page and keep the most-cited entries.
 
-    The references selection: over-fetch a pool of ``_RANK_POOL`` (S2 offers
-    no server-side sorting and its default order skews to the most recent
-    neighbor, not the most cited) and rank it by citation count before
-    trimming to ``limit``. (A reference list is small enough that one page IS
-    the whole list — no landmark/latest split or mining, unlike ``citations``.)
+    The references selection: fetch a pool of ``_RANK_POOL`` (S2 offers no
+    server-side sorting and its default order skews to the most recent neighbor,
+    not the most cited — and one page is the whole list, since a reference list
+    fits), rank it by citation count, and trim to ``limit`` (``None`` keeps them
+    all). No landmark/latest split or mining, unlike ``citations``.
 
     Args:
         path: The endpoint path under ``/paper/`` (quoted id + relation).
         key: The nested paper key — ``"citedPaper"`` or ``"citingPaper"``.
-        limit: Maximum neighbors to return.
+        limit: Maximum neighbors to return, or ``None`` for all fetched.
 
     Returns:
         A list of ``{"node": <node dict>, "influential": bool}`` entries,
@@ -310,16 +314,16 @@ def _neighbors(path: str, key: str, limit: int) -> list[dict]:
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    pool = _fetch_page(path, key, max(limit, _RANK_POOL))
+    pool = _fetch_page(path, key, _RANK_POOL)
     return _select_by_influence(pool, limit)
 
 
-def references(paper_id: str, limit: int) -> list[dict]:
+def references(paper_id: str, limit: int | None) -> list[dict]:
     """Fetch the papers this one CITES (its intellectual ancestors).
 
     Args:
         paper_id: An S2 paperId or prefixed id.
-        limit: Maximum references to return.
+        limit: Maximum references to return, or ``None`` for all fetched.
 
     Returns:
         A list of ``{"node": <node dict>, "influential": bool}`` entries.
@@ -457,8 +461,8 @@ def citations(
 def citation_relations(
     paper_id: str,
     *,
-    landmark_limit: int,
-    latest_limit: int,
+    landmark_limit: int | None,
+    latest_limit: int | None,
     total_count: int | None = None,
     year: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
@@ -475,8 +479,9 @@ def citation_relations(
 
     Args:
         paper_id: An S2 paperId or prefixed id.
-        landmark_limit: Maximum landmark (historic) citers to return.
-        latest_limit: Maximum recent-frontier citers to return.
+        landmark_limit: Maximum landmark (historic) citers to return, or ``None``
+            for all (the whole deep-paged older pool).
+        latest_limit: Maximum recent-frontier citers to return, or ``None`` for all.
         total_count: The paper's total citation count, when known (enables
             landmark mining for a mega paper).
         year: The paper's publication year, when known (bounds mining).
@@ -497,12 +502,13 @@ def citation_relations(
     return _select_by_influence(older, landmark_limit), latest[:latest_limit]
 
 
-def recommendations(paper_id: str, limit: int, pool: str | None = None) -> list[dict]:
+def recommendations(paper_id: str, limit: int | None, pool: str | None = None) -> list[dict]:
     """Fetch embedding-based related papers (similarity neighbors).
 
     Args:
         paper_id: An S2 paperId or prefixed id.
-        limit: Maximum recommendations to return.
+        limit: Maximum recommendations to return, or ``None`` for as many as S2
+            will give (its ``/recommendations`` page maxes at 500).
         pool: The candidate set — ``"all-cs"`` or ``"recent"``. Defaults to
             ``config.graph.recs_pool`` (``all-cs``; the ``recent`` pool
             returns nothing for older seeds).
@@ -515,9 +521,12 @@ def recommendations(paper_id: str, limit: int, pool: str | None = None) -> list[
         client.S2Error: When the request fails after retries.
     """
     pool = pool or config.graph.recs_pool
+    # The recs endpoint needs a concrete page size; None ("unbounded") asks for
+    # S2's maximum, 500.
+    page = limit if limit is not None else 500
     url = (
         f"{config.s2.recs_url}/papers/forpaper/{client.quote(paper_id)}"
-        f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}&from={pool}"
+        f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={page}&from={pool}"
     )
     data = client.request(url)
     recommended_papers = data.get("recommendedPapers") if isinstance(data, dict) else None

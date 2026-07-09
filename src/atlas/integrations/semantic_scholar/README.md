@@ -180,7 +180,7 @@ affects far fewer seeds than before paging.
 
 Every relation comes back **already ranked**, by the one key that fits *its*
 meaning. The frontend shows a modest prefix and reveals more on demand — the
-planned per-relation count slider walks exactly this order, no re-query — so the
+per-relation count slider walks exactly this order, no re-query — so the
 order the backend returns *is* the order the user reveals through:
 
 | Relation | Returned by | Ordered by |

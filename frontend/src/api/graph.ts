@@ -57,6 +57,14 @@ export interface GraphEdge {
    * apply.
    */
   influential?: boolean | null
+  /**
+   * 0-based position within this edge's relation, in the relation's own order
+   * (references/citations by citation count, latest by recency, similar by S2
+   * similarity). The per-relation count slider reveals `rank < value`, so
+   * raising it shows more of the already-shipped set live. Absent on snapshots
+   * cached before it — treated as 0.
+   */
+  rank?: number
 }
 
 /** The `/api/graph` response: the resolved seed, its neighborhood, and counts. */

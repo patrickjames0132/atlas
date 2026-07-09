@@ -27,6 +27,7 @@ import {
   selectHasDiscovered,
   selectHasSearchHits,
   selectWorkspace,
+  visibleNodesSet,
 } from '../store/workspace'
 import { useSelection } from '../detail/useSelection'
 import DetailPanel from '../detail/DetailPanel'
@@ -34,7 +35,7 @@ import Lightbox from '../figures/Lightbox'
 import GraphCanvas from './GraphCanvas'
 import GraphControls from './GraphControls'
 import Legend from './Legend'
-import { REL_TYPES } from './theme'
+import { REL_DEFAULT_LIMIT, REL_TYPES } from './theme'
 import { useDiscovery } from './hooks/useDiscovery'
 import { usePinning } from './hooks/usePinning'
 import { useTimeline } from './hooks/useTimeline'
@@ -52,6 +53,10 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   // hits are agent-discovered and few, so they stay visible; the year slider
   // still filters them.
   const [enabled, setEnabled] = useState<Set<string>>(new Set([...REL_TYPES, 'search']))
+  // Per-relation visible count (the live sliders). The backend ships the whole
+  // ranked pool; this keeps ranks 0..limit-1 of each relation, seeded from the
+  // defaults on load and capped to what the paper actually has.
+  const [limits, setLimits] = useState<Record<string, number>>({ ...REL_DEFAULT_LIMIT })
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -112,6 +117,12 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   useEffect(() => {
     if (!base) return
     setEnabled(new Set([...REL_TYPES, 'search']))
+    // Each slider starts at its default, clamped to what this paper actually has.
+    setLimits(
+      Object.fromEntries(
+        REL_TYPES.map((type) => [type, Math.min(REL_DEFAULT_LIMIT[type], base.counts[type] ?? 0)]),
+      ),
+    )
     setYearLo(base.minYear)
     setYearHi(base.maxYear)
     setHoverId(null)
@@ -168,23 +179,49 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
    */
   const view = useMemo(() => {
     if (!base) return { nodes: [] as VNode[], links: [] as VLink[] }
+    // An edge is allowed when its relation is toggled on AND its rank falls
+    // within that relation's slider (search edges have no slider — always on).
+    // Ranks are per-relation; a `similar` slider of 15 keeps similar ranks 0-14
+    // regardless of how many references are shown.
+    const linkOk = (link: VLink) => {
+      if (!enabled.has(link.type)) return false
+      if (!(link.type in limits)) return true // 'search' — no per-relation cap
+      return (link.rank ?? 0) < limits[link.type]
+    }
+    // A neighbor is shown when at least one edge reaches it within the sliders;
+    // the seed is always shown. Nodes reached only via a hidden/over-limit edge
+    // drop out — that's how a slider trims the graph, dedupe-safe (a paper kept
+    // by its reference edge stays even if its similar edge is over the limit).
+    const reachable = new Set<string>()
+    base.links.forEach((link) => {
+      if (linkOk(link)) {
+        reachable.add(link._s)
+        reachable.add(link._t)
+      }
+    })
     const nodeOk = (node: VNode) => {
-      if (node.is_seed) return true
-      if (!node.rels.some((rel) => rel !== 'seed' && enabled.has(rel))) return false
+      if (node.is_seed) return true // the seed is always shown, ignoring filters
       if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi))
         return false
-      return true
+      return reachable.has(node.id)
     }
     const nodes = base.nodes.filter(nodeOk)
     const ids = new Set(nodes.map((node) => node.id))
     const links = base.links
-      .filter((link) => enabled.has(link.type) && ids.has(link._s) && ids.has(link._t))
+      .filter((link) => linkOk(link) && ids.has(link._s) && ids.has(link._t))
       .map((link) => ({ ...link, source: link._s, target: link._t }))
     return { nodes, links }
     // graphVersion isn't read directly — it's a signal that base.nodes/links
     // were mutated in place (discoveries) and this must recompute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, enabled, yearLo, yearHi, graphVersion])
+  }, [base, enabled, limits, yearLo, yearHi, graphVersion])
+
+  // Publish the on-screen node ids so agent grounding (selectGroundingNodes)
+  // tracks the visible view, not the whole shipped pool. Fires whenever the
+  // filters change; consumers re-render only when the id set actually differs.
+  useEffect(() => {
+    dispatch(visibleNodesSet(view.nodes.map((node) => node.id)))
+  }, [view, dispatch])
 
   /** Neighbors of the hovered node (for focus-on-hover dimming). */
   const hoverSet = useMemo(() => {
@@ -212,6 +249,11 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
       else next.add(type)
       return next
     })
+  }, [])
+
+  /** Set one relation's visible count (the live count sliders). */
+  const setLimit = useCallback((type: string, value: number) => {
+    setLimits((prev) => ({ ...prev, [type]: value }))
   }, [])
 
   /**
@@ -259,6 +301,8 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             enabled={enabled}
             onToggleType={toggleType}
             counts={base!.counts}
+            limits={limits}
+            onLimit={setLimit}
             minYear={base!.minYear}
             maxYear={base!.maxYear}
             yearLo={yearLo}

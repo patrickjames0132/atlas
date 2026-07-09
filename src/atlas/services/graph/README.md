@@ -18,8 +18,9 @@ seed — is the output of one function, `build_graph()`. `routes/graph.py`'s
 `/api/graph` endpoint is a thin HTTP wrapper over it.
 
 Given a **seed paper**, it produces a Connected-Papers-style graph: the seed at
-the center, surrounded by three kinds of neighbor, each a different relationship
-to the seed.
+the center, surrounded by four kinds of neighbor — references, landmark
+citations, latest (recent-frontier) citations, and embedding-similar papers —
+each a different relationship to the seed.
 
 ## The shape it builds
 
@@ -41,8 +42,11 @@ to the seed.
 - **`seed`** (`Seed`) — `{arxiv_id, id, title}`, a compact summary for the header.
 - **`nodes`** (`list[Node]`) — deduped papers, each the normalized S2 node fields
   plus a `rels` list (which relations surfaced it) and an `is_seed` flag.
-- **`edges`** (`list[Edge]`) — `{source, target, type, influential}`;
-  `influential` is `None` on `similar` edges (it's a citation-only flag).
+- **`edges`** (`list[Edge]`) — `{source, target, type, influential, rank}`;
+  `type` is `reference | citation | latest | similar`; `influential` is `None` on
+  `similar` edges (it's a citation-only flag); `rank` is the edge's 0-based
+  position within its relation's order (the frontend count slider reveals
+  `rank < value`).
 - **`counts`** (`Counts`) — raw traversal sizes plus the final deduped node count.
 
 The models live in `model.py`, beside `build.py`'s `build_graph`. Callers that
@@ -87,8 +91,10 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
 5. **Build typed edges — direction is load-bearing.** An edge always points
    from the citing paper to the cited one:
    - **reference** → `seed → ancestor` (the seed cites it), carries `influential`
-   - **citation** → `descendant → seed` (it cites the seed) — *opposite*
-     direction — carries `influential`
+   - **citation** (landmark) and **latest** (recent-frontier) → `descendant →
+     seed` (it cites the seed) — *opposite* direction — carry `influential`. Both
+     are citers; they're split by recency into two relations (see the citation
+     package's README).
    - **similar** → `seed → neighbor` — recommendations aren't citations, so
      there's no citation direction and no `influential`; the edge just anchors
      the neighbor to the seed visually.

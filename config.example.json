@@ -10,10 +10,10 @@
     "min_interval": 1.1
   },
   "graph": {
-    "ref_limit": 25,
-    "cite_limit": 25,
-    "latest_limit": 20,
-    "similar_limit": 15,
+    "ref_limit": 100,
+    "cite_limit": 150,
+    "latest_limit": 150,
+    "similar_limit": 60,
     "citation_mining": {
       "sources": 100,
       "candidates": 1000
