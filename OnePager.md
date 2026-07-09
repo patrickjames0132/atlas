@@ -113,14 +113,9 @@ optional, behind a key.
 
 ## Roadmap
 
-> Grouped by **theme**, not ship order — renumbered 2026-07-03 once features
-> started landing out of sequence (the explorer polish now under 2.x shipped
-> *after* Phase 3a). **Version tags are untouched** and carry the true
-> chronology. Old → new names: *Phase 3.5* → **2.2**, *Sidebar enrichment* →
-> **2.1**, *Legacy teardown* → **2.3**, *Phase 3b.1* → **3b**, *Phase 3b.2* →
-> **3c.1**.
+> A single top-to-bottom checklist, grouped by theme. **Shipped** work is up top (each item keeps its full history + version tag); **unshipped** work is the **Backlog** at the bottom. Version tags carry the true chronology — the grouping does not.
 
-**Foundation**
+### Foundation & the v2 rewrite
 
 - [x] **Phase 0 — One-pager** (this file)
 - [x] **Phase 1 — Backend pivot to Semantic Scholar** *(v1.0.0)* —
@@ -131,7 +126,29 @@ optional, behind a key.
       teardown of the legacy digest backend was completed later — see
       **Phase 2.3 — Legacy teardown** below.)*
 
-**The graph explorer**
+- [x] **v2.0.0 — the readability rewrite** *(2026-07-06)* — the whole app
+      rebuilt file-by-file in a walkthrough (explain → refactor → test → sync),
+      with a README in every package. Backend: `config.json` + Pydantic config
+      (no env vars), strict mypy, typed `Graph` models, the teacher reborn as a
+      **PydanticAI agent crew** (query_analyst / librarian / lecturer /
+      researcher behind a deterministic orchestrator; typed event stream;
+      everything streams for real — required Anthropic's eager tool-input
+      streaming). Search moved **arXiv → all of Semantic Scholar** with LLM
+      query expansion + title resolution and whole-result caching; the `arxiv`
+      package and the claude-CLI backend retired. Frontend: strict TS, Redux
+      Toolkit (3 slices: workspace/transcript/highlight), the 743-line
+      Teacher.tsx and 577-line Atlas.tsx decomposed along the hybrid structure
+      rule, ingest progress bars, a Home button, and the **"Atlas"** rebrand
+      (in-app copy; repo name unchanged).
+- [x] **`atlas` package rename** *(v2.0.1)* — the backend catches up to the
+      in-app rebrand above: `src/arxiv_digest/` → `src/atlas/`,
+      `test/arxiv_digest/` → `test/atlas/`, every import updated, and the
+      console script `arxiv-atlas` → `atlas` (`uv run atlas serve`).
+      `pyproject.toml` has no remaining `arxiv` references. GitHub repo name
+      unchanged (`arxiv-digest`) — a separate, un-requested action.
+
+
+### Graph explorer & timeline
 
 - [x] **Phase 2 — Graph explorer frontend** *(v1.0.0)* — force-directed canvas
       (`react-force-graph-2d`), seed via arXiv search, nodes colored by relation
@@ -141,15 +158,6 @@ optional, behind a key.
       all), **focus-on-hover** dimming, and a papers-shown readout. **Visual
       traversal:** double-click (or "Explore from here") re-seeds the graph on
       any node — journal papers included.
-- [x] **Phase 2.1 — Sidebar enrichment** *(v1.2.0)* — under the detail panel's
-      TL;DR, the paper's **own figures with their captions** (`figures.py`
-      extracts them from **ar5iv** HTML, cached 30 days; images streamed through
-      a same-origin `/api/figure_proxy` locked to the ar5iv host — no hotlink
-      reliance, no open proxy; tables skipped; graceful fallback where ar5iv has
-      no render), plus a **direct PDF link** beside the arXiv-abstract link.
-      Shipped alongside a UI polish: the year filter is now a single
-      **dual-thumb range slider** (two overlaid inputs on one track + fill)
-      instead of two stacked sliders.
 - [x] **Phase 2.2 — Timeline layout** *(v1.3.0, month granularity v1.3.1)* — a
       **Force ↔ Timeline** toggle. Timeline pins each node's x to its **publication
       date** (year + month fraction from S2 `publicationDate`, so papers sit
@@ -162,13 +170,61 @@ optional, behind a key.
       light up. Force was the default at launch (**Timeline became the
       default in v2.4.1**); switching layout releases all pins. (A
       relation-band variant remains a possible later sub-toggle.)
-- [x] **Phase 2.3 — Legacy teardown** *(v1.4.0)* — retired the digest-era backend
-      now that Atlas stands on its own: deleted `store.py`, `pipeline.py`,
-      `summarizer.py`, `embeddings.py`; slimmed `search.py`/`arxiv_client.py` to
-      just the seed search; removed 8 legacy `app.py` routes + 8 unused `api.ts`
-      functions; trimmed dead `config.py`/`.env.example` settings; `run.py` is now
-      `serve`-only. `taxonomy.py` kept **dormant** for near-term features. (See
-      "Deliberately dropped" below for the what/why.)
+- [x] **Fix: dateless papers in Timeline landed at the far edge** *(v2.3.1)* —
+      a paper with no publication year (S2 sometimes just doesn't have one)
+      was placed one slot before the earliest real year on the graph — a
+      strong, usually-wrong assumption that "unknown date" means "oldest."
+      `nodeTimelineX` (`useTimeline.ts`) now defaults a dateless node to the
+      **seed's own exact x** — same year *and* month fraction, pixel-aligned
+      with the seed's column, not just parked somewhere in its year — falling
+      back to the earliest year only if the seed itself has none. (There's no
+      day-level precision anywhere in this layout, only year+month, so
+      "exact" tops out at whatever precision the seed has — same ceiling
+      every other node on the graph is already subject to.)
+- [x] **Default to Timeline, not Force** *(v2.4.1)* — a fresh page load, going
+      Home, and restoring an old saved session that predates the `layout`
+      field all used to fall back to Force; all three now default to
+      Timeline instead (`store/workspace.ts`'s `initialState`,
+      `workspaceCleared`, and `restoreSession`'s missing-field fallback).
+      Sessions that explicitly saved a layout — Force or Timeline — are
+      unaffected; this only changes what happens when there's no stored
+      preference at all.
+- [x] **Loading spinners for graph render + search** *(v2.2.0)* — neither the
+      "Building graph…" overlay nor the "Searching Semantic Scholar…" hit-list
+      note had any animated feedback, so a slow S2 fetch could read as hung.
+      Added a shared `.spin` primitive (centralized in `atlas.css` — it existed
+      once already, duplicated in the library upload flow; de-duped it there
+      too) and wired it into both spots. *(From the `todos.md` inbox,
+      2026-07-06.)*
+      **Fixed in v2.2.1:** the "Building graph…" overlay was invisible whenever
+      a graph was already on screen (re-seeding, or searching over an existing
+      graph) — only worked on the very first load. Root cause:
+      `react-force-graph-2d` sets its canvas wrapper's `position: relative`
+      inline with no `z-index`, tying it with `.overlay`'s implicit
+      `z-index: auto`; CSS then falls back to DOM order, and the canvas
+      renders *after* `.overlay` in `GraphExplorer.tsx`, so it painted over it
+      once a graph existed to render at all. Gave `.overlay` an explicit
+      `z-index: 20`, comfortably above every other floating panel
+      (`.controls` at 4, `.hit-list` at 5). Also, bare overlay text read poorly
+      against a busy graph still on screen, so a `.canvas-scrim` now dims the
+      whole canvas (graph + its controls/legend) and the overlay itself gets a
+      contrasting card background — for both the loading and the graph-load
+      error state (verified against a real 502 from the running server).
+- [x] **Optional per-seed cache clear** *(v2.5.0)* — a **Refresh** button in the
+      graph controls (beside Release / Fit) busts the cached graph snapshot
+      (`data/digest.db`'s `cache` table) for the current seed on demand, rather
+      than only living with the 1-day TTL — useful when S2's data for a paper
+      visibly changes mid-session. Reuses the backend's existing `refresh=1`
+      path (bypass read → rebuild from S2 → upsert the snapshot), which was
+      wired end-to-end but never triggered from the UI. Frontend-only: the
+      workspace slice now records the **exact seed reference** the graph was
+      loaded with (`seedRef`) so Refresh replays the same string and busts the
+      *right* cache key — a double-click re-seed keys by S2 paperId, a search by
+      arXiv id — rather than a stale duplicate. *(From the `todos.md` inbox,
+      2026-07-07.)*
+
+### Search & seeding
+
 - [x] **Phase 2.4 — Cache-first seed search** *(v1.6.0)* — seed-search results
       served from the **local snapshot cache instantly**, before (and independent
       of) the live arXiv search: `/api/local_search` scans cached graph snapshots
@@ -178,7 +234,100 @@ optional, behind a key.
       results append below when they land; if arXiv is unreachable, the cached
       papers still work. Born of a real rate-limited evening.
 
-**The AI teacher**
+- [x] **Publication date in search results + seed-search filters** *(v1.16.0)* —
+      arXiv hits now show their **publication date** (from the paper's own
+      submission day), and the search surface gained an optional **filter
+      popover**: a dual-handle **year-range slider** (folds to no-bound at 1991 /
+      the current year, so a full-width slider is the no-op state) plus an **arXiv
+      category picker** fed by a new `/api/taxonomy` endpoint (server-validated
+      codes, any-of match). Filters AND onto arXiv's query (`submittedDate` + `cat`
+      clauses) and the local cache's year window alike; an explicit id/URL lookup
+      ignores them. This is where the dormant `taxonomy.py` finally earns its keep.
+      *(From the `todos.md` inbox, 2026-07-03.)*
+- [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
+      filter popover didn't close when a search fired; `Search`'s form `onSubmit`
+      now collapses it (`setOpen(false)`) before running the search.
+
+### Detail panel & paper enrichment
+
+- [x] **Phase 2.1 — Sidebar enrichment** *(v1.2.0)* — under the detail panel's
+      TL;DR, the paper's **own figures with their captions** (`figures.py`
+      extracts them from **ar5iv** HTML, cached 30 days; images streamed through
+      a same-origin `/api/figure_proxy` locked to the ar5iv host — no hotlink
+      reliance, no open proxy; tables skipped; graceful fallback where ar5iv has
+      no render), plus a **direct PDF link** beside the arXiv-abstract link.
+      Shipped alongside a UI polish: the year filter is now a single
+      **dual-thumb range slider** (two overlaid inputs on one track + fill)
+      instead of two stacked sliders.
+- [x] **Detail-panel arXiv category tags** *(v2.3.0)* — the panel now shows an
+      arXiv paper's own category tags (`cs.LG` → "Machine Learning") as
+      read-only pills between the meta line and the TL;DR. S2 doesn't carry
+      per-paper categories, so a new `integrations.arxiv.categories` module
+      hits arXiv's own export API (a different host from ar5iv) for the raw
+      codes and labels them via a new `vocab.name_for` lookup, served by
+      `GET /api/paper/<ref>/categories` (same degrade-to-`available:false`
+      contract as figures/code) and fetched lazily in `useSelection` alongside
+      them. *Fixed same day:* six pairs in the taxonomy are different codes
+      that happen to share one display name (`cs.LG`/`stat.ML`, both
+      "Machine Learning"; also the `cs.IT`/`math.IT`, `cs.NA`/`math.NA`,
+      `cs.SY`/`eess.SY`, `math.MP`/`math-ph`, `math.ST`/`stat.TH` pairs) — a
+      paper cross-listed in both of a pair showed the identical label twice
+      (caught on Kingma & Welling's VAE paper, tagged both `stat.ML` and
+      `cs.LG`); `get_categories` now dedupes by display name, keeping arXiv's
+      first-listed code of the pair. *(From the `todos.md` inbox,
+      2026-07-07.)*
+- [x] **Papers-with-code / implementation links** *(v1.23.0)* — the detail panel
+      now shows a **"Code & artifacts"** section from **Hugging Face Papers**
+      (Papers with Code's successor): the community-linked **GitHub repo** (with
+      stars) plus the top linked **models / datasets / Spaces** and their full
+      counts, linking out to the paper's HF page. One call to
+      `huggingface.co/api/papers/{arxiv_id}` (`integrations/huggingface.py`),
+      day-cached in SQLite (misses too), served by `GET /api/paper/<id>/code`,
+      which degrades to `available: false` on any HF failure — never 500s the
+      panel. Lazily fetched per paper alongside figures; the actions row was
+      restyled to fit (compact Abstract/PDF/Pin chips, full-width Explore).
+      *Not done (needs one HF call per node, no batch endpoint): flagging graph
+      nodes that have code.*
+- [x] **Zoom on detail-panel figures** *(v2.4.0)* — the sidebar's paper figures
+      (Phase 2.1) are now click-to-enlarge, reusing the same **lightbox** the
+      answer figures got in v1.20.0. Since it's now a genuine two-consumer
+      component, `Lightbox.tsx` was promoted out of `teacher/figures/` to a
+      new root-level `figures/` folder per the hybrid structure rule (each
+      caller — `Teacher.tsx`, `graph/GraphExplorer.tsx` — still owns its own
+      open/close state and instance). Caught a latent bug in the move: the
+      caption line unconditionally rendered `Figure {figure.figure}`, fine
+      for the teacher's always-numbered agent-cited figures but a bare
+      "Figure " for the detail panel's un-numbered ones — now the label only
+      shows when a number actually exists. *(From the `todos.md` inbox,
+      2026-07-04.)*
+- [x] **S2 categories as detail-panel tags** *(v2.6.0)* — alongside the v2.3.0
+      arXiv category pills, the detail panel now surfaces Semantic Scholar's own
+      field-of-study classification (`s2FieldsOfStudy`, falling back to the
+      coarser `fieldsOfStudy`) as tags. Rendered as **two provider-labeled
+      sections** (styled like "Code & artifacts") — an **arXiv tags** section
+      and a **Semantic Scholar tags** section (accent-tinted) — so it's clear
+      who tagged what; a non-arXiv paper shows the S2 section alone. No new
+      endpoint: S2 already returns these on the paper object, so the fields ride
+      along with the existing detail hydration (`DETAIL_FIELDS`) — light on
+      graph neighbors, filled in on click like the abstract/TL;DR. The normalized
+      node gained a `fields_of_study` list (deduped, order-preserving), defaulted
+      on the `Node` model so snapshots cached before it still validate.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+- [x] **Proper subscripts & math notation** *(v3.2.0)* — paper text surfaces
+      (titles, abstracts, TL;DRs, lecture beats, answers, search hits, figure
+      captions) now render **delimited LaTeX** (`$…$`, `$$…$$`, `\(…\)`,
+      `\[…\]`) with **KaTeX**, via a shared `frontend/src/notation/` package:
+      `<MathText>` for the DOM surfaces, `latexToUnicode` for graph node labels
+      (canvas — KaTeX can't reach it, so β₂ is a best-effort Unicode
+      approximation). Scoped to *delimited* math only — bare "CO2"/"H2O" is left
+      alone (auto-subscripting digits misfires on "GPT4", "COVID19"). Shipping
+      it surfaced a backend bug: ar5iv figure captions arrived as tripled MathML
+      soup (`subscriptitalic-ϵ…`); the fix emits each `<math>`'s clean `alttext`
+      LaTeX instead — see [BUGS.md](BUGS.md). Deferred to a later ticket:
+      user-uploaded source titles and researcher trace chips.
+      *(From the `todos.md` inbox, 2026-07-08; shipped 2026-07-08.)*
+
+### AI teacher & lectures
 
 - [x] **Phase 3a — AI teacher + Q&A (grounded)** *(v1.1.0)* — `teacher.py` with
       the dual Claude backend (Anthropic API **or** the `claude` CLI subscription)
@@ -232,6 +381,123 @@ optional, behind a key.
     3c.2. **OpenAlex** keyless traversal fallback is still an open question (see
     costs / open questions below) — not built; a manual `S2_API_KEY` is the
     reliable path for `expand_node` / `search_papers` under rate limits.
+- [x] **Phase 3e — "How we got here" time travel** *(v1.14.0)* — the history
+      lecture no longer starts mid-stream: before narrating, `history_backfill`
+      walks **backward through references** to a field's older roots. It launches
+      from the **oldest papers already on the graph** (expanding the seed just
+      re-finds its visible refs), each hop adding the most-cited new ancestors and
+      carrying the oldest into the next hop, bounded by a hop budget
+      (`LECTURE_HISTORY_HOPS`) and a **year floor** (`LECTURE_HISTORY_LOOKBACK`
+      years before the seed). Discovered ancestors merge into the live graph
+      (dashed rings; far-left in Timeline) and join the node set the lecture
+      narrates over; the panel shows the hops live (`⏳ Traced back to <year>`).
+      Deterministic, so it runs on both teacher backends, reusing the Phase 3c
+      `_s2_neighbors` machinery. Shipped with an **S2 request throttle** (~1 req/s,
+      `S2_MIN_INTERVAL`) so the backward burst — and graph build / agent expansion
+      — don't 429. *(Browser-tested — reaches genuinely older foundational work; a
+      specific origin paper can still be missed since additions rank by citations
+      over a narrow frontier — future tweak: prefer `influential` edges.)*
+      **Retired in v3.0.0** — lectures no longer expand the graph (see
+      "Lectures never expand the graph" under Enhancements); the history
+      lecture now narrates the visible ancestors, ending at the seed.
+
+- [x] **Phase 3f — "What's Evolved Since" lecture mode** *(v2.7.0)* — a **third
+      lecture button** alongside "How We Got Here" (history) and "This Paper's
+      Intuition" (intuition), completing the **past → present → future**
+      triptych. It's the exact **mirror of the history backfill**: the shared
+      walk was refactored into one `_walk(direction=…)`, and evolution runs it
+      *forward* — launching from the **newest visible descendants** (launching
+      from the seed itself just re-finds its already-shown citations and
+      stalls), hopping **citations** (each hop reaches strictly newer work),
+      keeping the most-cited new papers, and marching toward the present with no
+      year ceiling (nothing can be cited by the future). The orchestrator runs
+      `forward_backfill` before narrating (same enrich-then-lecture path as
+      history); discoveries merge as descendants (dashed rings, far-**right** in
+      Timeline). `BackfillTrace` gained `direction`/`newest` (a forward hop
+      reports the newest year reached), rendered as **"⏩ Traced forward to
+      \<year\>"**; a new EVOLUTION mode-intent tells the lecturer to start at the
+      seed and move forward to the current frontier. Kept deterministic and
+      LLM-free like the history walk — the roadmap's optional `search_papers`
+      frontier-grab was deferred. *(From the `todos.md` inbox, 2026-07-07.)*
+      **Walk retired in v3.0.0** — lectures no longer expand the graph; the
+      mode (button, intent, seed-onward scoping) lives on, narrating the
+      descendants the even-by-year citation spread puts on screen (see
+      "Lectures never expand the graph" under Enhancements).
+
+- [x] **Lectures never expand the graph — backfill walks removed** *(v3.0.0)* —
+      a doctrine change: a lecture narrates the graph **as the user built
+      it**; only the researcher (explicit Q&A) may pull new papers onto the
+      canvas. The deterministic history/evolution backfill walks (Phase
+      3e/3f) were removed end-to-end — `orchestrator/backfill.py` + tests
+      deleted, the lecture intent is pure delegation, `BackfillTrace` left
+      the event vocabulary, the `graph.backfill` config knobs are gone, and
+      the panel's "⏳/⏩ Traced…" chips + the saved-session `hist_trace`
+      field were retired (old saves still restore; the field is ignored).
+      The **directional modes are also scoped to their side of the seed**
+      (`_story_nodes`): "How we got here" receives only the seed + papers
+      published in or before its year — the story ends AT the seed — while
+      "What's evolved since" receives the seed onward; intuition/bridge see
+      everything (undated papers sit out of the clamped modes; an undated
+      seed disables the clamp).
+- [x] **Refocus "This paper's intuition" on the seed itself** *(v3.0.0)* — the
+      intuition lecture no longer reads like a second "How we got here": its
+      mode-intent now walks the paper's own components (the problem, the core
+      idea, how the method actually works, what the results showed, why it
+      works), naming surrounding papers only in passing for contrast. It's
+      also **grounded in the seed itself, deterministically** (the lecturer
+      stays tool-free): the seed's own **ar5iv figures** are fetched before
+      the run and listed by caption — the model attaches the most
+      illuminating one to the beat it belongs to (a `figure` number resolved
+      to a proxied image on the beat; hallucinated numbers just mean no
+      figure) and the panel renders it inline under the beat (click to
+      enlarge) — and, when a **local library** exists, hybrid retrieval on
+      the seed's title supplies passages the lecture may draw on, attributed
+      inline. **History and evolution are illustrated too:** their figure
+      pool draws from the seed plus the story's landmark papers (the 4
+      most-cited arXiv papers on the mode's side of the seed, 3 figures
+      each, source-paper attributed on the card); bridge stays figure-free.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+- [x] **Figures in agent answers** *(v1.20.0)* — the agentic Q&A can now pull a
+      paper's own figures into its answer. A **full `read_paper` lists that paper's
+      figures** (numbered captions) and a **`show_figure(index, figure)`** tool
+      attaches one — resolved through the existing `figures.py` (ar5iv) extraction +
+      the same-origin `/api/figure_proxy`, streamed as a `figure` SSE event and
+      rendered (image + caption) in the answer bubble with a **click-to-enlarge
+      lightbox** (backdrop / ✕ / Esc to close). Budgeted at `AGENT_MAX_FIGURES`
+      (3/answer); agentic path only. A `🖼 Showed Figure N of …` trace chip marks it.
+- [x] **Embed answer figures inline (not appended)** *(v1.22.0)* — each
+      `show_figure` attachment now gets a 1-based **slot**, and the tool result
+      instructs the agent to place a **`<<FIG n>>` marker** in its prose exactly
+      where the figure belongs. The marker streams through verbatim (no SSE
+      protocol change); the answer bubble **splits its text on markers and
+      interleaves the figure cards** (a partial marker at the streaming tail is
+      held out of the render so it never flashes). Degrades gracefully: an
+      unplaced figure falls back to the old end-of-bubble strip, a marker with no
+      matching figure vanishes without gluing paragraphs, and pre-v1.22 saved
+      sessions render as before (new saves restore inline placement free, since
+      markers live in the persisted text). Two fixes from browser testing:
+      markers are **stripped from the server-side conversation history** (a model
+      that saw `<<FIG 1>>` in its earlier answers skipped placing the fresh one,
+      so figures degraded to end-anchoring as the chat went on), and the system
+      prompt now hard-forbids the model **drawing figures itself** (ASCII art /
+      box characters) — `show_figure` is the only path to visuals. *(Known limit:
+      tool-call compliance is still somewhat inconsistent; see the agent-
+      reliability item below.)*
+- [X] **Agent reliability: stronger model or sub-agent decomposition** — even
+      with the hardened prompt, the agent sometimes skips `show_figure` (or
+      tools generally) and answers from context. Two levers to explore: point
+      `AGENT_MODEL` at a stronger model than the default (`TEACHER_MODEL`,
+      Sonnet 4.6) just for the tool loop; or **break the loop into sub-agents**
+      (e.g. a researcher that reads/expands and a writer that composes) so each
+      keeps a **small, focused context** instead of one long conversation
+      carrying every tool result. *(Patrick's observation while testing inline
+      figures, 2026-07-04.)*
+- [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
+      sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
+      names the model the AI teacher actually runs on, not the build tool.
+
+### Bring-your-own sources
+
 - [ ] **Phase 3d — Bring your own sources** — pull the user's own material into
       the teacher's reach so Q&A can draw on it alongside the papers it fetches —
       "how does this paper relate to chapter 3 of my textbook?" Books are far too
@@ -280,210 +546,6 @@ optional, behind a key.
       right passage from a razor-thin vector-only lead to a decisive win.
     - [ ] figure/image handling — **OCR for scanned PDFs** *(deferred — needs a
       system Tesseract dep, fiddly on Windows)*.
-- [x] **Phase 3e — "How we got here" time travel** *(v1.14.0)* — the history
-      lecture no longer starts mid-stream: before narrating, `history_backfill`
-      walks **backward through references** to a field's older roots. It launches
-      from the **oldest papers already on the graph** (expanding the seed just
-      re-finds its visible refs), each hop adding the most-cited new ancestors and
-      carrying the oldest into the next hop, bounded by a hop budget
-      (`LECTURE_HISTORY_HOPS`) and a **year floor** (`LECTURE_HISTORY_LOOKBACK`
-      years before the seed). Discovered ancestors merge into the live graph
-      (dashed rings; far-left in Timeline) and join the node set the lecture
-      narrates over; the panel shows the hops live (`⏳ Traced back to <year>`).
-      Deterministic, so it runs on both teacher backends, reusing the Phase 3c
-      `_s2_neighbors` machinery. Shipped with an **S2 request throttle** (~1 req/s,
-      `S2_MIN_INTERVAL`) so the backward burst — and graph build / agent expansion
-      — don't 429. *(Browser-tested — reaches genuinely older foundational work; a
-      specific origin paper can still be missed since additions rank by citations
-      over a narrow frontier — future tweak: prefer `influential` edges.)*
-      **Retired in v3.0.0** — lectures no longer expand the graph (see
-      "Lectures never expand the graph" under Enhancements); the history
-      lecture now narrates the visible ancestors, ending at the seed.
-
-- [x] **Phase 3f — "What's Evolved Since" lecture mode** *(v2.7.0)* — a **third
-      lecture button** alongside "How We Got Here" (history) and "This Paper's
-      Intuition" (intuition), completing the **past → present → future**
-      triptych. It's the exact **mirror of the history backfill**: the shared
-      walk was refactored into one `_walk(direction=…)`, and evolution runs it
-      *forward* — launching from the **newest visible descendants** (launching
-      from the seed itself just re-finds its already-shown citations and
-      stalls), hopping **citations** (each hop reaches strictly newer work),
-      keeping the most-cited new papers, and marching toward the present with no
-      year ceiling (nothing can be cited by the future). The orchestrator runs
-      `forward_backfill` before narrating (same enrich-then-lecture path as
-      history); discoveries merge as descendants (dashed rings, far-**right** in
-      Timeline). `BackfillTrace` gained `direction`/`newest` (a forward hop
-      reports the newest year reached), rendered as **"⏩ Traced forward to
-      \<year\>"**; a new EVOLUTION mode-intent tells the lecturer to start at the
-      seed and move forward to the current frontier. Kept deterministic and
-      LLM-free like the history walk — the roadmap's optional `search_papers`
-      frontier-grab was deferred. *(From the `todos.md` inbox, 2026-07-07.)*
-      **Walk retired in v3.0.0** — lectures no longer expand the graph; the
-      mode (button, intent, seed-onward scoping) lives on, narrating the
-      descendants the even-by-year citation spread puts on screen (see
-      "Lectures never expand the graph" under Enhancements).
-
-**Beyond the teacher**
-
-- [x] **Phase 4 — Saved sessions & workspaces** *(v1.15.0)* — persistence,
-      deliberately dropped at the v1.0 pivot, reintroduced as opt-in. A **🗂
-      Sessions drawer** saves the current workspace — the full graph as it stands
-      (every node/edge, **including the papers the agent discovered / expanded /
-      searched in**, with their flags), the layout mode, and the teacher
-      transcript (chat + lecture beats + history trace) — into a dedicated
-      persistent store (`sessions.py`, `data/sessions.db`; own lifecycle, never
-      TTL-evicted). Reopening rebuilds the graph **directly from the save — no
-      Semantic Scholar rebuild**, so a restore costs zero rate-limited calls and
-      the exact discovered papers come back; the teacher remounts with the saved
-      conversation (restored answers/beats still re-light their nodes on click).
-      **Save-as-new** or **Update** an existing session in place (overwrite by id),
-      plus delete. Shipped with the bundled lighter control: **clear chat on
-      demand** — a **Clear** button in the teacher header, and re-seeding via
-      "Explore from here" now auto-starts a fresh conversation (the panel remounts
-      per graph). New routes `GET/POST /api/sessions`, `GET/DELETE
-      /api/sessions/<id>`. *(Known limit: the server-side Q&A memory is ephemeral,
-      so a follow-up after reopening starts without the earlier turns as context —
-      it still answers against the fully restored graph. Deliberately left as-is.)*
-- [ ] **Phase 5 — Concept mindmap** — Claude concept-map JSON, "bridge two
-      topics," `/api/mindmap`.
-- [ ] **Phase 6 — Audio lecture** — Podcastfy integration, Edge TTS default,
-      ElevenLabs optional, `/api/lecture/audio`.
-- [ ] **Phase 7 — Polished media (optional)** — `autocontent.py` behind
-      `AUTOCONTENT_API_KEY`; "Generate visuals" button.
-
-**The v2 rewrite** *(shipped)*
-
-- [x] **v2.0.0 — the readability rewrite** *(2026-07-06)* — the whole app
-      rebuilt file-by-file in a walkthrough (explain → refactor → test → sync),
-      with a README in every package. Backend: `config.json` + Pydantic config
-      (no env vars), strict mypy, typed `Graph` models, the teacher reborn as a
-      **PydanticAI agent crew** (query_analyst / librarian / lecturer /
-      researcher behind a deterministic orchestrator; typed event stream;
-      everything streams for real — required Anthropic's eager tool-input
-      streaming). Search moved **arXiv → all of Semantic Scholar** with LLM
-      query expansion + title resolution and whole-result caching; the `arxiv`
-      package and the claude-CLI backend retired. Frontend: strict TS, Redux
-      Toolkit (3 slices: workspace/transcript/highlight), the 743-line
-      Teacher.tsx and 577-line Atlas.tsx decomposed along the hybrid structure
-      rule, ingest progress bars, a Home button, and the **"Atlas"** rebrand
-      (in-app copy; repo name unchanged).
-- [x] **`atlas` package rename** *(v2.0.1)* — the backend catches up to the
-      in-app rebrand above: `src/arxiv_digest/` → `src/atlas/`,
-      `test/arxiv_digest/` → `test/atlas/`, every import updated, and the
-      console script `arxiv-atlas` → `atlas` (`uv run atlas serve`).
-      `pyproject.toml` has no remaining `arxiv` references. GitHub repo name
-      unchanged (`arxiv-digest`) — a separate, un-requested action.
-
-- [ ] **Graph-less research mode** — let the researcher run with no graph
-      open: agentic research from scratch (search S2 + the local library, no
-      seed required). Would retire the librarian in its favor — today's
-      no-graph chat is deliberately single-shot RAG (retrieval-before-model:
-      half the cost/latency, grounding guaranteed by construction), which is
-      the right trade until real usage demands agency there.
-- [ ] **Orchestrator model fan-out** — the hybrid design's model half, on the
-      documented seam in `agents/orchestrator/main.py`: for ambiguous or
-      multi-step asks, let an orchestrator model route or fan out across
-      sub-agents and synthesize. Same trigger as above: build when usage
-      shows the researcher's own tool loop isn't enough.
-- [x] **Detail-panel arXiv category tags** *(v2.3.0)* — the panel now shows an
-      arXiv paper's own category tags (`cs.LG` → "Machine Learning") as
-      read-only pills between the meta line and the TL;DR. S2 doesn't carry
-      per-paper categories, so a new `integrations.arxiv.categories` module
-      hits arXiv's own export API (a different host from ar5iv) for the raw
-      codes and labels them via a new `vocab.name_for` lookup, served by
-      `GET /api/paper/<ref>/categories` (same degrade-to-`available:false`
-      contract as figures/code) and fetched lazily in `useSelection` alongside
-      them. *Fixed same day:* six pairs in the taxonomy are different codes
-      that happen to share one display name (`cs.LG`/`stat.ML`, both
-      "Machine Learning"; also the `cs.IT`/`math.IT`, `cs.NA`/`math.NA`,
-      `cs.SY`/`eess.SY`, `math.MP`/`math-ph`, `math.ST`/`stat.TH` pairs) — a
-      paper cross-listed in both of a pair showed the identical label twice
-      (caught on Kingma & Welling's VAE paper, tagged both `stat.ML` and
-      `cs.LG`); `get_categories` now dedupes by display name, keeping arXiv's
-      first-listed code of the pair. *(From the `todos.md` inbox,
-      2026-07-07.)*
-- [x] **Fix: dateless papers in Timeline landed at the far edge** *(v2.3.1)* —
-      a paper with no publication year (S2 sometimes just doesn't have one)
-      was placed one slot before the earliest real year on the graph — a
-      strong, usually-wrong assumption that "unknown date" means "oldest."
-      `nodeTimelineX` (`useTimeline.ts`) now defaults a dateless node to the
-      **seed's own exact x** — same year *and* month fraction, pixel-aligned
-      with the seed's column, not just parked somewhere in its year — falling
-      back to the earliest year only if the seed itself has none. (There's no
-      day-level precision anywhere in this layout, only year+month, so
-      "exact" tops out at whatever precision the seed has — same ceiling
-      every other node on the graph is already subject to.)
-- [ ] **General non-arXiv full text** — S2's `openAccessPdf` + the existing
-      pymupdf pipeline as a fallback reader for `read_paper` on journal
-      papers (text only; figures stay ar5iv-quality-or-nothing).
-
-**Enhancements & tech debt** *(unscheduled; from the `todos.md` inbox)*
-
-- [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
-      `todos.md` inbox, 2026-07-08.)*
-- [ ] **Cached papers don't match the query agent's expanded query** — papers
-      served from the local sources cache don't seem to line up with the query
-      the query-analyst expanded to, so the researcher may ground on the wrong
-      cached hits. Investigate the retrieval/cache-key path vs. the expanded
-      query (query_analyst → researcher/retrieval). *(From the `todos.md` inbox,
-      2026-07-08.)*
-- [ ] **Graph build should survive S2 being down without trapping the user** —
-      if Semantic Scholar is unavailable mid-build, the error message should be
-      **dismissible** and the graph currently on screen restored (it must not stay
-      greyed out). Frontend error handling around `fetchGraph`/`GraphExplorer`.
-      *(From the `todos.md` inbox, 2026-07-08.)*
-
-- [x] **Even citation spread across the years** *(v3.0.0 — supersedes "Recency
-      preference for citations")* — instead of a user-facing older/newer knob,
-      the seed's citations are now **always** selected **evenly across
-      publication years**: the pool is bucketed by year (most-cited first
-      within each) and round-robined, so sparse early years surface and no
-      busy year monopolizes the count. For mega-cited seeds (beyond the
-      1000-paper page), the pool is built by **stratified offset sampling**
-      across S2's newest-first citation list (5 windows from the newest to the
-      deepest reachable under S2's ~9k offset ceiling; windows S2 rejects
-      degrade gracefully), so the spread covers the seed's whole descendant
-      era instead of just the recent tip. No toggle shipped — even-by-year is
-      simply how graphs build now (references keep the most-cited ranking; a
-      reference list is naturally year-spread already). This is what gives
-      "What's evolved since" a real timeline to narrate. **Known limit:** on
-      truly mega-cited papers (≳10-20k citations, e.g. "Attention Is All You
-      Need") the ~10k offset ceiling traps every stratum in the newest few
-      months — see "Mega-paper citation coverage" in the unfinished items
-      below.
-- [x] **Lectures never expand the graph — backfill walks removed** *(v3.0.0)* —
-      a doctrine change: a lecture narrates the graph **as the user built
-      it**; only the researcher (explicit Q&A) may pull new papers onto the
-      canvas. The deterministic history/evolution backfill walks (Phase
-      3e/3f) were removed end-to-end — `orchestrator/backfill.py` + tests
-      deleted, the lecture intent is pure delegation, `BackfillTrace` left
-      the event vocabulary, the `graph.backfill` config knobs are gone, and
-      the panel's "⏳/⏩ Traced…" chips + the saved-session `hist_trace`
-      field were retired (old saves still restore; the field is ignored).
-      The **directional modes are also scoped to their side of the seed**
-      (`_story_nodes`): "How we got here" receives only the seed + papers
-      published in or before its year — the story ends AT the seed — while
-      "What's evolved since" receives the seed onward; intuition/bridge see
-      everything (undated papers sit out of the clamped modes; an undated
-      seed disables the clamp).
-- [x] **Refocus "This paper's intuition" on the seed itself** *(v3.0.0)* — the
-      intuition lecture no longer reads like a second "How we got here": its
-      mode-intent now walks the paper's own components (the problem, the core
-      idea, how the method actually works, what the results showed, why it
-      works), naming surrounding papers only in passing for contrast. It's
-      also **grounded in the seed itself, deterministically** (the lecturer
-      stays tool-free): the seed's own **ar5iv figures** are fetched before
-      the run and listed by caption — the model attaches the most
-      illuminating one to the beat it belongs to (a `figure` number resolved
-      to a proxied image on the beat; hallucinated numbers just mean no
-      figure) and the panel renders it inline under the beat (click to
-      enlarge) — and, when a **local library** exists, hybrid retrieval on
-      the seed's title supplies passages the lecture may draw on, attributed
-      inline. **History and evolution are illustrated too:** their figure
-      pool draws from the seed plus the story's landmark papers (the 4
-      most-cited arXiv papers on the mode's side of the seed, 3 figures
-      each, source-paper attributed on the card); bridge stays figure-free.
-      *(From the `todos.md` inbox, 2026-07-07.)*
 - [x] **Offline chat mode** *(v1.12.0)* — a graph-free RAG chat straight over the
       local library. `teacher.answer_from_sources` retrieves the top passages
       (`SOURCES_CHAT_K`) and answers grounded only in them, citing inline by page —
@@ -529,16 +591,212 @@ optional, behind a key.
       **Next:** fold this into a **single unified assistant panel** (see the
       library-view toggle item) — one header-toggled drawer that defaults to the
       library with no graph open and levels up to graph + S2 tools once one is.
-- [x] **Publication date in search results + seed-search filters** *(v1.16.0)* —
-      arXiv hits now show their **publication date** (from the paper's own
-      submission day), and the search surface gained an optional **filter
-      popover**: a dual-handle **year-range slider** (folds to no-bound at 1991 /
-      the current year, so a full-width slider is the no-op state) plus an **arXiv
-      category picker** fed by a new `/api/taxonomy` endpoint (server-validated
-      codes, any-of match). Filters AND onto arXiv's query (`submittedDate` + `cat`
-      clauses) and the local cache's year window alike; an explicit id/URL lookup
-      ignores them. This is where the dormant `taxonomy.py` finally earns its keep.
-      *(From the `todos.md` inbox, 2026-07-03.)*
+- [x] **Deselect-all in the assistant source scope** *(v1.20.1)* — the source-scope
+      popover only had **Select all**; added a **Deselect all** (shown whenever any
+      source is checked) so you can clear and then pick a few, rather than unchecking
+      many by hand.
+- [x] **Empty source scope means "search nothing"** *(v1.20.2)* — corrects
+      v1.20.1: an empty checkbox set used to fall back to "search the whole
+      library" (both extremes behaved the same). Now the three states are
+      distinct — all checked = whole library, a subset = just those, **none
+      checked = search no sources**. Threaded a `None` (no scope → all) vs `[]`
+      (explicit empty → nothing) distinction through `sources.search`, both ask
+      routes, `answer_agentic`, and the `search_sources` tool.
+- [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
+      `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
+      with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
+
+### Citation graph — landmark/latest & mega-papers
+
+A reframe of the mega-paper citation story, decided with Patrick after we shelved
+the stratified-sampling + velocity WIP. **Drop stratified offset windows
+entirely.** One newest-≤1000 citation fetch does double duty, splitting citations
+into two relations with distinct meaning, colour, filter, and (later) slider:
+
+- **Landmark citations** (keep green `#4ade80`) — the most-cited papers citing the
+  seed, "the giants that built on this." Reachable citation list ranked by citation
+  count for normal papers; **mining-first** for mega papers (mine reachable citers'
+  reference lists → verify → rank by citations, pruned to ≤ last year). No
+  stratified windows → a mega build is ~3 S2 requests (1 fetch + 2 mining batches).
+- **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
+  last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
+
+- [x] **Even citation spread across the years** *(v3.0.0 — supersedes "Recency
+      preference for citations")* — instead of a user-facing older/newer knob,
+      the seed's citations are now **always** selected **evenly across
+      publication years**: the pool is bucketed by year (most-cited first
+      within each) and round-robined, so sparse early years surface and no
+      busy year monopolizes the count. For mega-cited seeds (beyond the
+      1000-paper page), the pool is built by **stratified offset sampling**
+      across S2's newest-first citation list (5 windows from the newest to the
+      deepest reachable under S2's ~9k offset ceiling; windows S2 rejects
+      degrade gracefully), so the spread covers the seed's whole descendant
+      era instead of just the recent tip. No toggle shipped — even-by-year is
+      simply how graphs build now (references keep the most-cited ranking; a
+      reference list is naturally year-spread already). This is what gives
+      "What's evolved since" a real timeline to narrate. **Known limit:** on
+      truly mega-cited papers (≳10-20k citations, e.g. "Attention Is All You
+      Need") the ~10k offset ceiling traps every stratum in the newest few
+      months — see "Mega-paper citation coverage" in the unfinished items
+      below.
+- [x] **Rank citations/references by citation count, not S2's default order**
+      *(v2.1.1)* — a heavily-cited old seed (e.g. Hawking's "Black hole
+      explosions?", 5,143 citations) was showing an almost entirely 2026,
+      near-zero-citation "citations" neighborhood. Root cause: S2's
+      `/paper/{id}/citations` and `/references` endpoints take no `sort` param
+      and default to a genuinely chronological, newest-first order (confirmed
+      by sampling `offset` across the full range) — so a small `cite_limit`
+      filled up entirely with this year's obscure citing papers before a
+      single famous one was ever seen. Fixed in `_neighbors()` (shared by
+      `references()`/`citations()`): over-fetch up to S2's hard per-call cap
+      (1000 — 1001+ returns HTTP 400) and rank the pool by `citation_count`
+      locally before trimming to the configured limit. Verified against the
+      Hawking paper: citing papers went from 0–1 citations each to 40–268.
+      *Known limit (discussed and accepted):* a single call still only
+      reaches ~1000 of the newest citations, so an extremely well-cited old
+      paper's neighborhood still skews toward the last few years rather than
+      spanning its full multi-decade citation history — truly reaching decades
+      back would need a few extra stratified-`offset` calls per seed/expand,
+      trading latency/API load for it. Shipping the single-call fix for now;
+      revisit if the recency skew is still too tight in practice.
+- [x] **Ship A — backend split + `latest` relation** *(v3.3.0)*. New `latest`
+      edge type through `model.py`/`build.py`/counts; `citation_relations()`
+      splits one newest-page fetch into mining-first landmark selection + a
+      12-month `latest` partition (dropped the `_STRATA`/`_STRATUM_LIMIT`/
+      `_MAX_OFFSET` sampling). Frontend: light-green colour + an on/off **filter
+      chip** for latest (no slider — deferred to Ship C). **Mining hardened
+      while testing:** budgets made operator-tunable (`graph.citation_mining.
+      sources`/`.candidates`), candidate ranking switched from raw citations to
+      **co-citation frequency** (so off-topic giants don't burn verification
+      slots), and verification **chunked + best-effort per chunk** (survives a
+      429, and `candidates` may exceed the 500-id batch cap). Flow documented in
+      `integrations/semantic_scholar/README.md`. *Known ceiling: hyper-cited
+      seeds (DQN ~16 landmarks) are capped by S2 truncating nested `references`
+      arrays + the "invisible unless a source cites it" limit — see README.*
+- [x] **Ship D — page deeper to complete the latest window + fill the landmark
+      middle band** *(v3.4.0)*. `_fetch_citers(deep=True)` pages the citer list
+      (offsets 0, 1000, 2000…), stopping at the first page with no in-window
+      citer, the list end, or the `_MAX_OFFSET` (~10k) ceiling. `latest` now
+      covers the *whole* rolling window; the citers just past the boundary fill
+      the landmark middle band. **Verified on DQN: ~3k citers paged, landmark
+      relation went 16 → the full `cite_limit` (60) of real 2016–2024 citers,
+      evenly spread.** For hyper-cited seeds (AIAYN) the past-ceiling tail still
+      comes from mining — complementary. Graph expansion (`citations()`) stays
+      one page. Paired **429 hardening**: `client.request` default `tries` 4 → 6
+      (backoff to 16s) so a mega build's ~10 pages ride out sustained 429s;
+      `min_interval` is the further lever. *(From the `todos.md` inbox, 2026-07-08.)*
+- [x] **Ship B — "The current frontier" lecture** *(v3.5.0)*. New
+      `LectureMode.FRONTIER` ("The current frontier"); `_story_nodes` scopes it to
+      seed + any-relation nodes from the last ~12 months (absolute recency, not
+      relative to the seed) — so it **folds in recent `similar` nodes too**,
+      alongside the `latest` citers. `MODE_INTENTS` intent (survey the newest work
+      as current threads, distinct from EVOLUTION's full arc), figure pool wired,
+      frontend mode button + `LectureMode` type. Completeness guard added
+      (`set(MODE_INTENTS) == set(LectureMode)`).
+- [x] **Ship C — live per-relation count sliders** *(v3.6.0)*. Each `Edge`
+      carries a `rank` (its index in the relation's order — references/citations by
+      influence, latest by recency, similar by S2); the backend ships the whole
+      ranked set per relation (the `*_limit` config values became **ship counts =
+      each slider's max**, and are now **nullable** — `null` ships *everything* the
+      paper has, so the slider maxes to the full count) and the frontend slider is
+      a **pure client-side reveal** of `rank < value`, defaulting to 25, no
+      re-query. UI: a clean aligned grid (dot+label toggle · slider · `N/max`) —
+      references/**Field Landmarks**/**Latest Publications**/**Similar** (chip
+      relabel folded in). The **agent-grounding fix** rode along (it had to —
+      sliders hide nodes, so grounding is now visible ∪ discoveries, via
+      `visibleNodeIds`). Salvaged the slider UI + `rank`/grounding mechanics from
+      `stash@{0}`; dropped its `pool_limit` cap per the new design. *(Slider from
+      the `todos.md` inbox, 2026-07-06; fetch-everything + relabel + nullable limits
+      2026-07-08.)*
+
+  **→ Phase complete (A → D → B → C shipped, v3.3.0–v3.6.0).** The mega-paper
+  citation story is now: deep-paged landmark/latest split, co-citation mining for
+  the past-ceiling tail, a current-frontier lecture, and live per-relation
+  sliders over the whole ranked pool.
+
+  - **Shelved WIP — `stash@{0}`** ("WIP v3.3.0-candidate: velocity reveal-order +
+    configurable citation_pool …"), sitting on top of the earlier
+    sliders/grounding/clutter stash — **superseded by the plan above** but kept
+    for cherry-picking. Reusable bits: the **agent-grounding fix** (`GraphExplorer`
+    publishes `visibleNodesSet`; `selectGroundingNodes` → visible ∪ discoveries —
+    was browser-verified), the **clutter retune** (Timeline day-of-year spread via
+    `withinYearFraction`), the **pool_limit/rank slider mechanism** (for Ship C),
+    and a **`_velocity` helper** (`citation_count / (age + 1)`). Patrick chose to
+    keep the grounding fix + clutter retune out of Ship A for now — revisit.
+- [x] **Mega-paper citation coverage — beat the ~10k offset ceiling**
+      *(v3.1.0)* — the
+      v3.0.0 even-by-year citation spread has a known blind spot on truly
+      mega-cited papers. S2's `/citations` endpoint returns citing papers
+      **newest-first**, offers **no server-side sort**, and **rejects any
+      request past `offset + limit` ≈ 10k** (hence `_MAX_OFFSET = 9000` in
+      `_stratified_pool`). The stratified fetch can therefore only sample
+      inside the newest ~9.2k citations — for **"Attention Is All You Need"
+      (~150k citations, tens of thousands per year)** that's the top ~6% of
+      the list, i.e. the last few months, so every stratum lands in 2026 and
+      the even-by-year selection has exactly one year-bucket to spread over.
+      Even a landmark 2019 citer (BERT-class famous) sits ~100k entries deep
+      — S2 will simply never return it through this endpoint. (DQN at ~15k
+      citations is only partly affected: offset 9000 reaches ~60% of its
+      list, back to the mid-2010s, but its oldest citers are past the
+      ceiling too.) **Decided design — the heuristic as a pool-builder, not
+      a replacement.** The final even-by-year selection stays (pure
+      most-popular would re-clump in the hot years, losing the frontier);
+      the heuristic only enriches the *pool* it selects from. Three-tier
+      dispatch in `citations()`: **≤1000** citations → single page (the
+      complete list, exact); **1k–ceiling** → stratified offset windows
+      (unchanged); **past the ceiling** → stratified windows for the
+      reachable slice PLUS **landmark mining**: harvest the reference lists
+      of the pool's most-cited recent citers (surveys are goldmines — they
+      cite every landmark), rank candidates by their own citation count, and
+      **verify each candidate actually cites the seed** before keeping it —
+      a candidate merely co-appearing in reference lists is NOT proof, and
+      the graph must never invent a citation edge (verification via one
+      batched `references.paperId` lookup). Verified landmarks join the pool
+      (influential flag unknowable → False) and even-by-year does the rest:
+      BERT-class 2018-2020 landmarks AND the 2026 frontier, honestly edged.
+      Mining is best-effort — either batch failing just degrades to the
+      reachable pool, never fails the build. (A first cut also carried a
+      `deep_citations` retry mode and adaptive client pacing, built against
+      one congested S2 night; the congestion turned out to be transient, so
+      both were dropped as overkill — the ship is mining + stratified
+      windows + even-by-year, nothing more.)
+      Alternatives kept on file: year-filtered citation queries *if* S2 ever
+      adds them (trivial then), or the S2 Datasets bulk dump (full
+      enumeration, but against the "no local corpus" philosophy). *(From a
+      live v3.0.0 session on 1706.03762, 2026-07-07; design settled same
+      day.)*
+
+### Saved sessions & workspaces
+
+- [x] **Phase 4 — Saved sessions & workspaces** *(v1.15.0)* — persistence,
+      deliberately dropped at the v1.0 pivot, reintroduced as opt-in. A **🗂
+      Sessions drawer** saves the current workspace — the full graph as it stands
+      (every node/edge, **including the papers the agent discovered / expanded /
+      searched in**, with their flags), the layout mode, and the teacher
+      transcript (chat + lecture beats + history trace) — into a dedicated
+      persistent store (`sessions.py`, `data/sessions.db`; own lifecycle, never
+      TTL-evicted). Reopening rebuilds the graph **directly from the save — no
+      Semantic Scholar rebuild**, so a restore costs zero rate-limited calls and
+      the exact discovered papers come back; the teacher remounts with the saved
+      conversation (restored answers/beats still re-light their nodes on click).
+      **Save-as-new** or **Update** an existing session in place (overwrite by id),
+      plus delete. Shipped with the bundled lighter control: **clear chat on
+      demand** — a **Clear** button in the teacher header, and re-seeding via
+      "Explore from here" now auto-starts a fresh conversation (the panel remounts
+      per graph). New routes `GET/POST /api/sessions`, `GET/DELETE
+      /api/sessions/<id>`. *(Known limit: the server-side Q&A memory is ephemeral,
+      so a follow-up after reopening starts without the earlier turns as context —
+      it still answers against the fully restored graph. Deliberately left as-is.)*
+
+### Infrastructure, quality & tooling
+
+- [x] **Phase 2.3 — Legacy teardown** *(v1.4.0)* — retired the digest-era backend
+      now that Atlas stands on its own: deleted `store.py`, `pipeline.py`,
+      `summarizer.py`, `embeddings.py`; slimmed `search.py`/`arxiv_client.py` to
+      just the seed search; removed 8 legacy `app.py` routes + 8 unused `api.ts`
+      functions; trimmed dead `config.py`/`.env.example` settings; `run.py` is now
+      `serve`-only. `taxonomy.py` kept **dormant** for near-term features. (See
+      "Deliberately dropped" below for the what/why.)
 - [x] **Frontend/backend package refactor** *(v1.15.1–v1.15.2)* — the whole
       codebase reorganized into concern packages. Backend: `app.py` → a thin
       factory over `routes/` blueprints; `teacher.py` (1,280 lines) → a
@@ -606,94 +864,6 @@ optional, behind a key.
       and killed the stream before the `error` event reached the panel — now a
       module logger, with the `token → error` framing locked in by a test.
       *(From the `todos.md` inbox, 2026-07-04.)*
-- [x] **Papers-with-code / implementation links** *(v1.23.0)* — the detail panel
-      now shows a **"Code & artifacts"** section from **Hugging Face Papers**
-      (Papers with Code's successor): the community-linked **GitHub repo** (with
-      stars) plus the top linked **models / datasets / Spaces** and their full
-      counts, linking out to the paper's HF page. One call to
-      `huggingface.co/api/papers/{arxiv_id}` (`integrations/huggingface.py`),
-      day-cached in SQLite (misses too), served by `GET /api/paper/<id>/code`,
-      which degrades to `available: false` on any HF failure — never 500s the
-      panel. Lazily fetched per paper alongside figures; the actions row was
-      restyled to fit (compact Abstract/PDF/Pin chips, full-width Explore).
-      *Not done (needs one HF call per node, no batch endpoint): flagging graph
-      nodes that have code.*
-- [x] **Figures in agent answers** *(v1.20.0)* — the agentic Q&A can now pull a
-      paper's own figures into its answer. A **full `read_paper` lists that paper's
-      figures** (numbered captions) and a **`show_figure(index, figure)`** tool
-      attaches one — resolved through the existing `figures.py` (ar5iv) extraction +
-      the same-origin `/api/figure_proxy`, streamed as a `figure` SSE event and
-      rendered (image + caption) in the answer bubble with a **click-to-enlarge
-      lightbox** (backdrop / ✕ / Esc to close). Budgeted at `AGENT_MAX_FIGURES`
-      (3/answer); agentic path only. A `🖼 Showed Figure N of …` trace chip marks it.
-- [x] **Embed answer figures inline (not appended)** *(v1.22.0)* — each
-      `show_figure` attachment now gets a 1-based **slot**, and the tool result
-      instructs the agent to place a **`<<FIG n>>` marker** in its prose exactly
-      where the figure belongs. The marker streams through verbatim (no SSE
-      protocol change); the answer bubble **splits its text on markers and
-      interleaves the figure cards** (a partial marker at the streaming tail is
-      held out of the render so it never flashes). Degrades gracefully: an
-      unplaced figure falls back to the old end-of-bubble strip, a marker with no
-      matching figure vanishes without gluing paragraphs, and pre-v1.22 saved
-      sessions render as before (new saves restore inline placement free, since
-      markers live in the persisted text). Two fixes from browser testing:
-      markers are **stripped from the server-side conversation history** (a model
-      that saw `<<FIG 1>>` in its earlier answers skipped placing the fresh one,
-      so figures degraded to end-anchoring as the chat went on), and the system
-      prompt now hard-forbids the model **drawing figures itself** (ASCII art /
-      box characters) — `show_figure` is the only path to visuals. *(Known limit:
-      tool-call compliance is still somewhat inconsistent; see the agent-
-      reliability item below.)*
-- [X] **Agent reliability: stronger model or sub-agent decomposition** — even
-      with the hardened prompt, the agent sometimes skips `show_figure` (or
-      tools generally) and answers from context. Two levers to explore: point
-      `AGENT_MODEL` at a stronger model than the default (`TEACHER_MODEL`,
-      Sonnet 4.6) just for the tool loop; or **break the loop into sub-agents**
-      (e.g. a researcher that reads/expands and a writer that composes) so each
-      keeps a **small, focused context** instead of one long conversation
-      carrying every tool result. *(Patrick's observation while testing inline
-      figures, 2026-07-04.)*
-- [x] **Zoom on detail-panel figures** *(v2.4.0)* — the sidebar's paper figures
-      (Phase 2.1) are now click-to-enlarge, reusing the same **lightbox** the
-      answer figures got in v1.20.0. Since it's now a genuine two-consumer
-      component, `Lightbox.tsx` was promoted out of `teacher/figures/` to a
-      new root-level `figures/` folder per the hybrid structure rule (each
-      caller — `Teacher.tsx`, `graph/GraphExplorer.tsx` — still owns its own
-      open/close state and instance). Caught a latent bug in the move: the
-      caption line unconditionally rendered `Figure {figure.figure}`, fine
-      for the teacher's always-numbered agent-cited figures but a bare
-      "Figure " for the detail panel's un-numbered ones — now the label only
-      shows when a number actually exists. *(From the `todos.md` inbox,
-      2026-07-04.)*
-- [x] **Default to Timeline, not Force** *(v2.4.1)* — a fresh page load, going
-      Home, and restoring an old saved session that predates the `layout`
-      field all used to fall back to Force; all three now default to
-      Timeline instead (`store/workspace.ts`'s `initialState`,
-      `workspaceCleared`, and `restoreSession`'s missing-field fallback).
-      Sessions that explicitly saved a layout — Force or Timeline — are
-      unaffected; this only changes what happens when there's no stored
-      preference at all.
-- [x] **Loading spinners for graph render + search** *(v2.2.0)* — neither the
-      "Building graph…" overlay nor the "Searching Semantic Scholar…" hit-list
-      note had any animated feedback, so a slow S2 fetch could read as hung.
-      Added a shared `.spin` primitive (centralized in `atlas.css` — it existed
-      once already, duplicated in the library upload flow; de-duped it there
-      too) and wired it into both spots. *(From the `todos.md` inbox,
-      2026-07-06.)*
-      **Fixed in v2.2.1:** the "Building graph…" overlay was invisible whenever
-      a graph was already on screen (re-seeding, or searching over an existing
-      graph) — only worked on the very first load. Root cause:
-      `react-force-graph-2d` sets its canvas wrapper's `position: relative`
-      inline with no `z-index`, tying it with `.overlay`'s implicit
-      `z-index: auto`; CSS then falls back to DOM order, and the canvas
-      renders *after* `.overlay` in `GraphExplorer.tsx`, so it painted over it
-      once a graph existed to render at all. Gave `.overlay` an explicit
-      `z-index: 20`, comfortably above every other floating panel
-      (`.controls` at 4, `.hit-list` at 5). Also, bare overlay text read poorly
-      against a busy graph still on screen, so a `.canvas-scrim` now dims the
-      whole canvas (graph + its controls/legend) and the overlay itself gets a
-      contrasting card background — for both the loading and the graph-load
-      error state (verified against a real 502 from the running server).
 - [x] **File logging + honest search-failure traces** *(v2.1.0)* — `create_app()`
       now logs to a rotating file (`data/atlas.log`, 5MB × 3 backups) as well as
       the console, so agent runs survive after the terminal scrolls away.
@@ -712,26 +882,6 @@ optional, behind a key.
       *(From the `todos.md` inbox, 2026-07-06.)*
       **Next:** sweep other silent-failure spots (other agent tools, route
       error paths) that should log before returning a user-facing message.
-- [x] **Rank citations/references by citation count, not S2's default order**
-      *(v2.1.1)* — a heavily-cited old seed (e.g. Hawking's "Black hole
-      explosions?", 5,143 citations) was showing an almost entirely 2026,
-      near-zero-citation "citations" neighborhood. Root cause: S2's
-      `/paper/{id}/citations` and `/references` endpoints take no `sort` param
-      and default to a genuinely chronological, newest-first order (confirmed
-      by sampling `offset` across the full range) — so a small `cite_limit`
-      filled up entirely with this year's obscure citing papers before a
-      single famous one was ever seen. Fixed in `_neighbors()` (shared by
-      `references()`/`citations()`): over-fetch up to S2's hard per-call cap
-      (1000 — 1001+ returns HTTP 400) and rank the pool by `citation_count`
-      locally before trimming to the configured limit. Verified against the
-      Hawking paper: citing papers went from 0–1 citations each to 40–268.
-      *Known limit (discussed and accepted):* a single call still only
-      reaches ~1000 of the newest citations, so an extremely well-cited old
-      paper's neighborhood still skews toward the last few years rather than
-      spanning its full multi-decade citation history — truly reaching decades
-      back would need a few extra stratified-`offset` calls per seed/expand,
-      trading latency/API load for it. Shipping the single-call fix for now;
-      revisit if the recency skew is still too tight in practice.
 - [x] **No single-letter identifiers** *(v2.4.2)* — swept the whole codebase
       (backend `src/atlas`, `frontend/src`, **and** `test/`) clean of
       single-letter variable / parameter / loop / comprehension / generic-type
@@ -746,54 +896,29 @@ optional, behind a key.
       ("Code conventions") so it doesn't drift back. Behavior-neutral: the whole
       quality gate (ruff, strict mypy, 277 tests, tsc + oxlint) stays green.
       *(From the `todos.md` inbox, 2026-07-06.)*
-- [x] **Optional per-seed cache clear** *(v2.5.0)* — a **Refresh** button in the
-      graph controls (beside Release / Fit) busts the cached graph snapshot
-      (`data/digest.db`'s `cache` table) for the current seed on demand, rather
-      than only living with the 1-day TTL — useful when S2's data for a paper
-      visibly changes mid-session. Reuses the backend's existing `refresh=1`
-      path (bypass read → rebuild from S2 → upsert the snapshot), which was
-      wired end-to-end but never triggered from the UI. Frontend-only: the
-      workspace slice now records the **exact seed reference** the graph was
-      loaded with (`seedRef`) so Refresh replays the same string and busts the
-      *right* cache key — a double-click re-seed keys by S2 paperId, a search by
-      arXiv id — rather than a stale duplicate. *(From the `todos.md` inbox,
-      2026-07-07.)*
 - [x] **CLI → `click`** *(v1.11.0)* — replaced the hand-rolled `argparse` in
       `run.py` with a `click` group (same command names: `serve`, `ingest`,
       `sources`, `search-sources`, `forget`).
-- [x] **"Powered by Claude"** *(v1.11.0)* — subtle top-bar credit (Anthropic
-      sunburst mark + "Powered by Claude", linking to anthropic.com/claude);
-      names the model the AI teacher actually runs on, not the build tool.
-- [x] **Deselect-all in the assistant source scope** *(v1.20.1)* — the source-scope
-      popover only had **Select all**; added a **Deselect all** (shown whenever any
-      source is checked) so you can clear and then pick a few, rather than unchecking
-      many by hand.
-- [x] **Empty source scope means "search nothing"** *(v1.20.2)* — corrects
-      v1.20.1: an empty checkbox set used to fall back to "search the whole
-      library" (both extremes behaved the same). Now the three states are
-      distinct — all checked = whole library, a subset = just those, **none
-      checked = search no sources**. Threaded a `None` (no scope → all) vs `[]`
-      (explicit empty → nothing) distinction through `sources.search`, both ask
-      routes, `answer_agentic`, and the `search_sources` tool.
-- [x] **Filter popover stays open after Explore** *(v1.18.1)* — the seed-search
-      filter popover didn't close when a search fired; `Search`'s form `onSubmit`
-      now collapses it (`setOpen(false)`) before running the search.
-- [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
-      `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
-      with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.
-- [x] **S2 categories as detail-panel tags** *(v2.6.0)* — alongside the v2.3.0
-      arXiv category pills, the detail panel now surfaces Semantic Scholar's own
-      field-of-study classification (`s2FieldsOfStudy`, falling back to the
-      coarser `fieldsOfStudy`) as tags. Rendered as **two provider-labeled
-      sections** (styled like "Code & artifacts") — an **arXiv tags** section
-      and a **Semantic Scholar tags** section (accent-tinted) — so it's clear
-      who tagged what; a non-arXiv paper shows the S2 section alone. No new
-      endpoint: S2 already returns these on the paper object, so the fields ride
-      along with the existing detail hydration (`DETAIL_FIELDS`) — light on
-      graph neighbors, filled in on click like the abstract/TL;DR. The normalized
-      node gained a `fields_of_study` list (deduped, order-preserving), defaulted
-      on the `Node` model so snapshots cached before it still validate.
-      *(From the `todos.md` inbox, 2026-07-07.)*
+
+## Backlog — not yet shipped
+
+### Teacher & agent reach
+
+- [ ] **Graph-less research mode** — let the researcher run with no graph
+      open: agentic research from scratch (search S2 + the local library, no
+      seed required). Would retire the librarian in its favor — today's
+      no-graph chat is deliberately single-shot RAG (retrieval-before-model:
+      half the cost/latency, grounding guaranteed by construction), which is
+      the right trade until real usage demands agency there.
+- [ ] **Orchestrator model fan-out** — the hybrid design's model half, on the
+      documented seam in `agents/orchestrator/main.py`: for ambiguous or
+      multi-step asks, let an orchestrator model route or fan out across
+      sub-agents and synthesize. Same trigger as above: build when usage
+      shows the researcher's own tool loop isn't enough.
+- [ ] **General non-arXiv full text** — S2's `openAccessPdf` + the existing
+      pymupdf pipeline as a fallback reader for `read_paper` on journal
+      papers (text only; figures stay ar5iv-quality-or-nothing).
+
 - [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
       agentic Q&A only calls `show_figure` when the question explicitly asks for
       a picture; you have to request an image every time to get one. It should
@@ -823,89 +948,9 @@ optional, behind a key.
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
-### Phase — Current frontier: landmark vs latest citations *(active, 2026-07-08)*
 
-A reframe of the mega-paper citation story, decided with Patrick after we shelved
-the stratified-sampling + velocity WIP. **Drop stratified offset windows
-entirely.** One newest-≤1000 citation fetch does double duty, splitting citations
-into two relations with distinct meaning, colour, filter, and (later) slider:
+### Citations & graph data
 
-- **Landmark citations** (keep green `#4ade80`) — the most-cited papers citing the
-  seed, "the giants that built on this." Reachable citation list ranked by citation
-  count for normal papers; **mining-first** for mega papers (mine reachable citers'
-  reference lists → verify → rank by citations, pruned to ≤ last year). No
-  stratified windows → a mega build is ~3 S2 requests (1 fetch + 2 mining batches).
-- **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
-  last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
-
-Shipped as small, browser-testable increments. **Remaining order: D → B → C**
-(Ship D lands first — it improves the citation *data* the lecture will narrate
-and closes a real coverage gap).
-
-- [x] **Ship A — backend split + `latest` relation** *(v3.3.0)*. New `latest`
-      edge type through `model.py`/`build.py`/counts; `citation_relations()`
-      splits one newest-page fetch into mining-first landmark selection + a
-      12-month `latest` partition (dropped the `_STRATA`/`_STRATUM_LIMIT`/
-      `_MAX_OFFSET` sampling). Frontend: light-green colour + an on/off **filter
-      chip** for latest (no slider — deferred to Ship C). **Mining hardened
-      while testing:** budgets made operator-tunable (`graph.citation_mining.
-      sources`/`.candidates`), candidate ranking switched from raw citations to
-      **co-citation frequency** (so off-topic giants don't burn verification
-      slots), and verification **chunked + best-effort per chunk** (survives a
-      429, and `candidates` may exceed the 500-id batch cap). Flow documented in
-      `integrations/semantic_scholar/README.md`. *Known ceiling: hyper-cited
-      seeds (DQN ~16 landmarks) are capped by S2 truncating nested `references`
-      arrays + the "invisible unless a source cites it" limit — see README.*
-- [x] **Ship D — page deeper to complete the latest window + fill the landmark
-      middle band** *(v3.4.0)*. `_fetch_citers(deep=True)` pages the citer list
-      (offsets 0, 1000, 2000…), stopping at the first page with no in-window
-      citer, the list end, or the `_MAX_OFFSET` (~10k) ceiling. `latest` now
-      covers the *whole* rolling window; the citers just past the boundary fill
-      the landmark middle band. **Verified on DQN: ~3k citers paged, landmark
-      relation went 16 → the full `cite_limit` (60) of real 2016–2024 citers,
-      evenly spread.** For hyper-cited seeds (AIAYN) the past-ceiling tail still
-      comes from mining — complementary. Graph expansion (`citations()`) stays
-      one page. Paired **429 hardening**: `client.request` default `tries` 4 → 6
-      (backoff to 16s) so a mega build's ~10 pages ride out sustained 429s;
-      `min_interval` is the further lever. *(From the `todos.md` inbox, 2026-07-08.)*
-- [x] **Ship B — "The current frontier" lecture** *(v3.5.0)*. New
-      `LectureMode.FRONTIER` ("The current frontier"); `_story_nodes` scopes it to
-      seed + any-relation nodes from the last ~12 months (absolute recency, not
-      relative to the seed) — so it **folds in recent `similar` nodes too**,
-      alongside the `latest` citers. `MODE_INTENTS` intent (survey the newest work
-      as current threads, distinct from EVOLUTION's full arc), figure pool wired,
-      frontend mode button + `LectureMode` type. Completeness guard added
-      (`set(MODE_INTENTS) == set(LectureMode)`).
-- [x] **Ship C — live per-relation count sliders** *(v3.6.0)*. Each `Edge`
-      carries a `rank` (its index in the relation's order — references/citations by
-      influence, latest by recency, similar by S2); the backend ships the whole
-      ranked set per relation (the `*_limit` config values became **ship counts =
-      each slider's max**, and are now **nullable** — `null` ships *everything* the
-      paper has, so the slider maxes to the full count) and the frontend slider is
-      a **pure client-side reveal** of `rank < value`, defaulting to 25, no
-      re-query. UI: a clean aligned grid (dot+label toggle · slider · `N/max`) —
-      references/**Field Landmarks**/**Latest Publications**/**Similar** (chip
-      relabel folded in). The **agent-grounding fix** rode along (it had to —
-      sliders hide nodes, so grounding is now visible ∪ discoveries, via
-      `visibleNodeIds`). Salvaged the slider UI + `rank`/grounding mechanics from
-      `stash@{0}`; dropped its `pool_limit` cap per the new design. *(Slider from
-      the `todos.md` inbox, 2026-07-06; fetch-everything + relabel + nullable limits
-      2026-07-08.)*
-
-  **→ Phase complete (A → D → B → C shipped, v3.3.0–v3.6.0).** The mega-paper
-  citation story is now: deep-paged landmark/latest split, co-citation mining for
-  the past-ceiling tail, a current-frontier lecture, and live per-relation
-  sliders over the whole ranked pool.
-
-  - **Shelved WIP — `stash@{0}`** ("WIP v3.3.0-candidate: velocity reveal-order +
-    configurable citation_pool …"), sitting on top of the earlier
-    sliders/grounding/clutter stash — **superseded by the plan above** but kept
-    for cherry-picking. Reusable bits: the **agent-grounding fix** (`GraphExplorer`
-    publishes `visibleNodesSet`; `selectGroundingNodes` → visible ∪ discoveries —
-    was browser-verified), the **clutter retune** (Timeline day-of-year spread via
-    `withinYearFraction`), the **pool_limit/rank slider mechanism** (for Ship C),
-    and a **`_velocity` helper** (`citation_count / (age + 1)`). Patrick chose to
-    keep the grounding fix + clutter retune out of Ship A for now — revisit.
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the
@@ -914,68 +959,6 @@ and closes a real coverage gap).
       Give them their own toggle alongside references / citations / similar so
       the user can hide/show them like any other relation. *(From the
       `todos.md` inbox, 2026-07-07.)*
-- [ ] **Clickable reference numbers in agent answers** — an answer's inline
-      reference markers (the `[n]` the researcher cites papers by) render as
-      bare numbers today, which tell the user nothing. Make each `[n]`
-      **clickable**, highlighting the specific graph node it refers to (reusing
-      the same `highlightIds` glow the click-to-re-light answer sections already
-      use) so a citation points at the paper on the map instead of just naming
-      an index. *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Frontend pre-commit (format + lint)** — the backend has a full
-      pre-commit hook set (`.pre-commit-config.yaml` → ruff, via
-      `uv run nox -s precommit`); the frontend has none. `oxlint` exists today
-      only as a standalone `npm run lint` script, not wired into pre-commit,
-      and there's no formatter. Add both to the pre-commit gate so frontend
-      hygiene is enforced the same way backend hygiene is.
-      *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Frontend tests** — the backend has a 291-test offline suite
-      (`uv run nox -s tests`); the frontend has none. Stand up a runner
-      (Vitest + React Testing Library is the natural fit for this Vite/React
-      app) and start covering components/hooks, mirroring the backend's
-      offline-only, no-live-API discipline.
-      *(From the `todos.md` inbox, 2026-07-07.)*
-- [x] **Mega-paper citation coverage — beat the ~10k offset ceiling**
-      *(v3.1.0)* — the
-      v3.0.0 even-by-year citation spread has a known blind spot on truly
-      mega-cited papers. S2's `/citations` endpoint returns citing papers
-      **newest-first**, offers **no server-side sort**, and **rejects any
-      request past `offset + limit` ≈ 10k** (hence `_MAX_OFFSET = 9000` in
-      `_stratified_pool`). The stratified fetch can therefore only sample
-      inside the newest ~9.2k citations — for **"Attention Is All You Need"
-      (~150k citations, tens of thousands per year)** that's the top ~6% of
-      the list, i.e. the last few months, so every stratum lands in 2026 and
-      the even-by-year selection has exactly one year-bucket to spread over.
-      Even a landmark 2019 citer (BERT-class famous) sits ~100k entries deep
-      — S2 will simply never return it through this endpoint. (DQN at ~15k
-      citations is only partly affected: offset 9000 reaches ~60% of its
-      list, back to the mid-2010s, but its oldest citers are past the
-      ceiling too.) **Decided design — the heuristic as a pool-builder, not
-      a replacement.** The final even-by-year selection stays (pure
-      most-popular would re-clump in the hot years, losing the frontier);
-      the heuristic only enriches the *pool* it selects from. Three-tier
-      dispatch in `citations()`: **≤1000** citations → single page (the
-      complete list, exact); **1k–ceiling** → stratified offset windows
-      (unchanged); **past the ceiling** → stratified windows for the
-      reachable slice PLUS **landmark mining**: harvest the reference lists
-      of the pool's most-cited recent citers (surveys are goldmines — they
-      cite every landmark), rank candidates by their own citation count, and
-      **verify each candidate actually cites the seed** before keeping it —
-      a candidate merely co-appearing in reference lists is NOT proof, and
-      the graph must never invent a citation edge (verification via one
-      batched `references.paperId` lookup). Verified landmarks join the pool
-      (influential flag unknowable → False) and even-by-year does the rest:
-      BERT-class 2018-2020 landmarks AND the 2026 frontier, honestly edged.
-      Mining is best-effort — either batch failing just degrades to the
-      reachable pool, never fails the build. (A first cut also carried a
-      `deep_citations` retry mode and adaptive client pacing, built against
-      one congested S2 night; the congestion turned out to be transient, so
-      both were dropped as overkill — the ship is mining + stratified
-      windows + even-by-year, nothing more.)
-      Alternatives kept on file: year-filtered citation queries *if* S2 ever
-      adds them (trivial then), or the S2 Datasets bulk dump (full
-      enumeration, but against the "no local corpus" philosophy). *(From a
-      live v3.0.0 session on 1706.03762, 2026-07-07; design settled same
-      day.)*
 - [ ] **OpenAlex as a second citation provider** — the structural fix for
       everything the mega-paper mining heuristic works around. OpenAlex is
       free and keyless (~10 req/s, 100k/day — far gentler limits than S2's
@@ -994,28 +977,25 @@ and closes a real coverage gap).
       parallelizing requests (asyncio) can't beat a rate limiter — the fix
       is a provider with a friendlier one. *(From a live v3.0.x session,
       2026-07-07.)*
-- [ ] **Adjustable side panels** — every docked side panel (the detail panel,
-      the assistant panel) is a fixed width today; make them all user-resizable
-      (a drag handle on the panel edge), ideally remembering the chosen size
-      across sessions. *(From the `todos.md` inbox, 2026-07-08.)*
 - [ ] **Search cache refresh override** — seed-search results are served from
       the whole-result cache (v2.0.0) with no way to bypass a stale entry; add
       a refresh/override button to the search surface, mirroring the graph's
       per-seed **Refresh** button (v2.5.0) that busts the snapshot cache.
       *(From the `todos.md` inbox, 2026-07-08.)*
-- [x] **Proper subscripts & math notation** *(v3.2.0)* — paper text surfaces
-      (titles, abstracts, TL;DRs, lecture beats, answers, search hits, figure
-      captions) now render **delimited LaTeX** (`$…$`, `$$…$$`, `\(…\)`,
-      `\[…\]`) with **KaTeX**, via a shared `frontend/src/notation/` package:
-      `<MathText>` for the DOM surfaces, `latexToUnicode` for graph node labels
-      (canvas — KaTeX can't reach it, so β₂ is a best-effort Unicode
-      approximation). Scoped to *delimited* math only — bare "CO2"/"H2O" is left
-      alone (auto-subscripting digits misfires on "GPT4", "COVID19"). Shipping
-      it surfaced a backend bug: ar5iv figure captions arrived as tripled MathML
-      soup (`subscriptitalic-ϵ…`); the fix emits each `<math>`'s clean `alttext`
-      LaTeX instead — see [BUGS.md](BUGS.md). Deferred to a later ticket:
-      user-uploaded source titles and researcher trace chips.
-      *(From the `todos.md` inbox, 2026-07-08; shipped 2026-07-08.)*
+
+### UI & rendering polish
+
+- [ ] **Clickable reference numbers in agent answers** — an answer's inline
+      reference markers (the `[n]` the researcher cites papers by) render as
+      bare numbers today, which tell the user nothing. Make each `[n]`
+      **clickable**, highlighting the specific graph node it refers to (reusing
+      the same `highlightIds` glow the click-to-re-light answer sections already
+      use) so a citation points at the paper on the map instead of just naming
+      an index. *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **Adjustable side panels** — every docked side panel (the detail panel,
+      the assistant panel) is a fixed width today; make them all user-resizable
+      (a drag handle on the panel edge), ideally remembering the chosen size
+      across sessions. *(From the `todos.md` inbox, 2026-07-08.)*
 - [ ] **Q&A answers need full Markdown + LaTeX rendering** — the research
       agent's answers come back as **Markdown**, but `ChatMessage.tsx` renders
       the prose as plain text wrapped in `<MathText>` (v3.2.0): LaTeX math now
@@ -1040,6 +1020,50 @@ and closes a real coverage gap).
       to **stream progress** (frontier hops fetched / total, or a coarse stage
       count) the same way, not just a frontend change. *(From the `todos.md`
       inbox, 2026-07-08.)*
+
+
+### Frontend quality
+
+- [ ] **Frontend pre-commit (format + lint)** — the backend has a full
+      pre-commit hook set (`.pre-commit-config.yaml` → ruff, via
+      `uv run nox -s precommit`); the frontend has none. `oxlint` exists today
+      only as a standalone `npm run lint` script, not wired into pre-commit,
+      and there's no formatter. Add both to the pre-commit gate so frontend
+      hygiene is enforced the same way backend hygiene is.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+- [ ] **Frontend tests** — the backend has a 291-test offline suite
+      (`uv run nox -s tests`); the frontend has none. Stand up a runner
+      (Vitest + React Testing Library is the natural fit for this Vite/React
+      app) and start covering components/hooks, mirroring the backend's
+      offline-only, no-live-API discipline.
+      *(From the `todos.md` inbox, 2026-07-07.)*
+
+### Enhancements & tech debt
+
+- [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
+      `todos.md` inbox, 2026-07-08.)*
+- [ ] **Cached papers don't match the query agent's expanded query** — papers
+      served from the local sources cache don't seem to line up with the query
+      the query-analyst expanded to, so the researcher may ground on the wrong
+      cached hits. Investigate the retrieval/cache-key path vs. the expanded
+      query (query_analyst → researcher/retrieval). *(From the `todos.md` inbox,
+      2026-07-08.)*
+- [ ] **Graph build should survive S2 being down without trapping the user** —
+      if Semantic Scholar is unavailable mid-build, the error message should be
+      **dismissible** and the graph currently on screen restored (it must not stay
+      greyed out). Frontend error handling around `fetchGraph`/`GraphExplorer`.
+      *(From the `todos.md` inbox, 2026-07-08.)*
+
+
+### Larger phases
+
+- [ ] **Phase 5 — Concept mindmap** — Claude concept-map JSON, "bridge two
+      topics," `/api/mindmap`.
+- [ ] **Phase 6 — Audio lecture** — Podcastfy integration, Edge TTS default,
+      ElevenLabs optional, `/api/lecture/audio`.
+- [ ] **Phase 7 — Polished media (optional)** — `autocontent.py` behind
+      `AUTOCONTENT_API_KEY`; "Generate visuals" button.
+
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
