@@ -667,7 +667,7 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
         routes hydrate their TL;DRs (via S2) and re-seed them unchanged.
       - **Metered pricing handled** — free API key $1/day, keyless $0.10/day,
         id/DOI lookups free; a per-seed build is a handful of filter calls.
-        `OPENALEX_API_KEY` optional (`config.openalex`). *(Browser-tested on
+        `OPENALEX_API_KEY` optional (`config.providers.openalex`). *(Browser-tested on
         hawking radiation / attention / dqn, 2026-07-09.)*
 - [x] **Latest Publications slider reveals oldest-first** *(v4.1.0)* — the
       reveal slider used to surface the newest citers first and work *backward*
@@ -972,6 +972,20 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       Windows support at all (Patrick's primary machine), while mise runs on
       Windows *and* macOS and reads the same asdf-format `.tool-versions`, so
       the pin file stays portable either way.
+- [x] **Config reorg: data APIs grouped under `providers`** *(v4.3.0)* — the
+      top-level `s2` and `openalex` config groups moved into one
+      **`providers`** object (`config.providers.s2.*`,
+      `config.providers.openalex.*`), mirroring how `llm.providers` groups
+      the LLM vendors — connection settings (keys, URLs, timeouts,
+      throttles) now live together per external data API, and adding a
+      future source is a field, not a redesign. The LLM vendor model was
+      renamed `ProvidersConfig` → `LLMProvidersConfig` so the two
+      "providers" concepts can't collide in code. Mechanical rename across
+      ~10 consumer modules + tests + docs (`docs/configuration.md` gained a
+      `providers` section with an OpenAlex subsection). **Breaking for
+      `config.json`** (it's gitignored and single-user, so shipped as a
+      minor by agreement): move your `s2`/`openalex` blocks under
+      `"providers": { ... }` — values unchanged.
 
 ## Backlog — not yet shipped
 

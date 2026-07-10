@@ -66,7 +66,7 @@ def get_papers(paper_ids: list[str], fields: str = nodes.DETAIL_FIELDS) -> dict[
     if not paper_ids:
         return {}
     out: dict[str, dict] = {}
-    url = f"{config.s2.graph_url}/paper/batch?fields={urllib.parse.quote(fields)}"
+    url = f"{config.providers.s2.graph_url}/paper/batch?fields={urllib.parse.quote(fields)}"
     for start in range(0, len(paper_ids), _BATCH_MAX):
         chunk = paper_ids[start : start + _BATCH_MAX]
         data = client.request(url, method="POST", body={"ids": chunk})
@@ -153,7 +153,7 @@ def _fetch_page(path: str, key: str, limit: int, offset: int = 0) -> list[dict]:
         client.S2Error: When the request fails after retries.
     """
     url = (
-        f"{config.s2.graph_url}/paper/{path}"
+        f"{config.providers.s2.graph_url}/paper/{path}"
         f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}&offset={offset}"
     )
     data = client.request(url)
@@ -360,7 +360,7 @@ def recommendations(paper_id: str, limit: int | None, pool: str | None = None) -
     # S2's maximum, 500.
     page = limit if limit is not None else 500
     url = (
-        f"{config.s2.recs_url}/papers/forpaper/{client.quote(paper_id)}"
+        f"{config.providers.s2.recs_url}/papers/forpaper/{client.quote(paper_id)}"
         f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={page}&from={pool}"
     )
     data = client.request(url)

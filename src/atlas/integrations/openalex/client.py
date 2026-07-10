@@ -63,10 +63,10 @@ def throttle() -> None:
         None.
     """
     global _last_request
-    if config.openalex.min_interval <= 0:
+    if config.providers.openalex.min_interval <= 0:
         return
     with _throttle_lock:
-        wait = config.openalex.min_interval - (time.monotonic() - _last_request)
+        wait = config.providers.openalex.min_interval - (time.monotonic() - _last_request)
         if wait > 0:
             time.sleep(wait)
         _last_request = time.monotonic()
@@ -80,10 +80,10 @@ def _with_credentials(params: dict[str, str]) -> dict[str, str]:
     omitted (keyless still works, just on the smaller $0.10/day pool).
     """
     merged = dict(params)
-    if config.openalex.mailto:
-        merged["mailto"] = config.openalex.mailto
-    if config.openalex.api_key:
-        merged["api_key"] = config.openalex.api_key
+    if config.providers.openalex.mailto:
+        merged["mailto"] = config.providers.openalex.mailto
+    if config.providers.openalex.api_key:
+        merged["api_key"] = config.providers.openalex.api_key
     return merged
 
 
@@ -98,7 +98,7 @@ def works_url(params: dict[str, str]) -> str:
         The fully-encoded ``{base_url}/works?...`` URL.
     """
     query = urllib.parse.urlencode(_with_credentials(params))
-    return f"{config.openalex.base_url}/works?{query}"
+    return f"{config.providers.openalex.base_url}/works?{query}"
 
 
 def entity_url(entity_id: str, params: dict[str, str] | None = None) -> str:
@@ -117,7 +117,7 @@ def entity_url(entity_id: str, params: dict[str, str] | None = None) -> str:
     """
     quoted = urllib.parse.quote(entity_id, safe=":/")
     query = urllib.parse.urlencode(_with_credentials(params or {}))
-    return f"{config.openalex.base_url}/works/{quoted}?{query}"
+    return f"{config.providers.openalex.base_url}/works/{quoted}?{query}"
 
 
 def request(url: str, *, tries: int = 5) -> object:
@@ -142,7 +142,7 @@ def request(url: str, *, tries: int = 5) -> object:
         throttle()
         http_request = urllib.request.Request(url, headers=headers, method="GET")
         try:
-            with urllib.request.urlopen(http_request, timeout=config.openalex.timeout) as response:
+            with urllib.request.urlopen(http_request, timeout=config.providers.openalex.timeout) as response:
                 return json.loads(response.read().decode())
         except urllib.error.HTTPError as exc:
             last_error = exc

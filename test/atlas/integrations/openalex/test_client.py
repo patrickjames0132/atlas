@@ -30,8 +30,8 @@ def _query(url):
 
 
 def test_works_url_adds_mailto_and_api_key(monkeypatch):
-    monkeypatch.setattr(config.openalex, "mailto", "me@x.org")
-    monkeypatch.setattr(config.openalex, "api_key", "SECRET")
+    monkeypatch.setattr(config.providers.openalex, "mailto", "me@x.org")
+    monkeypatch.setattr(config.providers.openalex, "api_key", "SECRET")
     params = _query(client.works_url({"filter": "cites:W1", "sort": "cited_by_count:desc"}))
     assert params["mailto"] == "me@x.org"
     assert params["api_key"] == "SECRET"
@@ -39,15 +39,15 @@ def test_works_url_adds_mailto_and_api_key(monkeypatch):
 
 
 def test_works_url_omits_empty_credentials(monkeypatch):
-    monkeypatch.setattr(config.openalex, "mailto", "")
-    monkeypatch.setattr(config.openalex, "api_key", "")
+    monkeypatch.setattr(config.providers.openalex, "mailto", "")
+    monkeypatch.setattr(config.providers.openalex, "api_key", "")
     params = _query(client.works_url({"filter": "cites:W1"}))
     assert "mailto" not in params and "api_key" not in params
 
 
 def test_entity_url_keeps_doi_colon_and_slash(monkeypatch):
-    monkeypatch.setattr(config.openalex, "mailto", "")
-    monkeypatch.setattr(config.openalex, "api_key", "")
+    monkeypatch.setattr(config.providers.openalex, "mailto", "")
+    monkeypatch.setattr(config.providers.openalex, "api_key", "")
     url = client.entity_url("doi:10.1038/248030a0", {"select": "id"})
     assert "/works/doi:10.1038/248030a0?" in url
 

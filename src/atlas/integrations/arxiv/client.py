@@ -38,7 +38,7 @@ def fetch_html(arxiv_id: str) -> str | None:
     url = f"{BASE_URL}/html/{urllib.parse.quote(arxiv_id)}"
     request = urllib.request.Request(url, headers=_USER_AGENT)
     try:
-        with urllib.request.urlopen(request, timeout=config.s2.timeout) as response:
+        with urllib.request.urlopen(request, timeout=config.providers.s2.timeout) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             return response.read().decode(charset, "replace")
     except urllib.error.HTTPError as exc:
@@ -82,5 +82,5 @@ def fetch_image(url: str) -> tuple[bytes, str]:
         urllib.error.URLError: On network failures.
     """
     request = urllib.request.Request(url, headers=_USER_AGENT)
-    with urllib.request.urlopen(request, timeout=config.s2.timeout) as response:
+    with urllib.request.urlopen(request, timeout=config.providers.s2.timeout) as response:
         return response.read(), response.headers.get_content_type() or "image/png"

@@ -82,7 +82,7 @@ vocab.py        — the bundled taxonomy: what categories exist + their labels
   stays here for now (one other consumer); if Phase 3 shows it's needed more
   broadly it may be extracted into a standalone module then — not speculatively
   now.
-- **The ar5iv fetches reuse `config.s2.timeout`** — Semantic Scholar's timeout,
+- **The ar5iv fetches reuse `config.providers.s2.timeout`** — Semantic Scholar's timeout,
   not a dedicated ar5iv one. A pre-existing quirk carried over rather than
   inventing a config field with no documented need yet.
 - **A miss is cached too.** When ar5iv has no render (404 — a LaTeX-conversion

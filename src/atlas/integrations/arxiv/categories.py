@@ -53,7 +53,7 @@ def fetch_categories(arxiv_id: str) -> list[str] | None:
     """
     url = f"{BASE_URL}?id_list={urllib.parse.quote(arxiv_id)}"
     request = urllib.request.Request(url, headers=_USER_AGENT)
-    with urllib.request.urlopen(request, timeout=config.s2.timeout) as response:
+    with urllib.request.urlopen(request, timeout=config.providers.s2.timeout) as response:
         body = response.read()
     root = ET.fromstring(body)
     entry = root.find(f"{_ATOM_NS}entry")

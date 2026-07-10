@@ -45,7 +45,7 @@ code_links.py — normalizes the typed PaperInfo into the detail-panel envelope
   `sentence-transformers` already pulls it in transitively — the marginal
   install cost is zero, and relying on a transitive dependency for a direct
   import is fragile.
-- **No `config.s2.timeout` borrow.** The original hand-rolled version reused
+- **No `config.providers.s2.timeout` borrow.** The original hand-rolled version reused
   Semantic Scholar's timeout for its HTTP call (a documented quirk, shared with
   `ar5iv`). The library owns HTTP now, so that quirk is simply gone.
 - **A miss is cached too**, same pattern as `ar5iv`: a paper HF has never

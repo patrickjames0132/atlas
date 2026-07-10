@@ -113,7 +113,7 @@ def fetch_url(url: str) -> tuple[str, str | None]:
     """
     request = urllib.request.Request(url, headers={"User-Agent": "atlas/1.1"})
     try:
-        with urllib.request.urlopen(request, timeout=config.s2.timeout) as response:
+        with urllib.request.urlopen(request, timeout=config.providers.s2.timeout) as response:
             raw = response.read()
     except (urllib.error.URLError, urllib.error.HTTPError) as exc:
         raise SourceError(f"Couldn't fetch {url}: {exc}") from exc

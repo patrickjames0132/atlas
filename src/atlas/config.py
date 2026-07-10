@@ -16,7 +16,7 @@ fields at once) see docs/configuration.md.
 
 The models are mutable on purpose: the test suite's autouse ``_isolate``
 fixture points ``config.storage.data_dir`` at a per-test temp directory
-and zeroes ``config.s2.min_interval`` so tests never touch real data or
+and zeroes ``config.providers.s2.min_interval`` so tests never touch real data or
 sleep. Keep field lookups late (``config.x.y`` at call time, not a
 module-level ``from ... import y``) so those overrides are seen.
 """
@@ -152,6 +152,20 @@ class OpenAlexConfig(ConfigModel):
     )
 
 
+class ProvidersConfig(ConfigModel):
+    """The external data APIs the graph is built from, one sub-object per
+    service.
+
+    Groups the academic-data backbones (Semantic Scholar, OpenAlex) the same
+    way ``llm.providers`` groups the LLM vendors: connection settings — keys,
+    URLs, timeouts, throttles — live together, per service. Adding a data
+    source later is purely additive: a new field here, no redesign.
+    """
+
+    s2: SemanticScholarConfig
+    openalex: OpenAlexConfig
+
+
 class GraphConfig(ConfigModel):
     """How big a neighborhood one seed paper pulls onto the canvas.
 
@@ -220,7 +234,7 @@ class AnthropicConfig(ConfigModel):
     api_key: str = Field(description="Key from https://console.anthropic.com.")
 
 
-class ProvidersConfig(ConfigModel):
+class LLMProvidersConfig(ConfigModel):
     """Backend LLM providers this app can reach, keyed by vendor name.
 
     One sub-object per vendor — mirrors PydanticAI's own per-vendor
@@ -229,6 +243,8 @@ class ProvidersConfig(ConfigModel):
     but adding a vendor later is purely additive: a new field here, no
     redesign. Every ``AgentConfig.model``'s ``"<provider>:<model>"`` prefix
     must name a vendor configured here (``LLMConfig`` validates this).
+    (Distinct from the top-level ``providers`` group, which holds the
+    external *data* APIs — S2, OpenAlex.)
     """
 
     anthropic: AnthropicConfig
@@ -287,7 +303,7 @@ class LLMConfig(ConfigModel):
     that's a local embedding model for search, not a chat/tool-use LLM.
     """
 
-    providers: ProvidersConfig
+    providers: LLMProvidersConfig
     agents: list[AgentConfig] = Field(min_length=1, description="Every agent the app can run.")
 
     @model_validator(mode="after")
@@ -303,7 +319,7 @@ class LLMConfig(ConfigModel):
     def _agent_providers_are_configured(self) -> LLMConfig:
         """An agent naming an unconfigured vendor would fail at first request,
         not at load — catch it here instead."""
-        configured = ProvidersConfig.model_fields.keys()
+        configured = LLMProvidersConfig.model_fields.keys()
         for agent in self.agents:
             if agent.provider not in configured:
                 raise ValueError(
@@ -424,8 +440,7 @@ class Config(ConfigModel):
     """All configuration, grouped by the part of the app that consumes it."""
 
     storage: StorageConfig
-    s2: SemanticScholarConfig
-    openalex: OpenAlexConfig
+    providers: ProvidersConfig
     graph: GraphConfig
     sources: SourcesConfig
     server: ServerConfig

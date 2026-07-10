@@ -138,8 +138,8 @@ OpenAlex meters usage: a free API key grants **$1/day**, the keyless `mailto`
 polite pool **$0.10/day**. **Id/DOI lookups are free**; search/filter costs ~$1
 per 1,000 calls. A per-seed citation build is a handful of filter calls, so the
 free tier is ample — but `client.throttle()` still paces requests to
-`config.openalex.min_interval` (default 0.2s; OpenAlex allows ~10 req/s), a
-separate budget/lock from the S2 client. Set `config.openalex.api_key` to lift
+`config.providers.openalex.min_interval` (default 0.2s; OpenAlex allows ~10 req/s), a
+separate budget/lock from the S2 client. Set `config.providers.openalex.api_key` to lift
 to the $1/day pool; `mailto` is the courteous default even keyless.
 
 ## Who uses it

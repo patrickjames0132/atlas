@@ -7,7 +7,14 @@
 setting does. This page is for the **why** behind specific example values,
 where a JSON file (no comments allowed) can't say it.
 
-## `s2` — Semantic Scholar
+## `providers` — external data APIs
+
+The academic-data backbones the graph is built from, one sub-object per
+service (`providers.s2`, `providers.openalex`) — grouped the same way
+`llm.providers` groups the LLM vendors (which live separately under `llm`,
+because those are chat/tool-use credentials, not graph data sources).
+
+### `providers.s2` — Semantic Scholar
 
 - **`min_interval: 1.1`** — even an authenticated API key only allows ~1
   request/second on the graph endpoints. Waiting 1.1s between requests up
@@ -17,6 +24,15 @@ where a JSON file (no comments allowed) can't say it.
   rate-limited. A free key from
   [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api)
   lifts that ceiling substantially.
+
+### `providers.openalex` — OpenAlex
+
+- **`min_interval: 0.1`** — OpenAlex allows ~10 req/s, so a light throttle
+  suffices; its budget/lock is separate from the S2 client's.
+- **`mailto`** joins OpenAlex's "polite pool" (faster, more reliable) even
+  keyless; a free `api_key` grants $1/day of metered usage vs $0.10 keyless
+  (id/DOI lookups are free either way — see `config.py` for the pricing
+  notes, verified live 2026-07-09).
 
 ## `graph` — neighborhood size
 

@@ -64,7 +64,7 @@ def search_papers(
         params["year"] = year
     if fields_of_study:
         params["fieldsOfStudy"] = ",".join(fields_of_study)
-    url = f"{config.s2.graph_url}/paper/search?{urllib.parse.urlencode(params)}"
+    url = f"{config.providers.s2.graph_url}/paper/search?{urllib.parse.urlencode(params)}"
     data = client.request(url)
     papers = (data.get("data") or []) if isinstance(data, dict) else []
     return nodes.from_papers(papers)
@@ -89,7 +89,7 @@ def match_title(title: str) -> dict | None:
             other than the no-match 404).
     """
     params = {"query": title, "fields": nodes.SEARCH_FIELDS}
-    url = f"{config.s2.graph_url}/paper/search/match?{urllib.parse.urlencode(params)}"
+    url = f"{config.providers.s2.graph_url}/paper/search/match?{urllib.parse.urlencode(params)}"
     try:
         data = client.request(url)
     except client.S2Error as exc:

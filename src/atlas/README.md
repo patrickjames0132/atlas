@@ -20,7 +20,7 @@ app that consumes it:
 
 ```
 config.storage    — the three SQLite database paths
-config.s2         — Semantic Scholar connection settings
+config.providers.s2         — Semantic Scholar connection settings
 config.graph      — how big a neighborhood one seed pulls onto the canvas
 config.sources    — bring-your-own sources: embedding, chunking, retrieval
 config.server     — Flask host/port/debug
@@ -71,7 +71,7 @@ README only covers the shape and the big decisions.
   `/api/sources`) — "library" invited confusion with Python packages.
 - **Mutable on purpose.** The config groups aren't frozen — the test
   suite's autouse `_isolate` fixture overrides `config.storage.data_dir`
-  and `config.s2.min_interval` per test. Consumers should read
+  and `config.providers.s2.min_interval` per test. Consumers should read
   `config.x.y` at call time, not bind it to a module-level constant at
   import time, so those overrides are actually seen.
 
@@ -84,7 +84,7 @@ truth, not a per-feature dependency. By subsystem:
   read `config.storage.*` for where each SQLite file lives, and call
   `ensure_dirs()` before first use so a fresh checkout needs no setup step.
 - **Semantic Scholar client** (`integrations/semantic_scholar/`) reads
-  `config.s2.*` (api key, URLs, timeout, throttle interval) to build every
+  `config.providers.s2.*` (api key, URLs, timeout, throttle interval) to build every
   HTTP request and self-throttle, and `config.graph.recs_pool` to pick the
   recommendation candidate pool.
 - **Graph assembly** (`services/graph.py`, `teacher/neighbors.py` — not yet

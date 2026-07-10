@@ -35,8 +35,8 @@ def _isolate(monkeypatch, tmp_path):
     them all. Zeroing the ``min_interval`` throttles keeps tests from sleeping.
     """
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
-    monkeypatch.setattr(config.s2, "min_interval", 0.0)
-    monkeypatch.setattr(config.openalex, "min_interval", 0.0)
+    monkeypatch.setattr(config.providers.s2, "min_interval", 0.0)
+    monkeypatch.setattr(config.providers.openalex, "min_interval", 0.0)
 
 
 # --- deterministic offline embeddings -----------------------------------------

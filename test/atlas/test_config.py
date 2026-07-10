@@ -121,7 +121,7 @@ def test_agent_provider_must_be_configured():
     [
         (("graph", "recs_pool"), "trending"),  # not one of the two known pools
         (("server", "port"), 70000),  # not a TCP port
-        (("s2", "timeout"), -5),  # negative timeout is nonsense
+        (("providers", "s2", "timeout"), -5),  # negative timeout is nonsense
         (("llm", "agents", 0, "model"), ""),  # a blank model name can't be called
         (("llm", "agents", 0, "id"), ""),  # a blank id can't be looked up
     ],

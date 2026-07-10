@@ -93,13 +93,14 @@ environment variables, ever). Every field is required and validated at startup
 by Pydantic; the value-by-value rationale lives in
 [docs/configuration.md](docs/configuration.md). The two keys that matter:
 
-- **`s2.api_key`** — a free
+- **`providers.s2.api_key`** — a free
   [Semantic Scholar API key](https://www.semanticscholar.org/product/api).
   Optional but strongly recommended; the unauthenticated pool is tight.
-- **`openalex.api_key`** — optional. OpenAlex (the citation source) runs keyless
+- **`providers.openalex.api_key`** — optional. OpenAlex (the citation source)
+  runs keyless
   on its `mailto` polite pool ($0.10/day of metered search — plenty for browsing);
   a free key at [openalex.org/settings/api](https://openalex.org/settings/api)
-  lifts it to $1/day. Set `openalex.mailto` to your email either way.
+  lifts it to $1/day. Set `providers.openalex.mailto` to your email either way.
 - **`llm.providers.anthropic.api_key`** — powers the whole agent crew
   (lecture, research Q&A, library chat, query analysis). The per-agent model
   choices live under `llm.agents`.
