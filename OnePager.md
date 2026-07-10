@@ -1090,6 +1090,23 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
+- [ ] **Verify slider reveal order is most-cited-first** — every relation
+      slider except Latest Publications is supposed to reveal by
+      **citation rank** (references/citations/landmarks: most-cited first;
+      latest is deliberately oldest-first per v4.1.0; similar by S2
+      similarity). Verify the shipped `rank` actually reflects that on both
+      citation sources — the OpenAlex primary path *and* the S2 fallback —
+      and fix wherever it doesn't; a pinned test per relation would keep it
+      true. *(From the `todos.md` inbox, 2026-07-09.)*
+- [ ] **Confirm Latest Publications really comes from OpenAlex** — Patrick's
+      observation suggests latest citers may still be arriving via the old
+      S2 offset paging in practice. Since v4.0.0 OpenAlex owns the citation
+      relations, with S2 only as the *fallback* when OpenAlex can't resolve
+      the seed — so either the fallback is engaging more often than expected
+      (silently?), or a path still calls the S2 traversal directly. Audit
+      `services/graph/build.py`'s `_citation_relations` + logs (`data/atlas.log`
+      records the source), make the chosen source visible/loggable per build,
+      and fix any stray S2 usage. *(From the `todos.md` inbox, 2026-07-09.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the
@@ -1151,6 +1168,18 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
+- [ ] **Enforce docstrings in the gate, both languages** — make "every
+      function documented" a *checked* invariant instead of a convention:
+      - **Backend:** turn on ruff's pydocstyle rules (`D` family) in the
+        existing pre-commit ruff hook so a missing docstring fails the gate;
+        sweep the stragglers whose docstrings lack **Args / Returns /
+        Raises** sections where applicable (completeness beyond D-rules may
+        need `pydoclint` or the darglint-style checkers — evaluate).
+      - **Frontend:** many functions still lack JSDoc; add it everywhere
+        with backend-style structure (description + `@param`/`@returns`/
+        `@throws` where applicable) and enforce via oxlint's jsdoc plugin
+        rules (e.g. `require-returns`, `require-param`) so new code can't
+        regress. *(From the `todos.md` inbox, 2026-07-09.)*
 - [ ] **Dynamic OpenAlex latest-window sizing** — the "Latest Publications"
       per-year bands + newest window (`config.graph.latest_band_years` /
       `latest_per_year`) are a **fixed** span today. But how far back the recent
