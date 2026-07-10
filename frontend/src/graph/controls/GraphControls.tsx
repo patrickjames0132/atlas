@@ -85,10 +85,7 @@ export default function GraphControls({
         <button className={layout === 'force' ? 'on' : ''} onClick={() => onLayout('force')}>
           Force
         </button>
-        <button
-          className={layout === 'timeline' ? 'on' : ''}
-          onClick={() => onLayout('timeline')}
-        >
+        <button className={layout === 'timeline' ? 'on' : ''} onClick={() => onLayout('timeline')}>
           Timeline
         </button>
       </div>

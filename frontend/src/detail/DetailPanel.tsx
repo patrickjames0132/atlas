@@ -133,12 +133,22 @@ function CodeSection({ code }: { code: CodeLinksResponse }) {
         />
       )}
       {code.models.slice(0, 3).map((model) => (
-        <CodeRow key={model.id} href={model.url} icon="🤖" label={model.id}
-          meta={model.likes > 0 ? `♥ ${fmtCount(model.likes)}` : undefined} />
+        <CodeRow
+          key={model.id}
+          href={model.url}
+          icon="🤖"
+          label={model.id}
+          meta={model.likes > 0 ? `♥ ${fmtCount(model.likes)}` : undefined}
+        />
       ))}
       {code.datasets.slice(0, 2).map((dataset) => (
-        <CodeRow key={dataset.id} href={dataset.url} icon="🗃" label={dataset.id}
-          meta={dataset.likes > 0 ? `♥ ${fmtCount(dataset.likes)}` : undefined} />
+        <CodeRow
+          key={dataset.id}
+          href={dataset.url}
+          icon="🗃"
+          label={dataset.id}
+          meta={dataset.likes > 0 ? `♥ ${fmtCount(dataset.likes)}` : undefined}
+        />
       ))}
       {code.spaces.slice(0, 2).map((space) => (
         <CodeRow key={space.id} href={space.url} icon={space.emoji || '🚀'} label={space.id} />
@@ -193,8 +203,8 @@ export default function DetailPanel({
       <div className="detail-meta">
         {node.authors && <div>{node.authors}</div>}
         <div>
-          {formatPubDate(node.pub_date, node.year)} ·{' '}
-          {(node.citation_count ?? 0).toLocaleString()} citations
+          {formatPubDate(node.pub_date, node.year)} · {(node.citation_count ?? 0).toLocaleString()}{' '}
+          citations
         </div>
       </div>
       <CategoryTags categories={categories} fieldsOfStudy={node.fields_of_study ?? []} />
@@ -248,7 +258,11 @@ export default function DetailPanel({
                 title="Click to enlarge"
                 aria-label="Enlarge figure"
               >
-                <img src={figure.image} alt={figure.caption || `Figure ${index + 1}`} loading="lazy" />
+                <img
+                  src={figure.image}
+                  alt={figure.caption || `Figure ${index + 1}`}
+                  loading="lazy"
+                />
               </button>
               {figure.caption && (
                 <figcaption>

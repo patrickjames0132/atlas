@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" vite.config.ts",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" vite.config.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -30,6 +32,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "oxlint": "^1.69.0",
+    "prettier": "3.8.4",
     "typescript": "~6.0.2",
     "vite": "^8.1.0"
   }

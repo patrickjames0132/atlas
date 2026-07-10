@@ -17,7 +17,13 @@ import type { FormEvent } from 'react'
 import { listSources } from './api'
 import { ID_RE } from './graph/model'
 import { useAppDispatch, useAppSelector } from './store'
-import { errorSet, loadGraph, restoreSession, saveWorkspace, workspaceCleared } from './store/workspace'
+import {
+  errorSet,
+  loadGraph,
+  restoreSession,
+  saveWorkspace,
+  workspaceCleared,
+} from './store/workspace'
 import { useSeedSearch } from './search/useSeedSearch'
 import AtlasHeader from './header/AtlasHeader'
 import GraphExplorer from './graph/GraphExplorer'
@@ -62,8 +68,16 @@ export default function Atlas() {
     [dispatch],
   )
   const {
-    query, setQuery, filters, setFilters,
-    hits, localHits, searching, liveFailed, runSearch, clearHits,
+    query,
+    setQuery,
+    filters,
+    setFilters,
+    hits,
+    localHits,
+    searching,
+    liveFailed,
+    runSearch,
+    clearHits,
   } = useSeedSearch(onSearchError)
 
   /** Load a graph and dismiss any open search results. */
@@ -155,11 +169,18 @@ export default function Atlas() {
                 <span className="spin" /> {buildProgress?.label ?? 'Building graph…'}
               </div>
               {buildProgress && (
-                <div className="build-progress" role="progressbar"
-                  aria-valuenow={buildProgress.done} aria-valuemin={0} aria-valuemax={buildProgress.total}>
+                <div
+                  className="build-progress"
+                  role="progressbar"
+                  aria-valuenow={buildProgress.done}
+                  aria-valuemin={0}
+                  aria-valuemax={buildProgress.total}
+                >
                   <div
                     className="build-progress-fill"
-                    style={{ width: `${Math.round((buildProgress.done / buildProgress.total) * 100)}%` }}
+                    style={{
+                      width: `${Math.round((buildProgress.done / buildProgress.total) * 100)}%`,
+                    }}
                   />
                 </div>
               )}
@@ -170,8 +191,7 @@ export default function Atlas() {
           )}
           {!hasGraph && !loading && !hits && !error && (
             <div className="overlay hint">
-              Search for a paper to map its citations, references, and similar
-              work.
+              Search for a paper to map its citations, references, and similar work.
               {libraryCount > 0 && (
                 <>
                   <div className="hint-or">— or —</div>

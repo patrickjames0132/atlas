@@ -92,33 +92,30 @@ export const loadGraph = createAsyncThunk(
  * rate-limit cost and the exact discovered papers are preserved). The
  * transcript slice restores itself from this thunk's payload.
  */
-export const restoreSession = createAsyncThunk(
-  'workspace/restoreSession',
-  async (id: string) => {
-    const saved = await getSession(id)
-    const data = saved.data
-    const graph: GraphResponse = {
-      seed: {
-        id: data.seed.id,
-        arxiv_id: data.seed.arxiv_id ?? null,
-        title: data.seed.title,
-      },
-      nodes: data.nodes,
-      edges: data.edges,
-      counts: countRels(data.nodes),
-    }
-    return {
-      graph,
-      layout: data.layout ?? ('timeline' as const),
-      // (Old saves may carry a hist_trace field from the retired lecture
-      // backfill — ignored; lectures no longer expand the graph.)
-      transcript: {
-        chat: data.chat ?? [],
-        beats: data.beats ?? [],
-      },
-    }
-  },
-)
+export const restoreSession = createAsyncThunk('workspace/restoreSession', async (id: string) => {
+  const saved = await getSession(id)
+  const data = saved.data
+  const graph: GraphResponse = {
+    seed: {
+      id: data.seed.id,
+      arxiv_id: data.seed.arxiv_id ?? null,
+      title: data.seed.title,
+    },
+    nodes: data.nodes,
+    edges: data.edges,
+    counts: countRels(data.nodes),
+  }
+  return {
+    graph,
+    layout: data.layout ?? ('timeline' as const),
+    // (Old saves may carry a hist_trace field from the retired lecture
+    // backfill — ignored; lectures no longer expand the graph.)
+    transcript: {
+      chat: data.chat ?? [],
+      beats: data.beats ?? [],
+    },
+  }
+})
 
 /**
  * Save the current workspace. The store IS the source of truth: the graph's
@@ -139,9 +136,7 @@ export const saveWorkspace = createAsyncThunk<
     seed: graph.seed,
     layout: workspace.layout,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
-    nodes: [...graph.nodes, ...workspace.discoveredNodes].map((node) =>
-      cleanNode(node as VNode),
-    ),
+    nodes: [...graph.nodes, ...workspace.discoveredNodes].map((node) => cleanNode(node as VNode)),
     edges: [...graph.edges, ...workspace.discoveredEdges],
     chat: transcript.chat,
     beats: transcript.beats,
@@ -153,10 +148,7 @@ const workspaceSlice = createSlice({
   initialState,
   reducers: {
     /** Merge a discovery event, deduped against the graph and prior finds. */
-    discoveryMerged(
-      state,
-      action: PayloadAction<{ nodes: GraphNode[]; edges: GraphEdge[] }>,
-    ) {
+    discoveryMerged(state, action: PayloadAction<{ nodes: GraphNode[]; edges: GraphEdge[] }>) {
       if (!state.graph) return
       const knownIds = new Set([
         ...state.graph.nodes.map((node) => node.id),
@@ -168,9 +160,7 @@ const workspaceSlice = createSlice({
         state.discoveredNodes.push(node)
       }
       const edgeKey = (edge: GraphEdge) => `${edge.source}|${edge.target}|${edge.type}`
-      const knownEdges = new Set(
-        [...state.graph.edges, ...state.discoveredEdges].map(edgeKey),
-      )
+      const knownEdges = new Set([...state.graph.edges, ...state.discoveredEdges].map(edgeKey))
       for (const edge of action.payload.edges) {
         if (knownEdges.has(edgeKey(edge))) continue
         knownEdges.add(edgeKey(edge))
@@ -241,8 +231,7 @@ const workspaceSlice = createSlice({
         state.graph = action.payload.graph
         // A restore has no cached-snapshot origin; refreshing it does a real
         // S2 rebuild, best-effort keyed by the seed's arXiv id (else paperId).
-        state.seedRef =
-          action.payload.graph.seed.arxiv_id ?? action.payload.graph.seed.id
+        state.seedRef = action.payload.graph.seed.arxiv_id ?? action.payload.graph.seed.id
         state.discoveredNodes = []
         state.discoveredEdges = []
         state.visibleNodeIds = []

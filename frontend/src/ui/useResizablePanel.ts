@@ -39,10 +39,7 @@ export function useResizablePanel(
   defaultWidth: number,
   { min = 280, max = 680 }: ResizeBounds = {},
 ): ResizablePanel {
-  const clamp = useCallback(
-    (value: number) => Math.min(max, Math.max(min, value)),
-    [min, max],
-  )
+  const clamp = useCallback((value: number) => Math.min(max, Math.max(min, value)), [min, max])
 
   const [width, setWidth] = useState<number>(() => {
     const stored = Number(localStorage.getItem(storageKey))
@@ -56,14 +53,11 @@ export function useResizablePanel(
   const widthRef = useRef(width)
   widthRef.current = width
 
-  const onHandlePointerDown = useCallback(
-    (event: ReactPointerEvent) => {
-      event.preventDefault()
-      origin.current = { startX: event.clientX, startWidth: widthRef.current }
-      setDragging(true)
-    },
-    [],
-  )
+  const onHandlePointerDown = useCallback((event: ReactPointerEvent) => {
+    event.preventDefault()
+    origin.current = { startX: event.clientX, startWidth: widthRef.current }
+    setDragging(true)
+  }, [])
 
   useEffect(() => {
     if (!dragging) return

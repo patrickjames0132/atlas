@@ -64,11 +64,7 @@ export default function HitList({
         <>
           <div className="hit-sub">From your cache</div>
           {localHits.map((hit) => (
-            <button
-              key={hit.id}
-              className="hit"
-              onClick={() => onPick(hit.arxiv_id ?? hit.id)}
-            >
+            <button key={hit.id} className="hit" onClick={() => onPick(hit.arxiv_id ?? hit.id)}>
               <div className="hit-title">
                 <MathText>{hit.title}</MathText>
                 {hit.has_graph && (
@@ -82,8 +78,7 @@ export default function HitList({
               </div>
               <div className="hit-meta">
                 {refAuthors(hit.authors) ? `${refAuthors(hit.authors)} · ` : ''}
-                {hit.year ?? '—'} ·{' '}
-                {(hit.citation_count ?? 0).toLocaleString()} citations
+                {hit.year ?? '—'} · {(hit.citation_count ?? 0).toLocaleString()} citations
               </div>
             </button>
           ))}
@@ -98,9 +93,7 @@ export default function HitList({
         </div>
       )}
       {liveFailed && (
-        <div className="hit-note">
-          Live search unavailable — showing cached papers only.
-        </div>
+        <div className="hit-note">Live search unavailable — showing cached papers only.</div>
       )}
       {hits && hits.length === 0 && !searching && (
         <div className="hit-note">No results from Semantic Scholar.</div>

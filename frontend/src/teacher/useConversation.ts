@@ -28,8 +28,7 @@ import {
 } from '../store/transcript'
 import { discoveryMerged, selectGroundingNodes, selectSeedNode } from '../store/workspace'
 
-const newSessionId = () =>
-  (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
+const newSessionId = () => (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
 
 /** An inline citation marker in answer prose, e.g. `[7]`. */
 const REF_MARKER = /\[(\d+)\]/g
@@ -81,10 +80,7 @@ export function useConversation() {
     abortRef.current = null
   }, [])
 
-  const highlight = useCallback(
-    (ids: string[]) => dispatch(highlightSet(ids)),
-    [dispatch],
-  )
+  const highlight = useCallback((ids: string[]) => dispatch(highlightSet(ids)), [dispatch])
 
   /** Click a beat: light its papers; click the active one again to clear. */
   const onBeatClick = useCallback(

@@ -92,10 +92,7 @@ export interface GraphResponse {
  * @throws With the server's error message (e.g. "No paper found…", S2
  *         unavailable) when the graph can't be built.
  */
-export async function fetchGraph(
-  seed: string,
-  refresh = false,
-): Promise<GraphResponse> {
+export async function fetchGraph(seed: string, refresh = false): Promise<GraphResponse> {
   const params = new URLSearchParams({ seed })
   if (refresh) params.set('refresh', '1')
   const res = await fetch(`/api/graph?${params.toString()}`)

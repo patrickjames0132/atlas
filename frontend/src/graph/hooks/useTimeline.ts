@@ -166,8 +166,7 @@ export function useTimeline({
   const drawAxis = useCallback(
     (ctx: CanvasRenderingContext2D, globalScale: number) => {
       const fg = fgRef.current
-      if (layout !== 'timeline' || !base || !fg || base.maxYear <= base.minYear)
-        return
+      if (layout !== 'timeline' || !base || !fg || base.maxYear <= base.minYear) return
       const tl = fg.screen2GraphCoords(0, 0)
       const br = fg.screen2GraphCoords(size.w, size.h)
       // Only label as many years as comfortably fit (≥28px apart on screen).

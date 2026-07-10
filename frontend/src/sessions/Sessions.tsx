@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  deleteSession,
-  listSessions,
-  type SavedSessionMeta,
-} from '../api'
+import { deleteSession, listSessions, type SavedSessionMeta } from '../api'
 import '../library/sources.css'
 import './sessions.css'
 
@@ -113,8 +109,8 @@ export default function Sessions({
         </header>
 
         <p className="sources-blurb">
-          Save the current graph — including papers the teacher discovered — and
-          its chat, then reopen it anytime. Restoring costs no API calls.
+          Save the current graph — including papers the teacher discovered — and its chat, then
+          reopen it anytime. Restoring costs no API calls.
         </p>
 
         <form className="src-url session-save" onSubmit={onSaveClick}>

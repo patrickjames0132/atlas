@@ -21,3 +21,23 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
+
+  # Frontend format + lint — the same npm scripts you'd run by hand, over the
+  # whole frontend (both tools are fast). They need frontend/node_modules;
+  # the session-start bin/setup installs it. Prettier runs first and fixes in
+  # place (the ruff --fix pattern): a reformat fails the run so the changes
+  # get restaged, then oxlint judges the formatted code.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier (frontend format)
+        language: system
+        entry: npm run format --silent --prefix frontend
+        files: ^frontend/(src/.*\.(ts|tsx|css)|vite\.config\.ts)$
+        pass_filenames: false
+      - id: oxlint
+        name: oxlint (frontend lint)
+        language: system
+        entry: npm run lint --silent --prefix frontend
+        files: ^frontend/(src/.*\.(ts|tsx|css)|vite\.config\.ts)$
+        pass_filenames: false

@@ -62,7 +62,9 @@
   text-decoration: none;
   white-space: nowrap;
   opacity: 0.8;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
 }
 .cc-credit:hover {
   opacity: 1;

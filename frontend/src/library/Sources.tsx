@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  deleteSource,
-  ingestUrl,
-  listSources,
-  uploadSource,
-  type Source,
-} from '../api'
+import { deleteSource, ingestUrl, listSources, uploadSource, type Source } from '../api'
 import './sources.css'
 
 // The Sources drawer: manage the user's local semantic library — upload PDFs /
@@ -169,15 +163,14 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
         </header>
 
         <p className="sources-blurb">
-          Upload a book/PDF or paste a link. It's chunked and embedded{' '}
-          <b>locally</b> (nothing leaves your machine), so the teacher can search
-          it during Q&amp;A.
+          Upload a book/PDF or paste a link. It's chunked and embedded <b>locally</b> (nothing
+          leaves your machine), so the teacher can search it during Q&amp;A.
         </p>
 
         {!available && (
           <div className="sources-warn">
-            Local embeddings aren't available, so search over your sources is off.
-            (Is the embedding model able to load?)
+            Local embeddings aren't available, so search over your sources is off. (Is the embedding
+            model able to load?)
           </div>
         )}
 
@@ -190,11 +183,7 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
         >
-          <button
-            className="src-btn"
-            disabled={locked}
-            onClick={() => fileRef.current?.click()}
-          >
+          <button className="src-btn" disabled={locked} onClick={() => fileRef.current?.click()}>
             ⬆ Upload PDFs
           </button>
           <input

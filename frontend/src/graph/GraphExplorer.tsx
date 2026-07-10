@@ -131,12 +131,22 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   // Timeline layout physics (year-column pinning, collide force, year axis,
   // settle-freeze) — plus its keep-in-sync effects.
   const { nodeTimelineX, applyLayoutPhysics, drawAxis, freezeSettledY } = useTimeline({
-    base, layout, fgRef, size, fitDone, yearLo, yearHi,
+    base,
+    layout,
+    fgRef,
+    size,
+    fitDone,
+    yearLo,
+    yearHi,
   })
 
   // User pins: drag-to-pin, the detail panel's Pin button, Release-all.
   const { pinned, clearPins, onNodeDragEnd, togglePin, releaseAll } = usePinning({
-    base, layout, nodeTimelineX, fgRef, fitDone,
+    base,
+    layout,
+    nodeTimelineX,
+    fgRef,
+    fitDone,
   })
 
   const doLoadGraph = useCallback(
@@ -158,14 +168,26 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   // Selection: the open detail panel, its hydration + figures + code links +
   // category tags.
   const {
-    selectedId, setSelectedId, selected, figures, figLoading, codeLinks, categories, onNodeClick,
+    selectedId,
+    setSelectedId,
+    selected,
+    figures,
+    figLoading,
+    codeLinks,
+    categories,
+    onNodeClick,
   } = useSelection({ base, graph, loadGraph: doLoadGraph })
 
   // The sim-side discovery merge. The discovery LISTS live in the store (the
   // teacher dispatches them); this effect feeds them into the in-place merge,
   // whose internal dedupe makes re-feeding the full arrays safe.
   const { graphVersion, onDiscover } = useDiscovery({
-    base, layout, nodeTimelineX, fgRef, onYearLo: setYearLo, onYearHi: setYearHi,
+    base,
+    layout,
+    nodeTimelineX,
+    fgRef,
+    onYearLo: setYearLo,
+    onYearHi: setYearHi,
   })
   useEffect(() => {
     if (discoveredNodes.length || discoveredEdges.length)
@@ -201,8 +223,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     })
     const nodeOk = (node: VNode) => {
       if (node.is_seed) return true // the seed is always shown, ignoring filters
-      if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi))
-        return false
+      if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi)) return false
       return reachable.has(node.id)
     }
     const nodes = base.nodes.filter(nodeOk)

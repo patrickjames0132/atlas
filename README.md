@@ -186,5 +186,6 @@ event protocol, the streaming bridge), `services/sources/` (hybrid retrieval:
 FTS5 + vectors + RRF), `frontend/src/README.md` (the render-tree map), or
 `frontend/src/store/` (what earns a Redux slice and what stays local).
 
-Quality gates: `uv run nox` (ruff, strict mypy, pytest — all offline) and
-`cd frontend && npm run build && npm run lint` (strict tsc, Vite, oxlint).
+Quality gates: `uv run nox` (pre-commit hooks — file hygiene, ruff, and the
+frontend's prettier + oxlint — plus strict mypy and pytest, all offline) and
+`cd frontend && npm run build` (strict tsc + Vite) for the type/build check.

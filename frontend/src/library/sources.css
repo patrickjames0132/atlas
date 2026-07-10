@@ -47,7 +47,9 @@
   padding: 12px;
   border: 1px dashed var(--border);
   border-radius: 10px;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 /* Highlighted while dragging PDFs over the drop zone. */
 .sources-add.dragging {

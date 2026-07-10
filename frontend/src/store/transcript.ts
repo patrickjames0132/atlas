@@ -11,13 +11,7 @@
 
 import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
-import type {
-  AnswerFigure,
-  Beat,
-  ChatMsg,
-  RetrieveEvent,
-  TraceEvent,
-} from '../api'
+import type { AnswerFigure, Beat, ChatMsg, RetrieveEvent, TraceEvent } from '../api'
 import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 
 export interface TranscriptState {
@@ -103,5 +97,4 @@ export const {
 } = transcriptSlice.actions
 export default transcriptSlice.reducer
 
-export const selectTranscript = (state: { transcript: TranscriptState }) =>
-  state.transcript
+export const selectTranscript = (state: { transcript: TranscriptState }) => state.transcript

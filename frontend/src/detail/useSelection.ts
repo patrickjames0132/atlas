@@ -93,9 +93,7 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
     setFigLoading(aid)
     fetchFigures(aid)
       .then((res) => setFigures((prev) => ({ ...prev, [aid]: res })))
-      .catch(() =>
-        setFigures((prev) => ({ ...prev, [aid]: { available: false, figures: [] } })),
-      )
+      .catch(() => setFigures((prev) => ({ ...prev, [aid]: { available: false, figures: [] } })))
       .finally(() => setFigLoading((cur) => (cur === aid ? null : cur)))
   }, [selected, figures, figLoading])
 
@@ -145,6 +143,13 @@ export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): Sele
   )
 
   return {
-    selectedId, setSelectedId, selected, figures, figLoading, codeLinks, categories, onNodeClick,
+    selectedId,
+    setSelectedId,
+    selected,
+    figures,
+    figLoading,
+    codeLinks,
+    categories,
+    onNodeClick,
   }
 }

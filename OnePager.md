@@ -1115,13 +1115,20 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Frontend quality
 
-- [ ] **Frontend pre-commit (format + lint)** — the backend has a full
-      pre-commit hook set (`.pre-commit-config.yaml` → ruff, via
-      `uv run nox -s precommit`); the frontend has none. `oxlint` exists today
-      only as a standalone `npm run lint` script, not wired into pre-commit,
-      and there's no formatter. Add both to the pre-commit gate so frontend
-      hygiene is enforced the same way backend hygiene is.
-      *(From the `todos.md` inbox, 2026-07-07.)*
+- [x] **Frontend pre-commit (format + lint)** *(2026-07-09, no version
+      bump — dev tooling, not the app)* — **prettier** (3.9.5, pinned exact)
+      added as the formatter, configured to the existing house style
+      (`semi: false`, single quotes, printWidth 100) so the one-time sweep
+      stayed small (23 files, +166/−159, render-equivalent JSX whitespace
+      reflows only); scoped to `src/**/*.{ts,tsx,css}` + `vite.config.ts` —
+      deliberately not the hand-formatted READMEs or the JSONC tsconfigs.
+      Two **local pre-commit hooks** (prettier then oxlint, both running the
+      frontend's own npm scripts) join the existing gate, so
+      `uv run nox -s precommit` now enforces frontend hygiene the same way
+      it does backend hygiene — prettier fixes in place like ruff `--fix`
+      (verified with a negative test: a deliberately mangled file failed the
+      run and came back formatted). New npm scripts `format` /
+      `format:check`. *(From the `todos.md` inbox, 2026-07-07.)*
 - [ ] **Frontend tests** — the backend has a 291-test offline suite
       (`uv run nox -s tests`); the frontend has none. Stand up a runner
       (Vitest + React Testing Library is the natural fit for this Vite/React

@@ -116,9 +116,7 @@ export function useDiscovery({
         }
       }
 
-      const knownLinkKeys = new Set(
-        base.links.map((link) => `${link._s}|${link._t}|${link.type}`),
-      )
+      const knownLinkKeys = new Set(base.links.map((link) => `${link._s}|${link._t}|${link.type}`))
       let addedLinks = 0
       for (const edge of newEdges) {
         const key = `${edge.source}|${edge.target}|${edge.type}`

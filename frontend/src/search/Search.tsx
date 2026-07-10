@@ -130,9 +130,7 @@ export default function Search({
   }, [open, fieldOptions])
 
   const activeCount =
-    (filters.yearFrom != null ? 1 : 0) +
-    (filters.yearTo != null ? 1 : 0) +
-    filters.fields.length
+    (filters.yearFrom != null ? 1 : 0) + (filters.yearTo != null ? 1 : 0) + filters.fields.length
 
   /** Add a field of study to the filter (deduped). */
   const addField = (field: string) => {
@@ -184,9 +182,7 @@ export default function Search({
               aria-label="Add a field-of-study filter"
               onChange={(event) => addField(event.target.value)}
             >
-              <option value="">
-                {fieldOptions === null ? 'Loading fields…' : 'Add a field…'}
-              </option>
+              <option value="">{fieldOptions === null ? 'Loading fields…' : 'Add a field…'}</option>
               {fieldOptions?.map((field) => (
                 <option key={field} value={field}>
                   {field}

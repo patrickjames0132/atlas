@@ -149,7 +149,13 @@ branch `main`.
 in `noxfile.py`, all reusing the uv env (no per-session installs):
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
-  hygiene + **ruff** lint (config in `pyproject.toml`).
+  hygiene + **ruff** lint (config in `pyproject.toml`) + the **frontend's
+  format & lint** — prettier (config in `frontend/.prettierrc.json`, scoped
+  to `src/**/*.{ts,tsx,css}` + `vite.config.ts`; READMEs and the JSONC
+  tsconfigs stay hand-formatted) and oxlint, as local hooks running the
+  frontend's own npm scripts (they need `frontend/node_modules` — the
+  session-start `bin/setup` installs it). Prettier fixes in place like ruff
+  `--fix`: a reformat fails the run so the changes get restaged.
 - **`mypy`** — type-checks `src/atlas`, **strict since v1.21.1**: no
   `disable_error_code` entries and `check_untyped_defs = true`. Keep it that way —
   new code must type-check clean; don't reintroduce disabled codes. At SDK
