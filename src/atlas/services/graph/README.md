@@ -48,7 +48,8 @@ each a different relationship to the seed.
   `similar` edges (it's a citation-only flag); `rank` is the edge's 0-based
   position within its relation's order (the frontend count slider reveals
   `rank < value`).
-- **`counts`** (`Counts`) — raw traversal sizes plus the final deduped node count.
+- **`counts`** (`Counts`) — post-dedupe edge counts per relation (what each
+  slider can actually reveal) plus the final deduped node count.
 
 The models live in `model.py`, beside `build.py`'s `build_graph`. Callers that
 need JSON serialize with `graph.model_dump()` / `graph.model_dump_json()` — the
@@ -101,12 +102,27 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    and `ml_pipelines/cite_budget/README.md` for the derivation and how to
    retrain.
 
-4. **Dedupe with relation accumulation.** The `add_neighbor()` closure merges
-   neighbors into one node table keyed by paperId. The same paper can surface
-   through more than one relation (both a reference *and* a recommendation);
-   first sighting wins for the node body, and every later sighting just appends
-   its tag to that node's `rels` — so one paper reached three ways is one node
-   with three tags, not three nodes.
+4. **Dedupe with cross-source identity + relation accumulation.** The
+   `add_neighbor()` closure merges neighbors into one node table — keyed by raw
+   id, with identity resolved through the **arXiv id** whenever a sighting has
+   one. That second layer exists because the hybrid ships two id schemes: S2
+   relations carry bare paperIds while OpenAlex citers carry
+   `DOI:`/`ARXIV:`/`W…` ids (and OpenAlex sometimes holds duplicate works for
+   one paper — verified live: two QMIX works share the same DOI). First
+   sighting wins the node slot; every later sighting appends its tag to that
+   node's `rels` and upgrades fields it knows better (`_upgrade_node`: max
+   `citation_count` — S2's counts are far more complete for arXiv papers —
+   fill-if-None for the summary/date fields). `add_neighbor` returns the
+   **canonical id** and the edge loops must use it: for a merged paper it
+   differs from the sighting's own id. Papers without an arXiv id on both
+   sides (e.g. a journal-DOI record vs. its preprint twin) still can't merge —
+   the known residual, deliberately left rather than risking title matching.
+
+   A dedupe consequence for edges: two sightings can collapse onto one
+   endpoint, so `add_edge()` skips self-loops and already-drawn
+   `(source, target, type)` triples, and each relation's `rank` counter only
+   advances on an edge actually drawn — ranks stay compact for the frontend's
+   reveal sliders.
 
 5. **Build typed edges — direction is load-bearing.** An edge always points
    from the citing paper to the cited one:

@@ -1144,32 +1144,61 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       the mega-papers phase notes) is the starting formula; may need tuning so
       the balance point lands where the spread looks even. *(Patrick's
       brainstorm, 2026-07-10.)*
-- [ ] **Duplicate nodes for the same paper (cross-source identity)** —
-      Patrick's browser observation: seeding on DQN shows **two** node
-      instances of "Continuous control with deep reinforcement learning".
-      Likely cross-source id mismatch: since v4.0.0 OpenAlex citers carry
-      `DOI:`/`ARXIV:`/`W…` ids while S2 relations (references, similar) use
-      bare S2 paperIds — the same paper arriving via two relations under two
-      id schemes dedupes as two nodes. Needs an identity-resolution pass in
-      the graph build (match by DOI/arXiv id before minting a node), plus a
-      pinned test. *(From the `todos.md` inbox, 2026-07-10.)*
-- [ ] **Verify slider reveal order is most-cited-first** — every relation
-      slider except Latest Publications is supposed to reveal by
-      **citation rank** (references/citations/landmarks: most-cited first;
-      latest is deliberately oldest-first per v4.1.0; similar by S2
-      similarity). Verify the shipped `rank` actually reflects that on both
-      citation sources — the OpenAlex primary path *and* the S2 fallback —
-      and fix wherever it doesn't; a pinned test per relation would keep it
-      true. *(From the `todos.md` inbox, 2026-07-09.)*
-- [ ] **Confirm Latest Publications really comes from OpenAlex** — Patrick's
-      observation suggests latest citers may still be arriving via the old
-      S2 offset paging in practice. Since v4.0.0 OpenAlex owns the citation
-      relations, with S2 only as the *fallback* when OpenAlex can't resolve
-      the seed — so either the fallback is engaging more often than expected
-      (silently?), or a path still calls the S2 traversal directly. Audit
-      `services/graph/build.py`'s `_citation_relations` + logs (`data/atlas.log`
-      records the source), make the chosen source visible/loggable per build,
-      and fix any stray S2 usage. *(From the `todos.md` inbox, 2026-07-09.)*
+- [x] **Duplicate nodes for the same paper (cross-source identity)**
+      *(v4.5.1)* — Patrick's browser observation: seeding on DQN showed two
+      instances of "Continuous control with deep RL". Investigation found it
+      was actually **three** (an OpenAlex `ARXIV:` citer + an OpenAlex
+      `DOI:` citer from a duplicate work + an S2-paperId similar hit), and
+      24/11/43/30 duplicate-title groups across the four cached graphs. Fix:
+      **node identity resolves through the arXiv id** in
+      `build.py::add_neighbor` — the one id both sources agree on — with
+      `add_neighbor` returning the canonical id for edges, later sightings
+      upgrading fields they know better (`_upgrade_node`: max
+      `citation_count`, since S2's counts are far more complete; fill-if-None
+      for summary/date fields), `add_edge` skipping self-loops + duplicate
+      `(source, target, type)` triples, ranks staying compact, and `counts`
+      becoming post-dedupe edge counts. The seed registers its own arXiv id,
+      so a citer that IS the seed under another id merges instead of
+      self-looping. Known residual (deliberate): a journal-DOI record vs.
+      its preprint twin where neither carries the arXiv id can't merge —
+      title matching was rejected as too risky (same-title distinct papers
+      exist, e.g. Living Reviews editions). Two pinned tests. *(From the
+      `todos.md` inbox, 2026-07-10.)*
+- [x] **Verify slider reveal order is most-cited-first** *(2026-07-10 —
+      verified correct, no fix needed)* — audited all four cached graph
+      snapshots (DQN, Attention, QMIX, Hawking; up to 500 edges/relation):
+      **references and Field Landmarks reveal perfectly most-cited-first**
+      (zero rank inversions everywhere), **Latest Publications is perfectly
+      date-ascending** (the v4.1.0 oldest-first reveal, zero inversions),
+      and **Similar reveals by S2 similarity** — not citations — which is
+      that relation's intended semantics (most-similar first); Patrick
+      accepted this as correct. *(From the `todos.md` inbox, 2026-07-09.)*
+- [ ] **Latest Publications is thin on arXiv-only seeds — OpenAlex data
+      gaps, not S2 offset paging** *(investigated 2026-07-10; the original
+      suspicion is settled, the underlying problem is real and still open)* —
+      **Verified: latest DOES come from OpenAlex** (every latest node in all
+      four cached graphs carries an OpenAlex id; the logs show zero S2
+      fallback engagements). But the instinct that something was off was
+      right: **latest is badly truncated for arXiv-only seeds** — DQN's
+      stops at 2025-08 (nothing from the last ~11 months), QMIX shipped just
+      11 latest nodes. Two verified causes: (1) **OpenAlex splits papers
+      into duplicate works** and `resolve_work` picks one — for QMIX we
+      resolved the 352-citation twin while a same-DOI sibling holds 479, so
+      `cites:` queries see half the paper; (2) **OpenAlex's citation linkage
+      lags hard for preprint-only works** — even both QMIX works combined
+      show ~34 citers since 2025 where S2 knows thousands (well-linked
+      records like Attention/Hawking span cleanly to the build date).
+      Remedies to build: union the `cites:` filter across all works sharing
+      the seed's DOI/arXiv id (`cites:W1|W2`), and/or a per-relation S2
+      supplement when the latest pool comes back suspiciously thin (the
+      fallback is currently all-or-nothing on seed resolution). *(From the
+      `todos.md` inbox, 2026-07-09; findings 2026-07-10.)*
+- [ ] **Prune ghost similar papers (no citations AND no publication
+      history)** — Patrick doesn't want to see them on the graph: an S2
+      recommendation with zero citations and no year/date is unverifiable
+      noise. Filter them out of the similar relation at build time (keep the
+      filter server-side so the slider's pool is honest). *(From the
+      `todos.md` inbox, 2026-07-10.)*
 - [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
       `search` relation from the researcher's `search_papers` tool) are
       currently **always shown** with no filter chip of their own (see the
@@ -1408,6 +1437,36 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### The same paper as two (actually three) nodes — cross-source identity in the hybrid graph
+
+*Found & fixed in v4.5.1 (2026-07-10).*
+
+- **Symptom.** Seeding on DQN showed "Continuous control with deep reinforcement
+  learning" as **two** node instances, each with a partial view of the paper
+  (different rels, wildly different citation counts). An audit of the four
+  cached graphs found 24/11/43/30 duplicate-title groups — the graph had been
+  quietly double-counting papers since the v4.0.0 hybrid.
+- **Root cause.** The node table was keyed by raw id, but the hybrid ships
+  **two id schemes**: S2 relations (references, similar) carry bare paperIds
+  while OpenAlex citers carry `DOI:`/`ARXIV:`/`W…` ids. The "duplicate" was
+  actually **three** sightings — an OpenAlex `ARXIV:` citer, an OpenAlex `DOI:`
+  citer from a *duplicate OpenAlex work* (verified live: two QMIX works share
+  one DOI), and an S2-paperId similar hit — each minting its own node.
+- **Fix.** `build.py::add_neighbor` resolves identity through the **arXiv id**,
+  the one id both sources agree on: first sighting wins the node slot, later
+  sightings append their rels and upgrade fields they know better
+  (`_upgrade_node`: max `citation_count` — S2's counts are far more complete —
+  fill-if-None for summary/date fields). `add_neighbor` returns the canonical
+  id and the edge loops use it; `add_edge` skips self-loops and duplicate
+  `(source, target, type)` triples with ranks staying compact; `counts` are
+  post-dedupe. The seed registers its own arXiv id, so a citer that IS the seed
+  under another id merges instead of self-looping. Two pinned tests.
+- **Lesson / guard.** A graph fed by two sources needs an explicit **identity
+  key**, not "whatever id arrived". The known residual is deliberate: a
+  journal-DOI record vs. its preprint twin where neither side carries the arXiv
+  id can't merge — title matching was rejected as riskier than the rare leftover
+  duplicate (same-title distinct papers exist, e.g. Living Reviews editions).
 
 ### OpenAlex misdates "Attention Is All You Need" to 2025 — nearly broke the cite-budget model
 

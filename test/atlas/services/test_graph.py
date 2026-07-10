@@ -107,6 +107,83 @@ def test_citations_come_from_openalex_when_seed_resolves(fake_s2, monkeypatch):
     assert by_id["ref1"].rels == ["reference", "similar"]
 
 
+def test_same_paper_across_sources_merges_into_one_node(fake_s2, monkeypatch):
+    """The DQN/DDPG bug: one paper arriving as an OpenAlex citer (DOI: id),
+    an OpenAlex duplicate work (ARXIV: id), AND an S2 recommendation (bare
+    paperId) must resolve — via its shared arXiv id — into ONE node carrying
+    both relations, with every edge pointing at the surviving node, no
+    duplicate edges, and compact ranks."""
+    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: {"id": "W99"})
+
+    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+        landmark = [
+            {"node": make_node("DOI:10.48550/arxiv.1509.02971",
+                               arxiv_id="1509.02971", citation_count=5379),
+             "influential": False},
+            # OpenAlex's duplicate work for the SAME paper, under another id.
+            {"node": make_node("ARXIV:1509.02971",
+                               arxiv_id="1509.02971", citation_count=6787),
+             "influential": True},
+            {"node": make_node("DOI:10/other", citation_count=50), "influential": False},
+        ]
+        return landmark, []
+
+    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
+    # The S2 recommendation for the same paper, under its S2 paperId.
+    monkeypatch.setattr(build.s2, "recommendations",
+                        lambda pid, limit: [{"node": make_node("s2ddpg", arxiv_id="1509.02971",
+                                                               citation_count=15607)}])
+
+    graph = build.build_graph("1706.03762")
+    by_id = {node.id: node for node in graph.nodes}
+
+    # One node for the paper, keyed by its first sighting, carrying both rels.
+    assert "DOI:10.48550/arxiv.1509.02971" in by_id
+    assert "ARXIV:1509.02971" not in by_id and "s2ddpg" not in by_id
+    merged = by_id["DOI:10.48550/arxiv.1509.02971"]
+    assert merged.rels == ["citation", "similar"]
+    # The later sightings upgraded the citation count to the best-known value.
+    assert merged.citation_count == 15607
+
+    # One citation edge (the duplicate work's was skipped), pointing at the
+    # canonical id; the next distinct citer keeps a compact rank.
+    citation_edges = [edge for edge in graph.edges if edge.type == "citation"]
+    assert [(edge.source, edge.rank) for edge in citation_edges] == [
+        ("DOI:10.48550/arxiv.1509.02971", 0),
+        ("DOI:10/other", 1),
+    ]
+    # The similar edge also lands on the canonical node.
+    similar_edges = [edge for edge in graph.edges if edge.type == "similar"]
+    assert [(edge.target, edge.rank) for edge in similar_edges] == [
+        ("DOI:10.48550/arxiv.1509.02971", 0),
+    ]
+    # Counts reflect what was actually drawn, post-dedupe.
+    assert graph.counts.citations == 2 and graph.counts.similar == 1
+
+
+def test_a_citer_that_is_the_seed_never_self_loops(fake_s2, monkeypatch):
+    """A seed's OpenAlex twin appearing among its own citers (dirty data)
+    merges into the seed node — no duplicate seed, no self-edge, and the
+    seed keeps its single 'seed' tag."""
+    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: {"id": "W99"})
+
+    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+        return [{"node": make_node("DOI:10/seed-twin", arxiv_id="1706.03762"),
+                 "influential": False}], []
+
+    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
+    monkeypatch.setattr(build.s2, "get_paper",
+                        lambda lookup: make_node("seed", title="The Seed",
+                                                 arxiv_id="1706.03762"))
+
+    graph = build.build_graph("1706.03762")
+    by_id = {node.id: node for node in graph.nodes}
+    assert "DOI:10/seed-twin" not in by_id
+    assert by_id["seed"].rels == ["seed"]
+    assert all(edge.source != edge.target for edge in graph.edges)
+    assert graph.counts.citations == 0
+
+
 def test_openalex_failure_falls_back_to_s2_citations(fake_s2, monkeypatch):
     """An OpenAlex error never fails the build — it degrades to S2 citations."""
     monkeypatch.setattr(

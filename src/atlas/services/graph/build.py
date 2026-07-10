@@ -6,8 +6,10 @@ that cite it — its descendants), and recommendation neighbors (embedding-simil
 papers S2 suggests). The seed, references, and similar come from Semantic
 Scholar; the **citations** come from OpenAlex (``_citation_relations``), whose
 server-sorted ``cites:`` queries surface the landmark citers directly — with an
-S2 fallback. Cross-source nodes carry S2-resolvable ids so they dedupe, hydrate,
-and re-seed uniformly. Edges are tagged
+S2 fallback. Cross-source nodes carry S2-resolvable ids so they hydrate and
+re-seed uniformly, and node **identity resolves through the arXiv id** so the
+same paper arriving under an S2 paperId and an OpenAlex ``DOI:``/``ARXIV:`` id
+merges into one node instead of duplicating. Edges are tagged
 ``reference | citation | similar`` so the frontend can colour and route them.
 The whole snapshot is cached (see ``storage/cache.py``) so re-exploring a paper
 doesn't re-hit the rate-limited S2 API.
@@ -29,7 +31,7 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import Callable
+from typing import Callable, Literal
 
 from ...config import config
 from ...integrations import arxiv, openalex
@@ -113,6 +115,30 @@ def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], lis
         landmark_limit=landmark_limit,
         latest_limit=config.graph.latest_limit,
     )
+
+def _upgrade_node(existing: Node, sighting: dict) -> None:
+    """Fold a later sighting's better data into an already-merged node.
+
+    Cross-source merging means the first-seen record wins the node slot, but a
+    later sighting may know the paper better — S2's citation counts are far
+    more complete than OpenAlex's for arXiv papers, and either source can be
+    the one carrying the abstract/date. Field policy: ``citation_count`` takes
+    the max (best-known count — it drives node size and figure-pool ranking);
+    identity/summary fields fill in only where the existing node has none.
+    The first sighting's title and year stay — churning them for a tie is
+    noise.
+
+    Args:
+        existing: The node already in the table (mutated in place).
+        sighting: The later sighting's normalized node dict.
+    """
+    sighting_count = sighting.get("citation_count")
+    if sighting_count is not None and sighting_count > (existing.citation_count or 0):
+        existing.citation_count = sighting_count
+    for field_name in ("arxiv_id", "abstract", "tldr", "pub_date", "month", "authors", "url"):
+        if getattr(existing, field_name) is None and sighting.get(field_name) is not None:
+            setattr(existing, field_name, sighting[field_name])
+
 
 #: Progress callback: ``(steps_done, steps_total, label)``. The streaming
 #: ``/api/graph/stream`` route bridges these into SSE ``progress`` frames so
@@ -202,105 +228,147 @@ def build_graph(
 
     report(5, "Assembling graph…")
 
-    # --- Dedupe neighbors into a single node table keyed by paperId. The same
-    # paper can surface through more than one relation (e.g. it's both a
-    # reference AND a recommendation); we want ONE node carrying BOTH relation
-    # tags, not two nodes.
+    # --- Dedupe neighbors into a single node table. The same paper can surface
+    # through more than one relation (e.g. it's both a reference AND a
+    # recommendation) — and, since the OpenAlex hybrid, under more than one ID
+    # SCHEME: S2 relations carry bare paperIds while OpenAlex citers carry
+    # ``DOI:``/``ARXIV:``/``W…`` ids (and OpenAlex itself sometimes holds
+    # duplicate works for one paper). Identity therefore resolves through the
+    # **arXiv id** whenever a sighting has one — the one id both sources agree
+    # on — so a paper reached from both sources ends up ONE node carrying every
+    # relation tag, not two or three nodes (the DQN/DDPG triple of v4.4.0).
     nodes: dict[str, Node] = {}
+    # arXiv id (lowercased) -> the node-table key that paper first resolved to.
+    arxiv_index: dict[str, str] = {}
 
-    def add_neighbor(node_data: dict, rel: str) -> None:
-        """Merge a neighbor into ``nodes``, accumulating its relation tags.
+    def add_neighbor(node_data: dict, rel: str) -> str:
+        """Merge a neighbor into ``nodes``, returning its canonical node id.
 
-        First sighting builds the ``Node``; every later sighting just appends
-        its relation to the existing node's ``rels`` (deduped), so a paper
-        reached three ways ends up one node with three tags.
+        First sighting builds the ``Node`` (and registers its arXiv id in the
+        identity index); every later sighting of the same paper — same raw id,
+        OR a different id sharing the arXiv id — appends its relation to the
+        existing node's ``rels`` (deduped) and upgrades fields the later
+        sighting knows better (see ``_upgrade_node``). Edges must point at the
+        returned id, not at ``node_data["id"]`` — for a merged paper they
+        differ.
 
         Args:
-            node_data: The normalized S2 node dict.
+            node_data: The normalized node dict (S2 or OpenAlex sourced).
             rel: The relation that surfaced it (``reference | citation |
                 similar | latest``).
-        """
-        existing = nodes.get(node_data["id"])
-        if existing is None:
-            nodes[node_data["id"]] = Node(**node_data, rels=[rel], is_seed=False)
-        elif rel not in existing.rels:
-            existing.rels.append(rel)
 
-    # The seed goes in first, flagged so the frontend can render it distinctly.
+        Returns:
+            The node-table key this paper resolved to (the surviving node's id).
+        """
+        arxiv_id = (node_data.get("arxiv_id") or "").lower()
+        key = arxiv_index.get(arxiv_id, node_data["id"]) if arxiv_id else node_data["id"]
+        existing = nodes.get(key)
+        if existing is None:
+            nodes[key] = Node(**node_data, rels=[rel], is_seed=False)
+        else:
+            # The seed keeps its own single tag; a neighbor accumulates.
+            if rel not in existing.rels and not existing.is_seed:
+                existing.rels.append(rel)
+            _upgrade_node(existing, node_data)
+        if arxiv_id:
+            arxiv_index.setdefault(arxiv_id, key)
+        return key
+
+    # The seed goes in first, flagged so the frontend can render it distinctly —
+    # and registered in the identity index, so a citer/recommendation that IS
+    # the seed under another id merges into it instead of duplicating it.
     seed_node = Node(**seed_paper, rels=["seed"], is_seed=True)
     nodes[seed_id] = seed_node
+    if seed_node.arxiv_id:
+        arxiv_index[seed_node.arxiv_id.lower()] = seed_id
 
     # --- Build the typed edges. The DIRECTION differs per relation and encodes
     # citation semantics — an edge always points from the citing paper to the
     # cited one:
     edges: list[Edge] = []
+    # (source, target, type) triples already drawn — identity merging can make
+    # two sightings collapse onto one endpoint (e.g. OpenAlex's duplicate works
+    # both citing the seed), and one line is enough.
+    seen_edges: set[tuple[str, str, str]] = set()
+
+    def add_edge(source: str, target: str,
+                 edge_type: Literal["reference", "citation", "similar", "latest"],
+                 influential: bool | None, rank: int) -> bool:
+        """Append one edge unless it's a self-loop or already drawn.
+
+        Args:
+            source: The citing end's canonical node id.
+            target: The cited end's canonical node id.
+            edge_type: The relation tag (``reference | citation | similar |
+                latest``).
+            influential: S2's influential-citation flag (None where it doesn't
+                apply).
+            rank: The edge's reveal rank within its relation.
+
+        Returns:
+            True when the edge was drawn (so the caller advances its rank
+            counter — ranks stay compact even when duplicates are skipped).
+        """
+        if source == target or (source, target, edge_type) in seen_edges:
+            return False
+        seen_edges.add((source, target, edge_type))
+        edges.append(Edge(
+            source=source, target=target, type=edge_type,
+            influential=influential, rank=rank,
+        ))
+        return True
 
     # Each relation arrives already ranked (references/citations by citation
     # count, latest oldest-first so the reveal walks toward the present,
-    # similar by S2 similarity), so an edge's enumeration index within its
+    # similar by S2 similarity), so an edge's emission index within its
     # relation IS its `rank` — the order the frontend's per-relation count
-    # slider reveals through.
+    # slider reveals through. A skipped duplicate doesn't burn a rank.
 
     # References: papers the SEED cites. The seed is the citer, so the arrow
     # runs seed -> ancestor. ``influential`` flags S2's "highly influential
     # citation" (the frontend can weight the edge).
-    for reference_rank, reference in enumerate(refs):
-        add_neighbor(reference["node"], "reference")
-        edges.append(Edge(
-            source=seed_id,
-            target=reference["node"]["id"],
-            type="reference",
-            influential=reference["influential"],
-            rank=reference_rank,
-        ))
+    reference_rank = 0
+    for reference in refs:
+        node_id = add_neighbor(reference["node"], "reference")
+        if add_edge(seed_id, node_id, "reference", reference["influential"], reference_rank):
+            reference_rank += 1
 
     # Citations: papers that cite the SEED. Now the neighbor is the citer, so
     # the arrow runs descendant -> seed (the opposite direction from above).
     # Two disjoint relations from the same split: landmark citers ("citation")
     # and the recent frontier ("latest"), both citer -> seed.
-    for citation_rank, citation in enumerate(landmark_cites):
-        add_neighbor(citation["node"], "citation")
-        edges.append(Edge(
-            source=citation["node"]["id"],
-            target=seed_id,
-            type="citation",
-            influential=citation["influential"],
-            rank=citation_rank,
-        ))
-    for latest_rank, latest in enumerate(latest_cites):
-        add_neighbor(latest["node"], "latest")
-        edges.append(Edge(
-            source=latest["node"]["id"],
-            target=seed_id,
-            type="latest",
-            influential=latest["influential"],
-            rank=latest_rank,
-        ))
+    citation_rank = 0
+    for citation in landmark_cites:
+        node_id = add_neighbor(citation["node"], "citation")
+        if add_edge(node_id, seed_id, "citation", citation["influential"], citation_rank):
+            citation_rank += 1
+    latest_rank = 0
+    for latest in latest_cites:
+        node_id = add_neighbor(latest["node"], "latest")
+        if add_edge(node_id, seed_id, "latest", latest["influential"], latest_rank):
+            latest_rank += 1
 
     # Recommendations: embedding-similar papers. These are NOT citations, so
     # there's no direction meaning and no ``influential`` (left None); we draw
     # seed -> neighbor just to anchor them to the seed visually.
-    for similar_rank, recommendation in enumerate(similar):
-        add_neighbor(recommendation["node"], "similar")
-        edges.append(Edge(
-            source=seed_id,
-            target=recommendation["node"]["id"],
-            type="similar",
-            rank=similar_rank,
-        ))
+    similar_rank = 0
+    for recommendation in similar:
+        node_id = add_neighbor(recommendation["node"], "similar")
+        if add_edge(seed_id, node_id, "similar", None, similar_rank):
+            similar_rank += 1
 
     graph = Graph(
         seed=Seed(arxiv_id=seed_node.arxiv_id, id=seed_id, title=seed_node.title),
         nodes=list(nodes.values()),
         edges=edges,
-        # Raw traversal sizes (not deduped) plus the final node count. Note
-        # ``nodes`` < references + citations + similar + latest whenever a paper
-        # appeared in more than one relation and got merged above.
+        # Post-dedupe edge counts per relation (what each slider can actually
+        # reveal) plus the final node count. Note ``nodes`` < the relation sum
+        # whenever a paper appeared in more than one relation and got merged.
         counts=Counts(
-            references=len(refs),
-            citations=len(landmark_cites),
-            similar=len(similar),
-            latest=len(latest_cites),
+            references=reference_rank,
+            citations=citation_rank,
+            similar=similar_rank,
+            latest=latest_rank,
             nodes=len(nodes),
         ),
     )
