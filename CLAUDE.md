@@ -19,7 +19,12 @@ digest app; that era is being retired).
 
 ## Session start — bootstrap first
 
-**First thing when a session opens, run the setup script**: `bin\setup.bat` on
+**Before anything else, `git pull`.** Sessions may start on a stale checkout
+(work happens from more than one machine), and running setup or the config
+drift check against yesterday's tree defeats the point — pull first so the
+steps below see the current `main`.
+
+**Then run the setup script**: `bin\setup.bat` on
 Windows, `bin/setup.sh` on macOS/Linux. It installs the toolchain pinned in
 `.tool-versions` via **mise** (python, uv, nodejs, trivy — mise reads the
 asdf-format file but, unlike asdf, works on Windows too), then `uv sync`s the
