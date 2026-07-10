@@ -35,6 +35,7 @@ dev = [
     "mypy>=1.11",
     "pytest>=8.0",
     "pre-commit>=3.7",
+    "pydoclint>=0.9",
 ]
 
 # --- quality tooling (all driven by `uv run nox`) ---
@@ -72,7 +73,41 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-# pyflakes (F), import sorting (I), and pycodestyle (E) minus line-length (E501,
-# left to the formatter's judgement).
-select = ["E", "F", "I"]
-ignore = ["E501"]
+# pyflakes (F), import sorting (I), pycodestyle (E) minus line-length (E501,
+# left to the formatter's judgement), and pydocstyle (D): every module, class,
+# and function must carry a docstring, Google-style. Completeness of the
+# Args/Returns/Raises sections is pydoclint's job (see its pre-commit hook).
+select = ["E", "F", "I", "D"]
+# D205 (one-line summary + blank line) is deliberately off: the house style
+# opens docstrings with a flowing multi-sentence paragraph, and flattening
+# those to a single line would make the docs worse, not better.
+ignore = ["E501", "D205"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# Args/Returns/Raises COMPLETENESS (ruff's D rules only check presence/format).
+# Types stay out of docstrings on purpose — the annotations own them — so the
+# type-matching checks are off; what's enforced is that every section exists
+# and matches the signature/body.
+[tool.pydoclint]
+style = "google"
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-yield-types = false
+skip-checking-short-docstrings = true
+# The house style documents PROPAGATED exceptions too (a client wrapper's
+# "Raises: S2Error" is the caller's contract even though the raise lives in a
+# callee) — pydoclint only accepts lexical `raise` statements, so its raises
+# checks would outlaw exactly the docs we want. Raises stays human-judged.
+skip-checking-raises = true
+# ruff's D107 requires __init__ docstrings; don't let pydoclint fight it.
+allow-init-docstring = true
+show-filenames-in-every-violation-message = true
+quiet = true
+
+[tool.ruff.lint.per-file-ignores]
+# Tests document themselves at the test-name + docstring level; don't demand
+# module/function docstrings for every tiny fixture and case.
+"test/**" = ["D"]
+"noxfile.py" = ["D"]

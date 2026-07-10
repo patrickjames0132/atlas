@@ -25,14 +25,11 @@ _SKIP_TAGS = {"math", "script", "style", "figure", "nav", "cite"}
 
 class _TextParser(HTMLParser):
     """Collect readable body text: the text of each block-level element, with
-    math / scripts / figures / citations dropped. Blocks join with blank lines."""
+    math / scripts / figures / citations dropped. Blocks join with blank lines.
+    """
 
     def __init__(self) -> None:
-        """Set up empty block/depth accumulators.
-
-        Returns:
-            None.
-        """
+        """Set up empty block/depth accumulators."""
         super().__init__(convert_charrefs=True)
         self.blocks: list[str] = []
         self._in_text = 0  # depth inside a kept block tag

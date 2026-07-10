@@ -97,7 +97,8 @@ def get_paper(paper_id: str) -> dict | None:
 
 def _influence(entry: dict) -> int:
     """The citation count of a neighbor entry (0 when S2 reports none) — the
-    proxy for how landmark a paper is, and the within-pool ranking key."""
+    proxy for how landmark a paper is, and the within-pool ranking key.
+    """
     return entry["node"].get("citation_count") or 0
 
 

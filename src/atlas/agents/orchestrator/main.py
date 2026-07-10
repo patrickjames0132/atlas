@@ -40,7 +40,8 @@ log = logging.getLogger(__name__)
 
 def _is_recent(node: Node, cutoff_iso: str, min_year: int) -> bool:
     """Whether a node falls in the current-frontier window — by ``pub_date`` at
-    or after ``cutoff_iso``, or (lacking a pub_date) by ``year >= min_year``."""
+    or after ``cutoff_iso``, or (lacking a pub_date) by ``year >= min_year``.
+    """
     if node.pub_date:
         return node.pub_date >= cutoff_iso
     return node.year is not None and node.year >= min_year

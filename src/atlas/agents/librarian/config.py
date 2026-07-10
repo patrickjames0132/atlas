@@ -1,5 +1,6 @@
 """The librarian's words and knobs: its agent id, prompt, skills, and the
-canned no-hits answer. Model choice lives in its ``config.llm.agents`` entry."""
+canned no-hits answer. Model choice lives in its ``config.llm.agents`` entry.
+"""
 
 from __future__ import annotations
 

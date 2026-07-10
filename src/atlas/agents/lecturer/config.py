@@ -3,7 +3,8 @@ mode-intent paragraphs, the frontier recency window, and the beat-count
 bounds. Model choice lives in its ``config.llm.agents`` entry; the knobs
 live in that entry's ``extras`` (the staging area — promoted to typed
 config fields once their shape settles). Unknown extras keys fail at
-import so the staging area can't silently accumulate junk."""
+import so the staging area can't silently accumulate junk.
+"""
 
 from __future__ import annotations
 

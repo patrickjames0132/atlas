@@ -34,7 +34,12 @@ export interface SearchFilters {
 /** The no-op filter set (everything passes). */
 export const EMPTY_FILTERS: SearchFilters = { yearFrom: null, yearTo: null, fields: [] }
 
-/** Append a filter set to a query string (omitting inactive filters). */
+/**
+ * Append a filter set to a query string (omitting inactive filters).
+ *
+ * @param params  The query string being built (mutated in place).
+ * @param filters The active filters, or undefined for none.
+ */
 function applyFilters(params: URLSearchParams, filters?: SearchFilters): void {
   if (!filters) return
   if (filters.yearFrom != null) params.set('year_from', String(filters.yearFrom))
@@ -53,6 +58,7 @@ function applyFilters(params: URLSearchParams, filters?: SearchFilters): void {
  * @param q       The search query.
  * @param limit   Maximum hits to return (default 25).
  * @param filters Optional date/field filters (see {@link SearchFilters}).
+ * @returns The echoed query plus its hits, best matches first.
  * @throws When the request fails — seed search has no graceful fallback; the
  *         caller surfaces the error in the search UI.
  */
@@ -96,6 +102,7 @@ export interface LocalHit {
  * @param q       The search query.
  * @param limit   Maximum hits to return (default 10).
  * @param filters Optional filters — only the year window applies locally.
+ * @returns The cached hits (empty on any failure).
  */
 export async function searchLocal(
   q: string,
@@ -126,6 +133,8 @@ export async function searchLocal(
  * server-labelled instead, via `graph.ts`'s `fetchCategories`, so the full
  * taxonomy still has no frontend caller. Reserved for an arXiv-category
  * search filter, mirroring this one, if that ever lands.)
+ *
+ * @returns The field names (empty on any failure).
  */
 export async function getFields(): Promise<string[]> {
   try {

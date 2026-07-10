@@ -105,6 +105,10 @@ def resolvable_id(work: dict, arxiv_id: str | None) -> str | None:
     ``ARXIV:<id>`` → bare OpenAlex ``W…`` (last resort; hydration/re-seed via S2
     won't work for these, but they're rare and still render).
 
+    Args:
+        work: The OpenAlex work object.
+        arxiv_id: The work's arXiv id, when one was extracted.
+
     Returns:
         The id string, or None when the work has no usable id at all.
     """

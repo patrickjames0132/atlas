@@ -3,6 +3,11 @@
 import type { AnswerFigure } from '../../api'
 import MathText from '../../notation/MathText'
 
+/**
+ * Render one inline figure card.
+ *
+ * @returns The figure with its numbered caption.
+ */
 export default function FigCard({
   figure,
   onEnlarge,

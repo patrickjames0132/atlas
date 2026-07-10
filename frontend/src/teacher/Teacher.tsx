@@ -32,6 +32,11 @@ const MODES: { key: LectureMode; label: string }[] = [
   { key: 'frontier', label: 'The current frontier' },
 ]
 
+/**
+ * Render the assistant panel: lecture buttons, transcript, and the ask form.
+ *
+ * @returns The docked, resizable assistant panel.
+ */
 export default function Teacher({
   collapsed = false,
   onClose,

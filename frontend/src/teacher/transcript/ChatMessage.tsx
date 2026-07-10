@@ -16,6 +16,9 @@ import AnswerMarkdown from './AnswerMarkdown'
  * ran out" and "Semantic Scholar errored" read very differently to someone
  * watching the trace. Undefined `reason` (older saved sessions, or a passing
  * search) renders nothing extra, same as before this field existed.
+ *
+ * @param reason The trace's failure-reason code, when one was sent.
+ * @returns The plain-words explanation, or null for nothing extra.
  */
 function searchFailReason(reason: TraceEvent['reason']): string | null {
   switch (reason) {
@@ -32,7 +35,11 @@ function searchFailReason(reason: TraceEvent['reason']): string | null {
   }
 }
 
-/** One trace chip: a human line per researcher action, failures included. */
+/**
+ * One trace chip: a human line per researcher action, failures included.
+ *
+ * @returns The rendered trace line.
+ */
 function TraceLine({ trace }: { trace: TraceEvent }) {
   if (trace.action === 'figure')
     return (
@@ -91,6 +98,11 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
   )
 }
 
+/**
+ * Render one chat turn end-to-end.
+ *
+ * @returns The turn's bubble (retrieval line, trace chips, prose, figures).
+ */
 export default function ChatMessage({
   message,
   active,

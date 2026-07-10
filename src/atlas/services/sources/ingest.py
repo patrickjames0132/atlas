@@ -116,6 +116,8 @@ def ingest_pdf(
     Args:
         path: Filesystem path to the PDF.
         title: Display title; defaults to the filename stem.
+        on_progress: Optional callback fired per embedded batch (see
+            ``add_source``) — drives the UI's live ingestion progress.
 
     Returns:
         The stored source record.
@@ -139,6 +141,8 @@ def ingest_url(
     Args:
         url: The page URL.
         title: Display title; defaults to the page's own ``<title>``, then the URL.
+        on_progress: Optional callback fired per embedded batch (see
+            ``add_source``) — drives the UI's live ingestion progress.
 
     Returns:
         The stored source record.

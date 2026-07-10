@@ -25,6 +25,12 @@ interface CiteRefNode {
   children: Text[]
 }
 
+/**
+ * The remark plugin: rewrite `[n]` markers in text nodes into `citeref`
+ * elements (see the module docstring).
+ *
+ * @returns The mdast transformer remark runs over each tree.
+ */
 export function remarkCite() {
   return (tree: Root): void => {
     visit(tree, 'text', (node: Text, index, parent: Parent | undefined) => {

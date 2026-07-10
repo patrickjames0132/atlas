@@ -48,6 +48,10 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  *
  * Parsed by hand (not `new Date`) to avoid timezone off-by-one on date-only
  * strings.
+ *
+ * @param pubDate The paper's "YYYY-MM-DD" (or "YYYY-MM") date, when known.
+ * @param year    The bare publication year, the fallback.
+ * @returns The formatted date, or "—" when nothing is known.
  */
 export function formatPubDate(pubDate?: string | null, year?: number | null): string {
   if (pubDate) {
@@ -66,6 +70,9 @@ export function formatPubDate(pubDate?: string | null, year?: number | null): st
  * The single relation that decides a node's color: seed wins, then the first
  * graph relation in priority order, then topic-search hits get their own
  * color, falling back to 'similar'.
+ *
+ * @param node The paper node.
+ * @returns The relation key into `REL_COLOR`.
  */
 export function primaryRel(node: GraphNode): string {
   if (node.is_seed) return 'seed'
@@ -78,6 +85,9 @@ export function primaryRel(node: GraphNode): string {
 /**
  * A node's drawn radius: the seed is fixed-large; everything else scales
  * gently with citation count, capped so megahits don't swallow the canvas.
+ *
+ * @param node The paper node.
+ * @returns The radius in graph units.
  */
 export function nodeRadius(node: GraphNode): number {
   if (node.is_seed) return 10
@@ -90,6 +100,9 @@ export function nodeRadius(node: GraphNode): number {
  * sim's x/y and any fx/fy pins (re-derived on restore), and the researcher's
  * `idx` (per-conversation numbering ephemera; the researcher renumbers from node
  * order on every question, so persisting it would only mislead).
+ *
+ * @param node The live simulation node.
+ * @returns The bare persistable `GraphNode`.
  */
 export function cleanNode(node: VNode): GraphNode {
   return {
@@ -114,6 +127,9 @@ export function cleanNode(node: VNode): GraphNode {
  * Rebuild a GraphResponse's relation counts from its nodes — used when
  * restoring a saved session (whose stored node set already includes
  * discovered papers).
+ *
+ * @param nodes The restored nodes.
+ * @returns Per-relation totals plus the node count.
  */
 export function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
   const counts = { references: 0, citations: 0, similar: 0, latest: 0, nodes: nodes.length }

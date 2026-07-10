@@ -56,13 +56,19 @@ interface YearRangeProps {
  *
  * @param filters   The active filter set (its year window is read + written).
  * @param onFilters Commit a new filter set upward.
+ * @returns The rendered year-range row.
  */
 function YearRange({ filters, onFilters }: YearRangeProps) {
   const maxYear = new Date().getFullYear()
   const lo = filters.yearFrom ?? MIN_YEAR
   const hi = filters.yearTo ?? maxYear
 
-  /** Commit a new [lo, hi] window, folding either bound back to null. */
+  /**
+   * Commit a new [lo, hi] window, folding either bound back to null.
+   *
+   * @param nextLo The new earliest year (folds to null at {@link MIN_YEAR}).
+   * @param nextHi The new latest year (folds to null at the current year).
+   */
   const commit = (nextLo: number, nextHi: number) => {
     onFilters({
       ...filters,
@@ -71,7 +77,12 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
     })
   }
 
-  /** A year's position along the track as a 0–100 percentage. */
+  /**
+   * A year's position along the track as a 0–100 percentage.
+   *
+   * @param year The year to place.
+   * @returns The position percentage.
+   */
   const pct = (year: number) => ((year - MIN_YEAR) / (maxYear - MIN_YEAR)) * 100
 
   return (
@@ -110,7 +121,11 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
   )
 }
 
-/** Render the seed-search form with its collapsible filter popover. */
+/**
+ * Render the seed-search form with its collapsible filter popover.
+ *
+ * @returns The search box (form + popover + active-filter badge).
+ */
 export default function Search({
   query,
   onQueryChange,
@@ -132,13 +147,21 @@ export default function Search({
   const activeCount =
     (filters.yearFrom != null ? 1 : 0) + (filters.yearTo != null ? 1 : 0) + filters.fields.length
 
-  /** Add a field of study to the filter (deduped). */
+  /**
+   * Add a field of study to the filter (deduped).
+   *
+   * @param field The field-of-study name to add.
+   */
   const addField = (field: string) => {
     if (!field || filters.fields.includes(field)) return
     onFilters({ ...filters, fields: [...filters.fields, field] })
   }
 
-  /** Remove one field of study from the filter. */
+  /**
+   * Remove one field of study from the filter.
+   *
+   * @param field The field-of-study name to drop.
+   */
   const removeField = (field: string) => {
     onFilters({ ...filters, fields: filters.fields.filter((other) => other !== field) })
   }

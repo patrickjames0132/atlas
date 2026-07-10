@@ -22,6 +22,19 @@ repos:
       - id: ruff
         args: [--fix]
 
+  # Docstring COMPLETENESS: every Args section matches the signature and a
+  # Returns section exists wherever a value comes back (config in pyproject's
+  # [tool.pydoclint]; ruff's D rules already enforce presence + format).
+  # Runs from the uv env — pydoclint is a dev-group dependency.
+  - repo: local
+    hooks:
+      - id: pydoclint
+        name: pydoclint (docstring completeness)
+        language: system
+        entry: uv run --no-sync pydoclint src/atlas
+        files: ^src/atlas/.*\.py$
+        pass_filenames: false
+
   # Frontend format + lint — the same npm scripts you'd run by hand, over the
   # whole frontend (both tools are fast). They need frontend/node_modules;
   # the session-start bin/setup installs it. Prettier runs first and fixes in

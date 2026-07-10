@@ -147,7 +147,12 @@ const workspaceSlice = createSlice({
   name: 'workspace',
   initialState,
   reducers: {
-    /** Merge a discovery event, deduped against the graph and prior finds. */
+    /**
+     * Merge a discovery event, deduped against the graph and prior finds.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the discovered nodes and edges.
+     */
     discoveryMerged(state, action: PayloadAction<{ nodes: GraphNode[]; edges: GraphEdge[] }>) {
       if (!state.graph) return
       const knownIds = new Set([
@@ -167,21 +172,41 @@ const workspaceSlice = createSlice({
         state.discoveredEdges.push(edge)
       }
     },
+    /**
+     * Switch the graph layout (Force ↔ Timeline).
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the layout mode.
+     */
     layoutSet(state, action: PayloadAction<'force' | 'timeline'>) {
       state.layout = action.payload
     },
-    /** A build-stage frame from the SSE build stream (see `loadGraph`). */
+    /**
+     * A build-stage frame from the SSE build stream (see `loadGraph`).
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the `{done, total, label}` stage.
+     */
     buildProgressSet(state, action: PayloadAction<BuildProgress>) {
       state.buildProgress = action.payload
     },
-    /** GraphExplorer publishes the on-screen node ids here whenever its view
-     * filter changes, so agent grounding tracks what's actually visible. */
+    /**
+     * GraphExplorer publishes the on-screen node ids here whenever its view
+     * filter changes, so agent grounding tracks what's actually visible.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the visible node ids.
+     */
     visibleNodesSet(state, action: PayloadAction<string[]>) {
       state.visibleNodeIds = action.payload
     },
-    /** Home: back to the default no-graph state (the page-load look). The
+    /**
+     * Home: back to the default no-graph state (the page-load look). The
      * epoch bump remounts the teacher panel for fresh run state; the
-     * transcript and highlights clear themselves via extraReducers. */
+     * transcript and highlights clear themselves via extraReducers.
+     *
+     * @param state The slice state (mutated via immer).
+     */
     workspaceCleared(state) {
       state.graph = null
       state.seedRef = null
@@ -192,7 +217,12 @@ const workspaceSlice = createSlice({
       state.error = null
       state.epoch += 1
     },
-    /** The shared search/graph error overlay (null clears it). */
+    /**
+     * The shared search/graph error overlay (null clears it).
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the message, or null to clear.
+     */
     errorSet(state, action: PayloadAction<string | null>) {
       state.error = action.payload
     },
@@ -260,6 +290,12 @@ export default workspaceSlice.reducer
 
 type StateWithWorkspace = { workspace: WorkspaceState }
 
+/**
+ * The whole workspace slice (graph, discoveries, layout, load state).
+ *
+ * @param state The root state.
+ * @returns The workspace slice.
+ */
 export const selectWorkspace = (state: StateWithWorkspace) => state.workspace
 
 /** The full seed node (the stream bodies need every Node field, not the

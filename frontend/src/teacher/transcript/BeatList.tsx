@@ -8,7 +8,12 @@ import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import AnswerMarkdown from './AnswerMarkdown'
 
-/** Adapt a beat's figure to the shape FigCard/Lightbox render. */
+/**
+ * Adapt a beat's figure to the shape FigCard/Lightbox render.
+ *
+ * @param figure The beat's attached figure.
+ * @returns The same figure as an `AnswerFigure`.
+ */
 const asAnswerFigure = (figure: NonNullable<Beat['figure']>): AnswerFigure => ({
   image: figure.image,
   caption: figure.caption,
@@ -16,6 +21,11 @@ const asAnswerFigure = (figure: NonNullable<Beat['figure']>): AnswerFigure => ({
   figure: figure.number,
 })
 
+/**
+ * Render the lecture's beats.
+ *
+ * @returns The beat cards, papers lighting up on click.
+ */
 export default function BeatList({
   beats,
   activeBeat,

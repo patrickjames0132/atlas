@@ -50,7 +50,11 @@ export interface GraphControlsProps {
   refreshing: boolean
 }
 
-/** Render the graph's control panel. */
+/**
+ * Render the graph's control panel.
+ *
+ * @returns The declutter panel (toggle, chips, sliders, actions, hint).
+ */
 export default function GraphControls({
   layout,
   onLayout,
@@ -76,7 +80,12 @@ export default function GraphControls({
   // The year slider only makes sense when the graph spans more than one year.
   const showYears = maxYear > minYear
   const yearSpan = maxYear - minYear
-  /** Position (0–100%) of a year along the range track, for the fill + knobs. */
+  /**
+   * Position of a year along the range track, for the fill + knobs.
+   *
+   * @param year The year to place.
+   * @returns The position as a 0–100 percentage.
+   */
   const yearPct = (year: number) => (yearSpan ? ((year - minYear) / yearSpan) * 100 : 0)
 
   return (

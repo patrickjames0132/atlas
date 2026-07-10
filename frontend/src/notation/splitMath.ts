@@ -21,15 +21,24 @@ export type MathSegment =
   | { readonly kind: 'text'; readonly value: string }
   | { readonly kind: 'math'; readonly value: string; readonly display: boolean }
 
-/** True when the character is whitespace (or absent, i.e. string edge). */
+/**
+ * True when the character is whitespace (or absent, i.e. string edge).
+ *
+ * @param char The character to test, or undefined at a string edge.
+ * @returns Whether it counts as a whitespace boundary.
+ */
 function isWhitespace(char: string | undefined): boolean {
   return char === undefined || /\s/.test(char)
 }
 
 /**
  * Find the closing `$` of an inline math run opened at `openIndex`, applying the
- * CommonMark boundary rules. Returns the index of the closing `$`, or -1 when
- * this `$` doesn't open a valid inline run (so it should be treated as text).
+ * CommonMark boundary rules.
+ *
+ * @param input     The whole string being split.
+ * @param openIndex The index of the candidate opening `$`.
+ * @returns The index of the closing `$`, or -1 when this `$` doesn't open a
+ *          valid inline run (so it should be treated as text).
  */
 function findInlineClose(input: string, openIndex: number): number {
   // An opening `$` immediately followed by whitespace (or end of string) is not
@@ -52,7 +61,14 @@ function findInlineClose(input: string, openIndex: number): number {
   return -1
 }
 
-/** Locate the matching closer for a `\[…\]` or `\(…\)` run; -1 if unterminated. */
+/**
+ * Locate the matching closer for a `\[…\]` or `\(…\)` run.
+ *
+ * @param input        The whole string being split.
+ * @param contentStart The index just past the opening delimiter.
+ * @param closer       The closing delimiter to look for.
+ * @returns The closer's index, or -1 if unterminated.
+ */
 function findBracketClose(input: string, contentStart: number, closer: string): number {
   const closeIndex = input.indexOf(closer, contentStart)
   return closeIndex
@@ -61,6 +77,9 @@ function findBracketClose(input: string, contentStart: number, closer: string): 
 /**
  * Break `input` into text and math segments. A string with no delimited math
  * comes back as a single text segment, so callers can cheaply skip KaTeX.
+ *
+ * @param input The raw text (prose, possibly with LaTeX runs).
+ * @returns The ordered text/math segments.
  */
 export function splitMath(input: string): MathSegment[] {
   const segments: MathSegment[] = []

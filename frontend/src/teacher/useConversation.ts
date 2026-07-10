@@ -28,6 +28,11 @@ import {
 } from '../store/transcript'
 import { discoveryMerged, selectGroundingNodes, selectSeedNode } from '../store/workspace'
 
+/**
+ * Mint a fresh chat-session id (keys the backend's per-conversation history).
+ *
+ * @returns A UUID, or a random-digits fallback off-HTTPS.
+ */
 const newSessionId = () => (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
 
 /** An inline citation marker in answer prose, e.g. `[7]`. */
@@ -38,6 +43,10 @@ const REF_MARKER = /\[(\d+)\]/g
  * `index → node-id` map, given the numbered grounding list `[n]` indexes into
  * (1-based, matching the backend's `node_lines`). Only referenced indices that
  * land on a real node are kept, so the map stays small and reload-safe.
+ *
+ * @param text        The finished answer prose.
+ * @param numberedIds The grounding list's node ids, in numbered order.
+ * @returns The marker → node-id map for the turn's clickable chips.
  */
 function resolveRefs(text: string, numberedIds: string[]): Record<string, string> {
   const refs: Record<string, string> = {}
@@ -49,6 +58,12 @@ function resolveRefs(text: string, numberedIds: string[]): Record<string, string
   return refs
 }
 
+/**
+ * Own the assistant's stream engine: run the lecture/ask/library streams,
+ * dispatch their events into the store, and expose the panel's run state.
+ *
+ * @returns The run state + the lecture/ask/clear entry points.
+ */
 export function useConversation() {
   const dispatch = useAppDispatch()
   const seedNode = useAppSelector(selectSeedNode)

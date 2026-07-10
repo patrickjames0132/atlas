@@ -89,6 +89,7 @@ export interface GraphResponse {
  * @param seed    An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId
  *                (re-seeding works from any node, arXiv or not).
  * @param refresh Bypass the server's day-cached snapshot and rebuild from S2.
+ * @returns The seed's whole neighborhood graph (nodes, edges, counts).
  * @throws With the server's error message (e.g. "No paper found…", S2
  *         unavailable) when the graph can't be built.
  */
@@ -121,6 +122,7 @@ export interface BuildProgress {
  * @param seed       An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId.
  * @param refresh    Bypass the server's day-cached snapshot and rebuild from S2.
  * @param onProgress Called per build stage with `{done, total, label}`.
+ * @returns The seed's whole neighborhood graph, same shape as {@link fetchGraph}.
  * @throws With the server's error message when the graph can't be built.
  */
 export async function fetchGraphStream(
@@ -150,6 +152,7 @@ export async function fetchGraphStream(
  * @param paperRef The paper's arXiv id, a pasted abs/pdf URL, or a raw S2
  *                 paperId (papers that exist on S2 but not arXiv hydrate by
  *                 paperId).
+ * @returns The hydrated node (abstract, tldr, authors filled in).
  * @throws With the server's error message when the paper can't be fetched.
  */
 export async function fetchPaperDetail(paperRef: string): Promise<GraphNode> {
@@ -184,6 +187,7 @@ export interface FiguresResponse {
  * can't break the panel.
  *
  * @param arxivId The paper's arXiv id.
+ * @returns The figure list, or `{available: false}` when ar5iv has no render.
  */
 export async function fetchFigures(arxivId: string): Promise<FiguresResponse> {
   const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/figures`)
@@ -239,6 +243,7 @@ const EMPTY_CODE_LINKS: CodeLinksResponse = {
  * can't break the panel.
  *
  * @param arxivId The paper's arXiv id.
+ * @returns The linked repos/models/datasets, or `{available: false}`.
  */
 export async function fetchCodeLinks(arxivId: string): Promise<CodeLinksResponse> {
   const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/code`)
@@ -269,6 +274,7 @@ const EMPTY_CATEGORIES: CategoriesResponse = { available: false, categories: [] 
  * export API can't break the panel.
  *
  * @param arxivId The paper's arXiv id.
+ * @returns The category tags, or `{available: false}`.
  */
 export async function fetchCategories(arxivId: string): Promise<CategoriesResponse> {
   const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/categories`)

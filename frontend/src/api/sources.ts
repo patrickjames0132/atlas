@@ -34,6 +34,8 @@ export interface SourcesResponse {
  *
  * Never throws — failures degrade to `{ available: false, sources: [] }` so
  * the library panel can render a disabled state.
+ *
+ * @returns The source list, or the disabled shape on any failure.
  */
 export async function listSources(): Promise<SourcesResponse> {
   try {
@@ -56,10 +58,14 @@ export interface IngestProgress {
  * `done` resolves with the stored record, `error` rejects with the server's
  * message (a SourceError's text verbatim — written for users).
  * Shared by {@link uploadSource} and {@link ingestUrl}.
+ *
+ * @param res        The ingestion endpoint's SSE response.
+ * @param onProgress Called per embedding batch with `{done, total}` chunks.
+ * @returns The stored source record once the stream completes.
  */
 async function ingestResult(
   res: Response,
-  onProgress?: (p: IngestProgress) => void,
+  onProgress?: (progress: IngestProgress) => void,
 ): Promise<Source> {
   let source: Source | null = null
   let message: string | null = null
@@ -81,12 +87,13 @@ async function ingestResult(
  * @param file       The PDF file.
  * @param title      Optional display title (defaults to the filename server-side).
  * @param onProgress Called per embedding batch with `{done, total}` chunks.
+ * @returns The stored source record.
  * @throws With the server's error message when ingestion fails.
  */
 export async function uploadSource(
   file: File,
   title?: string,
-  onProgress?: (p: IngestProgress) => void,
+  onProgress?: (progress: IngestProgress) => void,
 ): Promise<Source> {
   const form = new FormData()
   form.append('file', file)
@@ -100,12 +107,13 @@ export async function uploadSource(
  * @param url        The page or PDF URL.
  * @param title      Optional display title (defaults to the page title server-side).
  * @param onProgress Called per embedding batch with `{done, total}` chunks.
+ * @returns The stored source record.
  * @throws With the server's error message when ingestion fails.
  */
 export async function ingestUrl(
   url: string,
   title?: string,
-  onProgress?: (p: IngestProgress) => void,
+  onProgress?: (progress: IngestProgress) => void,
 ): Promise<Source> {
   return ingestResult(
     await fetch('/api/sources', {
@@ -121,6 +129,9 @@ export async function ingestUrl(
  * Remove a source and its chunks/vectors from the library.
  *
  * Never throws — returns false on any failure.
+ *
+ * @param id The source's id.
+ * @returns True when the source existed and is now gone.
  */
 export async function deleteSource(id: string): Promise<boolean> {
   try {

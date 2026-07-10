@@ -9,6 +9,11 @@
 import { useState } from 'react'
 import type { Source } from '../api'
 
+/**
+ * Render the library-scope picker: which sources the assistant may search.
+ *
+ * @returns The collapsible source-checkbox list.
+ */
 export default function ScopePicker({
   items,
   checkedIds,

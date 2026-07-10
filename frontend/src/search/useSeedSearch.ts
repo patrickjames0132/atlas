@@ -39,6 +39,7 @@ export interface SeedSearchApi {
  *
  * @param onError Surface a search failure message (or clear one with null) —
  *                errors share Atlas's overlay with graph-load errors.
+ * @returns The search state + handlers (see {@link SeedSearchApi}).
  */
 export function useSeedSearch(onError: (message: string | null) => void): SeedSearchApi {
   const [query, setQuery] = useState('')

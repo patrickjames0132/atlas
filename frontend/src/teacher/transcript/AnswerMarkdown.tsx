@@ -23,6 +23,11 @@ import { remarkCite } from './remarkCite'
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
 const REHYPE_PLUGINS = [rehypeKatex]
 
+/**
+ * Render an answer's Markdown + math + clickable `[n]` citations.
+ *
+ * @returns The rendered answer body.
+ */
 export default function AnswerMarkdown({
   text,
   refs,

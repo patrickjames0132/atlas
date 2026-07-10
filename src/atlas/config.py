@@ -43,7 +43,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 class ConfigModel(BaseModel):
     """Base for every settings group: unknown keys in config.json are typos,
-    so reject them instead of ignoring them."""
+    so reject them instead of ignoring them.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -318,7 +319,8 @@ class LLMConfig(ConfigModel):
     @model_validator(mode="after")
     def _agent_providers_are_configured(self) -> LLMConfig:
         """An agent naming an unconfigured vendor would fail at first request,
-        not at load — catch it here instead."""
+        not at load — catch it here instead.
+        """
         configured = LLMProvidersConfig.model_fields.keys()
         for agent in self.agents:
             if agent.provider not in configured:
@@ -421,7 +423,8 @@ class SourcesConfig(ConfigModel):
 
 class ServerConfig(ConfigModel):
     """Where the Flask app listens, how loudly it logs, and the route-owned
-    conversation policy."""
+    conversation policy.
+    """
 
     host: str = Field(min_length=1, description="Interface Flask binds to.")
     port: int = Field(ge=1, le=65535, description="TCP port Flask listens on.")

@@ -1043,6 +1043,18 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Teacher & agent reach
 
+- [ ] **Lectures should span the whole publication history** — Patrick's
+      browser observation: a "How we got here" / "What's evolved since"
+      lecture typically stops a little short of the graph's full time span
+      (e.g. the oldest roots or the newest visible descendants never get a
+      beat). Add a mechanism or guardrail so the story actually reaches both
+      ends — likely a prompt-side nudge (the mode intents could state the
+      span explicitly: "the numbered list runs YEAR₁–YEAR₂; your story must
+      reach both ends") and/or a deterministic check on the returned beats
+      (compare the years the beats' nodes cover against the story set's
+      range). Worth considering alongside `min_beats`/`max_beats` (v4.2.0):
+      too few beats for a long history forces skipping. *(From the
+      `todos.md` inbox, 2026-07-10.)*
 - [ ] **Graph-less research mode** — let the researcher run with no graph
       open: agentic research from scratch (search S2 + the local library, no
       seed required). Would retire the librarian in its favor — today's
@@ -1090,6 +1102,15 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
+- [ ] **Duplicate nodes for the same paper (cross-source identity)** —
+      Patrick's browser observation: seeding on DQN shows **two** node
+      instances of "Continuous control with deep reinforcement learning".
+      Likely cross-source id mismatch: since v4.0.0 OpenAlex citers carry
+      `DOI:`/`ARXIV:`/`W…` ids while S2 relations (references, similar) use
+      bare S2 paperIds — the same paper arriving via two relations under two
+      id schemes dedupes as two nodes. Needs an identity-resolution pass in
+      the graph build (match by DOI/arXiv id before minting a node), plus a
+      pinned test. *(From the `todos.md` inbox, 2026-07-10.)*
 - [ ] **Verify slider reveal order is most-cited-first** — every relation
       slider except Latest Publications is supposed to reveal by
       **citation rank** (references/citations/landmarks: most-cited first;
@@ -1145,6 +1166,15 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       lecture beats; `MathText` stays for the detail panel, search hits, and beat
       headings. The user's own question bubble stays plain (no Markdown
       surprises). *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Multi-number citation markers don't highlight** — an agent answer
+      sometimes writes a combined marker like `[14, 29]`; clicking it
+      highlights nothing. The whole `[n]` pipeline matches single numbers
+      only (`\[(\d+)\]` in the frontend's `remarkCite`/`useConversation`
+      resolveRefs AND the backend's `prompts.refs_from_text`), so a combined
+      marker never becomes a chip. Either split `[14, 29]` into two chips at
+      render time (extend the regexes to comma/space-separated lists) or
+      prompt the agents to always emit separate `[14][29]` markers — or
+      both, belt and braces. *(From the `todos.md` inbox, 2026-07-10.)*
 - [ ] **Tidy the lecture-mode buttons** — the three lecture buttons ("How we
       got here" / "This paper's intuition" / "What's evolved since", defined in
       `frontend/src/teacher/Teacher.tsx`, styled in `teacher/teacher.css`) look
@@ -1168,18 +1198,33 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
-- [ ] **Enforce docstrings in the gate, both languages** — make "every
-      function documented" a *checked* invariant instead of a convention:
-      - **Backend:** turn on ruff's pydocstyle rules (`D` family) in the
-        existing pre-commit ruff hook so a missing docstring fails the gate;
-        sweep the stragglers whose docstrings lack **Args / Returns /
-        Raises** sections where applicable (completeness beyond D-rules may
-        need `pydoclint` or the darglint-style checkers — evaluate).
-      - **Frontend:** many functions still lack JSDoc; add it everywhere
-        with backend-style structure (description + `@param`/`@returns`/
-        `@throws` where applicable) and enforce via oxlint's jsdoc plugin
-        rules (e.g. `require-returns`, `require-param`) so new code can't
-        regress. *(From the `todos.md` inbox, 2026-07-09.)*
+- [x] **Enforce docstrings in the gate, both languages** *(2026-07-10, no
+      version bump — quality tooling; the whole sweep is runtime-invisible,
+      bundle hash unchanged)* —
+      - **Backend:** ruff's pydocstyle **`D` rules on (Google convention)**
+        — a missing module/class/function docstring now fails the gate
+        (D205 deliberately ignored: the house style opens with flowing
+        multi-sentence paragraphs). **pydoclint** evaluated and adopted for
+        *completeness*: Args must match the signature, Returns must exist
+        where a value comes back (new pre-commit hook + `[tool.pydoclint]`;
+        type-matching and raises-checks off — types live in annotations,
+        and the house style rightly documents *propagated* exceptions,
+        which pydoclint's lexical raises-check would outlaw). Sweep fixed
+        ~45 gaps: 20 auto-fixed quote placements, 7 undocumented params
+        (incl. every researcher tool's `ctx` and ingest's `on_progress` —
+        the exact complaint), 5 tool Returns sections, missing
+        `__init__`/method docstrings, `_figure_pool`/`resolvable_id` Args.
+      - **Frontend:** oxlint's **jsdoc plugin on** (`require-param` with
+        `checkDestructured: false` — component props stay documented on
+        their Props interfaces, not duplicated as tags — `require-returns`,
+        description/name/tag rules; off for `test/**`, mirroring the
+        backend's per-file-ignores). Fixed all 96 completeness findings and
+        swept JSDoc onto the 17 still-undocumented functions (components,
+        selectors, reducers, hooks), so every function is documented with
+        backend-style structure. **Caveat:** oxlint has no `require-jsdoc`,
+        so *presence* on brand-new functions stays a convention (CLAUDE.md);
+        completeness of anything documented is machine-enforced.
+      *(From the `todos.md` inbox, 2026-07-09.)*
 - [ ] **Dynamic OpenAlex latest-window sizing** — the "Latest Publications"
       per-year bands + newest window (`config.graph.latest_band_years` /
       `latest_per_year`) are a **fixed** span today. But how far back the recent

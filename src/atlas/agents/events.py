@@ -35,7 +35,8 @@ class BeatFigure(BaseModel):
     image URL, the paper's own caption, and the figure's number in the
     lecture's figure list. ``title`` names the source paper when the lecture
     drew from several (history/evolution); None when every figure is the
-    seed's own (intuition)."""
+    seed's own (intuition).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,7 +49,8 @@ class BeatFigure(BaseModel):
 class Beat(BaseModel):
     """One lecture beat: a signpost heading, one tight narration paragraph,
     the nodes to light up on the graph while it's spoken, and optionally one
-    of the seed paper's own figures to show inline (intuition mode)."""
+    of the seed paper's own figures to show inline (intuition mode).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -126,7 +128,8 @@ class Figure(BaseModel):
 
 class Cited(BaseModel):
     """The final citation event: the node ids the answer draws on, for the
-    frontend to highlight. Emitted exactly once, after the prose."""
+    frontend to highlight. Emitted exactly once, after the prose.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -144,7 +147,8 @@ class Done(BaseModel):
 
 class Error(BaseModel):
     """The workflow failed. Always the last event on failure — the frontend
-    shows ``message`` in the panel instead of hanging on a dead stream."""
+    shows ``message`` in the panel instead of hanging on a dead stream.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -235,7 +239,8 @@ class FigureTrace(BaseModel):
 
 class RetrievalTrace(BaseModel):
     """The librarian's pre-answer retrieval: how many passages matched and
-    the distinct source titles they came from."""
+    the distinct source titles they came from.
+    """
 
     model_config = ConfigDict(extra="forbid")
 

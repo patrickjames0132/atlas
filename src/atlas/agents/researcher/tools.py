@@ -65,9 +65,19 @@ class ResearcherDeps:
     queue: list[events.Event] = field(default_factory=list)
 
     def emit(self, event: events.Event) -> None:
+        """Queue a trace/discovery event for the stream bridge to flush.
+
+        Args:
+            event: The typed event to queue.
+        """
         self.queue.append(event)
 
     def drain(self) -> list[events.Event]:
+        """Take (and clear) everything queued since the last drain.
+
+        Returns:
+            The queued events, oldest first.
+        """
         queued, self.queue = self.queue, []
         return queued
 
@@ -98,7 +108,8 @@ def _record_cited(deps: ResearcherDeps, node_id: str) -> None:
 def _figure_list(arxiv_id: str, index: int) -> str:
     """A full read's "Figures" block, so the model can show_figure the right
     one. Empty on no figures or a failed fetch — figures are a nicety, not
-    the read."""
+    the read.
+    """
     try:
         result = figures_mod.get_figures(arxiv_id)
     except Exception:
@@ -158,10 +169,15 @@ def read_paper(
     """Read one of the numbered papers to ground your answer.
 
     Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
         index: The [n] index of the paper from the numbered list.
         detail: "summary" for its abstract + TL;DR (cheap); "full" for the
             full text via ar5iv — use sparingly, it has a smaller budget. A
             full read also lists the paper's figures for show_figure.
+
+    Returns:
+        The paper's text — title + TL;DR + abstract (summary), or the full
+        text plus its figure list (full) — or a budget/validity message.
     """
     deps = ctx.deps
     node = _node_at(deps, index)
@@ -198,9 +214,14 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
     graph as new numbered papers you can then read.
 
     Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
         index: The [n] index of the paper to expand from.
         relation: "references" (papers it cites), "citations" (papers citing
             it), or "similar" (embedding-similar work).
+
+    Returns:
+        The newly numbered neighbors (title + year each), or a
+        budget/validity message.
     """
     deps = ctx.deps
     node = _node_at(deps, index)
@@ -287,9 +308,14 @@ def search_papers(
     expand_node can't reach; hits get numbered and added for you to read.
 
     Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
         query: Free-text query — keywords or a topic, not an id.
         year_from: Earliest publication year (inclusive). Omit for no floor.
         year_to: Latest publication year (inclusive). Omit for no ceiling.
+
+    Returns:
+        The newly numbered hits (title + year each), or a budget/validity
+        message.
     """
     deps = ctx.deps
     query = query.strip()
@@ -351,8 +377,13 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
     line in your prose exactly where the figure belongs.
 
     Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
         index: The [n] index of the paper the figure comes from.
         figure: The figure's number as listed in the full read (1-based).
+
+    Returns:
+        The ``<<FIG n>>`` marker to place in your prose, or a
+        budget/validity message.
     """
     deps = ctx.deps
     node = _node_at(deps, index)
@@ -420,8 +451,13 @@ def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str |
     with source title and page; attribute them inline in your prose.
 
     Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
         query: What to look for — a concept or question, not an id.
         source_id: Restrict to one source's id from "Your library" (optional).
+
+    Returns:
+        The most relevant passages (source title + page + text), or a
+        budget/validity message.
     """
     deps = ctx.deps
     query = query.strip()

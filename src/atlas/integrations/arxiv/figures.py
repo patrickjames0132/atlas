@@ -37,7 +37,7 @@ _MAX_CAPTION = 600
 
 
 class _FigureParser(HTMLParser):
-    """Collect ``{image, caption}`` for each ``<figure>`` that contains an image.
+    r"""Collect ``{image, caption}`` for each ``<figure>`` that contains an image.
 
     Tracks figure nesting so a stray inner figure can't corrupt the outer one,
     grabs the first ``<img>`` in a figure as its thumbnail, and accumulates the
@@ -47,17 +47,14 @@ class _FigureParser(HTMLParser):
     ``<math>`` element whose *children* are presentation MathML plus content-MathML
     and LaTeX annotations — three separate text renderings of the same formula.
     Tag-stripping all of it yields garbled, tripled soup
-    (``Q(s,a)=V∗(s)+ϵa`` + ``subscriptitalic-ϵa`` + ``Q(s,a)=V_{*}(s)+\\epsilon_{a}``).
+    (``Q(s,a)=V∗(s)+ϵa`` + ``subscriptitalic-ϵa`` + ``Q(s,a)=V_{*}(s)+\epsilon_{a}``).
     Instead we skip the ``<math>`` subtree entirely and emit its ``alttext``
     attribute — the clean LaTeX source — wrapped in ``$…$`` so the frontend's KaTeX
-    renders it properly."""
+    renders it properly.
+    """
 
     def __init__(self) -> None:
-        """Set up empty figure/caption accumulators.
-
-        Returns:
-            None.
-        """
+        """Set up empty figure/caption accumulators."""
         super().__init__(convert_charrefs=True)
         self.figures: list[dict] = []
         self._depth = 0  # how deep we are in nested <figure> tags

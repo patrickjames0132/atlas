@@ -12,7 +12,13 @@ import './sources.css'
  * extraction/chunking happens before the bar starts moving). */
 type Upload = { name: string; status: 'ingesting' | 'done' | 'error'; error?: string; pct?: number }
 
-/** Run `worker` over `items` with at most `limit` in flight at once. */
+/**
+ * Run `worker` over `items` with at most `limit` in flight at once.
+ *
+ * @param items  The work items.
+ * @param limit  The concurrency cap.
+ * @param worker Processes one item (called with the item and its index).
+ */
 async function runPool<Item>(
   items: Item[],
   limit: number,
@@ -28,6 +34,11 @@ async function runPool<Item>(
   await Promise.all(runners)
 }
 
+/**
+ * Render the Sources drawer: upload/paste, per-file progress, the source list.
+ *
+ * @returns The drawer, or null while closed.
+ */
 export default function Sources({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [available, setAvailable] = useState(true)
   const [items, setItems] = useState<Source[]>([])

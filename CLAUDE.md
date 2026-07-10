@@ -149,10 +149,19 @@ branch `main`.
 in `noxfile.py`, all reusing the uv env (no per-session installs):
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
-  hygiene + **ruff** lint (config in `pyproject.toml`) + the **frontend's
-  format & lint** — prettier (config in `frontend/.prettierrc.json`, scoped
-  to `src/**/*.{ts,tsx,css}` + `vite.config.ts`; READMEs and the JSONC
-  tsconfigs stay hand-formatted) and oxlint, as local hooks running the
+  hygiene + **ruff** lint (config in `pyproject.toml`; includes the
+  **pydocstyle `D` rules, Google convention** — every module/class/function
+  must carry a docstring; D205 deliberately off, the house style opens with
+  flowing paragraphs) + **pydoclint** (docstring *completeness*: Args match
+  the signature, Returns where a value comes back — config in
+  `[tool.pydoclint]`; its raises-checks are off because the house style
+  documents *propagated* exceptions too) + the **frontend's format & lint** —
+  prettier (config in `frontend/.prettierrc.json`, scoped to
+  `src/**/*.{ts,tsx,css}` + `test/` + `vite.config.ts`; READMEs and the JSONC
+  tsconfigs stay hand-formatted) and oxlint (now incl. **jsdoc completeness
+  rules**: a documented function's `@param`/`@returns` must be complete —
+  presence isn't machine-checkable in oxlint, so JSDoc-on-every-function
+  stays a convention, swept once 2026-07-10), as local hooks running the
   frontend's own npm scripts (they need `frontend/node_modules` — the
   session-start `bin/setup` installs it). Prettier fixes in place like ruff
   `--fix`: a reformat fails the run so the changes get restaged.

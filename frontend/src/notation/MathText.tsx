@@ -14,7 +14,11 @@ import 'katex/dist/katex.min.css'
 
 import { splitMath } from './splitMath'
 
-/** One math run, typeset by KaTeX into trusted (self-sanitised) markup. */
+/**
+ * One math run, typeset by KaTeX into trusted (self-sanitised) markup.
+ *
+ * @returns The rendered KaTeX span.
+ */
 function MathSpan({ value, display }: { value: string; display: boolean }) {
   // `throwOnError: false` degrades invalid LaTeX to a red-rendered source string
   // rather than throwing — a malformed formula never takes down the surface.
@@ -29,6 +33,8 @@ function MathSpan({ value, display }: { value: string; display: boolean }) {
  * Typeset the LaTeX math in `children`. Falls back to rendering the raw string
  * (or nothing, for null/empty) when there's no math, so it's safe to wrap every
  * text surface unconditionally.
+ *
+ * @returns The interleaved plain/typeset spans, or null for empty input.
  */
 export default function MathText({ children }: { children: string | null | undefined }) {
   const segments = useMemo(() => (children ? splitMath(children) : []), [children])

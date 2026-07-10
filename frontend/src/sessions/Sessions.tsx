@@ -9,11 +9,22 @@ import './sessions.css'
 // Semantic Scholar. Listing/deleting is handled here; saving and restoring are
 // the parent's job (it holds the live graph + chat), reached via onSave/onOpen.
 
+/**
+ * A saved session's timestamp as a short human date.
+ *
+ * @param ts The Unix timestamp (seconds).
+ * @returns E.g. "Jul 9, 2026".
+ */
 function when(ts: number): string {
   const date = new Date(ts * 1000)
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+/**
+ * Render the Sessions drawer: save the workspace, reopen or delete a save.
+ *
+ * @returns The drawer, or null while closed.
+ */
 export default function Sessions({
   open,
   onClose,

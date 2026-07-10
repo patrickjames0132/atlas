@@ -12,6 +12,11 @@ import { useEffect } from 'react'
 import type { AnswerFigure } from '../api'
 import MathText from '../notation/MathText'
 
+/**
+ * Render a figure enlarged full-screen (click/Escape to dismiss).
+ *
+ * @returns The overlay, or null when no figure is open.
+ */
 export default function Lightbox({
   figure,
   onClose,

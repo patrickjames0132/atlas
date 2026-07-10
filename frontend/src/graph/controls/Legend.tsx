@@ -14,7 +14,11 @@ export interface LegendProps {
   hasSearchHits: boolean
 }
 
-/** Render the graph's color legend. */
+/**
+ * Render the graph's color legend.
+ *
+ * @returns The legend row.
+ */
 export default function Legend({ hasDiscovered, hasSearchHits }: LegendProps) {
   return (
     <div className="legend">

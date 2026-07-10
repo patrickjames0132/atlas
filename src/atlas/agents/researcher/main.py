@@ -92,7 +92,8 @@ agent: Agent[ResearcherDeps, Answer] = Agent(
 
 def _library_context(library: list[dict]) -> str:
     """The "Your library" listing so the model knows what it can search and
-    can scope search_sources by id."""
+    can scope search_sources by id.
+    """
     lines = []
     for source in library:
         location = f"{source['pages']}pp" if source.get("pages") else source.get("kind", "")

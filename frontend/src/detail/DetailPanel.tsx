@@ -38,14 +38,23 @@ export interface DetailPanelProps {
   onExplore: (id: string) => void
 }
 
-/** Compact count for repo metadata: 1400 → "1.4k", 2100000 → "2.1M". */
+/**
+ * Compact count for repo metadata: 1400 → "1.4k", 2100000 → "2.1M".
+ *
+ * @param count The raw count.
+ * @returns The abbreviated form.
+ */
 function fmtCount(count: number): string {
   if (count >= 1e6) return `${(count / 1e6).toFixed(1).replace(/\.0$/, '')}M`
   if (count >= 1e3) return `${(count / 1e3).toFixed(1).replace(/\.0$/, '')}k`
   return String(count)
 }
 
-/** One link-out row in the "Code & artifacts" section. */
+/**
+ * One link-out row in the "Code & artifacts" section.
+ *
+ * @returns The rendered link row.
+ */
 function CodeRow({
   href,
   icon,
@@ -73,6 +82,8 @@ function CodeRow({
  * (S2's coarser field-of-study classification, e.g. "Computer Science").
  * Each section renders only when it has tags — a non-arXiv paper shows the
  * S2 section alone.
+ *
+ * @returns The rendered tag sections, or null when there are no tags at all.
  */
 function CategoryTags({
   categories,
@@ -113,7 +124,11 @@ function CategoryTags({
   )
 }
 
-/** The paper's implementations (HF Papers): GitHub repo, models, datasets, Spaces. */
+/**
+ * The paper's implementations (HF Papers): GitHub repo, models, datasets, Spaces.
+ *
+ * @returns The rendered "Code & artifacts" section.
+ */
 function CodeSection({ code }: { code: CodeLinksResponse }) {
   const { totals } = code
   const totalParts = [
@@ -164,7 +179,11 @@ function CodeSection({ code }: { code: CodeLinksResponse }) {
   )
 }
 
-/** Render the detail panel for the selected paper. */
+/**
+ * Render the detail panel for the selected paper.
+ *
+ * @returns The docked, resizable detail panel.
+ */
 export default function DetailPanel({
   node,
   figures,

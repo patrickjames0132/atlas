@@ -43,6 +43,12 @@ class S2Error(RuntimeError):
     """
 
     def __init__(self, message: str, *, status: int | None = None):
+        """Wrap the failure message, keeping the HTTP status as data.
+
+        Args:
+            message: Human-readable description of what failed.
+            status: The HTTP status code, or None for non-HTTP failures.
+        """
         super().__init__(message)
         self.status = status
 

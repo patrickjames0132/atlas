@@ -18,6 +18,10 @@ const FIG_TAIL = /<<(?:F(?:I(?:G(?: ?(?:\d+>?)?)?)?)?)?$/
  * parts, plus the figures whose marker never appeared in the prose — those
  * render at the end of the bubble (the pre-inline fallback, which also covers
  * old saved sessions whose figures carry no slot).
+ *
+ * @param text    The (possibly still-streaming) answer prose.
+ * @param figures The figures the agent attached, slot-tagged.
+ * @returns The interleaved `parts` plus the unreferenced `leftover` figures.
  */
 export function splitAnswer(
   text: string,

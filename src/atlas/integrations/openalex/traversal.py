@@ -185,7 +185,8 @@ def _by_citation(entry: dict) -> int:
 def _by_recency(entry: dict) -> tuple:
     """A citer entry's recency sort key (year then date), newest-first when
     reverse-sorted. Papers with only a year (no ``pub_date``) sort last in their
-    year — the ``""`` date floor."""
+    year — the ``""`` date floor.
+    """
     node = entry["node"]
     return (node.get("year") or 0, node.get("pub_date") or "")
 

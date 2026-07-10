@@ -52,6 +52,8 @@ export interface SelectionApi {
  *
  * Per-paper caches (details, figures, code links, categories) reset — and
  * the seed becomes the selection — whenever a new graph loads.
+ *
+ * @returns The selection state + handlers (see {@link SelectionApi}).
  */
 export function useSelection({ base, graph, loadGraph }: UseSelectionArgs): SelectionApi {
   const [selectedId, setSelectedId] = useState<string | null>(null)

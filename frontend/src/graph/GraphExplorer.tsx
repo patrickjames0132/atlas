@@ -41,6 +41,12 @@ import { usePinning } from './hooks/usePinning'
 import { useTimeline } from './hooks/useTimeline'
 import type { Base, VLink, VNode } from './model'
 
+/**
+ * Render the graph area: canvas + controls + legend + detail panel, plus the
+ * shell's overlays as `children`.
+ *
+ * @returns The graph exploration area.
+ */
 export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const dispatch = useAppDispatch()
   const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef } =

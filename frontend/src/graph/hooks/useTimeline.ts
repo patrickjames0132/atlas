@@ -71,6 +71,8 @@ export interface TimelineApi {
  *
  * Also runs two effects: re-pinning year columns when a new graph loads while
  * Timeline is active, and refitting the camera when the year slider narrows.
+ *
+ * @returns The x-placement, physics, axis-painting, and settle-freeze handles.
  */
 export function useTimeline({
   base,

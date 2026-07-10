@@ -119,6 +119,10 @@ const SUPERSCRIPTS: Readonly<Record<string, string>> = {
  * Map the characters of a sub/superscript group to Unicode. If any character
  * lacks a glyph in the target table, give up on the whole group and return the
  * plain characters — a half-converted "x₂z" reads worse than "x2z".
+ *
+ * @param group The script group's characters (without the `_`/`^` marker).
+ * @param table The subscript or superscript glyph table.
+ * @returns The mapped glyphs, or the group unchanged.
  */
 function mapScript(group: string, table: Readonly<Record<string, string>>): string {
   let mapped = ''
@@ -133,6 +137,9 @@ function mapScript(group: string, table: Readonly<Record<string, string>>): stri
 /**
  * Convert the LaTeX in `input` to an approximate Unicode string for canvas
  * display. Never throws; unmapped constructs are left as readable text.
+ *
+ * @param input The raw title text, possibly containing LaTeX.
+ * @returns The approximate Unicode rendering.
  */
 export function latexToUnicode(input: string): string {
   let text = input

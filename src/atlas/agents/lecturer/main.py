@@ -57,7 +57,8 @@ class LectureBeat(BaseModel):
     (the model never sees ids — ``prompts.idx_to_id`` maps them back), plus
     optionally the number of a pooled figure to show with the beat (the
     prompt lists the mode's figure pool; a mode with an empty pool maps any
-    value to nothing)."""
+    value to nothing).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -110,6 +111,11 @@ def _figure_pool(seed: Node, nodes: list[Node], mode: LectureMode) -> list[dict]
     mode-scoped) visible nodes, ``_FIGURES_PER_PAPER`` figures each — every
     entry titled with its source paper so both the model and the beat card
     can attribute it. Bridge shows no figures.
+
+    Args:
+        seed: The seed paper (its figures lead every pool).
+        nodes: The mode-scoped visible nodes the landmarks are drawn from.
+        mode: The lecture mode (decides the pool's shape).
 
     Returns:
         ``[{"image", "caption", "title"}]`` entries (``title`` None for the
@@ -232,7 +238,8 @@ def _beat(beat: LectureBeat, nodes: list[Node], figures: list[dict]) -> events.B
     mapped back to node ids, and a valid ``figure`` number resolved to the
     pooled figure's proxied image + caption + source paper (an out-of-range
     or spurious number — including any in a mode whose pool is empty — just
-    means no figure, never a failure)."""
+    means no figure, never a failure).
+    """
     figure = None
     if beat.figure is not None and 1 <= beat.figure <= len(figures):
         chosen = figures[beat.figure - 1]

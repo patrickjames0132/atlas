@@ -33,6 +33,7 @@ export interface ResizablePanel {
  * @param defaultWidth  Width before the user has ever dragged (must match the
  *                      panel's CSS width so nothing shifts on first paint).
  * @param bounds        Optional min/max clamp (defaults 280–680px).
+ * @returns The width + drag-handle wiring (see {@link ResizablePanel}).
  */
 export function useResizablePanel(
   storageKey: string,

@@ -91,6 +91,8 @@ export interface SaveSessionBody extends SessionData {
  * List the user's saved sessions (metadata only).
  *
  * Never throws — failures degrade to an empty list so the drawer still opens.
+ *
+ * @returns The saved sessions' metadata rows, newest first.
  */
 export async function listSessions(): Promise<SavedSessionMeta[]> {
   try {
@@ -106,6 +108,8 @@ export async function listSessions(): Promise<SavedSessionMeta[]> {
  * Fetch the full saved session (graph + transcript) to restore into the
  * explorer.
  *
+ * @param id The saved session's id.
+ * @returns The full session payload (graph + transcript).
  * @throws With the server's error message when the session doesn't exist or
  *         can't be loaded.
  */
@@ -122,6 +126,7 @@ export async function getSession(id: string): Promise<SavedSession> {
  * Save the current workspace. A body with an `id` overwrites that saved
  * session; without one, a new session is created.
  *
+ * @param body The workspace payload to store (see {@link SaveSessionBody}).
  * @returns The stored metadata row (with the new/updated id and timestamps).
  * @throws With the server's error message when the save fails.
  */
@@ -140,6 +145,9 @@ export async function saveSession(body: SaveSessionBody): Promise<SavedSessionMe
  * Delete a saved session.
  *
  * Never throws — returns false on any failure.
+ *
+ * @param id The saved session's id.
+ * @returns True when the session existed and is now gone.
  */
 export async function deleteSession(id: string): Promise<boolean> {
   try {

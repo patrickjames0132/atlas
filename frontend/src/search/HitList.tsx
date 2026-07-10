@@ -29,6 +29,9 @@ export interface HitListProps {
 /**
  * Reference-style authors: "A & B" up to two names, "A et al." beyond —
  * a hit list wants recognition, not the full roster.
+ *
+ * @param authors The comma-separated author string, when known.
+ * @returns The abbreviated form, or null when there are no authors.
  */
 function refAuthors(authors?: string | null): string | null {
   if (!authors) return null
@@ -42,6 +45,8 @@ function refAuthors(authors?: string | null): string | null {
  * the "Searching…" note is immediate feedback while the analyst + S2 work,
  * and cache hits render the instant they resolve, never gated on the live
  * search.
+ *
+ * @returns The rendered hit panel, or null when there's nothing to show.
  */
 export default function HitList({
   hits,

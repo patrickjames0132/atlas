@@ -45,6 +45,8 @@ export interface PinningApi {
  *
  * Pin state resets whenever a new graph loads (the fresh node objects carry
  * no pins).
+ *
+ * @returns The pinned-id set + the pin/unpin/release handlers.
  */
 export function usePinning({
   base,

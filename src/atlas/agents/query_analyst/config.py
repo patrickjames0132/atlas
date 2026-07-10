@@ -1,5 +1,6 @@
 """The query analyst's words and knobs: its agent id, system prompt, and
-skills. Model choice and tunables live in its ``config.llm.agents`` entry."""
+skills. Model choice and tunables live in its ``config.llm.agents`` entry.
+"""
 
 from __future__ import annotations
 

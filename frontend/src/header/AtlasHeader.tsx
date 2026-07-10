@@ -40,7 +40,11 @@ export interface AtlasHeaderProps {
   onOpenSessions: () => void
 }
 
-/** Render the app's top bar. */
+/**
+ * Render the app's top bar.
+ *
+ * @returns The header (brand, search, seed title, drawer toggles).
+ */
 export default function AtlasHeader({
   query,
   onQueryChange,

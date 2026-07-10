@@ -52,7 +52,11 @@ export interface GraphCanvasProps {
   onRenderFramePre: (ctx: CanvasRenderingContext2D, globalScale: number) => void
 }
 
-/** Render the force-directed graph canvas. */
+/**
+ * Render the force-directed graph canvas.
+ *
+ * @returns The configured ForceGraph2D element.
+ */
 export default function GraphCanvas({
   fgRef,
   width,

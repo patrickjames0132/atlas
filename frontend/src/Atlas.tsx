@@ -33,6 +33,11 @@ import Sources from './library/Sources'
 import Sessions from './sessions/Sessions'
 import './atlas.css'
 
+/**
+ * Render the app shell: header, drawers, and the graph area with its overlays.
+ *
+ * @returns The whole application tree.
+ */
 export default function Atlas() {
   const dispatch = useAppDispatch()
   const { graph, epoch, loading, buildProgress, error } = useAppSelector((state) => state.workspace)

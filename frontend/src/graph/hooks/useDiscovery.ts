@@ -50,6 +50,8 @@ export interface DiscoveryApi {
 
 /**
  * Own the in-place `base` merge for agent discoveries.
+ *
+ * @returns The merge entry point + the `graphVersion` change counter.
  */
 export function useDiscovery({
   base,
