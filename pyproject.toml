@@ -1,6 +1,6 @@
 [project]
 name = "atlas"
-version = "4.4.0"
+version = "4.5.0"
 description = "Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 requires-python = ">=3.11"
 dependencies = [
@@ -14,6 +14,9 @@ dependencies = [
     "click>=8.1",
     "huggingface-hub>=0.28",
     "pydantic-ai-slim[anthropic]>=2.5.0",
+    "scikit-learn>=1.5",
+    "joblib>=1.3",
+    "numpy>=1.26",
 ]
 
 [project.scripts]
@@ -37,6 +40,16 @@ dev = [
     "pre-commit>=3.7",
     "pydoclint>=0.9",
 ]
+# Offline analysis notebooks in research/ — opt-in via `uv run --group research`
+# (not part of the default sync; the app never imports these). scikit-learn /
+# joblib / numpy are runtime deps now (the app loads the trained model), so they
+# aren't repeated here — only the notebook-only libs are.
+research = [
+    "pandas>=2.2",
+    "matplotlib>=3.9",
+    "ipykernel>=6.29",
+    "nbconvert>=7.16",
+]
 
 # --- quality tooling (all driven by `uv run nox`) ---
 
@@ -56,11 +69,13 @@ explicit_package_bases = true
 check_untyped_defs = true
 
 [tool.pytest.ini_options]
-# Tests live in test/, mirroring src/atlas/. The package itself comes
-# from the editable install (src-layout); pythonpath is belt-and-braces for
-# running pytest outside a synced uv env.
+# Tests live in test/, mirroring src/atlas/ (and test/ml_pipelines/ mirrors the
+# top-level ml_pipelines/ training pipeline). The app package comes from the
+# editable install (src-layout); pythonpath is belt-and-braces for running
+# pytest outside a synced uv env — "src" for the app, "." so the repo-root
+# ``ml_pipelines`` package (not installed) imports too.
 testpaths = ["test"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 # Test dirs have no __init__.py, so as source packages keep splitting into
 # submodules (semantic_scholar/client.py, arxiv/client.py, ...), two
 # test files can end up sharing a basename in different directories.

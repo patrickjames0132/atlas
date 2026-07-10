@@ -27,6 +27,7 @@ citation points) and easy to get subtly wrong.
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Callable
 
@@ -34,9 +35,30 @@ from ...config import config
 from ...integrations import arxiv, openalex
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
+from . import budget
 from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
+
+
+def _adaptive_cite_limit(seed_paper: dict) -> int | None:
+    """The seed-adapted landmark ship count from the trained cite-budget model.
+
+    A thin wrapper over :func:`budget.adaptive_cite_limit` that pins the
+    reference year to today (age is measured from here). The model, its feature
+    contract, and the fallback rules live in ``budget.py``; the training
+    pipeline that produces it lives in ``ml_pipelines/cite_budget``.
+
+    Args:
+        seed_paper: The normalized S2 seed node (``year`` and
+            ``citation_count`` drive the model).
+
+    Returns:
+        The landmark limit to ship — a model-predicted count, or the configured
+        ``cite_limit`` passed through when the feature is off, the seed lacks a
+        year, or the model isn't loadable (see :func:`budget.adaptive_cite_limit`).
+    """
+    return budget.adaptive_cite_limit(seed_paper, as_of_year=datetime.date.today().year)
 
 
 def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], list[dict]]:
@@ -66,6 +88,9 @@ def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], lis
         s2.S2Error: Only from the S2 fallback path (OpenAlex errors are caught
             and degrade to that fallback).
     """
+    # One budget for both sources, so the OpenAlex path and the S2 fallback
+    # agree on how many landmarks a given seed deserves.
+    landmark_limit = _adaptive_cite_limit(seed_paper)
     try:
         work = openalex.resolve_work(
             arxiv_id=seed_paper.get("arxiv_id"),
@@ -75,7 +100,7 @@ def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], lis
         if work_id:
             landmark, latest = openalex.citation_relations(
                 work_id,
-                landmark_limit=config.graph.cite_limit,
+                landmark_limit=landmark_limit,
                 latest_limit=config.graph.latest_limit,
             )
             log.info("citations via OpenAlex for seed %s (work %s)", seed_id, work_id)
@@ -85,7 +110,7 @@ def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], lis
         log.warning("OpenAlex citations failed for %s (%s); using S2 citations", seed_id, exc)
     return s2.citation_relations(
         seed_id,
-        landmark_limit=config.graph.cite_limit,
+        landmark_limit=landmark_limit,
         latest_limit=config.graph.latest_limit,
     )
 

@@ -36,10 +36,21 @@ because those are chat/tool-use credentials, not graph data sources).
 
 ## `graph` — neighborhood size
 
-- **`ref_limit` / `cite_limit` / `similar_limit` = 25 / 25 / 15** — caps
-  ~65 nodes per graph: enough to explore meaningfully, small enough to
-  render smoothly on `react-force-graph-2d` and stay polite to the S2 rate
-  limit.
+- **`ref_limit` / `cite_limit` / `similar_limit` = 100 / 150 / 60** — ship
+  counts, not display caps: the frontend sliders default to a modest reveal
+  and treat these as their maximum, so generous values give the sliders
+  range without cluttering the first render.
+- **`adaptive_cite_limit: true`** — a flat landmark budget fits no one:
+  an old classic's top citers span decades and read as a map (Hawking
+  Radiation earns a large budget), while a young hot paper's top citers are
+  same-era pile-on (DQN reads better at ~60, "Attention Is All You Need" at
+  ~30). When on, the landmark ship count is predicted from the seed's age and
+  citation count by a **scikit-learn model trained on real data** (not
+  hand-tuned numbers), clamped to `[floor, cite_limit]`. The app loads the
+  model (`ml_pipelines/models/cite_budget.joblib`) and calls `.predict()` in
+  `services/graph/budget.py`; it's fit by `ml_pipelines/cite_budget/train.py`
+  (see that package's README, and `research/cite_budget/` for the exploratory
+  study). Turn off to always ship the flat `cite_limit`.
 - **`recs_pool: "all-cs"`** — the Recommendations API's default `"recent"`
   pool only draws from newly published papers. Seed on anything older than
   a year or two (e.g. a 2017 paper) and `"recent"` returns *zero* similar

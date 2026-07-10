@@ -192,6 +192,13 @@ class GraphConfig(ConfigModel):
         description="Max all-time-most-cited LANDMARK citations ('citation' nodes) to ship — "
         "the Field Landmarks slider's max. null = ship the unbounded cap (500)."
     )
+    adaptive_cite_limit: bool = Field(
+        description="Scale the landmark budget to the seed's age and citation count instead "
+        "of always shipping cite_limit: an old classic earns the full budget (its top citers "
+        "span decades), a young hot paper gets a tight one (its top citers are same-era "
+        "pile-on). cite_limit stays the ceiling. See services/graph/build.py "
+        "_adaptive_cite_limit for the curve."
+    )
     latest_limit: PositiveInt | None = Field(
         description="LATEST citations (the recent frontier — citers from the newest "
         "years plus the per-year bands below them) to ship as 'latest' nodes — the "

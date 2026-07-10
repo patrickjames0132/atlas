@@ -638,6 +638,28 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 - **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
   last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
 
+- [x] **Adaptive landmark budget — a trained model sizes `cite_limit` per seed**
+      *(v4.5.0)* — the flat landmark budget showed the same node count for every
+      seed; now the ship count is **predicted from the seed's age + citation
+      count**, so an old classic (Hawking) keeps a large, map-like set (~160)
+      while a young, hot paper (DQN ~60, Attention ~30) gets a tight one — its
+      top citers are same-era pile-on rather than a legible map. **Derived from
+      data, not hand-tuned:** a new `ml_pipelines/cite_budget/` pipeline pulls
+      ~60 OpenAlex seeds stratified by year × citations and labels each with its
+      "density budget" n* — the longest citation-ranked citer **prefix** (first N
+      from the top) before any single publication year floods past `K=12`, i.e.
+      where temporal clutter sets in — then fits a scikit-learn
+      `LinearRegression` (5-fold CV R²≈0.68), serialized to
+      `ml_pipelines/models/cite_budget.joblib`. The app **loads the model** and
+      calls `.predict()` per build (`services/graph/budget.py`), clamped to
+      `[floor, cite_limit]`, sharing `compute_features` with training so there's
+      no train/serve skew; a missing/broken artifact degrades to the flat
+      `cite_limit`. `research/cite_budget/analyze.ipynb` is the exploratory
+      write-up. Config: `graph.adaptive_cite_limit` (on by default; `cite_limit`
+      is the ceiling). Finding: **age carries the signal** (r≈0.84); the "more
+      citations → tighter budget" intuition didn't survive controlling for age
+      (the citation term came out mildly *positive*). *(Backend heuristic;
+      anchors eyeballed by Patrick, 2026-07-10.)*
 - [x] **OpenAlex hybrid citation source** *(v4.0.0 — major; supersedes the
       S2 mining/stratified-sampling approach for citations)* — the culmination of
       the OpenAlex spike (below, now retired). **OpenAlex owns the citation
@@ -1102,6 +1124,26 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
+- [ ] **Close the landmark→latest gap by fitting the landmark date
+      distribution** — there's often a visible gap between where the ~500
+      landmark papers end and where Latest Publications begin, because the
+      latest window is a hardcoded rolling span (`latest_band_years: 5` in
+      config). Instead, apply classic ML/stats to the **distribution of
+      landmark publication dates** already fetched: find where the landmark
+      "cluster" tails off, and use that boundary as the `start_date` for the
+      second (latest) OpenAlex call — replacing the fixed window and possibly
+      redefining what "Latest Publication" means (everything after the
+      landmark era, per-seed). *(Patrick's brainstorm, 2026-07-10.)*
+- [ ] **Even Latest-Publications spread via citation velocity** — the
+      stratified/per-year band approach has been tried several times and the
+      spread still isn't even. Revisit **citation velocity** as the ranking
+      instead: balance citation count against recency, which are inversely
+      proportional (newer papers haven't had time to accumulate citations), so
+      neither extreme dominates the selection. The shelved WIP's
+      **`_velocity` helper — `citation_count / (age + 1)`** (`stash@{0}`, see
+      the mega-papers phase notes) is the starting formula; may need tuning so
+      the balance point lands where the spread looks even. *(Patrick's
+      brainstorm, 2026-07-10.)*
 - [ ] **Duplicate nodes for the same paper (cross-source identity)** —
       Patrick's browser observation: seeding on DQN shows **two** node
       instances of "Continuous control with deep reinforcement learning".
@@ -1366,6 +1408,32 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### OpenAlex misdates "Attention Is All You Need" to 2025 — nearly broke the cite-budget model
+
+*Found & handled during the v4.5.0 adaptive-budget build (2026-07-10).*
+
+- **Symptom.** While fitting the landmark-budget model (`ml_pipelines/cite_budget`),
+  a **sqrt-age** variant that scored *better* on cross-validation (CV R² 0.73 vs
+  0.68) predicted a budget of **~2 landmarks** for "Attention Is All You Need" —
+  absurd for one of the most-cited ML papers.
+- **Root cause.** OpenAlex's canonical record for that paper reports
+  `publication_year: 2025` (it resolves to a low-citation duplicate work,
+  `W2626778328`, not the 2017 original), so the model saw **age ≈ 1**. The
+  sqrt-age transform is steep near zero, so a wrong age of 1 collapsed the
+  prediction; plain-age is linear and far more forgiving there (~30, the right
+  ballpark).
+- **Fix.** Chose the **plain-age linear model** over the higher-CV sqrt variant
+  precisely *because* it survives this dating noise (documented in
+  `ml_pipelines/cite_budget/train.py` and the notebook). `compute_features` also
+  floors age at 0 so a future-dated seed can't go negative. A test pins the
+  misdated anchor (`year=2025 → 30`) so a future "improvement" that reintroduces
+  the fragility fails loudly.
+- **Lesson / guard.** OpenAlex publication years are **not trustworthy** for
+  individual works — anything age-based (this model, and the queued
+  landmark→latest date-distribution work) must degrade gracefully on a wildly
+  wrong year, and CV score alone can hide a catastrophic failure on a single
+  important point. Always eyeball the anchors, not just the aggregate metric.
 
 ### OpenAlex's coarse dates emptied the "Latest Publications" relation
 

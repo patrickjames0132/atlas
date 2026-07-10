@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from atlas.config import config
 from atlas.services.graph import build
 from atlas.services.graph.model import Counts, Edge, Graph, Seed
 
@@ -151,6 +152,36 @@ def test_unknown_seed_returns_none(monkeypatch):
     monkeypatch.setattr(build.s2, "get_paper", lambda lookup: None)
     assert build.build_graph("0000.00000") is None
     assert build.build_graph("   ") is None
+
+
+def test_adaptive_budget_reaches_both_citation_sources(fake_s2, monkeypatch):
+    """The adapted landmark limit is what the traversals actually receive —
+    on the OpenAlex path and the S2 fallback alike. The value is whatever the
+    model returns for the fixture's seed; we assert both sources get the *same*
+    adapted number, not the flat cite_limit."""
+    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
+    monkeypatch.setattr(config.graph, "cite_limit", None)
+    expected = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
+    assert expected not in (None, build.openalex.UNBOUNDED_LANDMARK_CAP)  # genuinely adapted
+    received: dict[str, int | None] = {}
+
+    def s2_relations(pid, *, landmark_limit, latest_limit):
+        received["s2"] = landmark_limit
+        return [], []
+
+    monkeypatch.setattr(build.s2, "citation_relations", s2_relations)
+    build.build_graph("1706.03762")  # fake_s2 resolves no OpenAlex work → S2 path
+    assert received["s2"] == expected
+
+    def openalex_relations(work_id, *, landmark_limit, latest_limit):
+        received["openalex"] = landmark_limit
+        return [], []
+
+    monkeypatch.setattr(build.openalex, "resolve_work",
+                        lambda **kwargs: {"id": "https://openalex.org/W99"})
+    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
+    build.build_graph("1706.03762", refresh=True)
+    assert received["openalex"] == expected
 
 
 def test_on_progress_fires_on_a_build_but_not_a_cache_hit(fake_s2):

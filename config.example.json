@@ -21,6 +21,7 @@
   "graph": {
     "ref_limit": 100,
     "cite_limit": 150,
+    "adaptive_cite_limit": true,
     "latest_limit": 150,
     "similar_limit": 60,
     "latest_band_years": 5,

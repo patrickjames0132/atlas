@@ -50,7 +50,7 @@ _LATEST_YEARS = 2  # current year + previous year → the recent frontier
 # of range for the frontend's reveal-on-demand slider without paging a mega
 # seed's entire citer list (Hawking has ~5.7k; "Attention" ~150k). An explicit
 # numeric limit overrides this.
-_UNBOUNDED_LANDMARK_CAP = 500
+UNBOUNDED_LANDMARK_CAP = 500
 _UNBOUNDED_LATEST_CAP = 200
 
 
@@ -233,7 +233,7 @@ def citation_relations(
     current_year = datetime.date.today().year
     latest_from_year = current_year - (_LATEST_YEARS - 1)  # newest window: years ≥ this
     landmark_max_year = latest_from_year - 1  # landmarks capped here; below-window bands end here
-    cap = landmark_limit if landmark_limit is not None else _UNBOUNDED_LANDMARK_CAP
+    cap = landmark_limit if landmark_limit is not None else UNBOUNDED_LANDMARK_CAP
     per_year = config.graph.latest_per_year
 
     # FIELD LANDMARKS: the all-time giants, up to the last landmark year.
@@ -296,6 +296,6 @@ def citations(work_id: str, limit: int | None) -> list[dict]:
     return _fetch_citers(
         f"cites:{work_id}",
         "cited_by_count:desc",
-        limit if limit is not None else _UNBOUNDED_LANDMARK_CAP,
+        limit if limit is not None else UNBOUNDED_LANDMARK_CAP,
         nodes.NEIGHBOR_SELECT,
     )

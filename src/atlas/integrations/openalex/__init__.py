@@ -20,9 +20,16 @@ from __future__ import annotations
 
 from .client import OpenAlexError
 from .nodes import bare_openalex_id, node
-from .traversal import bare_work_id, citation_relations, citations, resolve_work
+from .traversal import (
+    UNBOUNDED_LANDMARK_CAP,
+    bare_work_id,
+    citation_relations,
+    citations,
+    resolve_work,
+)
 
 __all__ = [
+    "UNBOUNDED_LANDMARK_CAP",
     "OpenAlexError",
     "bare_openalex_id",
     "bare_work_id",

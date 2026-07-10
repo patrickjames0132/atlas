@@ -6,6 +6,7 @@ Neighborhood-graph assembly — the domain core of arXiv Atlas.
 graph/
   build.py   — build_graph: the assembly logic (S2 traversals, dedupe, cached)
   model.py   — the Pydantic Graph / Node / Edge / Seed / Counts
+  budget.py  — adaptive landmark-budget serving: load the trained model, predict
 ```
 
 `__init__.py` re-exports `build_graph` and the models, so callers use
@@ -81,6 +82,25 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    own `config.graph.*_limit`. Neighbors come back already hydrated with light
    display fields, so no extra batch call is needed.
 
+   The **landmark budget adapts to the seed** when
+   `config.graph.adaptive_cite_limit` is on: `_adaptive_cite_limit` delegates to
+   `budget.adaptive_cite_limit`, which loads a **scikit-learn model trained
+   offline** (`ml_pipelines/models/cite_budget.joblib`) and calls `.predict()`
+   on the seed's age and citation count — an old classic (Hawking Radiation)
+   earns a large budget because its top citers span decades and read as a map; a
+   young, well-cited paper (DQN) gets ~60 because its top citers are same-era
+   pile-on; a brand-new one (Attention Is All You Need) ~30. The prediction is
+   clamped to `[floor, cite_limit]`. The model is fit on real data — *not*
+   hand-tuned constants — by `ml_pipelines/cite_budget/train.py`, which learns
+   the "density budget" (where per-year citer clutter sets in) across ~60
+   OpenAlex seeds; the finding is that **age carries the signal** and citation
+   count is a mild *positive* term. One budget is computed per build and handed
+   to *both* citation sources (OpenAlex and the S2 fallback), so they agree. A
+   seed with no publication year, the toggle off, or an unloadable model passes
+   the flat `cite_limit` through unchanged. See `budget.py` for the serving side
+   and `ml_pipelines/cite_budget/README.md` for the derivation and how to
+   retrain.
+
 4. **Dedupe with relation accumulation.** The `add_neighbor()` closure merges
    neighbors into one node table keyed by paperId. The same paper can surface
    through more than one relation (both a reference *and* a recommendation);
@@ -140,3 +160,12 @@ three edge directions exactly; that `model_dump()` round-trips through
 `Graph.model_validate` (the cache-hit path); the cache round-trip (second call
 makes zero S2 hits) and that `refresh=True` bypasses it; and that an unknown or
 blank seed returns `None`.
+
+The adaptive budget's own tests live in **`test_budget.py`** (the serving side):
+they load the committed model and pin the four working anchors to its
+predictions, check age monotonically lifts the budget, the ceiling/floor clamps
+hold, and every fallback (toggle off, missing year, unloadable model) returns
+the flat `cite_limit`. Here in `test_graph.py`, one wiring test asserts the
+adapted budget is what *both* citation sources actually receive. The training
+pipeline that produces the model has its own offline tests under
+`test/ml_pipelines/`.

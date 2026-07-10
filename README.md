@@ -136,9 +136,11 @@ The Vite dev server proxies `/api/*` to Flask.
    🟣 similar · 💗 found-by-search. Citers (from **OpenAlex**) split into two
    relations: **Field Landmarks** (green) are the all-time most-cited papers
    citing the seed — the historic giants, returned directly by a sorted `cites:`
-   query (no recency bias, no mining); **Latest Publications** (light green) is
-   the recent frontier — recent citers, per-year banded for even coverage — as a
-   filterable relation of its own. Node size = citations; thick links = influential citations; a
+   query (no recency bias, no mining), with **how many to show sized per-seed by
+   a small trained model** (an old classic maps out large, a young hot paper
+   stays tight — see `ml_pipelines/cite_budget/`); **Latest Publications** (light
+   green) is the recent frontier — recent citers, per-year banded for even
+   coverage — as a filterable relation of its own. Node size = citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
    tags, figures, code & artifacts); **double-click to re-seed** on it —
