@@ -40,8 +40,13 @@ import { discoveryMerged, selectGroundingNodes, selectSeedNode } from '../store/
  */
 const newSessionId = () => (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
 
-/** An inline citation marker in answer prose, e.g. `[7]`. */
-const REF_MARKER = /\[(\d+)\]/g
+/** An inline citation marker in answer prose: a single index (`[7]`) or a
+ *  combined list (`[14, 29]`). Group 1 holds the digits and separators; split
+ *  on `REF_SEPARATOR` for the individual indices. Kept in step with the same
+ *  pattern in `remarkCite` (render) and the backend's `refs_from_text`. */
+const REF_MARKER = /\[(\d+(?:[\s,]+\d+)*)\]/g
+/** The separator between indices inside a combined marker (comma and/or space). */
+const REF_SEPARATOR = /[\s,]+/
 
 /**
  * Resolve the `[n]` markers an answer actually used into a compact
@@ -56,9 +61,13 @@ const REF_MARKER = /\[(\d+)\]/g
 function resolveRefs(text: string, numberedIds: string[]): Record<string, string> {
   const refs: Record<string, string> = {}
   for (const match of text.matchAll(REF_MARKER)) {
-    const index = Number(match[1])
-    const nodeId = numberedIds[index - 1]
-    if (nodeId) refs[String(index)] = nodeId
+    // A combined marker (`[14, 29]`) resolves each of its indices, so every
+    // number in it becomes clickable.
+    for (const token of match[1].split(REF_SEPARATOR)) {
+      const index = Number(token)
+      const nodeId = numberedIds[index - 1]
+      if (nodeId) refs[token] = nodeId
+    }
   }
   return refs
 }

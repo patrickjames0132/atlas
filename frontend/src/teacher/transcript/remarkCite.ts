@@ -11,8 +11,12 @@ import type { Root, Text } from 'mdast'
 import type { Parent } from 'unist'
 import { visit } from 'unist-util-visit'
 
-/** A complete inline citation marker, e.g. `[12]`. */
-const MARKER = /\[(\d+)\]/g
+/** A complete inline citation marker: a single index (`[12]`) or a combined
+ *  list the model sometimes writes (`[14, 29]` / `[14 29]`). Group 1 holds the
+ *  digits and separators; split it on `SEPARATOR` for the individual indices. */
+const MARKER = /\[(\d+(?:[\s,]+\d+)*)\]/g
+/** The separator between indices inside a combined marker (comma and/or space). */
+const SEPARATOR = /[\s,]+/
 
 /**
  * A synthetic inline node. `data.hName` / `data.hProperties` make the
@@ -47,11 +51,15 @@ export function remarkCite() {
         if (match.index > cursor) {
           replacements.push({ type: 'text', value: value.slice(cursor, match.index) })
         }
-        replacements.push({
-          type: 'citeref',
-          data: { hName: 'citeref', hProperties: { index: match[1] } },
-          children: [{ type: 'text', value: match[0] }],
-        })
+        // A combined marker (`[14, 29]`) becomes one chip per index — each a
+        // separate clickable `[n]`, so every paper it cites stays reachable.
+        for (const number of match[1].split(SEPARATOR)) {
+          replacements.push({
+            type: 'citeref',
+            data: { hName: 'citeref', hProperties: { index: number } },
+            children: [{ type: 'text', value: `[${number}]` }],
+          })
+        }
         cursor = match.index + match[0].length
       }
       if (cursor < value.length) {

@@ -138,7 +138,10 @@ ids, ignoring hallucinated ones (shared by the lecturer and, later, the
 researcher). `refs_from_text(nodes, text)` is the clickable-citation
 counterpart: it scans finished prose for the `[n]` markers actually *used* and
 resolves each against the same numbered list, returning a `{"n": node_id}` map
-the frontend turns into clickable chips. The **lecturer** resolves this
+the frontend turns into clickable chips. A combined marker (`[14, 29]`, which
+the model sometimes writes despite the prompt asking for separate `[14][29]`)
+contributes each of its indices, so every number stays clickable — the same
+split the frontend's `remarkCite` and `resolveRefs` apply. The **lecturer** resolves this
 server-side and ships it on each beat's `refs` field — a lecture numbers the
 mode-filtered `_story_nodes`, which the frontend never sees, so it *can't*
 resolve them itself. The **researcher** is the mirror case: it gets the full,

@@ -18,3 +18,5 @@ Rules:
 - Never invent an index. If a paper you need isn't in the list, it isn't
   visible — use a tool to bring it in (if you have one), or say it isn't
   available.
+- Give each paper its **own** marker — write `[14][29]`, never a combined
+  `[14, 29]` — so every citation stays individually clickable.

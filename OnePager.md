@@ -1282,15 +1282,19 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       lecture beats; `MathText` stays for the detail panel, search hits, and beat
       headings. The user's own question bubble stays plain (no Markdown
       surprises). *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Multi-number citation markers don't highlight** — an agent answer
-      sometimes writes a combined marker like `[14, 29]`; clicking it
-      highlights nothing. The whole `[n]` pipeline matches single numbers
-      only (`\[(\d+)\]` in the frontend's `remarkCite`/`useConversation`
-      resolveRefs AND the backend's `prompts.refs_from_text`), so a combined
-      marker never becomes a chip. Either split `[14, 29]` into two chips at
-      render time (extend the regexes to comma/space-separated lists) or
-      prompt the agents to always emit separate `[14][29]` markers — or
-      both, belt and braces. *(From the `todos.md` inbox, 2026-07-10.)*
+- [x] **Multi-number citation markers now highlight** *(v4.9.1)* — an agent
+      answer that wrote a combined marker like `[14, 29]` used to be inert
+      (clicking it highlighted nothing): the whole `[n]` pipeline matched single
+      numbers only, so a combined marker never became a chip. Fixed **both**
+      ways the ticket floated — the marker regex is now
+      `\[(\d+(?:[\s,]+\d+)*)\]` (comma- and/or space-separated) in all three
+      places that must agree (`remarkCite` render, `useConversation.resolveRefs`,
+      backend `prompts.refs_from_text`), splitting a combined marker into **one
+      clickable chip per index** (each resolving to its own paper); **and** the
+      `numbered-papers.md` skill now tells agents to emit separate `[14][29]`
+      markers, not combined, so the split rarely even fires. Verified with a new
+      RTL test that renders the real `AnswerMarkdown` and clicks each chip.
+      *(From the `todos.md` inbox, 2026-07-10.)*
 - [x] **Lecture buttons: cached toggles, tidied grid, parallel loading**
       *(v4.9.0)* — the lecture-mode buttons were reworked end-to-end (shipping
       the "tidy the buttons" and "cache each lecture" asks together):
