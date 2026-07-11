@@ -1334,15 +1334,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       `link.type`) in the force-graph config; Timeline already separates by date,
       so this is the Force-layout counterpart. *(From the `todos.md` inbox,
       2026-07-10.)*
-- [ ] **Group graph nodes by relation type in the Force layout** — the force
-      layout currently mingles every relation into one undifferentiated cloud;
-      nodes should **cluster into visual groups by their relation to the seed**
-      (references / Field Landmarks / Latest Publications / Similar) so the
-      neighborhood reads at a glance. Likely a per-relation grouping force (a
-      cluster centroid per relation, or a radial/sector layout keyed on
-      `link.type`) in the force-graph config; Timeline already separates by date,
-      so this is the Force-layout counterpart. *(From the `todos.md` inbox,
-      2026-07-10.)*
 - [x] **Drop the per-relation count sliders; filter by citation count instead**
       *(v4.7.0)* — the four per-node-type count sliders are gone; the **relation
       filter chips** (restyled back to the bubbly v2–v3 pills) are now the only
@@ -1375,6 +1366,20 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
+- [ ] **Rename `digest.db` → `cache.db`** — the ephemeral graph-snapshot store
+      is still named `digest.db`, a leftover from the retired daily-digest era;
+      it's really the 1-day graph/artifact **cache** now. Rename the file (and
+      the `storage.data_dir`-relative path + any `config`/docstring references,
+      e.g. `storage/sessions.py`'s note contrasting it with `sessions.db`) so the
+      name matches what it holds. A cosmetic rename — old `digest.db` files can be
+      left to age out or deleted, since it's a regenerable cache. *(From the
+      `todos.md` inbox, 2026-07-11.)*
+- [ ] **`atlas serve` should take a `--port` (and `--host`)** — the CLI serve
+      command uses the fixed `config.server.host`/`port` (5000); add flags to
+      override the port (and host) per invocation, so a second instance or a
+      busy-port situation doesn't need a config edit. Thread the overrides into
+      `create_app`/`app.run` in `cli.py`. *(From the `todos.md` inbox,
+      2026-07-11.)*
 - [x] **Enforce docstrings in the gate, both languages** *(2026-07-10, no
       version bump — quality tooling; the whole sweep is runtime-invisible,
       bundle hash unchanged)* —
