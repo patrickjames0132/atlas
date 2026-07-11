@@ -1292,6 +1292,21 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Source-scope picker doesn't appear until a page refresh (+ note it above
+      the ask bar)** — uploading sources through the 📚 Sources drawer doesn't make
+      the assistant panel's **source-scope picker** show up until you manually
+      reload the page. Root cause: `Teacher.tsx` fetches the library once, in a
+      mount-only `useEffect(… , [])`, into local `libraryItems` state; an upload
+      elsewhere never refreshes it, so the picker (shown at >1 source) stays
+      hidden. The lecture-scope picker doesn't have this bug because it derives
+      from the store (`transcript.lectures`), which updates live — the fix should
+      make the source list react the same way: lift it into the store (or a shared
+      context) that the Sources drawer updates on upload/delete, or re-fetch when
+      the drawer closes, so the picker appears immediately. **While here:** also
+      surface the selected sources in the **one-line note above the ask bar**
+      (like the lectures note added in v4.12.0) — space is tight, so likely a
+      combined line ("Answers draw on N lectures · M sources") rather than two.
+      *(Patrick's report, 2026-07-11.)*
 - [x] **Colour-coded lecture buttons + a two-view assistant panel** *(v4.11.0)* —
       a full pass over the assistant panel, tying each lecture to the nodes it
       narrates and de-cluttering the whole surface. **Buttons are colour-coded to
