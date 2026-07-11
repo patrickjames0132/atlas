@@ -1167,6 +1167,17 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
+- [ ] **Feed already-played lectures into the researcher's context** — when the
+      lecturer has already generated a lecture this session (its beats sit in the
+      transcript cache), the Q&A researcher should be able to **draw on that
+      narrative** rather than re-deriving the same ground from scratch — cheaper
+      (fewer tool calls / tokens) and more consistent (the answer echoes what the
+      lecture already said instead of contradicting it). Simplest form: pass the
+      cached lectures' beats in as extra grounding context on the `/api/ask`
+      request (the frontend already holds them in the transcript slice; thread
+      them through to `answer` as a context block, budgeted so a full set of four
+      lectures doesn't blow the prompt). *(From the `todos.md` inbox,
+      2026-07-11.)*
 - [ ] **Keep "frontier" out of the "landmark papers since" lecture** — the
       evolution lecture ("The landmark papers since", narrating the landmark
       citers) sometimes ends on a beat whose **title contains the word
