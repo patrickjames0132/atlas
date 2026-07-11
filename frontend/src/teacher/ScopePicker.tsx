@@ -1,18 +1,51 @@
 /**
- * The source-scope picker: which of the user's sources the assistant may
- * search. Checkbox-per-source, where ALL checked means "no scope" (search
- * everything) and NONE checked means "search nothing" — the same None/[]
- * semantics the backend carries end to end. Only rendered when the library
- * has more than one source to pick between.
+ * A generic scope picker: a checkbox-per-item popover where ALL checked reads
+ * as "no scope" (everything) and NONE checked as "nothing" — the same
+ * None/[] semantics the callers carry. Used for two scopes in the assistant
+ * panel: which uploaded **sources** the assistant may search, and which
+ * already-played **lectures** the researcher folds into its context. The copy
+ * (icon, noun, hints) comes in via `labels`; the item shape is just
+ * `{id, title}`, so both scopes fit.
  */
 
 import { useState } from 'react'
-import type { Source } from '../api'
+
+/** One selectable item — a source or a lecture, reduced to what the picker shows. */
+export interface ScopeItem {
+  id: string
+  title: string
+}
+
+/** The picker's display copy, so one component serves sources and lectures. */
+export interface ScopeLabels {
+  /** Leading emoji on the trigger button (`📚` sources, `🎓` lectures). */
+  icon: string
+  /** Singular noun for the count/empty label ("source" → "All sources"). */
+  unit: string
+  /** The popover's heading ("Search in", "Feed to answers"). */
+  heading: string
+  /** Footer hint when everything is checked. */
+  allHint: string
+  /** Footer hint when a subset is checked. */
+  someHint: string
+  /** Footer hint when nothing is checked. */
+  noneHint: string
+  /** The trigger button's tooltip. */
+  buttonTitle: string
+}
 
 /**
- * Render the library-scope picker: which sources the assistant may search.
+ * Render a scope picker: a trigger button showing the current selection, and a
+ * checkbox popover to change it.
  *
- * @returns The collapsible source-checkbox list.
+ * @param items The selectable items (`{id, title}`).
+ * @param checkedIds The ids currently checked.
+ * @param onToggle Flip one item's checked state.
+ * @param onSelectAll Check every item.
+ * @param onDeselectAll Uncheck every item.
+ * @param labels The display copy (icon, noun, heading, hints) — what makes one
+ *               component serve both the sources and lectures scopes.
+ * @returns The collapsible checkbox list.
  */
 export default function ScopePicker({
   items,
@@ -20,34 +53,36 @@ export default function ScopePicker({
   onToggle,
   onSelectAll,
   onDeselectAll,
+  labels,
 }: {
-  items: Source[]
+  items: ScopeItem[]
   checkedIds: string[]
   onToggle: (id: string) => void
   onSelectAll: () => void
   onDeselectAll: () => void
+  labels: ScopeLabels
 }) {
   const [open, setOpen] = useState(false)
   const all = checkedIds.length === items.length
+  const buttonLabel = all
+    ? `All ${labels.unit}s`
+    : checkedIds.length === 0
+      ? `No ${labels.unit}s`
+      : `${checkedIds.length} ${labels.unit}${checkedIds.length > 1 ? 's' : ''}`
   return (
     <div className="scope-wrap">
       <button
         type="button"
         className={`scope-btn ${all ? '' : 'on'}`}
         onClick={() => setOpen((prev) => !prev)}
-        title="Choose which of your sources the assistant may search"
+        title={labels.buttonTitle}
       >
-        📚{' '}
-        {all
-          ? 'All sources'
-          : checkedIds.length === 0
-            ? 'No sources'
-            : `${checkedIds.length} source${checkedIds.length > 1 ? 's' : ''}`}
+        {labels.icon} {buttonLabel}
       </button>
       {open && (
         <div className="scope-pop">
           <div className="scope-pop-head">
-            <span>Search in</span>
+            <span>{labels.heading}</span>
             <span className="scope-pop-actions">
               {checkedIds.length < items.length && (
                 <button className="link-btn" onClick={onSelectAll}>
@@ -61,24 +96,20 @@ export default function ScopePicker({
               )}
             </span>
           </div>
-          {items.map((source) => (
-            <label key={source.id} className="scope-item">
+          {items.map((item) => (
+            <label key={item.id} className="scope-item">
               <input
                 type="checkbox"
-                checked={checkedIds.includes(source.id)}
-                onChange={() => onToggle(source.id)}
+                checked={checkedIds.includes(item.id)}
+                onChange={() => onToggle(item.id)}
               />
-              <span className="scope-item-title" title={source.title}>
-                {source.title}
+              <span className="scope-item-title" title={item.title}>
+                {item.title}
               </span>
             </label>
           ))}
           <div className="scope-hint">
-            {all
-              ? 'All sources are searched.'
-              : checkedIds.length === 0
-                ? "No sources selected — the assistant won't search your library."
-                : 'Only the checked sources are searched.'}
+            {all ? labels.allHint : checkedIds.length === 0 ? labels.noneHint : labels.someHint}
           </div>
         </div>
       )}

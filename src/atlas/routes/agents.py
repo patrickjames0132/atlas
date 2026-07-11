@@ -26,7 +26,7 @@ from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
 from ..agents import events, orchestrator
-from ..agents.models import Intent, LectureMode
+from ..agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
 from ..config import config
 from ..services.graph import Node
 from .sse import sse, sse_response
@@ -72,6 +72,43 @@ def _opt_source_ids(payload: dict) -> list[str] | None:
     if not isinstance(raw, list):
         return None
     return [source_id for source_id in raw if isinstance(source_id, str) and source_id]
+
+
+def _opt_lectures(payload: dict) -> list[PlayedLecture] | None:
+    """Parse the optional already-played ``lectures`` from a request body.
+
+    Tolerant like the node parsing: the frontend sends
+    ``[{title, beats: [{heading, text}]}]`` from its transcript cache, and this
+    picks exactly those fields, skipping any entry missing a title or with no
+    usable beats. A malformed ``lectures`` value (or none) yields ``None`` — the
+    researcher simply runs without the extra context.
+
+    Args:
+        payload: The parsed JSON body.
+
+    Returns:
+        The played lectures to hand the researcher, or ``None`` when the key is
+        absent, malformed, or empty after cleaning.
+    """
+    raw = payload.get("lectures")
+    if not isinstance(raw, list):
+        return None
+    lectures: list[PlayedLecture] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        title = entry.get("title")
+        raw_beats = entry.get("beats")
+        if not isinstance(title, str) or not title or not isinstance(raw_beats, list):
+            continue
+        beats = [
+            PlayedBeat(heading=str(beat.get("heading") or ""), text=str(beat.get("text") or ""))
+            for beat in raw_beats
+            if isinstance(beat, dict) and (beat.get("text") or beat.get("heading"))
+        ]
+        if beats:
+            lectures.append(PlayedLecture(title=title, beats=beats))
+    return lectures or None
 
 
 def _node(raw: dict) -> Node:
@@ -192,8 +229,11 @@ def api_ask() -> ResponseReturnValue:
     ``session_id`` so follow-ups keep context, persisted only on success.
 
     Body:
-        ``{question, session_id, seed, nodes, source_ids?}`` — ``source_ids``
-        scopes the researcher's library search to a subset of uploaded sources.
+        ``{question, session_id, seed, nodes, source_ids?, lectures?}`` —
+        ``source_ids`` scopes the researcher's library search to a subset of
+        uploaded sources; ``lectures`` are the lectures already played this
+        session (``[{title, beats: [{heading, text}]}]``), folded in as context
+        the answer may build on instead of re-deriving.
 
     Returns:
         An SSE stream: ``trace`` frames (tool steps), ``discovery`` frames
@@ -216,6 +256,7 @@ def api_ask() -> ResponseReturnValue:
         return jsonify({"error": "seed/nodes are malformed"}), 400
     session_id = payload.get("session_id") or ""
     source_ids = _opt_source_ids(payload)
+    lectures = _opt_lectures(payload)
     history = _QA_SESSIONS.get(session_id, []) if session_id else []
 
     return sse_response(
@@ -227,6 +268,7 @@ def api_ask() -> ResponseReturnValue:
                 nodes=nodes,
                 history=history,
                 source_ids=source_ids,
+                lectures=lectures,
             ),
             store=_QA_SESSIONS,
             session_id=session_id,

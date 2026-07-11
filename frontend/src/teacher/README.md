@@ -10,7 +10,8 @@ teacher/
   Teacher.tsx        — the slim shell: header, modes, scroll, ask form
   useConversation.ts — the stream engine: runs the 3 streams, dispatches
                        events into the store, owns panel run-state
-  ScopePicker.tsx    — which sources the assistant may search
+  ScopePicker.tsx    — generic checkbox-scope popover: which sources the
+                       assistant searches AND which lectures it uses as context
   figures/           ← sub-package: the inline-figure pipeline
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
@@ -92,6 +93,16 @@ structure rule's nesting case (the `graph/hooks` precedent).
   when you deselect it, ask a question, or start another mode — nothing
   interrupts anything else. `onBeat` only drives the graph highlight when its
   mode is the one on screen (`shownModeRef`); background lectures stay quiet.
+- **Played lectures ride along on a Q&A** (`useConversation.ask`): every `ask`
+  packs the transcript cache's lectures (trimmed to each beat's heading + text,
+  titled via the shared `LECTURE_TITLES`) into `streamAsk`'s `lectures`, so the
+  researcher can build on a story the student already watched instead of
+  re-deriving it (and re-paying the tokens). The backend budgets the block. A
+  **🎓 scope picker** (the same `ScopePicker` the sources use) filters which
+  played lectures are fed — tracked in `Teacher.tsx` by **exclusion** (default
+  none excluded = all fed), so a lecture played after the user last touched the
+  picker is included automatically; `onAsk` passes the checked modes to `ask`. A
+  quiet line above the ask bar notes how many are in play.
 - **One panel, two views** (`Teacher.tsx`, gated on `activeMode`): a shown
   lecture takes over the scroll — the "Now playing" header + its beats — while no
   shown lecture means the Q&A chat. Selecting a lecture enters the lecture view;

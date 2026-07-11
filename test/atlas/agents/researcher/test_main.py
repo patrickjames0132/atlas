@@ -9,6 +9,7 @@ import json
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
 from atlas.agents import events, researcher
+from atlas.agents.models import PlayedBeat, PlayedLecture
 from atlas.agents.researcher import config as researcher_config
 from atlas.services.graph import Node
 
@@ -214,3 +215,48 @@ def test_show_figure_attaches_with_proxy_url_and_slot(monkeypatch):
     assert figure.slot == 1 and figure.title == "Playing Atari with Deep RL"
     trace = next(event for event in out if isinstance(event, events.FigureTrace))
     assert trace.ok is True
+
+
+def _first_user_prompt(messages) -> str:
+    """The user-prompt text of the first request the model saw."""
+    for message in messages:
+        for part in getattr(message, "parts", []):
+            if getattr(part, "part_kind", None) == "user-prompt":
+                return part.content
+    return ""
+
+
+def test_played_lectures_enter_the_prompt(monkeypatch):
+    seen: dict = {}
+    model = scripted([final("Attention replaced recurrence, as the lecture said.", [])], seen=seen)
+    lectures = [
+        PlayedLecture(
+            title="How we got here",
+            beats=[PlayedBeat(heading="The RNN era", text="Sequence models leaned on recurrence.")],
+        )
+    ]
+    run(model, monkeypatch, lectures=lectures)
+    prompt = _first_user_prompt(seen["turns"][0])
+    assert "Lectures already delivered" in prompt
+    assert "How we got here" in prompt
+    assert "Sequence models leaned on recurrence." in prompt
+
+
+def test_no_lectures_adds_no_lecture_block(monkeypatch):
+    seen: dict = {}
+    model = scripted([final("ok", [])], seen=seen)
+    run(model, monkeypatch)  # no lectures kwarg
+    assert "Lectures already delivered" not in _first_user_prompt(seen["turns"][0])
+
+
+def test_lectures_context_respects_the_char_budget(monkeypatch):
+    # A tiny budget: the first lecture alone overflows, so it's truncated with an
+    # ellipsis and every later lecture is dropped.
+    monkeypatch.setattr(researcher.main, "_LECTURES_MAX_CHARS", 50)
+    lectures = [
+        PlayedLecture(title="First", beats=[PlayedBeat(heading="h", text="x" * 200)]),
+        PlayedLecture(title="Second", beats=[PlayedBeat(heading="h", text="y" * 200)]),
+    ]
+    out = researcher.main._lectures_context(lectures)
+    assert out.endswith("…")
+    assert "Second" not in out
