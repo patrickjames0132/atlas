@@ -1366,6 +1366,8 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       (a restored save rebuilds locally, so it needs no bar). The blocking
       `GET /api/graph` stays for compatibility. *(From the `todos.md` inbox,
       2026-07-08.)*
+- [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
+      `todos.md` inbox, 2026-07-08.)*
 
 
 ### Enhancements & tech debt
@@ -1378,12 +1380,13 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       name matches what it holds. A cosmetic rename — old `digest.db` files can be
       left to age out or deleted, since it's a regenerable cache. *(From the
       `todos.md` inbox, 2026-07-11.)*
-- [ ] **`atlas serve` should take a `--port` (and `--host`)** — the CLI serve
-      command uses the fixed `config.server.host`/`port` (5000); add flags to
-      override the port (and host) per invocation, so a second instance or a
-      busy-port situation doesn't need a config edit. Thread the overrides into
-      `create_app`/`app.run` in `cli.py`. *(From the `todos.md` inbox,
-      2026-07-11.)*
+- [x] **`atlas serve` takes `--port` and `--host`** *(v4.10.0)* — the CLI serve
+      command gained `--host`/`--port` options that override
+      `config.server.host`/`port` per invocation (a second instance, or when 5000
+      is busy, no longer needs a config edit). Both default to `None` and fall
+      back to config, so existing behavior is unchanged; `app.main(host, port)`
+      applies the fallback. Verified live (`serve --port 5055` binds there, 5000
+      untouched). *(From the `todos.md` inbox, 2026-07-11.)*
 - [x] **Enforce docstrings in the gate, both languages** *(2026-07-10, no
       version bump — quality tooling; the whole sweep is runtime-invisible,
       bundle hash unchanged)* —
@@ -1488,8 +1491,6 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       narrate), so we can experiment with surfacing under-cited but important
       work. Low-effort: a skill-file addition wired into the researcher/lecturer
       `SKILLS` tuples. *(From a session side-question, 2026-07-08.)*
-- [ ] **Remove the "Powered by Claude Code" attribution** from the UI. *(From the
-      `todos.md` inbox, 2026-07-08.)*
 - [ ] **Cached papers don't match the query agent's expanded query** — papers
       served from the local sources cache don't seem to line up with the query
       the query-analyst expanded to, so the researcher may ground on the wrong

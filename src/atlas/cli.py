@@ -1,8 +1,9 @@
 """CLI entry point for Atlas (the ``atlas`` console script).
 
 Usage:
-    uv run atlas serve      # start the API + Atlas frontend
-    uv run atlas --help     # see all commands
+    uv run atlas serve                  # start the API + Atlas frontend
+    uv run atlas serve --port 5050      # ...on a different port (or --host)
+    uv run atlas --help                 # see all commands
 
 Every command imports lazily so ``--help`` (and each command) never pays
 the import cost of the parts it doesn't touch.
@@ -19,15 +20,25 @@ def cli() -> None:
 
 
 @cli.command(help="Run the Flask API + Atlas frontend.")
-def serve() -> None:
+@click.option("--host", default=None, help="Interface to bind (default: config.server.host).")
+@click.option(
+    "--port", type=int, default=None, help="Port to bind (default: config.server.port)."
+)
+def serve(host: str | None, port: int | None) -> None:
     """Start the Flask dev server (API + built frontend).
+
+    Args:
+        host: Interface to bind; overrides ``config.server.host`` when given —
+            e.g. ``0.0.0.0`` to expose the server on the network.
+        port: Port to bind; overrides ``config.server.port`` when given — handy
+            for a second instance or when 5000 is busy.
 
     Returns:
         None (blocks until the server exits).
     """
     from atlas import app as app_module
 
-    app_module.main()
+    app_module.main(host=host, port=port)
 
 
 # --- Bring-your-own sources (the local semantic library) ---------------------

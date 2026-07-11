@@ -112,6 +112,7 @@ by Pydantic; the value-by-value rationale lives in
 ```bash
 cd frontend && npm install && npm run build && cd ..
 uv run atlas serve                      # http://127.0.0.1:5000
+uv run atlas serve --port 5050          # ...or another port (--host to expose it)
 ```
 
 **Development** (two terminals, hot-reloading frontend):

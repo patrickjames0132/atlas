@@ -16,6 +16,27 @@ def test_health():
     assert response.json == {"status": "ok"}
 
 
+def test_main_defaults_to_config_and_honors_overrides(monkeypatch):
+    captured: dict = {}
+
+    class FakeApp:
+        def run(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(app_module, "create_app", lambda: FakeApp())
+
+    # No overrides -> the config host/port; threaded stays on for SSE.
+    app_module.main()
+    assert captured["host"] == app_module.config.server.host
+    assert captured["port"] == app_module.config.server.port
+    assert captured["threaded"] is True
+
+    # Explicit overrides win over config.
+    app_module.main(host="0.0.0.0", port=5050)
+    assert captured["host"] == "0.0.0.0"
+    assert captured["port"] == 5050
+
+
 def test_cors_covers_api_routes():
     # flask-cors answers a concrete Origin by echoing it (not a literal "*").
     response = client().get("/api/health", headers={"Origin": "http://localhost:5173"})

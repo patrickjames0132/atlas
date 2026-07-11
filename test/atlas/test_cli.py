@@ -1,11 +1,13 @@
-"""The atlas CLI: ingest dispatch + clean SourceError messages, and
-the list/forget library commands. (`serve` is untested — it blocks on a
-real server.)"""
+"""The atlas CLI: ingest dispatch + clean SourceError messages, the
+list/forget library commands, and `serve`'s host/port override plumbing
+(the actual serve blocks on a real server, so only the pass-through is
+tested)."""
 
 from __future__ import annotations
 
 from click.testing import CliRunner
 
+from atlas import app as app_module
 from atlas.cli import cli
 from atlas.services import sources
 
@@ -52,3 +54,19 @@ def test_forget(monkeypatch):
     runner = CliRunner()
     assert "Deleted." in runner.invoke(cli, ["forget", "src01"]).output
     assert "No such source." in runner.invoke(cli, ["forget", "nope"]).output
+
+
+def test_serve_threads_host_and_port_through(monkeypatch):
+    captured: dict = {}
+    monkeypatch.setattr(
+        app_module, "main", lambda host=None, port=None: captured.update(host=host, port=port)
+    )
+    runner = CliRunner()
+
+    # No flags -> None overrides (app.main falls back to config).
+    assert runner.invoke(cli, ["serve"]).exit_code == 0
+    assert captured == {"host": None, "port": None}
+
+    # Flags flow through, with --port coerced to int.
+    assert runner.invoke(cli, ["serve", "--host", "0.0.0.0", "--port", "5050"]).exit_code == 0
+    assert captured == {"host": "0.0.0.0", "port": 5050}

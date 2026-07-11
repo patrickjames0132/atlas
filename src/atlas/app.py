@@ -99,7 +99,7 @@ def create_app() -> Flask:
     return app
 
 
-def main() -> None:
+def main(host: str | None = None, port: int | None = None) -> None:
     """Run the Flask dev server (the `serve` CLI command lands here).
 
     ``threaded=True`` lets the frontend stream SSE (lecture/ask) while other
@@ -107,12 +107,18 @@ def main() -> None:
     config — the old app hardcoded ``debug=True``, running the reloader and
     interactive debugger on every "production" serve.
 
+    Args:
+        host: Interface to bind; falls back to ``config.server.host`` when None
+            (the `serve --host` override).
+        port: Port to bind; falls back to ``config.server.port`` when None (the
+            `serve --port` override).
+
     Returns:
         None (blocks until the server exits).
     """
     create_app().run(
-        host=config.server.host,
-        port=config.server.port,
+        host=config.server.host if host is None else host,
+        port=config.server.port if port is None else port,
         debug=config.server.debug,
         threaded=True,
     )
