@@ -49,6 +49,30 @@ export interface Beat {
 export type LectureMode = 'history' | 'intuition' | 'evolution' | 'frontier' | 'bridge'
 
 /**
+ * The display name of each lecture mode — the single source of the copy shown
+ * on the mode buttons, in the "Now playing" header, and sent to the researcher
+ * as a played lecture's title. Kept here (not in a component) so the panel and
+ * the ask-payload builder can't drift.
+ */
+export const LECTURE_TITLES: Record<LectureMode, string> = {
+  history: 'How we got here',
+  intuition: "This paper's intuition",
+  evolution: "What's evolved since",
+  frontier: 'The current frontier',
+  bridge: 'Bridging two topics',
+}
+
+/**
+ * A lecture already played this session, trimmed to what the researcher needs
+ * as context (its title + each beat's heading/text) — sent on {@link streamAsk}
+ * so a Q&A answer can build on the narrative instead of re-deriving it.
+ */
+export interface PlayedLecture {
+  title: string
+  beats: { heading: string; text: string }[]
+}
+
+/**
  * New papers (+ the edges connecting them) the researcher pulled in via its
  * expand_node / search_papers tools — to be merged into the live graph.
  * (Lectures never emit these: a lecture narrates the visible graph as-is.)
@@ -174,8 +198,10 @@ export interface AskHandlers {
  *
  * @param body The question, a session id for follow-up context, the seed,
  *             the visible nodes (full graph-node shapes — the grounding
- *             scope), and optional source_ids scoping the researcher's library
- *             search to a subset of uploaded sources.
+ *             scope), optional source_ids scoping the researcher's library
+ *             search to a subset of uploaded sources, and optional lectures
+ *             already played this session (extra context the answer may build
+ *             on).
  * @param h    Event handlers; see {@link AskHandlers}.
  */
 export async function streamAsk(
@@ -185,6 +211,7 @@ export async function streamAsk(
     seed: GraphNode
     nodes: GraphNode[]
     source_ids?: string[]
+    lectures?: PlayedLecture[]
   },
   h: AskHandlers,
 ): Promise<void> {

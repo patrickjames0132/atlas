@@ -298,7 +298,11 @@ grounded in what it actually read.
 
 - **Input:** question, seed, visible nodes, conversation history, optional
   library scope (`source_ids`: `None` = whole library, present list =
-  pinned to exactly those, empty list = source search disabled).
+  pinned to exactly those, empty list = source search disabled), and optional
+  **played lectures** (`lectures`: the `PlayedLecture` beats the lecturer already
+  delivered this session, from the frontend's transcript cache) — folded into the
+  prompt (budgeted by `_LECTURES_MAX_CHARS`) as context to build on, so a Q&A
+  answer doesn't re-derive a story the student just watched.
 - **Tools** (its `tools.py`):
   - `read_paper` — summary (abstract + TL;DR, hydrated from S2 on demand)
     or full text via ar5iv; a full read also lists the paper's figures.

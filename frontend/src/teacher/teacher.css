@@ -639,6 +639,16 @@
   color: var(--muted);
 }
 
+/* A quiet line above the ask bar noting the researcher folds already-played
+   lectures into its context (shown only once at least one has played). */
+.ask-context-note {
+  margin: 0;
+  padding: 10px 16px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
 /* --- the ask bar (shared with the library chat) --- */
 .teacher-ask {
   display: flex;

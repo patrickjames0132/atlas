@@ -14,7 +14,13 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
-import { listSources, type AnswerFigure, type LectureMode, type Source } from '../api'
+import {
+  listSources,
+  LECTURE_TITLES,
+  type AnswerFigure,
+  type LectureMode,
+  type Source,
+} from '../api'
 import { useAppSelector } from '../store'
 import { selectVisibleBeats } from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
@@ -31,10 +37,10 @@ import './teacher.css'
 // top-right corner naming the relation — the same colour as the graph's filter
 // chips and legend dots, so the button visibly ties to the nodes it lights up.
 const MODES: { key: LectureMode; label: string; rel: string; tag: string }[] = [
-  { key: 'history', label: 'How we got here', rel: 'reference', tag: 'References' },
-  { key: 'intuition', label: "This paper's intuition", rel: 'seed', tag: 'This paper' },
-  { key: 'evolution', label: "What's evolved since", rel: 'citation', tag: 'Landmarks' },
-  { key: 'frontier', label: 'The current frontier', rel: 'latest', tag: 'Latest' },
+  { key: 'history', label: LECTURE_TITLES.history, rel: 'reference', tag: 'References' },
+  { key: 'intuition', label: LECTURE_TITLES.intuition, rel: 'seed', tag: 'This paper' },
+  { key: 'evolution', label: LECTURE_TITLES.evolution, rel: 'citation', tag: 'Landmarks' },
+  { key: 'frontier', label: LECTURE_TITLES.frontier, rel: 'latest', tag: 'Latest' },
 ]
 
 /**
@@ -84,6 +90,9 @@ export default function Teacher({
   const [libraryItems, setLibraryItems] = useState<Source[]>([])
   // Checked = the assistant may search that source. All checked = no scope.
   const [scopeIds, setScopeIds] = useState<string[]>([])
+  // Lectures the researcher may NOT use as context, tracked by EXCLUSION so a
+  // lecture played after the user last touched the picker is fed by default.
+  const [excludedLectures, setExcludedLectures] = useState<LectureMode[]>([])
   // The answer figure opened full-screen (null = closed).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
@@ -102,12 +111,20 @@ export default function Teacher({
   const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
   const scopeArg = scopeAll ? undefined : scopeIds
 
+  // The played lectures, and which of them the researcher may use as context
+  // (the checked ones — all played minus the user's exclusions).
+  const playedModes = MODES.map((mode) => mode.key).filter(
+    (key) => (lectures[key]?.length ?? 0) > 0,
+  )
+  const lectureScope = playedModes.filter((mode) => !excludedLectures.includes(mode))
+  const lectureItems = playedModes.map((mode) => ({ id: mode, title: LECTURE_TITLES[mode] }))
+
   const onAsk = (event: FormEvent) => {
     event.preventDefault()
     const question = input.trim()
     if (!question || asking) return
     setInput('')
-    ask(question, scopeArg)
+    ask(question, scopeArg, lectureScope)
   }
 
   return (
@@ -123,6 +140,30 @@ export default function Teacher({
         <div className="teacher-head-top">
           <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask your library'}</span>
           <div className="teacher-head-right">
+            {hasGraph && playedModes.length > 0 && (
+              <ScopePicker
+                items={lectureItems}
+                checkedIds={lectureScope}
+                onToggle={(id) =>
+                  setExcludedLectures((prev) =>
+                    prev.includes(id as LectureMode)
+                      ? prev.filter((mode) => mode !== id)
+                      : [...prev, id as LectureMode],
+                  )
+                }
+                onSelectAll={() => setExcludedLectures([])}
+                onDeselectAll={() => setExcludedLectures(playedModes)}
+                labels={{
+                  icon: '🎓',
+                  unit: 'lecture',
+                  heading: 'Use as context',
+                  allHint: 'Every played lecture is fed to the researcher.',
+                  someHint: 'Only the checked lectures are fed to the researcher.',
+                  noneHint: 'No lectures selected — answers ignore them.',
+                  buttonTitle: 'Choose which played lectures the researcher uses as context',
+                }}
+              />
+            )}
             {libraryItems.length > 1 && (
               <ScopePicker
                 items={libraryItems}
@@ -134,6 +175,15 @@ export default function Teacher({
                 }
                 onSelectAll={() => setScopeIds(libraryItems.map((source) => source.id))}
                 onDeselectAll={() => setScopeIds([])}
+                labels={{
+                  icon: '📚',
+                  unit: 'source',
+                  heading: 'Search in',
+                  allHint: 'All sources are searched.',
+                  someHint: 'Only the checked sources are searched.',
+                  noneHint: "No sources selected — the assistant won't search your library.",
+                  buttonTitle: 'Choose which of your sources the assistant may search',
+                }}
               />
             )}
             {onClose && (
@@ -270,6 +320,12 @@ export default function Teacher({
         {error && <div className="teacher-error">{error}</div>}
       </div>
 
+      {hasGraph && lectureScope.length > 0 && (
+        <p className="ask-context-note">
+          Answers also draw on {lectureScope.length} played lecture
+          {lectureScope.length > 1 ? 's' : ''} (choose with 🎓 above).
+        </p>
+      )}
       <form className="teacher-ask" onSubmit={onAsk}>
         <input
           value={input}

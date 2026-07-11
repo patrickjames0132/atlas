@@ -102,6 +102,47 @@ def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
     assert seen["kwargs"]["history"] == convo[:2]
 
 
+def test_ask_parses_played_lectures_into_typed_context(client, monkeypatch):
+    seen = {}
+
+    def fake_run(intent, **kwargs):
+        seen["kwargs"] = kwargs
+        yield events.Token(text="Building on the lecture.")
+        yield events.Cited(node_ids=["seed01"])
+        yield events.Done()
+
+    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    body = {
+        "question": "why?", "session_id": "sess-lec", "seed": SEED, "nodes": NODES,
+        "lectures": [
+            # Full beat baggage (node_ids/figure) is tolerated — only title +
+            # heading/text are picked out.
+            {"title": "How we got here",
+             "beats": [{"heading": "Roots", "text": "It began with recurrence.",
+                        "node_ids": ["node02"], "figure": None}]},
+            {"title": "", "beats": []},  # malformed -> skipped
+        ],
+    }
+    client.post("/api/ask", json=body).data
+    lectures = seen["kwargs"]["lectures"]
+    assert [lecture.title for lecture in lectures] == ["How we got here"]
+    assert lectures[0].beats[0].text == "It began with recurrence."
+
+
+def test_ask_without_lectures_passes_none(client, monkeypatch):
+    seen = {}
+
+    def fake_run(intent, **kwargs):
+        seen["kwargs"] = kwargs
+        yield events.Done()
+
+    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    client.post(
+        "/api/ask", json={"question": "q", "session_id": "s", "seed": SEED, "nodes": NODES}
+    ).data
+    assert seen["kwargs"]["lectures"] is None
+
+
 def test_failed_answers_do_not_poison_history(client, monkeypatch):
     def fake_run(intent, **kwargs):
         yield events.Token(text="starting...")

@@ -12,8 +12,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { streamAsk, streamAskSources, streamLecture } from '../api'
-import type { Beat, GraphNode, LectureMode } from '../api'
+import { LECTURE_TITLES, streamAsk, streamAskSources, streamLecture } from '../api'
+import type { Beat, GraphNode, LectureMode, PlayedLecture } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { highlightSet } from '../store/highlight'
 import {
@@ -280,7 +280,11 @@ export function useConversation() {
   )
 
   const ask = useCallback(
-    async (question: string, sourceIds: string[] | undefined) => {
+    async (
+      question: string,
+      sourceIds: string[] | undefined,
+      lectureModes: LectureMode[] | undefined,
+    ) => {
       // Only supersede a previous question — lectures stream on their own
       // controllers, so asking never interrupts one that's loading.
       askCtrl.current?.abort()
@@ -305,6 +309,22 @@ export function useConversation() {
           // server-assigned idx as they stream. Plus the raw answer text, so we
           // can resolve which `[n]`s were actually used once it's done.
           const numberedIds = groundingNodes.map((node) => node.id)
+          // Lectures already played this session (trimmed to title + beat
+          // heading/text) become extra context, so the answer can build on
+          // them instead of re-deriving a story the student already heard.
+          // `lectureModes` is the user's scope pick (undefined = all played);
+          // a mode not in it is left out of context.
+          const allowedModes = lectureModes ? new Set(lectureModes) : null
+          const playedLectures: PlayedLecture[] = (
+            Object.entries(lectures) as [LectureMode, Beat[]][]
+          )
+            .filter(
+              ([mode, beats]) => beats.length > 0 && (!allowedModes || allowedModes.has(mode)),
+            )
+            .map(([mode, beats]) => ({
+              title: LECTURE_TITLES[mode],
+              beats: beats.map((beat) => ({ heading: beat.heading, text: beat.text })),
+            }))
           let answerText = ''
           await streamAsk(
             {
@@ -313,6 +333,7 @@ export function useConversation() {
               seed: seedNode,
               nodes: groundingNodes,
               source_ids: sourceIds,
+              lectures: playedLectures.length > 0 ? playedLectures : undefined,
             },
             {
               signal: ctrl.signal,
@@ -361,7 +382,7 @@ export function useConversation() {
         setAsking(false)
       }
     },
-    [seedNode, groundingNodes, chatLength, activeMode, dispatch, highlight],
+    [seedNode, groundingNodes, chatLength, activeMode, lectures, dispatch, highlight],
   )
 
   return {

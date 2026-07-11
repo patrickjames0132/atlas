@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v4.11.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v4.12.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -17,7 +17,8 @@
 > artifact links via Hugging Face Papers (v1.23.0), per-seed cache-clear Refresh
 > button (v2.5.0), Semantic Scholar field-of-study tags in the detail panel
 > (v2.6.0), "What's evolved since" forward lecture mode (v2.7.0), colour-coded
-> lecture buttons + two-view assistant panel (v4.11.0)
+> lecture buttons + two-view assistant panel (v4.11.0), researcher reuses
+> played lectures + lecture-scope picker (v4.12.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -1167,17 +1168,22 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       a retrieved passage, and a `show_source_figure`-style tool + `figure` event
       reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
       2026-07-03.)*
-- [ ] **Feed already-played lectures into the researcher's context** — when the
-      lecturer has already generated a lecture this session (its beats sit in the
-      transcript cache), the Q&A researcher should be able to **draw on that
-      narrative** rather than re-deriving the same ground from scratch — cheaper
-      (fewer tool calls / tokens) and more consistent (the answer echoes what the
-      lecture already said instead of contradicting it). Simplest form: pass the
-      cached lectures' beats in as extra grounding context on the `/api/ask`
-      request (the frontend already holds them in the transcript slice; thread
-      them through to `answer` as a context block, budgeted so a full set of four
-      lectures doesn't blow the prompt). *(From the `todos.md` inbox,
-      2026-07-11.)*
+- [x] **Feed already-played lectures into the researcher's context** *(v4.12.0)* —
+      the Q&A researcher now **draws on lectures already played this session**
+      instead of re-deriving the same ground (cheaper — fewer tool calls/tokens —
+      and consistent with what the lecture said). The frontend packs the
+      transcript cache's lectures (trimmed to each beat's heading + text, titled
+      via the shared `LECTURE_TITLES`) into `streamAsk`'s new `lectures` field;
+      the route parses them defensively into typed `PlayedLecture` models
+      (`agents/models.py`), threads them through `orchestrator.run` →
+      `researcher.answer`, and `_prompt` folds them in under a "build on these,
+      don't repeat them" header, **budgeted** by `_LECTURES_MAX_CHARS` (6000) so a
+      full set of four can't blow the prompt. A **🎓 scope picker** — the sources'
+      `ScopePicker`, generalized to serve both scopes via a `labels` config —
+      filters which played lectures are fed (tracked by exclusion, so a
+      newly-played lecture is included by default), with a one-line note above the
+      ask bar showing how many are in play. *(From the `todos.md` inbox,
+      2026-07-11; browser-tested.)*
 - [ ] **Keep "frontier" out of the "landmark papers since" lecture** — the
       evolution lecture ("The landmark papers since", narrating the landmark
       citers) sometimes ends on a beat whose **title contains the word

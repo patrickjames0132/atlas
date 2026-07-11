@@ -4,7 +4,7 @@ expand the graph) and the Done/Error termination contract."""
 from __future__ import annotations
 
 from atlas.agents import events
-from atlas.agents.models import Intent, LectureMode
+from atlas.agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
 from atlas.agents.orchestrator import main as orchestrator_main
 from atlas.agents.orchestrator import run
 from atlas.services.graph import Node
@@ -53,17 +53,19 @@ def test_librarian_intent_relays_and_appends_done(monkeypatch):
 def test_research_intent_passes_everything_through(monkeypatch):
     seen: dict = {}
 
-    def fake_answer(question, seed, nodes, history=None, source_ids=None):
+    def fake_answer(question, seed, nodes, history=None, source_ids=None, lectures=None):
         seen.update(question=question, seed=seed, nodes=nodes,
-                    history=history, source_ids=source_ids)
+                    history=history, source_ids=source_ids, lectures=lectures)
         yield events.Token(text="ok")
 
     monkeypatch.setattr(orchestrator_main.researcher, "answer", fake_answer)
     turns = [{"role": "user", "content": "earlier"}]
+    played = [PlayedLecture(title="How we got here",
+                            beats=[PlayedBeat(heading="Roots", text="It began.")])]
     out = list(run(Intent.RESEARCH, question="why?", seed=SEED, nodes=NODES,
-                   history=turns, source_ids=["s1"]))
+                   history=turns, source_ids=["s1"], lectures=played))
     assert seen == {"question": "why?", "seed": SEED, "nodes": NODES,
-                    "history": turns, "source_ids": ["s1"]}
+                    "history": turns, "source_ids": ["s1"], "lectures": played}
     assert out[-1] == events.Done()
 
 
