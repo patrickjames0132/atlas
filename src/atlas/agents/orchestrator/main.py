@@ -72,7 +72,7 @@ def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]
     A lecture never expands the graph — and each mode is pinned to exactly one
     kind of neighbor so the four lectures don't overlap. Scoping is by
     *relation*, not by year: HISTORY narrates the seed's **references**,
-    EVOLUTION ("Summarize the landmark papers since") the **landmark citers**,
+    EVOLUTION ("The landmark papers since") the **landmark citers**,
     and FRONTIER the recent **Latest Publications** — each keeping only nodes
     carrying that ``rels`` tag (plus the seed itself), then sorted
     chronologically (see ``_chronological``). INTUITION stays on the **seed

@@ -33,8 +33,8 @@ built, not silently grow it.)
 
 **Modes are scoped by `_story_nodes`, one graph relation each** (the tag
 `build.py` writes into a node's `rels`), so the four lectures don't overlap:
-history narrates the seed's **references**, evolution ("Summarize the landmark
-papers since") the **landmark citers** (`citation`), frontier the recent
+history narrates the seed's **references**, evolution ("The landmark papers
+since") the **landmark citers** (`citation`), frontier the recent
 **Latest Publications** (`latest`). Each keeps only nodes carrying that tag
 (plus the seed) and returns them **sorted oldest-first** (`_chronological`) —
 the lecturer numbers and era-bands the story in that order, so a beat's papers

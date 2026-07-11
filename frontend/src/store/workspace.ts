@@ -112,7 +112,12 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     // backfill — ignored; lectures no longer expand the graph.)
     transcript: {
       chat: data.chat ?? [],
-      beats: data.beats ?? [],
+      // New saves carry the per-mode lecture cache directly. A pre-caching
+      // save has only a flat `beats` array with no mode recorded — fold it in
+      // under `history` (the primary "how we got here" mode) so the lecture
+      // isn't lost, and show it.
+      lectures: data.lectures ?? (data.beats?.length ? { history: data.beats } : {}),
+      activeMode: data.activeMode ?? (data.beats?.length ? ('history' as const) : null),
     },
   }
 })
@@ -139,7 +144,8 @@ export const saveWorkspace = createAsyncThunk<
     nodes: [...graph.nodes, ...workspace.discoveredNodes].map((node) => cleanNode(node as VNode)),
     edges: [...graph.edges, ...workspace.discoveredEdges],
     chat: transcript.chat,
-    beats: transcript.beats,
+    lectures: transcript.lectures,
+    activeMode: transcript.activeMode,
   })
 })
 

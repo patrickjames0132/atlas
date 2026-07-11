@@ -4,7 +4,7 @@
  */
 
 import type { GraphNode, GraphEdge } from './graph'
-import type { AnswerFigure, Beat, RetrieveEvent, TraceEvent } from './agents'
+import type { AnswerFigure, Beat, LectureMode, RetrieveEvent, TraceEvent } from './agents'
 
 /**
  * One chat turn in the teacher transcript. Hoisted here (shared by
@@ -53,7 +53,20 @@ export interface SessionData {
   nodes: GraphNode[]
   edges: GraphEdge[]
   chat: ChatMsg[]
-  beats: Beat[]
+  /**
+   * The per-mode lecture cache (mode → its beats) as it stood when saved —
+   * every lecture the user had played this session, so a restore brings them
+   * all back, not just the visible one.
+   */
+  lectures?: Partial<Record<LectureMode, Beat[]>>
+  /** Which cached lecture was on screen when saved (null/absent = none). */
+  activeMode?: LectureMode | null
+  /**
+   * Legacy: a single un-attributed lecture's beats, from saves made before
+   * per-mode caching. New saves omit it; restore folds it into `lectures`
+   * (see `restoreSession`).
+   */
+  beats?: Beat[]
   /**
    * Legacy field from the retired lecture backfill — old saves carry it;
    * new saves omit it and restore ignores it.

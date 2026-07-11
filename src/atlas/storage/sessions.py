@@ -105,9 +105,10 @@ def save_session(payload: dict, session_id: str | None = None) -> dict:
 
     Args:
         payload: The frontend's session blob — ``{name, seed, layout, nodes,
-            edges, chat, beats, hist_trace}``. Stored verbatim in ``data``;
-            a few fields are lifted into columns for the list view. A blank
-            name becomes ``"Untitled session"``.
+            edges, chat, lectures, activeMode}`` (older saves carry a flat
+            ``beats`` and/or a ``hist_trace`` instead). Stored verbatim in
+            ``data``; a few fields are lifted into columns for the list view.
+            A blank name becomes ``"Untitled session"``.
         session_id: When given, overwrite that session (re-saving a workspace
             the user already stored — ``created_at`` is preserved); when
             omitted, a new session with a fresh id is created.

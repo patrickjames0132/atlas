@@ -1291,21 +1291,49 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       render time (extend the regexes to comma/space-separated lists) or
       prompt the agents to always emit separate `[14][29]` markers — or
       both, belt and braces. *(From the `todos.md` inbox, 2026-07-10.)*
-- [ ] **Tidy the lecture-mode buttons** — the three lecture buttons ("How we
-      got here" / "This paper's intuition" / "What's evolved since", defined in
-      `frontend/src/teacher/Teacher.tsx`, styled in `teacher/teacher.css`) look
-      jumbled on screen; give them a more organized, elegant layout (even
-      sizing/alignment, clearer grouping). Pure UI polish, no behavior change.
-      Candidate to bundle with other small UI-cleanup tickets in one ship.
-      *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Cache each lecture behind its button (toggle to show/hide)** — clicking a
-      lecture-mode button should **cache the generated lecture** the first time;
-      clicking it again reloads the cached version instead of regenerating, and
-      the button acts as a **show/hide toggle** you can select or deselect at any
-      time to reveal or hide that lecture. Saves the re-generation cost/latency on
-      a re-click and makes the three modes feel like persistent tabs. Bundles
-      naturally with **Tidy the lecture-mode buttons** above. *(From the
-      `todos.md` inbox, 2026-07-10.)*
+- [x] **Lecture buttons: cached toggles, tidied grid, parallel loading**
+      *(v4.9.0)* — the lecture-mode buttons were reworked end-to-end (shipping
+      the "tidy the buttons" and "cache each lecture" asks together):
+  - **Cached show/hide toggles** — each of the four modes caches its beats on
+    first play (`store/transcript.ts`: `lectures` = mode → beats, plus
+    `activeMode`); re-clicking the shown mode hides it (cache kept), clicking a
+    played-but-hidden mode reloads instantly with no re-fetch. Save persists the
+    whole per-mode cache (a restore brings every played lecture back, not just
+    the visible one; a pre-caching save's flat `beats` folds into `history`).
+  - **Everything streams in parallel** — the single "teaching" flag/shared abort
+    controller became one controller per in-flight lecture (`Map<mode, ctrl>`)
+    plus one for the chat, so a lecture keeps generating in the background when
+    you deselect it, ask a question, or start another mode — nothing interrupts
+    anything else. `beatAdded` carries its mode so a background stream fills the
+    right slot; `onBeat` only drives the graph highlight for the shown mode.
+  - **Tidied 2×2 grid** — even equal-height cells (long labels wrap cleanly), a
+    **filled periwinkle** selected state, a small dot on a cached-but-hidden
+    mode, and **hopping "loading" dots** (cascade animation, honors
+    `prefers-reduced-motion`) on a streaming button.
+  - **Soft periwinkle palette** — the panel's hard `#ffd166` yellow (buttons,
+    active-beat/answer tints, trace chips) swapped for a soft periwinkle
+    (`--lecture` / `--lecture-solid` in `teacher.css`), easier on the eyes and
+    in the app's blue-accent family. *(Browser-caught + fixed: hover was washing
+    out the filled `.active` fill on specificity — scoped hover off `.active`.)*
+  - **Contextual Clear**, relocated to a **transcript toolbar** (top-right of
+    the content zone, out of the lecture controls): a shown lecture → clear just
+    that lecture (`lectureDropped`); no lecture shown → clear the Q&A chat
+    (`chatCleared`) and mint a fresh session. The button relabels accordingly.
+  - **"The landmark papers since"** — the evolution mode renamed from
+    "Summarize the landmark papers since".
+  - **Grounding-scope caption** — a quiet note under the grid tells the user a
+    lecture covers exactly the papers currently shown on the graph (so filtering
+    the graph scopes the lecture). Verified in the browser via Playwright on the
+    cached DQN seed. *(Patrick's asks, browser-tested 2026-07-11.)*
+- [ ] **Group graph nodes by relation type in the Force layout** — the force
+      layout currently mingles every relation into one undifferentiated cloud;
+      nodes should **cluster into visual groups by their relation to the seed**
+      (references / Field Landmarks / Latest Publications / Similar) so the
+      neighborhood reads at a glance. Likely a per-relation grouping force (a
+      cluster centroid per relation, or a radial/sector layout keyed on
+      `link.type`) in the force-graph config; Timeline already separates by date,
+      so this is the Force-layout counterpart. *(From the `todos.md` inbox,
+      2026-07-10.)*
 - [ ] **Group graph nodes by relation type in the Force layout** — the force
       layout currently mingles every relation into one undifferentiated cloud;
       nodes should **cluster into visual groups by their relation to the seed**

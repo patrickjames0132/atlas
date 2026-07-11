@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { listSources, type AnswerFigure, type LectureMode, type Source } from '../api'
 import { useAppSelector } from '../store'
-import { selectTranscript } from '../store/transcript'
+import { selectVisibleBeats } from '../store/transcript'
 import ScopePicker from './ScopePicker'
 import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
@@ -28,7 +28,7 @@ import './teacher.css'
 const MODES: { key: LectureMode; label: string }[] = [
   { key: 'history', label: 'How we got here' },
   { key: 'intuition', label: "This paper's intuition" },
-  { key: 'evolution', label: 'Summarize the landmark papers since' },
+  { key: 'evolution', label: 'The landmark papers since' },
   { key: 'frontier', label: 'The current frontier' },
 ]
 
@@ -46,10 +46,13 @@ export default function Teacher({
   /** Collapse the panel (the header ✕). */
   onClose?: () => void
 }) {
-  const { chat, beats } = useAppSelector(selectTranscript)
+  const chat = useAppSelector((state) => state.transcript.chat)
+  const beats = useAppSelector(selectVisibleBeats)
+  const lectures = useAppSelector((state) => state.transcript.lectures)
+  const activeMode = useAppSelector((state) => state.transcript.activeMode)
   const {
     hasGraph,
-    teaching,
+    loadingModes,
     asking,
     error,
     activeBeat,
@@ -57,10 +60,15 @@ export default function Teacher({
     onBeatClick,
     onChatClick,
     onRefClick,
-    runLecture,
+    toggleLecture,
     ask,
     clear,
   } = useConversation()
+
+  // Clear is contextual: a shown lecture → clear that lecture; otherwise → clear
+  // the chat. Show the button whenever the active context has something to wipe.
+  const clearsLecture = activeMode !== null
+  const showClear = clearsLecture || chat.length > 0
 
   const [input, setInput] = useState('')
   // The uploaded library, powering the source-scope picker. The picker only
@@ -127,31 +135,73 @@ export default function Teacher({
             )}
           </div>
         </div>
-        {(hasGraph || beats.length > 0 || chat.length > 0) && (
+        {hasGraph && (
           <div className="teacher-modes">
-            {hasGraph &&
-              MODES.map((mode) => (
-                <button
-                  key={mode.key}
-                  className="teach-btn"
-                  onClick={() => runLecture(mode.key)}
-                  disabled={teaching}
-                >
-                  {teaching ? '…' : mode.label}
-                </button>
-              ))}
-            {(beats.length > 0 || chat.length > 0) && (
-              <button
-                className="teach-btn clear-btn"
-                onClick={clear}
-                title="Clear the conversation — start fresh"
-              >
-                Clear
-              </button>
-            )}
+            <div className="lecture-grid">
+              {MODES.map((mode) => {
+                const active = activeMode === mode.key
+                const loading = loadingModes.includes(mode.key)
+                // The "click to show" dot marks a played-but-hidden lecture;
+                // a loading one shows its hopping dots instead.
+                const cached = !loading && (lectures[mode.key]?.length ?? 0) > 0
+                return (
+                  <button
+                    key={mode.key}
+                    className={`teach-btn${active ? ' active' : ''}${
+                      cached && !active ? ' cached' : ''
+                    }`}
+                    // Lectures load in parallel — every button stays live so
+                    // you can show/hide or start another while one generates.
+                    onClick={() => toggleLecture(mode.key)}
+                    aria-pressed={active}
+                    title={
+                      loading
+                        ? active
+                          ? 'Loading… click to hide (keeps loading)'
+                          : 'Loading in the background… click to show'
+                        : active
+                          ? 'Hide this lecture'
+                          : cached
+                            ? 'Show this lecture'
+                            : mode.label
+                    }
+                  >
+                    {loading ? (
+                      <span className="hop-dots" aria-label="Loading lecture">
+                        <span className="hop-dot" />
+                        <span className="hop-dot" />
+                        <span className="hop-dot" />
+                      </span>
+                    ) : (
+                      mode.label
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="lecture-scope-note">
+              Each lecture is grounded in the papers currently shown on the graph — filter the graph
+              to narrow what it covers.
+            </p>
           </div>
         )}
       </div>
+
+      {showClear && (
+        <div className="teacher-toolbar">
+          <button
+            className="clear-btn"
+            onClick={clear}
+            title={
+              clearsLecture
+                ? 'Clear this lecture'
+                : 'Clear the Q&A chat — start a fresh conversation'
+            }
+          >
+            {clearsLecture ? 'Clear lecture' : 'Clear chat'}
+          </button>
+        </div>
+      )}
 
       <div className="teacher-scroll">
         <BeatList
@@ -178,7 +228,7 @@ export default function Teacher({
           )
         })}
 
-        {beats.length === 0 && chat.length === 0 && !teaching && (
+        {beats.length === 0 && chat.length === 0 && loadingModes.length === 0 && (
           <div className="teacher-hint">
             {hasGraph
               ? 'Play a lecture, or ask a question about the papers on the graph.'

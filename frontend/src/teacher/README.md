@@ -27,12 +27,13 @@ structure rule's nesting case (the `graph/hooks` precedent).
 
 ## The state split (the directive, applied to the hardest case)
 
-- **In the store:** the transcript (chat/beats — Save needs it),
-  the highlight ids (the canvas needs them), discoveries (the graph and
-  Save need them). `useConversation` dispatches; nothing is reported
+- **In the store:** the transcript (chat + the per-mode lecture cache — Save
+  needs it), the highlight ids (the canvas needs them), discoveries (the graph
+  and Save need them). `useConversation` dispatches; nothing is reported
   upward through props anymore — the old `onStateChange`/`initial*` prop
   plumbing and the Atlas-side duplicate are gone.
-- **Panel-local, on purpose:** the input box, asking/teaching flags, the
+- **Panel-local, on purpose:** the input box, the `asking` flag and the
+  `loadingModes` set (which lectures are streaming), the
   stream error, activeBeat/activeChat (which entry is lit is panel UI —
   only the resulting ids are global), the scope picker's library list and
   checked set, the lightbox, and the abort/session refs.
@@ -54,14 +55,34 @@ structure rule's nesting case (the `graph/hooks` precedent).
   fields the backend's typed boundary requires) and the grounding set
   (`selectGroundingNodes` = graph ∪ discoveries, deduped) from the store.
 - **Session mechanics:** a client-generated `session_id` keys the backend's
-  chat history; Clear mints a new one, so a cleared conversation also
-  detaches from server-side context. The panel remounts per workspace
+  chat history; clearing the chat mints a new one, so a cleared conversation
+  also detaches from server-side context. The panel remounts per workspace
   `epoch` (fresh run-state per graph); the transcript itself resets or
   restores via the store, not via remount props.
 - **Wire deltas absorbed here:** `onDiscovery` (was `onNodes`), error
   `{message}`, no `discard` handler (the researcher's pre-answer narration is
   never streamed). Lectures stream beats only — they never expand the
   graph, so the lecture handler has no trace/discovery callbacks.
+- **Lecture buttons are cached toggles** (`toggleLecture` in `useConversation`):
+  each of the four modes is a show/hide switch over its cached beats. First
+  click on a mode streams and caches it (`lectureStarted`/`beatAdded` write the
+  mode's slot — `beatAdded` carries its mode so a background stream fills the
+  right slot); re-clicking the shown mode hides it (`lectureHidden`, cache
+  kept) and clicking a hidden mode that's cached or still loading reveals it
+  instantly (`lectureShown`, no re-fetch). A run dropped before it finishes
+  (cleared) drops its partial via `lectureDropped`, so the next click
+  regenerates rather than reloading half a lecture.
+- **Everything streams in parallel** — the single "teaching" flag and shared
+  abort controller are gone. Each in-flight lecture has its own controller in a
+  `Map<mode, AbortController>` (`loadingModes` state drives the buttons' hopping
+  dots); the chat has its own. So a lecture keeps generating in the background
+  when you deselect it, ask a question, or start another mode — nothing
+  interrupts anything else. `onBeat` only drives the graph highlight when its
+  mode is the one on screen (`shownModeRef`); background lectures stay quiet.
+- **Clear is contextual** — a shown lecture → clear just that lecture (stop it
+  if loading, `lectureDropped`, unlight the graph); no lecture shown → clear the
+  Q&A chat (`chatCleared`) and mint a fresh session id. The button relabels
+  ("Clear lecture" / "Clear chat") to say which it'll do.
 
 ## Who uses it, and how/why
 

@@ -3,6 +3,12 @@
    the graph so answers can light up its nodes; toggled from the header. */
 
 .teacher {
+  /* The lecture palette — a soft periwinkle, easier on the eyes than the old
+     yellow and in the same blue family as the app's --accent. `--lecture` is
+     an "R, G, B" triple so the tints below can vary the alpha with rgba();
+     `--lecture-solid` is the filled (selected) fill. Retune here in one place. */
+  --lecture: 165, 180, 252;
+  --lecture-solid: #818cf8;
   position: relative; /* anchors the .panel-resize-handle on the left edge */
   width: 340px;
   flex-shrink: 0;
@@ -122,35 +128,139 @@
   margin-top: 4px;
 }
 .teacher-modes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   margin-top: 10px;
 }
-.teach-btn {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--accent-strong);
-  background: rgba(255, 209, 102, 0.08);
-  color: var(--text-strong);
-  font-size: 13px;
-  cursor: pointer;
+/* A quiet caption under the lecture grid, telling the user the lecture's scope
+   is exactly the papers on the graph (so filtering the graph scopes it too). */
+.lecture-scope-note {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
 }
-.teach-btn:hover:not(:disabled) {
-  background: rgba(255, 209, 102, 0.16);
+/* A thin bar at the top of the content zone holding the contextual Clear —
+   kept with the transcript it acts on, and out of the lecture controls above. */
+.teacher-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px 0;
+}
+/* The four lecture modes as an even 2×2 grid — equal-height cells so the long
+   labels ("This paper's intuition") sit as tidily as the short
+   ones instead of jumbling the row. */
+.lecture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: 1fr;
+  gap: 8px;
+}
+.teach-btn {
+  position: relative; /* anchors the .cached dot */
+  height: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--lecture), 0.35);
+  background: rgba(var(--lecture), 0.07);
+  color: var(--text-strong);
+  font-size: 12.5px;
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+/* Hover only lifts a non-selected button — the filled `.active` state must not
+   be washed out by hover (which otherwise wins on specificity). */
+.teach-btn:hover:not(:disabled):not(.active) {
+  background: rgba(var(--lecture), 0.15);
+  border-color: rgba(var(--lecture), 0.6);
+}
+/* The shown lecture — its button is filled, reading as pressed/selected. */
+.teach-btn.active {
+  background: var(--lecture-solid);
+  border-color: var(--lecture-solid);
+  color: #fff;
+  font-weight: 600;
+}
+.teach-btn.active:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+/* A played-but-hidden lecture wears a small dot: "cached — click to show." */
+.teach-btn.cached::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--lecture-solid);
 }
 .teach-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
-/* The "Clear" button reads as secondary next to the lecture modes. */
+
+/* The "playing" indicator: three dots that hop in a cascade while a lecture
+   streams — a little life on the button that's generating. currentColor picks
+   up the filled button's white text. */
+.hop-dots {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 1em;
+}
+.hop-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: hop 0.9s ease-in-out infinite;
+}
+.hop-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.hop-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes hop {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  35% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+/* Respect users who'd rather not have motion — the dots just sit and pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .hop-dot {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+/* The "Clear" button reads as secondary — small, sitting at the top-right of
+   the transcript (see .teacher-toolbar), not among the lecture controls. */
 .clear-btn {
-  border-color: var(--border);
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
 }
 .clear-btn:hover:not(:disabled) {
   background: rgba(120, 130, 150, 0.12);
+  color: var(--text-strong);
 }
 
 .teacher-scroll {
@@ -189,7 +299,7 @@
 }
 .beat.active {
   border-color: var(--accent);
-  background: rgba(255, 209, 102, 0.06);
+  background: rgba(var(--lecture), 0.1);
 }
 .beat-heading {
   font-size: 11px;
@@ -242,7 +352,7 @@
 }
 .chat.assistant.active {
   border-color: var(--accent);
-  background: rgba(255, 209, 102, 0.06);
+  background: rgba(var(--lecture), 0.1);
 }
 .chat-cited {
   margin-top: 6px;
@@ -473,7 +583,7 @@
   color: var(--muted);
   padding: 3px 7px;
   border-left: 2px solid var(--accent-strong);
-  background: rgba(255, 209, 102, 0.05);
+  background: rgba(var(--lecture), 0.06);
   border-radius: 0 4px 4px 0;
 }
 .trace-line.fail {

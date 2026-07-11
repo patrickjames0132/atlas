@@ -11,15 +11,28 @@
 
 import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
-import type { AnswerFigure, Beat, ChatMsg, RetrieveEvent, TraceEvent } from '../api'
+import type { AnswerFigure, Beat, ChatMsg, LectureMode, RetrieveEvent, TraceEvent } from '../api'
 import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 
 export interface TranscriptState {
   chat: ChatMsg[]
-  beats: Beat[]
+  /**
+   * Per-mode lecture cache: a mode maps to its generated beats once it has
+   * been played. Re-selecting a cached mode reloads its beats without a
+   * re-fetch; the four modes are independent, so switching between them is
+   * instant after the first play.
+   */
+  lectures: Partial<Record<LectureMode, Beat[]>>
+  /** Which cached lecture is currently shown on screen (null = none visible —
+   *  every mode button is deselected). */
+  activeMode: LectureMode | null
 }
 
-const initialState: TranscriptState = { chat: [], beats: [] }
+const initialState: TranscriptState = { chat: [], lectures: {}, activeMode: null }
+
+/** A stable empty-beats reference, so `selectVisibleBeats` never returns a
+ *  fresh array (which would churn selector-driven re-renders). */
+const NO_BEATS: Beat[] = []
 
 /**
  * The in-flight assistant message — streams always write to the last turn.
@@ -34,21 +47,60 @@ const transcriptSlice = createSlice({
   initialState,
   reducers: {
     /**
-     * A lecture starts: clear the beats, keep the chat.
+     * A lecture starts streaming: make its mode the visible one and reset its
+     * cache slot to empty, ready for the beats to stream in. The chat and every
+     * other mode's cached beats are left untouched.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the lecture mode being played.
+     */
+    lectureStarted(state, action: PayloadAction<LectureMode>) {
+      state.activeMode = action.payload
+      state.lectures[action.payload] = []
+    },
+    /**
+     * One finished lecture beat arrives from the stream — appended to its own
+     * mode's cache slot. The mode is carried explicitly (not read from
+     * `activeMode`) so a lecture streaming in the background — deselected, or
+     * running alongside another that's on screen — still fills the right slot.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the beat and the mode it belongs to.
+     */
+    beatAdded(state, action: PayloadAction<{ mode: LectureMode; beat: Beat }>) {
+      const { mode, beat } = action.payload
+      ;(state.lectures[mode] ??= []).push(beat)
+    },
+    /**
+     * Show an already-cached lecture without re-fetching it (clicking a mode
+     * button whose lecture was played earlier this session).
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the mode to reveal.
+     */
+    lectureShown(state, action: PayloadAction<LectureMode>) {
+      state.activeMode = action.payload
+    },
+    /**
+     * Hide the visible lecture (deselecting its button) while keeping its beats
+     * cached, so re-selecting the mode reloads them instantly.
      *
      * @param state The slice state (mutated via immer).
      */
-    lectureStarted(state) {
-      state.beats = []
+    lectureHidden(state) {
+      state.activeMode = null
     },
     /**
-     * One finished lecture beat arrives from the stream.
+     * Drop a mode's cached beats (a stream that was aborted or errored before
+     * finishing, so it should regenerate on the next click rather than reload a
+     * partial lecture). Also hides it if it was the visible one.
      *
      * @param state  The slice state (mutated via immer).
-     * @param action Carries the completed beat.
+     * @param action Carries the mode to drop.
      */
-    beatAdded(state, action: PayloadAction<Beat>) {
-      state.beats.push(action.payload)
+    lectureDropped(state, action: PayloadAction<LectureMode>) {
+      delete state.lectures[action.payload]
+      if (state.activeMode === action.payload) state.activeMode = null
     },
     /**
      * A question begins: the user turn plus the empty assistant turn the
@@ -124,12 +176,14 @@ const transcriptSlice = createSlice({
       if (msg) msg.refs = action.payload
     },
     /**
-     * Wipe the conversation (the panel's Clear button).
+     * Clear only the Q&A chat, leaving every cached lecture untouched — the
+     * Clear button's behavior when no lecture is selected. (A selected lecture
+     * is cleared on its own via `lectureDropped`.)
      *
-     * @returns The pristine empty transcript.
+     * @param state The slice state (mutated via immer).
      */
-    cleared() {
-      return initialState
+    chatCleared(state) {
+      state.chat = []
     },
   },
   extraReducers: (builder) => {
@@ -145,6 +199,9 @@ const transcriptSlice = createSlice({
 export const {
   lectureStarted,
   beatAdded,
+  lectureShown,
+  lectureHidden,
+  lectureDropped,
   turnStarted,
   tokenAppended,
   traceAdded,
@@ -152,14 +209,26 @@ export const {
   retrieveSet,
   citedSet,
   refsSet,
-  cleared,
+  chatCleared,
 } = transcriptSlice.actions
 export default transcriptSlice.reducer
 
 /**
- * The whole transcript slice (chat + beats), for rendering and Save.
+ * The whole transcript slice (chat + lecture cache), for Save.
  *
  * @param state The root state.
  * @returns The transcript slice.
  */
 export const selectTranscript = (state: { transcript: TranscriptState }) => state.transcript
+
+/**
+ * The beats of the currently-shown lecture, or a stable empty array when no
+ * mode is selected — what the panel renders.
+ *
+ * @param state The root state.
+ * @returns The visible lecture's beats.
+ */
+export const selectVisibleBeats = (state: { transcript: TranscriptState }): Beat[] => {
+  const { activeMode, lectures } = state.transcript
+  return (activeMode && lectures[activeMode]) || NO_BEATS
+}

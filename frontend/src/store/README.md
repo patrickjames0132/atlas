@@ -10,7 +10,7 @@ distant parts of the tree earns a slice.**
 store/
   index.ts       — configureStore + the typed useAppDispatch/useAppSelector
   workspace.ts   — the graph, discoveries, layout + load/restore/save thunks
-  transcript.ts  — the teacher's conversation (chat, beats)
+  transcript.ts  — the teacher's conversation (chat + per-mode lecture cache)
   highlight.ts   — the papers the teacher is currently talking about
 ```
 
@@ -33,6 +33,12 @@ store/
   to live in Teacher.tsx with a live duplicate hoisted into Atlas purely so
   Save could read it. Reset/restore ride the workspace thunks via
   `extraReducers` — a fresh graph empties it, a restored session refills it.
+  Lectures are held as a **per-mode cache** (`lectures`: mode → beats) plus the
+  `activeMode` on screen, so each of the four modes is played once and then
+  toggled show/hide for free; `selectVisibleBeats` reads out the shown mode's
+  beats. Save persists the whole cache (a restore brings every played lecture
+  back, not just the visible one); a pre-caching save's flat `beats` folds into
+  the `history` slot on restore.
 - **`highlight`** — the teacher writes (active beat / cited answer), the
   canvas glows. Stored as an id array (serializable); `selectHighlightSet`
   memoizes the Set the canvas wants.
