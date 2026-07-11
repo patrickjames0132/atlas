@@ -62,9 +62,10 @@ export interface GraphEdge {
   /**
    * 0-based position within this edge's relation, in the relation's own order
    * (references/citations by citation count, latest by recency, similar by S2
-   * similarity). The per-relation count slider reveals `rank < value`, so
-   * raising it shows more of the already-shipped set live. Absent on snapshots
-   * cached before it — treated as 0.
+   * similarity). The frontend no longer trims by rank (the per-relation count
+   * sliders were retired in favor of the citation-count threshold slider), but
+   * the backend still ranks the shipped pool, so the field is preserved for
+   * snapshots and any future rank-aware view. Absent on old snapshots.
    */
   rank?: number
 }

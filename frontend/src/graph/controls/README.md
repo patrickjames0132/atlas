@@ -6,9 +6,10 @@ parent is `graph/GraphExplorer.tsx`.
 
 ```
 controls/
-  GraphControls.tsx — layout toggle, per-relation chips + count sliders,
-                      the dual-knob year slider, count readout,
-                      release/fit/refresh actions, the gesture hint line
+  GraphControls.tsx — layout toggle, per-relation filter chips, the
+                      dual-knob year slider, the citation-count threshold
+                      slider, count readout, release/fit/refresh actions,
+                      the gesture hint line
   Legend.tsx        — the color legend (agent entries appear on first use)
 ```
 
@@ -21,10 +22,20 @@ canvas about what "a reference" looks like, and both style via
 
 ## `GraphControls` — points worth knowing
 
-- **Per-relation sliders are reveals, not queries.** The backend ships each
-  relation's whole ranked pool; a slider shows ranks `0..limit-1`, so
-  dragging it never re-fetches. `counts` is the pool size (the slider max),
-  `limits` the visible count.
+- **The relation chips are the only node-type filter.** Each toggles one
+  relation on/off; a hidden relation's edges drop, and neighbors reachable
+  only through them fall out of the view. (The old per-relation count
+  sliders were retired — the backend already citation-budgets each pool, so
+  a second per-relation cap was redundant chrome.)
+- **The citation-count slider is a dual-knob window, not a fetch.** Like the
+  year range — and bounded the same way, by the graph's actual min…max
+  citation counts so neither knob has dead travel — two thumbs bound a
+  citation window over the already-budgeted pool. The thumbs ride a **log
+  scale** (see `model.ts` `citationThreshold`) because citation counts fan out
+  over orders of magnitude, and their positions map to the displayed counts.
+  Full-open (min…max) shows everything; it only renders when the neighbors
+  span a citation range to filter against. Reuses the `.range-dual`
+  track/fill/thumb CSS.
 - **The year slider only renders when the graph spans more than one
   year** — a single-year graph gets nothing to filter. Its two knobs clamp
   against each other (`lo ≤ hi`).

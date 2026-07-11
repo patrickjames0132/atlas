@@ -1285,20 +1285,22 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       sizing/alignment, clearer grouping). Pure UI polish, no behavior change.
       Candidate to bundle with other small UI-cleanup tickets in one ship.
       *(From the `todos.md` inbox, 2026-07-08.)*
-- [ ] **Drop the per-relation count sliders; filter by citation count instead**
-      — the four per-node-type count sliders (References / Field Landmarks /
-      Latest / Similar in `frontend/src/graph/controls/GraphControls.tsx`) go
-      away: the **filter chips** become the only node-*type* filter. In their
-      place, add a **citation-count slider** beneath the publication-date slider
-      that filters visible nodes by citation count (a magnitude threshold, log
-      scale given the range). The **backend still ranks by citations and caps the
-      node count** via the `cite_budget` model (and the forthcoming similar
-      budget), so the slider is a *display* filter over an already-budgeted set,
-      not a fetch control. **Config cleanup to decide:** with the reveal sliders
-      gone, `graph.cite_limit` (the slider max) and possibly `adaptive_cite_limit`
-      may be redundant — Patrick is OK dropping them; audit what still reads them
-      (`services/graph/budget.py`, `build.py`) before removing. *(From the
-      `todos.md` inbox, 2026-07-10.)*
+- [x] **Drop the per-relation count sliders; filter by citation count instead**
+      *(v4.7.0)* — the four per-node-type count sliders are gone; the **relation
+      filter chips** (restyled back to the bubbly v2–v3 pills) are now the only
+      node-*type* filter. In their place, a **dual-knob citation-count window
+      slider** sits beneath the year slider: two thumbs bound a min…max citation
+      window on a **log scale** (`model.ts` `citationThreshold`, `log1p`/`expm1`),
+      bounded by the graph's *actual* min…max neighbor citation counts — like the
+      year slider's real-range bounds — so neither knob idles. It's a pure
+      *display* filter over the already citation-budgeted pool (`cite_budget`
+      model), not a fetch control; hidden when the neighbors share one citation
+      count (nothing to window). **Config cleanup, resolved: keep**
+      `graph.cite_limit` / `adaptive_cite_limit`. The OnePager's "(slider max)"
+      was a misread — they're the ceiling for the adaptive landmark-budget model
+      (`services/graph/budget.py`, `build.py`), independent of the retired
+      frontend sliders, so nothing was redundant. *(From the `todos.md` inbox,
+      2026-07-10.)*
 - [x] **Determinate "Building graph…" progress** *(v3.7.0)* — the build notice
       now shows a real filling bar + live stage label, not just a spinner. As
       predicted, this took a streaming build route: new SSE `GET

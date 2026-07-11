@@ -30,7 +30,8 @@ export type VLink = GraphEdge & { _s: string; _t: string }
 /**
  * The stable per-graph dataset behind the filtered view: the mutable node and
  * link objects (which MUST keep identity across filter changes so sim
- * positions and pins survive), plus the year range and per-relation counts.
+ * positions and pins survive), plus the year range, per-relation counts, and
+ * the citation-count range (the citation slider's bounds).
  */
 export type Base = {
   nodes: VNode[]
@@ -38,6 +39,41 @@ export type Base = {
   minYear: number
   maxYear: number
   counts: Record<string, number>
+  minCitations: number
+  maxCitations: number
+}
+
+/** Discrete positions along each knob of the citation-count window slider — a
+ * smooth log sweep from the graph's least-cited paper (position 0) to its
+ * most-cited (the top position). */
+export const CITE_SLIDER_STEPS = 100
+
+/**
+ * Map a citation-slider knob position to the citation count it represents. Both
+ * knobs of the citation window use this (the low knob's count is the floor, the
+ * high knob's the ceiling), and — like the year slider's min/max year bounds —
+ * the sweep spans the graph's actual citation range, so neither knob has dead
+ * travel below the least-cited paper or above the most-cited. The scale is
+ * logarithmic because citation counts fan out over orders of magnitude (a
+ * handful of giants, a long tail of ones and zeros): a linear slider would
+ * spend almost its whole travel among a few citations. `log1p`/`expm1` anchor
+ * the ends exactly — position 0 yields `minCitations`, the top `maxCitations`.
+ *
+ * @param position     The knob position, 0…{@link CITE_SLIDER_STEPS}.
+ * @param minCitations The lowest citation count in the graph (the floor).
+ * @param maxCitations The highest citation count in the graph (the ceiling).
+ * @returns The citation count for the current knob position.
+ */
+export function citationThreshold(
+  position: number,
+  minCitations: number,
+  maxCitations: number,
+): number {
+  const low = Math.log1p(Math.max(0, minCitations))
+  const high = Math.log1p(Math.max(0, maxCitations))
+  if (high <= low) return maxCitations
+  const frac = Math.min(Math.max(position, 0), CITE_SLIDER_STEPS) / CITE_SLIDER_STEPS
+  return Math.round(Math.expm1(low + frac * (high - low)))
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

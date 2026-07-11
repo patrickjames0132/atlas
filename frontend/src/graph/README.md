@@ -52,8 +52,9 @@ node object references** once the simulation binds them. Three consequences:
   ids, because after binding, `source`/`target` no longer *are* ids —
   filtering and persistence read `_s`/`_t`.
 - **`Base` must keep object identity.** The per-graph dataset (nodes, links,
-  year range, counts) is built once per graph and then only ever *mutated in
-  place* — rebuild it (or `.map()` it) and every position and pin evaporates,
+  year range, per-relation counts, the citation-count ceiling) is built once
+  per graph and then only ever *mutated in place* — rebuild it (or `.map()`
+  it) and every position and pin evaporates,
   because the state lives ON the objects. Filtered views derive from `Base`
   without cloning its nodes.
 - **Changes signal by version, not identity.** `useDiscovery` bumps a
@@ -75,6 +76,10 @@ to anything in this folder.
   their own color.
 - `nodeRadius`: seed fixed-large; others scale with √citations, capped so
   megahits don't swallow the canvas.
+- `citationThreshold`: maps a citation-slider knob position to its citation
+  count on a log scale spanning the graph's min…max (`log1p`/`expm1` anchor
+  the ends), so the filter's travel matches how citation counts actually fan
+  out and neither knob idles outside the real range.
 - `formatPubDate`: parsed by hand, not `new Date` — date-only strings parse
   as UTC and can render a day off in western timezones.
 - `cleanNode`: strips a live node back to persistable fields — sim x/y,

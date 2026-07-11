@@ -35,11 +35,11 @@ import Lightbox from '../figures/Lightbox'
 import GraphCanvas from './canvas/GraphCanvas'
 import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
-import { REL_DEFAULT_LIMIT, REL_TYPES } from './theme'
+import { REL_TYPES } from './theme'
 import { useDiscovery } from './hooks/useDiscovery'
 import { usePinning } from './hooks/usePinning'
 import { useTimeline } from './hooks/useTimeline'
-import type { Base, VLink, VNode } from './model'
+import { CITE_SLIDER_STEPS, citationThreshold, type Base, type VLink, type VNode } from './model'
 
 /**
  * Render the graph area: canvas + controls + legend + detail panel, plus the
@@ -59,12 +59,13 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   // hits are agent-discovered and few, so they stay visible; the year slider
   // still filters them.
   const [enabled, setEnabled] = useState<Set<string>>(new Set([...REL_TYPES, 'search']))
-  // Per-relation visible count (the live sliders). The backend ships the whole
-  // ranked pool; this keeps ranks 0..limit-1 of each relation, seeded from the
-  // defaults on load and capped to what the paper actually has.
-  const [limits, setLimits] = useState<Record<string, number>>({ ...REL_DEFAULT_LIMIT })
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
+  // The citation-count window's knob positions (0…CITE_SLIDER_STEPS). Full-open
+  // by default (show every paper); a display filter over the already
+  // citation-budgeted pool the backend ships — see `citationThreshold`.
+  const [citeLo, setCiteLo] = useState(0)
+  const [citeHi, setCiteHi] = useState(CITE_SLIDER_STEPS)
   const [hoverId, setHoverId] = useState<string | null>(null)
   // The detail panel's figures, enlarged full-screen (same lightbox the
   // teacher's answer figures use).
@@ -109,12 +110,22 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
         if (rel in counts) counts[rel]++
       }),
     )
+    // The citation slider's bounds ignore the seed — it's fixed-large and always
+    // shown, so it shouldn't stretch the scale the neighbors filter on. Spanning
+    // the real min…max (like the year slider) keeps both knobs live.
+    const neighborCitations = nodes
+      .filter((node) => !node.is_seed)
+      .map((node) => node.citation_count ?? 0)
+    const minCitations = neighborCitations.length ? Math.min(...neighborCitations) : 0
+    const maxCitations = neighborCitations.length ? Math.max(...neighborCitations) : 0
     return {
       nodes,
       links,
       minYear: years.length ? Math.min(...years) : 0,
       maxYear: years.length ? Math.max(...years) : 0,
       counts,
+      minCitations,
+      maxCitations,
     }
   }, [graph])
 
@@ -123,14 +134,11 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   useEffect(() => {
     if (!base) return
     setEnabled(new Set([...REL_TYPES, 'search']))
-    // Each slider starts at its default, clamped to what this paper actually has.
-    setLimits(
-      Object.fromEntries(
-        REL_TYPES.map((type) => [type, Math.min(REL_DEFAULT_LIMIT[type], base.counts[type] ?? 0)]),
-      ),
-    )
     setYearLo(base.minYear)
     setYearHi(base.maxYear)
+    // A fresh graph shows every citation count; the user narrows from there.
+    setCiteLo(0)
+    setCiteHi(CITE_SLIDER_STEPS)
     setHoverId(null)
   }, [base])
 
@@ -207,19 +215,19 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
    */
   const view = useMemo(() => {
     if (!base) return { nodes: [] as VNode[], links: [] as VLink[] }
-    // An edge is allowed when its relation is toggled on AND its rank falls
-    // within that relation's slider (search edges have no slider — always on).
-    // Ranks are per-relation; a `similar` slider of 15 keeps similar ranks 0-14
-    // regardless of how many references are shown.
-    const linkOk = (link: VLink) => {
-      if (!enabled.has(link.type)) return false
-      if (!(link.type in limits)) return true // 'search' — no per-relation cap
-      return (link.rank ?? 0) < limits[link.type]
-    }
-    // A neighbor is shown when at least one edge reaches it within the sliders;
-    // the seed is always shown. Nodes reached only via a hidden/over-limit edge
-    // drop out — that's how a slider trims the graph, dedupe-safe (a paper kept
-    // by its reference edge stays even if its similar edge is over the limit).
+    // The citation window a neighbor must fall inside (0…maxCitations = filter
+    // off). The backend already ranks by citations and caps the pool; this is a
+    // live display trim on top of it.
+    const citeMin = citationThreshold(citeLo, base.minCitations, base.maxCitations)
+    const citeMax = citationThreshold(citeHi, base.minCitations, base.maxCitations)
+    // An edge is allowed when its relation chip is toggled on ('search' edges
+    // have no chip — always on). Node-type filtering now lives entirely in the
+    // chips; the citation slider trims by magnitude on the node side below.
+    const linkOk = (link: VLink) => enabled.has(link.type)
+    // A neighbor is shown when at least one enabled edge reaches it; the seed is
+    // always shown. Nodes reached only via a hidden relation drop out — that's
+    // how a chip trims the graph, dedupe-safe (a paper kept by its reference
+    // edge stays even if its similar relation is hidden).
     const reachable = new Set<string>()
     base.links.forEach((link) => {
       if (linkOk(link)) {
@@ -230,6 +238,8 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     const nodeOk = (node: VNode) => {
       if (node.is_seed) return true // the seed is always shown, ignoring filters
       if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi)) return false
+      const citations = node.citation_count ?? 0
+      if (citations < citeMin || citations > citeMax) return false
       return reachable.has(node.id)
     }
     const nodes = base.nodes.filter(nodeOk)
@@ -241,7 +251,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     // graphVersion isn't read directly — it's a signal that base.nodes/links
     // were mutated in place (discoveries) and this must recompute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, enabled, limits, yearLo, yearHi, graphVersion])
+  }, [base, enabled, yearLo, yearHi, citeLo, citeHi, graphVersion])
 
   // Publish the on-screen node ids so agent grounding (selectGroundingNodes)
   // tracks the visible view, not the whole shipped pool. Fires whenever the
@@ -276,11 +286,6 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
       else next.add(type)
       return next
     })
-  }, [])
-
-  /** Set one relation's visible count (the live count sliders). */
-  const setLimit = useCallback((type: string, value: number) => {
-    setLimits((prev) => ({ ...prev, [type]: value }))
   }, [])
 
   /**
@@ -327,15 +332,18 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             onLayout={setLayoutMode}
             enabled={enabled}
             onToggleType={toggleType}
-            counts={base!.counts}
-            limits={limits}
-            onLimit={setLimit}
             minYear={base!.minYear}
             maxYear={base!.maxYear}
             yearLo={yearLo}
             yearHi={yearHi}
             onYearLo={setYearLo}
             onYearHi={setYearHi}
+            minCitations={base!.minCitations}
+            maxCitations={base!.maxCitations}
+            citeLo={citeLo}
+            citeHi={citeHi}
+            onCiteLo={setCiteLo}
+            onCiteHi={setCiteHi}
             visibleCount={view.nodes.length}
             totalCount={base!.nodes.length}
             pinnedCount={pinned.size}

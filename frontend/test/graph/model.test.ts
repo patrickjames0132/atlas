@@ -7,7 +7,9 @@
 import { describe, expect, it } from 'vitest'
 import type { GraphNode } from '../../src/api'
 import {
+  CITE_SLIDER_STEPS,
   ID_RE,
+  citationThreshold,
   cleanNode,
   countRels,
   formatPubDate,
@@ -81,6 +83,35 @@ describe('nodeRadius', () => {
 
   it('caps megahit papers so they cannot swallow the canvas', () => {
     expect(nodeRadius(makeNode({ citation_count: 1_000_000 }))).toBe(18)
+  })
+})
+
+describe('citationThreshold', () => {
+  it('anchors position 0 to the graph floor (not a hardcoded 0)', () => {
+    expect(citationThreshold(0, 8, 5000)).toBe(8)
+  })
+
+  it('reaches exactly the ceiling at the top position', () => {
+    expect(citationThreshold(CITE_SLIDER_STEPS, 8, 5000)).toBe(5000)
+  })
+
+  it('rises on a log scale — the midpoint sits far below the linear midpoint', () => {
+    // expm1(mid of log1p(0)…log1p(5000)) ≈ 70, not 2500: most travel is low.
+    expect(citationThreshold(CITE_SLIDER_STEPS / 2, 0, 5000)).toBe(70)
+  })
+
+  it('is monotonic across the slider', () => {
+    let previous = -1
+    for (let position = 0; position <= CITE_SLIDER_STEPS; position += 10) {
+      const threshold = citationThreshold(position, 8, 5000)
+      expect(threshold).toBeGreaterThanOrEqual(previous)
+      previous = threshold
+    }
+  })
+
+  it('collapses to the ceiling when the range is flat (nothing to filter)', () => {
+    expect(citationThreshold(0, 42, 42)).toBe(42)
+    expect(citationThreshold(CITE_SLIDER_STEPS, 42, 42)).toBe(42)
   })
 })
 

@@ -39,10 +39,10 @@ export interface WorkspaceState {
   discoveredEdges: GraphEdge[]
   /**
    * Ids of the nodes currently VISIBLE on the canvas — published by
-   * GraphExplorer's view filter (relation chips, per-relation count sliders,
-   * year range). Agents ground on what's on screen, not the whole shipped pool
-   * (which now holds far more than the sliders show), so this is the
-   * intersection `selectGroundingNodes` applies. Empty until the first render.
+   * GraphExplorer's view filter (relation chips, year range, citation-count
+   * threshold). Agents ground on what's on screen, not the whole shipped pool
+   * (which holds far more than the filters show), so this is the intersection
+   * `selectGroundingNodes` applies. Empty until the first render.
    */
   visibleNodeIds: string[]
   layout: 'force' | 'timeline'
@@ -308,10 +308,10 @@ export const selectSeedNode = createSelector(
 /**
  * The teacher's grounding scope: the nodes VISIBLE on the canvas plus
  * everything discovered this session, deduped. Grounding tracks what's on
- * screen — the graph now ships a much larger pool than the per-relation
- * sliders show, and the agents must reason over the papers the user actually
- * sees, not the hidden remainder. Discoveries are always kept (the agent
- * surfaced them), even if a filter would hide them.
+ * screen — the graph ships a much larger pool than the filters show, and the
+ * agents must reason over the papers the user actually sees, not the hidden
+ * remainder. Discoveries are always kept (the agent surfaced them), even if a
+ * filter would hide them.
  *
  * `visibleNodeIds` is published by GraphExplorer's view filter; before it
  * lands (e.g. the instant a graph loads) grounding is just the discoveries,

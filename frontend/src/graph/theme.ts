@@ -48,16 +48,3 @@ export const REL_LABEL: Record<string, string> = {
   latest: 'Latest Publications',
   similar: 'Similar',
 }
-
-/**
- * Where each relation's count slider starts when a graph loads (clamped to what
- * the paper actually has). The backend ships the whole ranked pool per relation
- * and each slider's MAX is that relation's available count; this is just the
- * modest initial position so a fresh graph isn't overwhelming.
- */
-export const REL_DEFAULT_LIMIT: Record<(typeof REL_TYPES)[number], number> = {
-  reference: 25,
-  citation: 25,
-  latest: 25,
-  similar: 25,
-}

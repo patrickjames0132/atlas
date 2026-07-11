@@ -1,14 +1,16 @@
 /**
  * The declutter panel over the graph: layout toggle (Force / Timeline),
- * relation filter chips, the dual-knob year range slider, the visible-count
- * readout, and the pin/fit actions.
+ * relation filter chips, the dual-knob year range slider, the dual-knob
+ * citation-count window slider, the visible-count readout, and the pin/fit
+ * actions.
  *
  * Purely presentational — all state lives in GraphExplorer; this just renders
  * it and fires the callbacks.
  */
 
-import { Fragment, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import { REL_COLOR, REL_LABEL, REL_TYPES } from '../theme'
+import { CITE_SLIDER_STEPS, citationThreshold } from '../model'
 import '../graph.css'
 
 /** Props for {@link GraphControls}. */
@@ -21,12 +23,6 @@ export interface GraphControlsProps {
   enabled: Set<string>
   /** Toggle one relation type on/off. */
   onToggleType: (type: string) => void
-  /** Per-relation pool sizes — each slider's maximum (what the paper has). */
-  counts: Record<string, number>
-  /** Per-relation visible count (each slider's current value). */
-  limits: Record<string, number>
-  /** Set one relation's visible count. */
-  onLimit: (type: string, value: number) => void
   /** The base graph's year range (slider bounds). */
   minYear: number
   maxYear: number
@@ -35,6 +31,14 @@ export interface GraphControlsProps {
   yearHi: number
   onYearLo: (year: number) => void
   onYearHi: (year: number) => void
+  /** The citation-count range in the graph (the citation slider's bounds). */
+  minCitations: number
+  maxCitations: number
+  /** The citation window's knob positions (each 0…{@link CITE_SLIDER_STEPS}). */
+  citeLo: number
+  citeHi: number
+  onCiteLo: (value: number) => void
+  onCiteHi: (value: number) => void
   /** Visible vs. total node counts for the readout. */
   visibleCount: number
   totalCount: number
@@ -60,15 +64,18 @@ export default function GraphControls({
   onLayout,
   enabled,
   onToggleType,
-  counts,
-  limits,
-  onLimit,
   minYear,
   maxYear,
   yearLo,
   yearHi,
   onYearLo,
   onYearHi,
+  minCitations,
+  maxCitations,
+  citeLo,
+  citeHi,
+  onCiteLo,
+  onCiteHi,
   visibleCount,
   totalCount,
   pinnedCount,
@@ -88,6 +95,16 @@ export default function GraphControls({
    */
   const yearPct = (year: number) => (yearSpan ? ((year - minYear) / yearSpan) * 100 : 0)
 
+  // The citation slider only earns its space when the neighbors span a citation
+  // range to bound a window against (a flat/empty range gives nothing to trim).
+  const showCitations = maxCitations > minCitations
+  // The knob positions are linear (0…STEPS); the counts they read out are the
+  // log-mapped thresholds across the graph's min…max. The fill/knobs sit at the
+  // raw position percentage.
+  const loCitations = citationThreshold(citeLo, minCitations, maxCitations)
+  const hiCitations = citationThreshold(citeHi, minCitations, maxCitations)
+  const citePct = (position: number) => (position / CITE_SLIDER_STEPS) * 100
+
   return (
     <div className="controls">
       <div className="layout-toggle">
@@ -100,36 +117,18 @@ export default function GraphControls({
       </div>
       <div className="ctrl-rels">
         {REL_TYPES.map((type) => {
-          const poolMax = counts[type] ?? 0
           const on = enabled.has(type)
-          const shown = on ? Math.min(limits[type] ?? 0, poolMax) : 0
           return (
-            <Fragment key={type}>
-              <button
-                className={`rel-toggle ${on ? 'on' : ''}`}
-                onClick={() => onToggleType(type)}
-                style={{ '--c': REL_COLOR[type] } as CSSProperties}
-                title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
-              >
-                <i />
-                {REL_LABEL[type]}
-              </button>
-              <input
-                type="range"
-                className="rel-slider"
-                style={{ '--c': REL_COLOR[type] } as CSSProperties}
-                min={0}
-                max={poolMax}
-                value={shown}
-                disabled={!on || poolMax === 0}
-                aria-label={`${REL_LABEL[type]} shown`}
-                onChange={(event) => onLimit(type, Number(event.target.value))}
-              />
-              <em className="rel-count">
-                {shown}
-                <span className="rel-max">/{poolMax}</span>
-              </em>
-            </Fragment>
+            <button
+              key={type}
+              className={`rel-toggle ${on ? 'on' : ''}`}
+              onClick={() => onToggleType(type)}
+              style={{ '--c': REL_COLOR[type] } as CSSProperties}
+              title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
+            >
+              <i />
+              {REL_LABEL[type]}
+            </button>
           )
         })}
       </div>
@@ -163,6 +162,40 @@ export default function GraphControls({
               value={yearHi}
               aria-label="Latest year"
               onChange={(event) => onYearHi(Math.max(Number(event.target.value), yearLo))}
+            />
+          </div>
+        </div>
+      )}
+
+      {showCitations && (
+        <div className="cites">
+          <div className="cites-label">
+            Citations <b>{loCitations.toLocaleString()}</b> – <b>{hiCitations.toLocaleString()}</b>
+          </div>
+          <div className="range-dual">
+            <div className="range-track" />
+            <div
+              className="range-fill"
+              style={{
+                left: `${citePct(citeLo)}%`,
+                width: `${citePct(citeHi) - citePct(citeLo)}%`,
+              }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={CITE_SLIDER_STEPS}
+              value={citeLo}
+              aria-label="Fewest citations"
+              onChange={(event) => onCiteLo(Math.min(Number(event.target.value), citeHi))}
+            />
+            <input
+              type="range"
+              min={0}
+              max={CITE_SLIDER_STEPS}
+              value={citeHi}
+              aria-label="Most citations"
+              onChange={(event) => onCiteHi(Math.max(Number(event.target.value), citeLo))}
             />
           </div>
         </div>
