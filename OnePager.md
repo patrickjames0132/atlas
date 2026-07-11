@@ -1260,6 +1260,17 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Release should re-condense a scattered force layout on demand** — on a
+      big graph the force nodes drift apart and there's no way to pull them back
+      together without changing the view. The **Release** button (graph controls)
+      only un-pins pinned nodes and is **disabled when nothing is pinned**
+      (`pinnedCount === 0`), so it can't help. Today's only workaround is toggling
+      a relation filter chip, which reheats the simulation as a side effect and
+      condenses the layout. Give the user a real control: either make **Release**
+      also **reheat the simulation** (`d3ReheatSimulation` on the ForceGraph2D
+      ref) so it re-settles the nodes even with none pinned, or add a dedicated
+      **"Re-layout"/"Recenter"** action beside Release/Fit. *(From the `todos.md`
+      inbox, 2026-07-11.)*
 - [x] **Clickable reference numbers in agent answers** *(v3.8.0)* — inline `[n]`
       markers are now clickable chips that spotlight the paper they cite (the
       `highlightIds` glow); click the same marker again to clear it. Works on
@@ -1372,6 +1383,16 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Enhancements & tech debt
 
+- [ ] **Drop the `recs_pool` config knob (hardcode `all-cs`)** — the S2
+      *Similar* recommendations pool is a `Literal["all-cs", "recent"]` config
+      option (`config.providers.s2.recs_pool`), but `config.py` and
+      `docs/configuration.md` both say it **must stay `all-cs`** — `"recent"`
+      returns nothing for older seeds, so no real graph ever wants it. Like the
+      retired per-relation count caps, it's a dead knob: remove the config field
+      and hardcode `from=all-cs` at the recommendations call site
+      (`integrations/semantic_scholar`), deleting the now-moot "why it must stay
+      all-cs" config/docs notes. Confirm nothing else reads it first. *(From the
+      `todos.md` inbox, 2026-07-11.)*
 - [ ] **Rename `digest.db` → `cache.db`** — the ephemeral graph-snapshot store
       is still named `digest.db`, a leftover from the retired daily-digest era;
       it's really the 1-day graph/artifact **cache** now. Rename the file (and
