@@ -46,6 +46,13 @@ local file follows.
 
 For each feature, follow this cycle:
 
+0. **Branch off `main` for a major feature** — before starting a substantial
+   feature/ticket, cut a fresh branch from an up-to-date `main`
+   (`git switch -c <short-feature-name> main`). All the work below happens on
+   that branch, keeping `main` clean and tidy. **Skip the branch for lightweight,
+   doc-only changes** — updating READMEs, other markdown, `CLAUDE.md`, or
+   `OnePager.md` (e.g. filing `todos.md`, ticking roadmap boxes) — those commit
+   straight to `main`.
 1. **Build** the feature. Run `npm run build --prefix frontend` to typecheck the
    frontend; verify backend changes with a quick script or the Flask test client.
    Run the whole quality gate — backend *and* frontend — with **`uv run nox`**
@@ -62,7 +69,9 @@ For each feature, follow this cycle:
    an entry to the **Bugs** section of **`OnePager.md`** (newest-first; see its
    header for the format).
    Small, obvious fixes don't need one — the commit message is enough.
-4. **Commit, tag, and push** (details below).
+4. **Commit on the branch, merge into `main`, tag, and push** (details below) —
+   commit the approved work on the feature branch, merge it back into `main`,
+   then tag and push in lockstep. The feature branch can be deleted once merged.
 
 Don't skip ahead: no committing before the browser test, no starting the next
 phase without a green light. Patrick is hands-on and likes to eyeball UX before
@@ -97,8 +106,11 @@ scratch; never treat leftover items there as authoritative.
   ```
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ```
+- **Merge into `main`:** the approved work is built on a feature branch (see the
+  loop's step 0); merge it back into `main` before tagging so the tag lands on
+  `main`. Delete the feature branch once merged.
 - **Tag in lockstep:** create an **annotated** tag `vX.Y.Z` matching the
-  `pyproject.toml` version.
+  `pyproject.toml` version, on the merge commit.
 - **Push:** `git push origin main --follow-tags`.
 
 The repo is **private** (`github.com/patrickjames0132/arxiv-digest`), default

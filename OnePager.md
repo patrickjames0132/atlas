@@ -1298,6 +1298,23 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       sizing/alignment, clearer grouping). Pure UI polish, no behavior change.
       Candidate to bundle with other small UI-cleanup tickets in one ship.
       *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Cache each lecture behind its button (toggle to show/hide)** — clicking a
+      lecture-mode button should **cache the generated lecture** the first time;
+      clicking it again reloads the cached version instead of regenerating, and
+      the button acts as a **show/hide toggle** you can select or deselect at any
+      time to reveal or hide that lecture. Saves the re-generation cost/latency on
+      a re-click and makes the three modes feel like persistent tabs. Bundles
+      naturally with **Tidy the lecture-mode buttons** above. *(From the
+      `todos.md` inbox, 2026-07-10.)*
+- [ ] **Group graph nodes by relation type in the Force layout** — the force
+      layout currently mingles every relation into one undifferentiated cloud;
+      nodes should **cluster into visual groups by their relation to the seed**
+      (references / Field Landmarks / Latest Publications / Similar) so the
+      neighborhood reads at a glance. Likely a per-relation grouping force (a
+      cluster centroid per relation, or a radial/sector layout keyed on
+      `link.type`) in the force-graph config; Timeline already separates by date,
+      so this is the Force-layout counterpart. *(From the `todos.md` inbox,
+      2026-07-10.)*
 - [x] **Drop the per-relation count sliders; filter by citation count instead**
       *(v4.7.0)* — the four per-node-type count sliders are gone; the **relation
       filter chips** (restyled back to the bubbly v2–v3 pills) are now the only
@@ -1357,6 +1374,35 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
         so *presence* on brand-new functions stays a convention (CLAUDE.md);
         completeness of anything documented is machine-enforced.
       *(From the `todos.md` inbox, 2026-07-09.)*
+- [ ] **Move `ml_pipelines/` into `src` and split `models/` per model** — the ML
+      training pipelines live at the repo root today, outside the src-layout
+      package; move `ml_pipelines/` under `src/atlas/` (updating the artifact
+      load paths in `services/graph/budget.py` + `bands.py`). And **break the
+      shared `ml_pipelines/models/` package** — currently a single home for both
+      `.joblib` artifacts + metadata + one README — **into per-model
+      sub-packages named for their model**, folding each artifact into its
+      existing pipeline package (`cite_budget/`, `latest_gap/`) so a model's
+      training code, corpus, artifact, and README live together. Each keeps its
+      own README (both already have one); **delete the `models/` README** as the
+      package dissolves. Matches the per-package-README rule. *(From the
+      `todos.md` inbox, 2026-07-10.)*
+- [ ] **Drop the retired per-relation count caps from config** — remove
+      `graph.ref_limit`, `graph.cite_limit`, `graph.adaptive_cite_limit`,
+      `graph.latest_limit`, and `graph.similar_limit` from `config.json` /
+      `config.example.json` and the Pydantic `graph` config. Resolved plan (per
+      Patrick, 2026-07-10):
+  - **`cite_limit` + `adaptive_cite_limit`** → gone: the **landmark-budget model
+    always determines the cite limit** — no toggle, no config ceiling. The budget
+    model owns its own upper bound (`services/graph/budget.py`) rather than
+    clamping to a config `cite_limit`.
+  - **`ref_limit`** → gone: **show all references** (no cap).
+  - **`latest_limit`** → gone: Latest Publications is already **banded by year**
+    (`latest_band_years` × `latest_per_year`), so the flat cap is redundant.
+  - **`similar_limit`** → **staged behind** the *Budget-cap the Similar nodes with
+    a trained model* ticket (under Citations & graph data): that ticket replaces
+    the flat `similar_limit` with a trained per-seed budget, so remove the config
+    key as part of / after it, not before. *(From the `todos.md` inbox,
+    2026-07-10.)*
 - [ ] **Dynamic OpenAlex latest-window sizing** — the "Latest Publications"
       per-year bands + newest window (`config.graph.latest_band_years` /
       `latest_per_year`) are a **fixed** span today. But how far back the recent
