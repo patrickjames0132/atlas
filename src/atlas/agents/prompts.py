@@ -145,8 +145,13 @@ def idx_to_id(nodes: Sequence[Node], indices: Iterable[int]) -> list[str]:
     return [nodes[index - 1].id for index in indices if 1 <= index <= len(nodes)]
 
 
-#: An inline citation marker in model prose, e.g. ``[7]``.
-_REF_MARKER = re.compile(r"\[(\d+)\]")
+#: An inline citation marker in model prose: a single index (``[7]``) or a
+#: combined list the model sometimes writes (``[14, 29]`` / ``[14 29]``). Group
+#: 1 holds the digits and separators between the brackets; split it on
+#: ``_REF_SEP`` for the individual indices.
+_REF_MARKER = re.compile(r"\[(\d+(?:[\s,]+\d+)*)\]")
+#: The separator between indices inside a combined marker (comma and/or space).
+_REF_SEP = re.compile(r"[\s,]+")
 
 
 def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
@@ -155,7 +160,9 @@ def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
     The clickable-citation counterpart to ``idx_to_id``: where that resolves an
     explicit index list, this scans prose for the markers actually written and
     resolves each against the same numbered list. Only referenced, in-range
-    indices are kept, so the map stays small and reload-safe.
+    indices are kept, so the map stays small and reload-safe. A combined marker
+    (``[14, 29]``) contributes each of its indices, so every number in it stays
+    clickable.
 
     Args:
         nodes: The same node sequence ``node_lines`` numbered.
@@ -166,9 +173,10 @@ def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
     """
     refs: dict[str, str] = {}
     for match in _REF_MARKER.finditer(text):
-        index = int(match.group(1))
-        if 1 <= index <= len(nodes):
-            refs[match.group(1)] = nodes[index - 1].id
+        for token in _REF_SEP.split(match.group(1)):
+            index = int(token)
+            if 1 <= index <= len(nodes):
+                refs[token] = nodes[index - 1].id
     return refs
 
 

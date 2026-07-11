@@ -40,6 +40,24 @@ describe('remarkCite', () => {
     expect(second.data?.hProperties?.index).toBe('12')
   })
 
+  it('splits a combined marker into one chip per index', () => {
+    const paragraph = transform(makeTree([{ type: 'text', value: 'both [14, 29] agree' }]))
+    expect(paragraph.children.map((child) => child.type)).toEqual([
+      'text',
+      'citeref',
+      'citeref',
+      'text',
+    ])
+    const [, first, second] = paragraph.children as Array<{
+      data?: { hProperties?: { index?: string } }
+      children?: Array<{ value?: string }>
+    }>
+    expect(first.data?.hProperties?.index).toBe('14')
+    expect(first.children?.[0]?.value).toBe('[14]')
+    expect(second.data?.hProperties?.index).toBe('29')
+    expect(second.children?.[0]?.value).toBe('[29]')
+  })
+
   it('leaves a marker-free text node exactly as it was', () => {
     const original = { type: 'text', value: 'no citations here' } as const
     const paragraph = transform(makeTree([{ ...original }]))

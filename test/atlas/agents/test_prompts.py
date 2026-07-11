@@ -104,6 +104,17 @@ def test_refs_from_text_maps_used_markers_and_ignores_out_of_range():
     assert prompts.refs_from_text(nodes, "Plain prose, no citations.") == {}
 
 
+def test_refs_from_text_splits_combined_markers():
+    nodes = [make_node("a"), make_node("b"), make_node("c")]
+    # A combined marker contributes each of its (in-range) indices, mixing
+    # comma and bare-space separators; an out-of-range member is dropped.
+    assert prompts.refs_from_text(nodes, "Both [1, 3] agree, and [2 9] diverge.") == {
+        "1": "a",
+        "3": "c",
+        "2": "b",
+    }
+
+
 def test_format_passages_tags_source_and_page():
     hits = [
         {"source_title": "Deep Learning", "page": 243, "text": "Momentum   helps\nconverge."},
