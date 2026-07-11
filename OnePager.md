@@ -1265,6 +1265,17 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [ ] **Hide dateless papers in Timeline, keep them in Force** — a paper with no
+      publication date has no honest position on a time axis. Today the Timeline
+      layout parks a dateless node at the **seed's own x** (`nodeTimelineX` in
+      `useTimeline.ts`, the v2.3.1 fix) so it doesn't fly to the far edge — but
+      it still shows, misleadingly sitting at the seed's year. Instead: **omit
+      dateless nodes from the Timeline view entirely** (and their edges), while
+      **keeping them in the Force view**, where position is force-driven, not
+      time-driven, so they belong. A layout-scoped visibility filter (Timeline
+      drops `year == null && pub_date == null` nodes; Force shows everything),
+      kept in step with the paper-count readout so it reflects what's shown.
+      *(From the `todos.md` inbox, 2026-07-11.)*
 - [ ] **Release should re-condense a scattered force layout on demand** — on a
       big graph the force nodes drift apart and there's no way to pull them back
       together without changing the view. The **Release** button (graph controls)
