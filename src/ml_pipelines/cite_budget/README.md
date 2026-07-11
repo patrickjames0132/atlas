@@ -1,6 +1,6 @@
 # `cite_budget` — training the adaptive landmark-budget model
 
-**What it produces.** `ml_pipelines/models/cite_budget.joblib` — the scikit-learn
+**What it produces.** `model.joblib` (beside this trainer) — the scikit-learn
 model the app loads (`atlas.services.graph.budget`) to decide how many landmark
 citers to ship per seed (`config.graph.cite_limit` becomes the ceiling).
 
@@ -14,10 +14,12 @@ citation count — instead of being a hand-tuned constant.
 
 ```
 cite_budget/
-  features.py   — the training-only LABEL: density budget n* (density_budget)
-  collect.py    — pull the labelled corpus from OpenAlex -> corpus.csv
-  train.py      — fit LinearRegression, cross-validate, serialize the artifact
-  corpus.csv    — the committed corpus (features + n* label per seed)
+  features.py          — the training-only LABEL: density budget n* (density_budget)
+  collect.py           — pull the labelled corpus from OpenAlex -> corpus.csv
+  train.py             — fit LinearRegression, cross-validate, serialize the artifact
+  corpus.csv           — the committed corpus (features + n* label per seed)
+  model.joblib         — the fitted artifact the app loads (committed)
+  model.metadata.json  — human-readable sidecar (params, metrics, date)
 ```
 
 The *features* (age, log-citations) are **not** defined here — they're the app's
@@ -43,8 +45,8 @@ place that can change, and it changes both sides at once.
 3. **Fit** (`train.py`). Build the feature matrix through the app's
    `compute_features`, fit `LinearRegression`, score with 5-fold cross-validated
    R², and serialize a joblib bundle (estimator + feature contract + clamp floor
-   + metadata) to `ml_pipelines/models/`, with a human-readable `metadata.json`
-   sidecar for eyeballing and diffing.
+   + metadata) to `model.joblib` beside the trainer, with a human-readable
+   `model.metadata.json` sidecar for eyeballing and diffing.
 
 ## What the data said (see `research/cite_budget` for the full write-up)
 
@@ -71,9 +73,23 @@ uv run python -m ml_pipelines.cite_budget.collect            # just refresh corp
 ```
 
 `--refresh` re-hits OpenAlex (polite pool, a couple hundred throttled calls).
-After a refresh, commit the updated `corpus.csv`, the new `models/` artifact +
-`metadata.json`, and re-run `research/cite_budget/analyze.ipynb` if you want the
-write-up to match.
+After a refresh, commit the updated `corpus.csv`, the new `model.joblib` +
+`model.metadata.json`, and re-run `research/cite_budget/analyze.ipynb` if you want
+the write-up to match.
+
+## The artifact
+
+`model.joblib` / `model.metadata.json` are **committed** so a fresh checkout
+serves predictions without training first. The `.joblib` is the bundle the app
+loads (the fitted estimator + its contract marker + clamp floor + metadata); the
+`.metadata.json` is the same metadata in human-readable JSON (never loaded — for
+eyeballing and for a git diff to show what a retrain moved). **Regenerated, not
+edited** — never hand-edit them; rerun the pipeline, and the diff is the record.
+**Loaded defensively** — a missing, corrupt, or contract-mismatched artifact makes
+the app fall back to the flat `cite_limit`, so a bad or absent model degrades
+gracefully. **Version skew:** the pickled scikit-learn estimator can fail to load
+if the runtime's scikit-learn diverges far enough; the fallback then kicks in —
+retrain to refresh the pickle.
 
 ## Testing
 

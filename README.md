@@ -139,11 +139,11 @@ The Vite dev server proxies `/api/*` to Flask.
    citing the seed — the historic giants, returned directly by a sorted `cites:`
    query (no recency bias, no mining), with **how many to show sized per-seed by
    a small trained model** (an old classic maps out large, a young hot paper
-   stays tight — see `ml_pipelines/cite_budget/`); **Latest Publications** (light
+   stays tight — see `src/ml_pipelines/cite_budget/`); **Latest Publications** (light
    green) is the recent frontier — recent citers, per-year banded for even
    coverage, with the band's **start sized per-seed by a second trained model**
    so an old classic's bands widen back to meet its landmark cluster instead of
-   leaving a gap (see `ml_pipelines/latest_gap/`) — as a filterable relation of
+   leaving a gap (see `src/ml_pipelines/latest_gap/`) — as a filterable relation of
    its own. Node size = citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category

@@ -8,11 +8,12 @@ two cheap fields already on the seed node (publication age + citation count) by
 a scikit-learn model **trained offline**, not hand-tuned constants.
 
 This module is the *serving* half: it loads the trained model
-(``ml_pipelines/models/cite_budget.joblib``) and turns a seed into a landmark budget. The
-*training* half lives in ``ml_pipelines/cite_budget`` — it fits the model on a labelled
-OpenAlex corpus and writes the artifact. Both sides build the feature vector
-through :func:`compute_features` here, so there's a single feature contract and
-no train/serve skew. See ``ml_pipelines/cite_budget/README.md`` for the derivation.
+(``src/ml_pipelines/cite_budget/model.joblib``) and turns a seed into a landmark
+budget. The *training* half lives beside the artifact in
+``src/ml_pipelines/cite_budget`` — it fits the model on a labelled OpenAlex corpus
+and writes it. Both sides build the feature vector through
+:func:`compute_features` here, so there's a single feature contract and no
+train/serve skew. See ``src/ml_pipelines/cite_budget/README.md`` for the derivation.
 
 The model artifact is loaded once and memoized (:func:`load_model`); a missing
 or unreadable artifact degrades gracefully to the flat ``cite_limit`` rather
@@ -33,9 +34,10 @@ from ...integrations import openalex
 
 log = logging.getLogger(__name__)
 
-#: The trained-model artifact, written by ``ml_pipelines/cite_budget/train.py``. A joblib
-#: bundle: ``{"model": <sklearn estimator>, "feature_names", "floor", ...}``.
-MODEL_PATH = PROJECT_ROOT / "ml_pipelines" / "models" / "cite_budget.joblib"
+#: The trained-model artifact, written by ``src/ml_pipelines/cite_budget/train.py``
+#: beside it. A joblib bundle: ``{"model": <sklearn estimator>, "feature_names",
+#: "floor", ...}``.
+MODEL_PATH = PROJECT_ROOT / "src" / "ml_pipelines" / "cite_budget" / "model.joblib"
 
 #: The feature contract — the order the estimator was trained on. Training reads
 #: this same constant, so the serving vector can't drift from the fitted one.

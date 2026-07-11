@@ -1,4 +1,4 @@
-"""The cite-budget training pipeline (ml_pipelines/cite_budget): label logic + offline fit.
+"""The cite-budget training pipeline (src/ml_pipelines/cite_budget): label logic + offline fit.
 
 Fully offline — no OpenAlex calls. The density-label function is pure; the fit
 runs on a tiny synthetic corpus so the pipeline (feature matrix → LinearRegression

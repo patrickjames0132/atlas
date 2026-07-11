@@ -4,9 +4,10 @@ The training stage: read the labelled corpus (``corpus.csv`` — each seed's
 shipped-landmark year distribution), then **fit the tail-edge rule's parameters**
 the app applies at serve time — the density threshold ``tau`` (where in the
 landmark distribution the cluster's recent edge sits) — and pin the ``max_span``
-cost cap. The chosen pair is serialized to a joblib bundle at
-``ml_pipelines/models/latest_gap.joblib`` plus a human-readable ``metadata.json``
-sidecar. The app loads that bundle via ``atlas.services.graph.bands.load_model``.
+cost cap. The chosen pair is serialized to a joblib bundle at ``model.joblib``
+beside this trainer (in ``src/ml_pipelines/latest_gap/``) plus a human-readable
+``model.metadata.json`` sidecar. The app loads that bundle via
+``atlas.services.graph.bands.load_model``.
 
 Unlike the ``cite_budget`` sibling, the boundary is **not** a regression on seed
 features — a feature regression was tried and fails (negative CV R², see
@@ -39,10 +40,10 @@ from . import collect as collect_module
 
 log = logging.getLogger("train")
 
-MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
-MODEL_PATH = MODELS_DIR / "latest_gap.joblib"
-# Per-model sidecar (not a shared "metadata.json") so pipelines don't collide.
-METADATA_PATH = MODEL_PATH.with_suffix(".metadata.json")
+#: The artifact lives beside its trainer, in this model's own package.
+MODEL_DIR = Path(__file__).resolve().parent
+MODEL_PATH = MODEL_DIR / "model.joblib"
+METADATA_PATH = MODEL_PATH.with_suffix(".metadata.json")  # human-readable sidecar
 
 # The current year and the last landmark-era year, matching the app's traversal
 # (``_LATEST_YEARS`` = 2). Bands run from the boundary up to CURRENT_YEAR.
@@ -207,7 +208,7 @@ def save(bundle: dict) -> None:
     Args:
         bundle: The training bundle from :func:`fit`.
     """
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, MODEL_PATH)
     with METADATA_PATH.open("w") as handle:
         json.dump(bundle, handle, indent=2)

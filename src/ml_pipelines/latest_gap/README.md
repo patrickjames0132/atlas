@@ -1,6 +1,6 @@
 # `latest_gap` — fitting the adaptive latest-band boundary
 
-**What it produces.** `ml_pipelines/models/latest_gap.joblib` — the model the app
+**What it produces.** `model.joblib` (beside this trainer) — the model the app
 loads (`atlas.services.graph.bands`) to decide, per seed, where the *Latest
 Publications* per-year bands should **start** (replacing the fixed
 `config.graph.latest_band_years` span).
@@ -15,9 +15,11 @@ dead stretch between the last landmark and the first band — the gap this close
 
 ```
 latest_gap/
-  collect.py    — pull each seed's shipped-landmark year distribution -> corpus.csv
-  train.py      — fit the density threshold tau, serialize the artifact
-  corpus.csv    — the committed corpus (year distributions per seed)
+  collect.py           — pull each seed's shipped-landmark year distribution -> corpus.csv
+  train.py             — fit the density threshold tau, serialize the artifact
+  corpus.csv           — the committed corpus (year distributions per seed)
+  model.joblib         — the fitted artifact the app loads (committed)
+  model.metadata.json  — human-readable sidecar (params, metrics, date)
 ```
 
 The seeds are **reused from `cite_budget`** (same 64 stratified seeds incl. the
@@ -38,7 +40,8 @@ serving can't disagree on what the boundary means.
    peak year's count — floored so the start reaches back at most `max_span` years
    (bounded query cost). `train.py` fits `tau` on **misdate-robustness** (see
    below) and pins `max_span` (a cost choice), then serializes a joblib bundle
-   (params + rule contract + metrics) plus a `metadata.json` sidecar.
+   (params + rule contract + metrics) to `model.joblib` beside the trainer, plus a
+   `model.metadata.json` sidecar.
 
 ## What the data said (see `research/latest_gap` for the full write-up)
 
@@ -75,12 +78,24 @@ uv run python -m ml_pipelines.latest_gap.train --refresh    # re-pull the corpus
 uv run python -m ml_pipelines.latest_gap.collect            # just refresh corpus.csv
 ```
 
-`collect.py` reads `ml_pipelines/cite_budget/corpus.csv` for its seed list and
+`collect.py` reads `src/ml_pipelines/cite_budget/corpus.csv` for its seed list and
 needs the trained `cite_budget` model (to reproduce each build's landmark trim),
 so run the `cite_budget` pipeline first if starting from nothing. A `--refresh`
 re-hits OpenAlex (polite pool, a few hundred throttled calls); after one, commit
-the updated `corpus.csv`, the new `models/` artifact + `metadata.json`, and
+the updated `corpus.csv`, the new `model.joblib` + `model.metadata.json`, and
 re-run `research/latest_gap/analyze.ipynb` if you want the write-up to match.
+
+## The artifact
+
+`model.joblib` / `model.metadata.json` are **committed** so a fresh checkout
+serves predictions without training first. The `.joblib` is the bundle the app
+loads (the fitted `tau`/`max_span` + rule contract marker + metrics); the
+`.metadata.json` is the same in human-readable JSON (never loaded — for eyeballing
+and diffing). **Regenerated, not edited** — rerun the pipeline rather than editing
+them. **Loaded defensively** — a missing, corrupt, or contract-mismatched artifact
+makes the app fall back to the fixed `latest_band_years` span, degrading
+gracefully. (This model pickles no estimator — just fitted numbers — so it's free
+of the scikit-learn version-skew hazard the `cite_budget` pickle carries.)
 
 ## Testing
 

@@ -47,8 +47,8 @@ because those are chat/tool-use credentials, not graph data sources).
   ~30). When on, the landmark ship count is predicted from the seed's age and
   citation count by a **scikit-learn model trained on real data** (not
   hand-tuned numbers), clamped to `[floor, cite_limit]`. The app loads the
-  model (`ml_pipelines/models/cite_budget.joblib`) and calls `.predict()` in
-  `services/graph/budget.py`; it's fit by `ml_pipelines/cite_budget/train.py`
+  model (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()` in
+  `services/graph/budget.py`; it's fit by `src/ml_pipelines/cite_budget/train.py`
   (see that package's README, and `research/cite_budget/` for the exploratory
   study). Turn off to always ship the flat `cite_limit`.
 - **`adaptive_latest_band: true`** — the *Latest Publications* relation fills
@@ -58,11 +58,11 @@ because those are chat/tool-use credentials, not graph data sources).
   the last landmark and the first band. When on, the band start is chosen **per
   seed** at the **density tail edge** of the seed's landmark cluster — the most
   recent year still holding ≥ `tau` of its peak year's landmark count (a second
-  model trained on real data, `ml_pipelines/models/latest_gap.joblib`, served in
+  model trained on real data, `src/ml_pipelines/latest_gap/model.joblib`, served in
   `services/graph/bands.py`) — so an old classic's bands widen back to meet its
   cluster while a young paper starts at its own recent edge (a tight frontier). A
   `max_span` cap bounds query cost. Turn off (or if the model can't load) to use
-  the fixed `latest_band_years` span. See `ml_pipelines/latest_gap/README.md` and
+  the fixed `latest_band_years` span. See `src/ml_pipelines/latest_gap/README.md` and
   `research/latest_gap/`.
 - **`recs_pool: "all-cs"`** — the Recommendations API's default `"recent"`
   pool only draws from newly published papers. Seed on anything older than
