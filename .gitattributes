@@ -1,0 +1,9 @@
+# Normalize line endings: store text as LF in the repo and check it out as LF
+# on every platform, so a Windows working tree stops drifting to CRLF and
+# showing phantom "modified" files. Matches the toolchain (prettier/ruff all
+# enforce LF). Binary files are auto-detected by `text=auto` and left alone.
+* text=auto eol=lf
+
+# Windows batch scripts want CRLF to be safe (labels/goto can misbehave on LF).
+*.bat text eol=crlf
+*.cmd text eol=crlf
