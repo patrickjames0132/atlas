@@ -1156,6 +1156,16 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
+- [ ] **Budget-cap the Similar nodes with a trained model** — the *Similar*
+      relation ships a flat `similar_limit` count, the same one-size problem the
+      landmark budget solved for citations (v4.5.0). Give it its own budget
+      model: cap how many SPECTER2 neighbors to show per seed, trained the same
+      way as `cite_budget` (a new `ml_pipelines/<study>/` producing a loadable
+      artifact the app calls at serve time, degrading gracefully). Decide the
+      right label/signal for "how many similar papers are worth showing" (density
+      of similarity scores? a drop-off / knee in the ranked similarity? seed
+      features?) during the study. Mirrors the `cite_budget` / `latest_gap`
+      pattern. *(From the `todos.md` inbox, 2026-07-10.)*
 - [ ] **Even Latest-Publications spread via citation velocity** — the
       stratified/per-year band approach has been tried several times and the
       spread still isn't even. Revisit **citation velocity** as the ranking
@@ -1275,6 +1285,20 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       sizing/alignment, clearer grouping). Pure UI polish, no behavior change.
       Candidate to bundle with other small UI-cleanup tickets in one ship.
       *(From the `todos.md` inbox, 2026-07-08.)*
+- [ ] **Drop the per-relation count sliders; filter by citation count instead**
+      — the four per-node-type count sliders (References / Field Landmarks /
+      Latest / Similar in `frontend/src/graph/controls/GraphControls.tsx`) go
+      away: the **filter chips** become the only node-*type* filter. In their
+      place, add a **citation-count slider** beneath the publication-date slider
+      that filters visible nodes by citation count (a magnitude threshold, log
+      scale given the range). The **backend still ranks by citations and caps the
+      node count** via the `cite_budget` model (and the forthcoming similar
+      budget), so the slider is a *display* filter over an already-budgeted set,
+      not a fetch control. **Config cleanup to decide:** with the reveal sliders
+      gone, `graph.cite_limit` (the slider max) and possibly `adaptive_cite_limit`
+      may be redundant — Patrick is OK dropping them; audit what still reads them
+      (`services/graph/budget.py`, `build.py`) before removing. *(From the
+      `todos.md` inbox, 2026-07-10.)*
 - [x] **Determinate "Building graph…" progress** *(v3.7.0)* — the build notice
       now shows a real filling bar + live stage label, not just a spinner. As
       predicted, this took a streaming build route: new SSE `GET
