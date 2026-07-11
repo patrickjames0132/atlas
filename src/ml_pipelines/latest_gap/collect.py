@@ -17,7 +17,7 @@ Run from the repo root (reuses the app's throttled OpenAlex client):
 
     uv run python -m ml_pipelines.latest_gap.collect
 
-Writes ``ml_pipelines/latest_gap/corpus.csv`` (committed, so training is
+Writes ``src/ml_pipelines/latest_gap/corpus.csv`` (committed, so training is
 reproducible without a re-pull). ``train.py`` calls :func:`collect` directly
 when asked to refresh.
 """

@@ -87,20 +87,20 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    The **landmark budget adapts to the seed** when
    `config.graph.adaptive_cite_limit` is on: `_adaptive_cite_limit` delegates to
    `budget.adaptive_cite_limit`, which loads a **scikit-learn model trained
-   offline** (`ml_pipelines/models/cite_budget.joblib`) and calls `.predict()`
+   offline** (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()`
    on the seed's age and citation count — an old classic (Hawking Radiation)
    earns a large budget because its top citers span decades and read as a map; a
    young, well-cited paper (DQN) gets ~60 because its top citers are same-era
    pile-on; a brand-new one (Attention Is All You Need) ~30. The prediction is
    clamped to `[floor, cite_limit]`. The model is fit on real data — *not*
-   hand-tuned constants — by `ml_pipelines/cite_budget/train.py`, which learns
+   hand-tuned constants — by `src/ml_pipelines/cite_budget/train.py`, which learns
    the "density budget" (where per-year citer clutter sets in) across ~60
    OpenAlex seeds; the finding is that **age carries the signal** and citation
    count is a mild *positive* term. One budget is computed per build and handed
    to *both* citation sources (OpenAlex and the S2 fallback), so they agree. A
    seed with no publication year, the toggle off, or an unloadable model passes
    the flat `cite_limit` through unchanged. See `budget.py` for the serving side
-   and `ml_pipelines/cite_budget/README.md` for the derivation and how to
+   and `src/ml_pipelines/cite_budget/README.md` for the derivation and how to
    retrain.
 
    The **latest bands adapt to the seed** too, when
@@ -112,7 +112,7 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    hands the shipped landmarks' years to `bands.earliest_band_year`, which places
    the start at the **density tail edge** of the landmark cluster — the most recent
    year still holding ≥ `tau` of the peak year's count (a second model trained
-   offline, `ml_pipelines/models/latest_gap.joblib`), floored by a `max_span` cost
+   offline, `src/ml_pipelines/latest_gap/model.joblib`), floored by a `max_span` cost
    cap. There's no only-widen clamp, so a young seed whose cluster edge is recent
    gets a tight frontier (QMIX → 3 bands) while an old seed widens back (Hawking →
    start 2020). Unlike the budget, the boundary is a property of the landmark
@@ -121,7 +121,7 @@ drift — at the cost of a validate on each cache hit, a deliberate trade.
    visible edge); see `research/latest_gap`. `build.py` injects
    `bands.earliest_band_year` as the `band_start` callable so `integrations/openalex`
    stays below `services` in the import order; a missing model or the toggle off
-   falls back to the fixed span. See `ml_pipelines/latest_gap/README.md`.
+   falls back to the fixed span. See `src/ml_pipelines/latest_gap/README.md`.
 
 4. **Dedupe with cross-source identity + relation accumulation.** The
    `add_neighbor()` closure merges neighbors into one node table — keyed by raw

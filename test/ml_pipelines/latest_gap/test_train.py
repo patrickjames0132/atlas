@@ -1,4 +1,4 @@
-"""The latest-gap training pipeline (ml_pipelines/latest_gap): rule fit + serialize.
+"""The latest-gap training pipeline (src/ml_pipelines/latest_gap): rule fit + serialize.
 
 Fully offline — no OpenAlex calls. The visible-gap metric and the robustness fit
 run on a tiny synthetic corpus so the pipeline (score → misdate-robustness → tau

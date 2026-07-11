@@ -49,7 +49,7 @@ def _adaptive_cite_limit(seed_paper: dict) -> int | None:
     A thin wrapper over :func:`budget.adaptive_cite_limit` that pins the
     reference year to today (age is measured from here). The model, its feature
     contract, and the fallback rules live in ``budget.py``; the training
-    pipeline that produces it lives in ``ml_pipelines/cite_budget``.
+    pipeline that produces it lives in ``src/ml_pipelines/cite_budget``.
 
     Args:
         seed_paper: The normalized S2 seed node (``year`` and

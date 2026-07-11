@@ -1,6 +1,6 @@
 [project]
 name = "atlas"
-version = "4.10.0"
+version = "4.10.1"
 description = "Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 requires-python = ">=3.11"
 dependencies = [
@@ -70,12 +70,12 @@ check_untyped_defs = true
 
 [tool.pytest.ini_options]
 # Tests live in test/, mirroring src/atlas/ (and test/ml_pipelines/ mirrors the
-# top-level ml_pipelines/ training pipeline). The app package comes from the
-# editable install (src-layout); pythonpath is belt-and-braces for running
-# pytest outside a synced uv env — "src" for the app, "." so the repo-root
-# ``ml_pipelines`` package (not installed) imports too.
+# src/ml_pipelines/ training pipeline). The app package comes from the editable
+# install (src-layout); pythonpath is belt-and-braces for running pytest outside
+# a synced uv env — "src" covers both the app (``atlas``) and the training
+# pipelines (``ml_pipelines``), which now live side by side under src/.
 testpaths = ["test"]
-pythonpath = ["src", "."]
+pythonpath = ["src"]
 # Test dirs have no __init__.py, so as source packages keep splitting into
 # submodules (semantic_scholar/client.py, arxiv/client.py, ...), two
 # test files can end up sharing a basename in different directories.

@@ -16,7 +16,7 @@ Run from the repo root (reuses the app's throttled OpenAlex client):
 
     uv run python -m ml_pipelines.cite_budget.collect
 
-Writes ``ml_pipelines/cite_budget/corpus.csv`` (committed, so training is reproducible
+Writes ``src/ml_pipelines/cite_budget/corpus.csv`` (committed, so training is reproducible
 without a re-pull). ``train.py`` calls :func:`collect` directly when asked to
 refresh. OpenAlex results shift slowly, so a re-run reproduces a similar corpus.
 """

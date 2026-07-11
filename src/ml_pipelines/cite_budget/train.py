@@ -4,9 +4,9 @@ The training stage: read the labelled corpus (``corpus.csv``), build the feature
 matrix through the app's own :func:`atlas.services.graph.budget.compute_features`
 (so training and serving share one feature contract), fit a scikit-learn
 ``LinearRegression``, score it with 5-fold cross-validation, and serialize a
-joblib bundle to ``ml_pipelines/models/cite_budget.joblib`` plus a human-readable
-``metadata.json`` beside it. The app loads that bundle via
-``atlas.services.graph.budget.load_model``.
+joblib bundle to ``model.joblib`` beside this trainer (in
+``src/ml_pipelines/cite_budget/``) plus a human-readable ``model.metadata.json``.
+The app loads that bundle via ``atlas.services.graph.budget.load_model``.
 
 This reproduces the research notebook's fit as a repeatable job (the notebook in
 ``research/cite_budget`` stays the exploratory write-up). Run from the repo root:
@@ -40,10 +40,10 @@ from .features import DENSITY_CAP
 
 log = logging.getLogger("train")
 
-MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
-MODEL_PATH = MODELS_DIR / "cite_budget.joblib"
-# Per-model sidecar (not a shared "metadata.json") so pipelines don't collide.
-METADATA_PATH = MODEL_PATH.with_suffix(".metadata.json")
+#: The artifact lives beside its trainer, in this model's own package.
+MODEL_DIR = Path(__file__).resolve().parent
+MODEL_PATH = MODEL_DIR / "model.joblib"
+METADATA_PATH = MODEL_PATH.with_suffix(".metadata.json")  # human-readable sidecar
 
 # 5-fold CV, shuffled with a fixed seed so the reported score is reproducible.
 _CV = KFold(n_splits=5, shuffle=True, random_state=0)
@@ -132,7 +132,7 @@ def save(bundle: dict) -> None:
     Args:
         bundle: The training bundle from :func:`train`.
     """
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, MODEL_PATH)
     model = bundle["model"]
     metadata = {key: value for key, value in bundle.items() if key != "model"}

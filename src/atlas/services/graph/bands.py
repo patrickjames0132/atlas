@@ -26,8 +26,8 @@ the count threshold, where a min/max would jump straight to them. There's no
 its bands at that recent edge (a tight, current frontier), not at a fixed span.
 
 ``tau`` and ``max_span`` are **not** hand-tuned constants: they're fit/chosen on a
-labelled OpenAlex corpus by ``ml_pipelines/latest_gap`` and shipped in the model
-artifact (``ml_pipelines/models/latest_gap.joblib``). This module is the *serving*
+labelled OpenAlex corpus by ``src/ml_pipelines/latest_gap`` and shipped in the model
+artifact (``src/ml_pipelines/latest_gap/model.joblib``). This module is the *serving*
 half — it loads that artifact and applies the rule; the *tail-edge rule itself*
 (:func:`tail_edge`) is imported by training too, so there's one contract and no
 train/serve skew. A missing or unreadable artifact degrades gracefully to the
@@ -52,9 +52,9 @@ from ...config import PROJECT_ROOT, config
 
 log = logging.getLogger(__name__)
 
-#: The trained-model artifact, written by ``ml_pipelines/latest_gap/train.py``. A
-#: joblib bundle: ``{"rule": <RULE_NAME>, "tau", "max_span", ...}``.
-MODEL_PATH = PROJECT_ROOT / "ml_pipelines" / "models" / "latest_gap.joblib"
+#: The trained-model artifact, written by ``src/ml_pipelines/latest_gap/train.py``
+#: beside it. A joblib bundle: ``{"rule": <RULE_NAME>, "tau", "max_span", ...}``.
+MODEL_PATH = PROJECT_ROOT / "src" / "ml_pipelines" / "latest_gap" / "model.joblib"
 
 #: The rule contract — the boundary logic the artifact's ``tau``/``max_span`` were
 #: fit for. Training records the same string, so a served artifact whose rule
@@ -74,7 +74,7 @@ def tail_edge(landmark_years: list[int], tau: float) -> int:
     Scanning from the most recent landmark year backward, the first year whose
     count is at least ``tau`` of the peak year's count — where the per-year
     density drops out of the cluster. The rule shared by serving (here) and
-    training (``ml_pipelines/latest_gap``) so the two can't disagree on what the
+    training (``src/ml_pipelines/latest_gap``) so the two can't disagree on what the
     boundary means.
 
     Scale-free (the threshold is relative to this seed's own peak, so it works

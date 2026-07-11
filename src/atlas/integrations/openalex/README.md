@@ -70,7 +70,7 @@ landmark cluster (where the per-year count falls off). Its return is used direct
 (closing the gap) or later for a young one (a tight recent frontier). It's a
 *parameter*, not an import, so `integrations` stays below `services` in the
 dependency order; `None` (the default) keeps the fixed `latest_band_years` span.
-See `services/graph/bands.py` and `ml_pipelines/latest_gap`.
+See `services/graph/bands.py` and `src/ml_pipelines/latest_gap`.
 
 ### Why the split is by year, not an exact date
 

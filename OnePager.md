@@ -1414,18 +1414,23 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
         so *presence* on brand-new functions stays a convention (CLAUDE.md);
         completeness of anything documented is machine-enforced.
       *(From the `todos.md` inbox, 2026-07-09.)*
-- [ ] **Move `ml_pipelines/` into `src` and split `models/` per model** — the ML
-      training pipelines live at the repo root today, outside the src-layout
-      package; move `ml_pipelines/` under `src/atlas/` (updating the artifact
-      load paths in `services/graph/budget.py` + `bands.py`). And **break the
-      shared `ml_pipelines/models/` package** — currently a single home for both
-      `.joblib` artifacts + metadata + one README — **into per-model
-      sub-packages named for their model**, folding each artifact into its
-      existing pipeline package (`cite_budget/`, `latest_gap/`) so a model's
-      training code, corpus, artifact, and README live together. Each keeps its
-      own README (both already have one); **delete the `models/` README** as the
-      package dissolves. Matches the per-package-README rule. *(From the
-      `todos.md` inbox, 2026-07-10.)*
+- [x] **Moved `ml_pipelines/` into `src/` and split `models/` per model**
+      *(v4.10.1)* — the training pipelines moved from the repo root to
+      `src/ml_pipelines/` — a second top-level package **alongside** `src/atlas/`,
+      **not** bundled into the shipped app wheel (`packages = ["src/atlas"]`
+      unchanged) and not force-typed by strict mypy, but importable everywhere
+      because the editable install already puts `src/` on `sys.path`. The shared
+      `ml_pipelines/models/` package **dissolved**: each model's committed
+      artifact now lives **beside its own code** as `model.joblib` +
+      `model.metadata.json` inside `cite_budget/` and `latest_gap/`, so a model's
+      collector, trainer, corpus, README, and artifact sit together. The app's
+      load paths (`services/graph/budget.py`, `bands.py`) and the trainers' write
+      paths point at the new per-package location; `pyproject`'s `pythonpath`
+      dropped the repo-root `"."` (everything's under `src/` now). The `models/`
+      README was deleted, its "committed / regenerated-not-edited / loaded-
+      defensively / version-skew" notes folded into each package README. Verified
+      the app loads both models from the new paths and the full gate is green.
+      *(From the `todos.md` inbox, 2026-07-10.)*
 - [ ] **Drop the retired per-relation count caps from config** — remove
       `graph.ref_limit`, `graph.cite_limit`, `graph.adaptive_cite_limit`,
       `graph.latest_limit`, and `graph.similar_limit` from `config.json` /
