@@ -152,6 +152,57 @@ its *ranking* is skewed, not just its totals. **So for ML it's not a missing
 junk tail — the top of the list is a different, lower-quality set.** This gap
 is extraction-driven, so a preprint-dedup heuristic would **not** recover it.
 
+## How the hybrid divides labor (and why OpenAlex owns citations)
+
+`services/graph/build.py` splits the graph across the two sources:
+
+| Relation | Source | Whose citation counts |
+|---|---|---|
+| Seed | S2 (`get_paper`) | S2 |
+| References (papers the seed cites) | S2 (`s2.references`) | S2 |
+| Similar (purple) | S2 (`recommendations`) | S2 |
+| Citations — Field Landmarks + Latest frontier | **OpenAlex** (`openalex.citation_relations`) | **OpenAlex** |
+
+**OpenAlex owns the citation relation** (`_citation_relations`, build.py:66) —
+S2's `citation_relations` runs *only* as a fallback, when OA can't resolve the
+seed. The reason is an S2 **API limitation, not a data one**: S2's citation
+endpoint is **newest-first with no citation-count sort**, and paging caps at
+`_MAX_OFFSET` (~10k, in `_fetch_citers`). So S2 cannot hand you the
+*most-cited* citers of a heavily-cited paper — the landmarks are older, buried
+past the offset ceiling, and there's no `sort=citations` to reach them; all S2
+can do is mine the newest ~10k and guess (recency-biased). OpenAlex supports
+`sort=cited_by_count:desc` server-side, returning the landmark citers directly
+in a couple of cheap calls.
+
+**Consequence (read twice):** the graph's ML **Field Landmarks — the nodes
+*and* their sizes — are OpenAlex's**, with all the weaknesses in §1–4 (the
+3/15 top-citer overlap, the applied-paper skew, the undercounts). S2's
+superior ML citation graph is *not* used here; it can't be surfaced
+top-cited-first through S2's live API. Keeping S2 preserves ML quality for the
+**seed count, references, and similar** — **not** for the citer landmarks,
+which are already OA's inside the hybrid.
+
+The `max(S2, OA)` count merge (`_upgrade_node`) only lifts a node to S2's count
+when the same paper is *also* sighted through an S2 relation (a citer that's
+*also* a "similar", say) — the exception, not the rule. A plain landmark
+citer's count is OA's number. (Side effect: node sizes are on **mixed scales** —
+S2-counted references vs OA-counted citers — so a citer isn't size-comparable
+to a reference on the same graph.)
+
+### Recovering S2's ML landmark quality — two levers (neither free)
+
+- **(a) S2-hydrate OA's citers' counts.** OA gives the citer *set*; batch-look
+  each up in S2 (`POST /paper/batch`, the 429-safe bulk endpoint) via its
+  `DOI:`/`ARXIV:` id (`openalex.nodes.resolvable_id` — nearly every citer has
+  one) and take `max(OA, S2)`. Fixes node **sizes** and unifies the graph's
+  count scale; fetching a *larger* OA candidate pool and re-ranking it by S2
+  counts also recovers landmarks OA *has but undercounts*. It does **not**
+  recover landmarks OA lacks the citation edge for (the missing-set problem),
+  and it re-adds a bounded (one batch/build) S2 dependency.
+- **(b) Ingest S2's bulk citations dataset offline.** The only way to get S2's
+  full, sortable ML citation graph — but a whole ingestion pipeline, not a live
+  call.
+
 ## Implications for "drop S2, go OpenAlex-only"
 
 S2 is quietly doing **three** jobs: supplying correct citation counts (via the
