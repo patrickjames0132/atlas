@@ -1331,6 +1331,77 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       references shape (surveys cite widely, get cited broadly, rarely introduce
       method), or S2/OpenAlex type metadata — heuristic first, a small classifier
       only if it needs one. *(From the `todos.md` inbox, 2026-07-13.)*
+- [ ] **SPIKE: SPECTER2 semantic retrieval as a landmark source (not just
+      Similar)** — a spike to investigate, **not yet a build decision**. Patrick's
+      idea: use S2's SPECTER2 recommendations to surface heavily-cited **landmark**
+      papers, as a workaround for the citation-coverage limits documented in
+      [`docs/citation-coverage.md`](docs/citation-coverage.md). *(Discussed
+      2026-07-13; picking up next session — full reasoning below so we don't
+      re-derive it.)*
+
+  **Why it's more than "reuse Similar."** It dodges **both** of our measured
+  citation failure modes at once:
+  - **S2's 10k ceiling + no sort** — `/recommendations/forpaper` is a *different
+    retrieval mechanism* (SPECTER2 nearest-neighbors, up to 500, returned
+    directly), so it has no offset-paging problem: a heavy hitter buried past the
+    `_MAX_OFFSET`≈10k newest-first window is reachable by embedding when it isn't
+    by citation paging (`integrations/semantic_scholar/traversal.py`).
+  - **OpenAlex's missing ML citation edges** — the *real* open problem in the
+    coverage doc (§3–4): OA under-extracts arXiv-preprint→preprint citations, so
+    its ML landmark set is a different, lower-quality set (3/15 top-citer overlap
+    on QMIX/MADDPG). **SPECTER2 embeddings don't need the citation edge to
+    exist**, and they're computed over exactly the preprint-native corpus S2 is
+    strong on — so semantic retrieval sidesteps the extraction gap entirely.
+
+  **Free-lunch mechanic.** Recommendations already return `citationCount` (same
+  `NEIGHBOR_FIELDS` we rank references/citations by), so **re-ranking the 500
+  neighbors by citation count is zero extra calls** — the exact over-fetch-then-
+  rank pattern `_neighbors` already uses. One call, no deep paging, no 429
+  backoff, no OA dependency. Cheap regardless of the rest.
+
+  **Motivating observation (Patrick).** Citation-ranked landmarks for a mega-seed
+  drag in off-field applications — e.g. *Attention Is All You Need* → a
+  transformers-for-protein-structure paper (AlphaFold-ish), which is really an
+  application of ML in biology, not core ML. Semantic neighbors would stay closer
+  to the field.
+
+  **Honest caveats — it changes the question, so probably a complementary
+  relation, not a replacement:**
+  - **Loses directionality.** A citation landmark is a *descendant* (built on the
+    seed); a SPECTER neighbor can be an ancestor (reference), descendant (citer),
+    **or a sibling** (contemporaneous, no edge). So "semantic landmark" = "papers
+    *near* this one", not "giants that *built on* this one." Fine for a
+    Connected-Papers-style map (CP is co-citation/coupling-based, not direct-edge),
+    but it **breaks the lecturer's timeline** ("how we got here" / "what evolved
+    since" both depend on seed↔node time direction). Fixable by splitting the
+    semantic set on publication-year-vs-seed, but not free.
+  - **On-topic isn't unambiguously better.** *"Attention enabled AlphaFold"* is
+    one of the most important things that paper did — cross-field impact is a
+    **feature** of the citation graph, not noise. Filtering it out gives a cleaner
+    field map but drops real impact signal.
+  - **500-cap + era bias.** We get the 500 *nearest* then re-rank; a topically
+    further-out landmark falls outside the pool (good = the AlphaFold exclusion;
+    bad = can also drop a legit landmark). And embedding similarity clusters
+    same-subfield/same-era, so it may be *worse* at surfacing deep-history
+    foundational ancestors than the recent frontier.
+
+  **Two plausible shapes (if the spike pays off):** **(A)** a parallel "related
+  landmarks" relation — 500 SPECTER neighbors re-ranked by citations, top-N, shown
+  distinctly (optionally year-split onto the timeline); **(B)** a *supplement* that
+  unions the semantic top-N into the OpenAlex landmark set (deduped) specifically
+  on the arXiv-native ML seeds where §4 showed OA is weak. (Note: this is a
+  deliberate spike *despite* the "Drop the Similar relation" ticket above — it
+  reuses the recommendations API, which that ticket keeps wired for the
+  researcher anyway.)
+
+  **The experiment (extends `research/citation_coverage/`).** Same seeds
+  (Attention, GPT-3, QMIX, DQN + a physics control like Hawking): pull SPECTER
+  neighbors re-ranked by citations, then measure against (a) our shipped OA
+  landmark set, (b) S2's true top-cited citers where pullable (the <9k-citer RL
+  papers), and — **the key metric** — how many semantic neighbors are *verifiable
+  citers OA missed* (resolve each id, check the edge). That last number is what
+  distinguishes genuine landmark **recovery** from just a prettier Similar
+  relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
 ### UI & rendering polish
 
