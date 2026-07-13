@@ -15,7 +15,7 @@ import type { GraphNode } from '../../api'
 import { latexToUnicode } from '../../notation/latexToUnicode'
 import { nodeRadius, primaryRel } from '../model'
 import type { VLink, VNode } from '../model'
-import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR } from '../theme'
+import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR, SELECTION_RING } from '../theme'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
 // untyped alias so our canvas/link callbacks stay readable.
@@ -38,10 +38,13 @@ export interface GraphCanvasProps {
   pinned: Set<string>
   /** The selected node id (bright ring + always-on label). */
   selectedId: string | null
+  /** Hand-picked nodes scoping the teacher (cyan ring; others dim). */
+  selectedIds: Set<string>
   /** Nodes the teacher is currently talking about (gold glow + ring). */
   highlightIds: Set<string>
-  /** Select / re-seed handler (single vs. quick double click). */
-  onNodeClick: (node: VNode) => void
+  /** Select / re-seed handler (single vs. quick double click); the DOM event
+   *  carries the shift modifier used for add/remove selection. */
+  onNodeClick: (node: VNode, event?: MouseEvent) => void
   /** Hover handler — receives the node id, or null when leaving. */
   onNodeHover: (id: string | null) => void
   /** Drag-release handler (pins the node where it was dropped). */
@@ -65,6 +68,7 @@ export default function GraphCanvas({
   focusSet,
   pinned,
   selectedId,
+  selectedIds,
   highlightIds,
   onNodeClick,
   onNodeHover,
@@ -103,7 +107,12 @@ export default function GraphCanvas({
         globalScale: number,
       ) => {
         const radius = nodeRadius(node)
-        const dim = focusSet ? !focusSet.has(node.id) : false
+        // A hand-picked selection dims everything outside it (like focus), on
+        // top of any hover/highlight dimming, so the scoped cluster stands out.
+        const hasSelection = selectedIds.size > 0
+        const dim =
+          (focusSet ? !focusSet.has(node.id) : false) || (hasSelection && !selectedIds.has(node.id))
+        const isPicked = selectedIds.has(node.id)
         const isPinned = pinned.has(node.id)
         const isSel = selectedId === node.id
         const isLit = highlightIds.has(node.id)
@@ -137,12 +146,21 @@ export default function GraphCanvas({
           ctx.strokeStyle = 'rgba(242,244,248,0.55)'
           ctx.stroke()
         }
+        if (isPicked && !dim) {
+          // Cyan ring marks a node hand-picked into the teacher's scope. Drawn
+          // just outside the fill so it coexists with a pin/select/lit ring.
+          ctx.beginPath()
+          ctx.arc(node.x, node.y, radius + 2.5, 0, 2 * Math.PI)
+          ctx.lineWidth = 2 / globalScale
+          ctx.strokeStyle = SELECTION_RING
+          ctx.stroke()
+        }
         if (isSel) {
           ctx.lineWidth = 2 / globalScale
           ctx.strokeStyle = '#f2f4f8'
           ctx.stroke()
         }
-        if (!dim && (node.is_seed || isSel || isLit || globalScale > 1.6)) {
+        if (!dim && (node.is_seed || isSel || isLit || isPicked || globalScale > 1.6)) {
           const fontSize = Math.max(11 / globalScale, 2)
           ctx.font = `${fontSize}px -apple-system, sans-serif`
           ctx.textAlign = 'center'

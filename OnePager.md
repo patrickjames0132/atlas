@@ -1308,22 +1308,45 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
-- [ ] **Node selector tool that scopes the lectures and Q&A agents** — a way to
-      **hand-pick which nodes** the teacher works over, right on the graph:
-      **click-and-drag a marquee** (a selection rectangle) to grab every node
-      inside it, and **shift+click** to add/remove single nodes. The selection
-      then becomes the **visible/grounding set the agents see** — a lecture
-      narrates only the selected nodes (feeding `_story_nodes` / the lecture's
-      node set) and the researcher grounds its Q&A in them (the `nodes` list sent
-      to `/api/ask`) — so the user can scope the teacher to a cluster of interest
-      instead of the whole graph or a relation filter. Needs: a marquee overlay +
-      hit-testing against node positions on the canvas (`react-force-graph-2d`
-      exposes node screen coords), a selection set in the store, a visual
-      treatment for selected vs unselected nodes, and threading the selection
-      into the lecture/ask payloads (today they send the filtered-visible nodes).
-      Interplays with the existing relation filters and the year slider — decide
-      whether a manual selection replaces or intersects those. *(From the
-      `todos.md` inbox, 2026-07-11.)*
+- [x] **Node selector tool that scopes the lectures and Q&A agents** *(v4.13.0)* —
+      **hand-pick which nodes** the teacher works over, right on the graph. An
+      **alt-drag marquee** (a transparent overlay that arms only while Alt is
+      held, so it captures the drag without fighting react-force-graph's
+      pan) sweeps up the enclosed **visible** nodes via screen-space
+      hit-testing (`fgRef.graph2ScreenCoords`), and **shift-click** toggles a
+      single node. The pick is **additive** — each sweep unions onto it, so
+      several clusters build one scope; **alt-click** empty canvas or the
+      controls' **Clear** resets it. Picked nodes ring **cyan** and the rest
+      **dim**. The pick lives in the workspace slice (`selectedNodeIds`) and
+      threads into grounding through `selectGroundingNodes`, which now
+      **intersects** it with the filters: grounding = `(selected ∩ visible) ∪
+      discoveries`, so hiding a relation after picking also drops those nodes
+      (discoveries are always kept). Both the lecture (`streamLecture`) and the
+      Q&A researcher (`streamAsk`) already send `nodes: groundingNodes`, so no
+      payload plumbing changed — the selection just narrows what they see. The
+      controls carry an always-on gesture hint and a picked-count/Clear row;
+      the assistant panel notes an active pick above the ask box. *(Design
+      calls, made with Patrick: intersect-not-replace for the filter interplay;
+      an **additive** marquee rather than an Alt+Shift "replace vs. add" split —
+      Alt+Shift is the OS keyboard-layout switch on Windows and can't be used
+      mid-drag; see the Bugs log. A guided **help tour** to teach these gestures
+      was split into its own backlog ticket below.) *(From the `todos.md` inbox,
+      2026-07-11.)*
+- [ ] **Guided help tour (coach-mark modal) for the graph tools** — a stepped,
+      spotlight-style onboarding overlay launched from a **"?" button**, walking
+      the user through the graph's tools one at a time: an anchored tooltip
+      bubble dims the rest of the screen, points at the relevant control
+      (relation chips, year/citation sliders, layout toggle, the node-selector
+      gestures, lecture buttons), and shows a step counter with **Next / Back**,
+      a **Skip** (hide these tips) and a **Quit** (✕) — the Yotpo-style product
+      tour Patrick mocked up. Should be a reusable, data-driven component (a
+      `steps` array of `{ target selector, title, body }`), positioning each
+      bubble off the target's bounding rect and skipping steps whose target is
+      absent; remember "seen" in `localStorage` so it auto-runs once but stays
+      re-launchable from "?". First motivation: teaching the node-selector's
+      alt-drag / shift-click / alt-click gestures, which are otherwise only
+      discoverable via the controls hint line. *(From the node-selector session,
+      2026-07-12.)*
 - [ ] **Source-scope picker doesn't appear until a page refresh (+ note it above
       the ask bar)** — uploading sources through the 📚 Sources drawer doesn't make
       the assistant panel's **source-scope picker** show up until you manually
@@ -1722,6 +1745,34 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### Alt+Shift+drag never added to the node selection (Windows)
+
+*Found & fixed on the `node-selector` branch (2026-07-12).*
+
+- **Symptom.** The node selector's other gestures worked — alt-drag picked a
+  cluster, shift-click toggled one, alt-click cleared — but the **Alt+Shift+drag
+  "add this rectangle to the pick"** gesture did nothing (or panned/replaced
+  instead). Only that one modifier combo was dead, and only on Windows.
+- **Root cause.** **Alt+Shift is the OS keyboard-layout switch on Windows.** The
+  moment both were held, Windows grabbed the combo: the browser never saw a
+  clean `event.shiftKey` mid-drag, and the layout-switch focus change fired a
+  window `blur` — which our `useMarquee` used to **disarm** the capture overlay,
+  so the mousedown fell through to react-force-graph and panned instead of
+  marqueeing. Nothing wrong with the code's logic (the reducer + a jsdom test of
+  the shift branch both passed) — the gesture was simply un-triggerable on the
+  target OS.
+- **Fix.** Dropped the "replace vs. add" modifier split entirely and made the
+  marquee **additive**: every alt-drag unions its rectangle onto the pick (reset
+  is alt-click empty / Clear). No second modifier, so no OS collision. The
+  `shiftKey` branch and its test are gone; a new test drives two sweeps and
+  asserts they accumulate.
+- **Lesson / guard.** **Don't build gestures on OS-reserved modifier combos** —
+  Alt+Shift (layout switch) and Ctrl+Alt (AltGr on international keyboards) are
+  claimed by the platform before the browser sees them, and a passing unit test
+  proves nothing about whether a human can actually *fire* the gesture.
+  Single-modifier drags (Alt alone here) are safe; anything richer needs an
+  in-app affordance (a mode toggle, a button), not a chord.
 
 ### "Event loop is closed" when several lectures stream at once
 

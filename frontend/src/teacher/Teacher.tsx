@@ -61,6 +61,9 @@ export default function Teacher({
   const beats = useAppSelector(selectVisibleBeats)
   const lectures = useAppSelector((state) => state.transcript.lectures)
   const activeMode = useAppSelector((state) => state.transcript.activeMode)
+  // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
+  // to scope the teacher; 0 means it grounds in every visible paper.
+  const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
   const {
     hasGraph,
     loadingModes,
@@ -197,7 +200,8 @@ export default function Teacher({
           <div className="teacher-modes">
             <p className="lecture-intro">
               Play a lecture to summarize different node types. Each lecture is grounded in the
-              papers currently shown on the graph — filter the graph to narrow what it covers.
+              papers currently shown on the graph — filter it, or alt-drag on the canvas to
+              hand-pick a cluster, to narrow what it covers.
             </p>
             <div className="lecture-grid">
               {MODES.map((mode) => {
@@ -320,6 +324,12 @@ export default function Teacher({
         {error && <div className="teacher-error">{error}</div>}
       </div>
 
+      {hasGraph && pickedCount > 0 && (
+        <p className="ask-context-note">
+          Scoped to {pickedCount} hand-picked paper{pickedCount > 1 ? 's' : ''} — lectures and
+          answers focus on your selection (clear it on the graph to widen).
+        </p>
+      )}
       {hasGraph && lectureScope.length > 0 && (
         <p className="ask-context-note">
           Answers also draw on {lectureScope.length} played lecture

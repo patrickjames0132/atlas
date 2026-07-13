@@ -12,7 +12,7 @@ graph/
   graph.css         — styles for the whole graph area (ported light-touch)
   canvas/           ← sub-package: the ForceGraph2D wrapper, every canvas painter
   controls/         ← sub-package: the declutter panel + the color legend
-  hooks/            ← sub-package: useDiscovery / usePinning / useTimeline
+  hooks/            ← sub-package: useDiscovery / useMarquee / usePinning / useTimeline
 ```
 
 All three sub-packages are single-parent clusters under `GraphExplorer` —

@@ -42,6 +42,10 @@ export interface GraphControlsProps {
   /** Visible vs. total node counts for the readout. */
   visibleCount: number
   totalCount: number
+  /** How many nodes are hand-picked into the teacher's scope (0 = none). */
+  selectedCount: number
+  /** Clear the hand-picked selection. */
+  onClearSelection: () => void
   /** How many nodes the user has pinned (0 disables Release). */
   pinnedCount: number
   /** Unpin every node. */
@@ -78,6 +82,8 @@ export default function GraphControls({
   onCiteHi,
   visibleCount,
   totalCount,
+  selectedCount,
+  onClearSelection,
   pinnedCount,
   onReleaseAll,
   onFit,
@@ -227,6 +233,28 @@ export default function GraphControls({
           </button>
         </div>
       </div>
+      <div className="ctrl-select">
+        <span
+          className="select-hint"
+          title="Hand-pick papers to scope the AI teacher's lectures and answers to them"
+        >
+          ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · alt-click empty to
+          clear
+        </span>
+        {selectedCount > 0 && (
+          <span className="select-status">
+            <b>{selectedCount}</b> picked
+            <button
+              className="link-btn"
+              onClick={onClearSelection}
+              title="Clear the hand-picked selection — the teacher grounds in every visible paper again"
+            >
+              clear
+            </button>
+          </span>
+        )}
+      </div>
+
       <div className="ctrl-hint">
         {layout === 'timeline'
           ? 'papers placed left→right by year · double-click to re-seed'

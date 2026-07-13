@@ -48,6 +48,12 @@ export const EDGE_COLOR: Record<EdgeType, string> = {
   similar: 'rgba(192,132,252,0.24)',
 }
 
+/** Ring for a node hand-picked into the teacher's scope (the alt-drag marquee /
+ * shift-click selection). Cyan — deliberately unlike the gold highlight, white
+ * detail-selection, and pale-white pin rings, so a scoped node reads at a
+ * glance while a selection is active. */
+export const SELECTION_RING = '#22d3ee'
+
 /** Fill for nodes outside the current hover/highlight focus. */
 export const DIM_NODE = 'rgba(120,130,150,0.18)'
 /** Stroke for edges outside the current hover/highlight focus. */

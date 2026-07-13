@@ -54,7 +54,11 @@ structure rule's nesting case (the `graph/hooks` precedent).
 - **Streams carry FULL node shapes**: `useConversation` selects the seed
   *node* (`selectSeedNode` — the compact `graph.seed` header lacks the
   fields the backend's typed boundary requires) and the grounding set
-  (`selectGroundingNodes` = graph ∪ discoveries, deduped) from the store.
+  (`selectGroundingNodes` = `(selected ∩ visible) ∪ discoveries`, deduped)
+  from the store — so a hand-picked marquee selection on the canvas scopes
+  both the lecture and the Q&A. The panel surfaces an active pick as a note
+  above the ask box (`N hand-picked papers`), mirroring the lecture-context
+  note.
 - **Session mechanics:** a client-generated `session_id` keys the backend's
   chat history; clearing the chat mints a new one, so a cleared conversation
   also detaches from server-side context. The panel remounts per workspace

@@ -45,6 +45,15 @@ export interface WorkspaceState {
    * `selectGroundingNodes` applies. Empty until the first render.
    */
   visibleNodeIds: string[]
+  /**
+   * Ids the user has HAND-PICKED on the canvas (alt-drag marquee / shift-click)
+   * to scope the teacher to a cluster of interest. When non-empty it narrows
+   * grounding to the selected ∩ visible nodes (see `selectGroundingNodes`);
+   * empty means "no manual pick" and grounding falls back to the whole visible
+   * set. A transient exploration choice, like `visibleNodeIds` — reset on every
+   * load/restore and never persisted in a save.
+   */
+  selectedNodeIds: string[]
   layout: 'force' | 'timeline'
   /** Bumps on every load/restore — the teacher panel remounts per epoch. */
   epoch: number
@@ -66,6 +75,7 @@ const initialState: WorkspaceState = {
   discoveredNodes: [],
   discoveredEdges: [],
   visibleNodeIds: [],
+  selectedNodeIds: [],
   layout: 'timeline',
   epoch: 0,
   loading: false,
@@ -207,6 +217,47 @@ const workspaceSlice = createSlice({
       state.visibleNodeIds = action.payload
     },
     /**
+     * Replace the hand-picked selection wholesale (a fresh marquee drag). The
+     * ids come pre-filtered to what's visible, so grounding intersects cleanly.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the newly selected node ids.
+     */
+    nodeSelectionSet(state, action: PayloadAction<string[]>) {
+      state.selectedNodeIds = [...new Set(action.payload)]
+    },
+    /**
+     * Union more ids into the selection (a shift-held marquee drag adds a
+     * cluster to what's already picked), deduped against the current set.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the ids to add.
+     */
+    nodeSelectionAdded(state, action: PayloadAction<string[]>) {
+      state.selectedNodeIds = [...new Set([...state.selectedNodeIds, ...action.payload])]
+    },
+    /**
+     * Flip one node in/out of the selection (a shift-click on a single node).
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the node id to toggle.
+     */
+    nodeSelectionToggled(state, action: PayloadAction<string>) {
+      const id = action.payload
+      state.selectedNodeIds = state.selectedNodeIds.includes(id)
+        ? state.selectedNodeIds.filter((other) => other !== id)
+        : [...state.selectedNodeIds, id]
+    },
+    /**
+     * Drop the whole hand-picked selection (the Clear button, or an alt-click
+     * on empty canvas) — grounding falls back to the full visible set.
+     *
+     * @param state The slice state (mutated via immer).
+     */
+    nodeSelectionCleared(state) {
+      state.selectedNodeIds = []
+    },
+    /**
      * Home: back to the default no-graph state (the page-load look). The
      * epoch bump remounts the teacher panel for fresh run state; the
      * transcript and highlights clear themselves via extraReducers.
@@ -219,6 +270,7 @@ const workspaceSlice = createSlice({
       state.discoveredNodes = []
       state.discoveredEdges = []
       state.visibleNodeIds = []
+      state.selectedNodeIds = []
       state.layout = 'timeline'
       state.error = null
       state.epoch += 1
@@ -251,6 +303,8 @@ const workspaceSlice = createSlice({
         // Cleared until GraphExplorer republishes this graph's visible set —
         // never carry the previous graph's ids into the new one's grounding.
         state.visibleNodeIds = []
+        // A hand-picked selection is per-graph; a new seed starts unscoped.
+        state.selectedNodeIds = []
         state.epoch += 1
         state.loading = false
       })
@@ -271,6 +325,7 @@ const workspaceSlice = createSlice({
         state.discoveredNodes = []
         state.discoveredEdges = []
         state.visibleNodeIds = []
+        state.selectedNodeIds = []
         state.layout = action.payload.layout
         state.epoch += 1
         state.loading = false
@@ -287,6 +342,10 @@ export const {
   layoutSet,
   buildProgressSet,
   visibleNodesSet,
+  nodeSelectionSet,
+  nodeSelectionAdded,
+  nodeSelectionToggled,
+  nodeSelectionCleared,
   errorSet,
   workspaceCleared,
 } = workspaceSlice.actions
@@ -313,11 +372,19 @@ export const selectSeedNode = createSelector(
 
 /**
  * The teacher's grounding scope: the nodes VISIBLE on the canvas plus
- * everything discovered this session, deduped. Grounding tracks what's on
+ * everything discovered this session, deduped — narrowed to the user's
+ * hand-picked selection when there is one. Grounding tracks what's on
  * screen — the graph ships a much larger pool than the filters show, and the
  * agents must reason over the papers the user actually sees, not the hidden
- * remainder. Discoveries are always kept (the agent surfaced them), even if a
- * filter would hide them.
+ * remainder.
+ *
+ * When `selectedNodeIds` is non-empty the graph side is the **intersection**
+ * of the selection with the visible set (`selected ∩ visible`): a hand-pick
+ * narrows *within* what the filters already show, so hiding a relation after
+ * selecting also drops those nodes from scope. An empty selection means "no
+ * manual pick" and the whole visible set grounds. Either way, **discoveries
+ * are always kept** (the agent pulled them in), even if a filter or the
+ * selection would exclude them.
  *
  * `visibleNodeIds` is published by GraphExplorer's view filter; before it
  * lands (e.g. the instant a graph loads) grounding is just the discoveries,
@@ -327,15 +394,20 @@ export const selectGroundingNodes = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,
   (state: StateWithWorkspace) => state.workspace.visibleNodeIds,
-  (graph, discovered, visibleNodeIds): GraphNode[] => {
+  (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
+  (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] => {
     if (!graph) return []
     const visible = new Set(visibleNodeIds)
+    const hasSelection = selectedNodeIds.length > 0
+    const selected = new Set(selectedNodeIds)
     const seen = new Set<string>()
     const merged: GraphNode[] = []
-    // On-screen graph nodes first, then all discoveries (kept regardless of
-    // the filter, since the agent pulled them in).
+    // On-screen graph nodes first — trimmed to the hand-picked set when one is
+    // active — then all discoveries (kept regardless of filter/selection,
+    // since the agent pulled them in).
     for (const node of graph.nodes) {
       if (!visible.has(node.id) || seen.has(node.id)) continue
+      if (hasSelection && !selected.has(node.id)) continue
       seen.add(node.id)
       merged.push(node)
     }
@@ -346,6 +418,18 @@ export const selectGroundingNodes = createSelector(
     }
     return merged
   },
+)
+
+/**
+ * The hand-picked selection as a Set, for the canvas's selection ring and
+ * dimming (and any count readout). Empty when nothing is picked.
+ *
+ * @param state The root state.
+ * @returns The selected node ids as a Set.
+ */
+export const selectNodeSelectionSet = createSelector(
+  (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
+  (selectedNodeIds) => new Set(selectedNodeIds),
 )
 
 /** Legend flags: any agent-discovered papers on the canvas (dashed ring),

@@ -24,8 +24,11 @@ import { selectHighlightSet } from '../store/highlight'
 import {
   layoutSet,
   loadGraph,
+  nodeSelectionCleared,
+  nodeSelectionToggled,
   selectHasDiscovered,
   selectHasSearchHits,
+  selectNodeSelectionSet,
   selectWorkspace,
   visibleNodesSet,
 } from '../store/workspace'
@@ -37,6 +40,7 @@ import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
 import { REL_TYPES } from './theme'
 import { useDiscovery } from './hooks/useDiscovery'
+import { useMarquee } from './hooks/useMarquee'
 import { usePinning } from './hooks/usePinning'
 import { useTimeline } from './hooks/useTimeline'
 import { CITE_SLIDER_STEPS, citationThreshold, type Base, type VLink, type VNode } from './model'
@@ -52,6 +56,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef } =
     useAppSelector(selectWorkspace)
   const highlightIds = useAppSelector(selectHighlightSet)
+  const selectedIds = useAppSelector(selectNodeSelectionSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
   const hasSearchHits = useAppSelector(selectHasSearchHits)
 
@@ -192,6 +197,22 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     onNodeClick,
   } = useSelection({ base, graph, loadGraph: doLoadGraph })
 
+  /**
+   * Canvas click, split by modifier: a shift-click toggles the node in the
+   * hand-picked selection (never opening the detail panel or re-seeding); a
+   * plain click falls through to the usual select/re-seed behavior.
+   */
+  const onCanvasNodeClick = useCallback(
+    (node: VNode, event?: MouseEvent) => {
+      if (event?.shiftKey) {
+        dispatch(nodeSelectionToggled(node.id))
+        return
+      }
+      onNodeClick(node)
+    },
+    [dispatch, onNodeClick],
+  )
+
   // The sim-side discovery merge. The discovery LISTS live in the store (the
   // teacher dispatches them); this effect feeds them into the in-place merge,
   // whose internal dedupe makes re-feeding the full arrays safe.
@@ -260,6 +281,11 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     dispatch(visibleNodesSet(view.nodes.map((node) => node.id)))
   }, [view, dispatch])
 
+  // Alt-drag marquee selection: arms while Alt is held, captures the drag on an
+  // overlay so RFG never pans, and commits the enclosed nodes to the selection.
+  const marquee = useMarquee({ view, fgRef, wrapRef })
+  const onClearSelection = useCallback(() => dispatch(nodeSelectionCleared()), [dispatch])
+
   /** Neighbors of the hovered node (for focus-on-hover dimming). */
   const hoverSet = useMemo(() => {
     if (!base || !hoverId) return null
@@ -317,7 +343,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   // Repaint when highlight/selection/pins/layout change (the sim may be at rest).
   useEffect(() => {
     fgRef.current?.refresh?.()
-  }, [hoverId, selectedId, pinned, view, highlightIds, layout])
+  }, [hoverId, selectedId, selectedIds, pinned, view, highlightIds, layout])
 
   const hasGraph = !!base && base.nodes.length > 0
 
@@ -346,6 +372,8 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             onCiteHi={setCiteHi}
             visibleCount={view.nodes.length}
             totalCount={base!.nodes.length}
+            selectedCount={selectedIds.size}
+            onClearSelection={onClearSelection}
             pinnedCount={pinned.size}
             onReleaseAll={releaseAll}
             onFit={() => fgRef.current?.zoomToFit(400, 60)}
@@ -363,12 +391,35 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             focusSet={focusSet}
             pinned={pinned}
             selectedId={selectedId}
+            selectedIds={selectedIds}
             highlightIds={highlightIds}
-            onNodeClick={onNodeClick}
+            onNodeClick={onCanvasNodeClick}
             onNodeHover={setHoverId}
             onNodeDragEnd={onNodeDragEnd}
             onEngineStop={onEngineStop}
             onRenderFramePre={drawAxis}
+          />
+        )}
+
+        {/* Marquee node-selector: the arm overlay captures the alt-drag (so RFG
+            never pans) and the outline paints the in-progress rectangle. The arm
+            sits below the controls (z-index) so alt-interacting with the panel
+            still works; it's inert unless Alt is held. */}
+        {hasGraph && (
+          <div
+            className={`marquee-arm${marquee.armed ? ' armed' : ''}`}
+            onMouseDown={marquee.onArmMouseDown}
+          />
+        )}
+        {marquee.rect && (
+          <div
+            className="marquee-rect"
+            style={{
+              left: marquee.rect.left,
+              top: marquee.rect.top,
+              width: marquee.rect.width,
+              height: marquee.rect.height,
+            }}
           />
         )}
 

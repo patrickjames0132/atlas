@@ -206,11 +206,63 @@
   opacity: 0.4;
   cursor: default;
 }
+/* The node-selector row: the always-on gesture hint, and the picked-count +
+ * clear status once a selection exists. */
+.ctrl-select {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.select-hint {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.8;
+  line-height: 1.4;
+}
+.select-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.select-status b {
+  color: var(--text-strong);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .ctrl-hint {
   margin-top: 8px;
   font-size: 11px;
   color: var(--muted);
   opacity: 0.75;
+}
+
+/* Marquee node-selector. The arm is a transparent full-canvas overlay that goes
+ * live only while Alt is held (see useMarquee), capturing the drag so
+ * ForceGraph2D never pans; the rect is the painted selection outline. Both sit
+ * below the controls panel (z 4) so alt-interacting with it still works. */
+.marquee-arm {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.marquee-arm.armed {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.marquee-rect {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px solid #22d3ee;
+  background: rgba(34, 211, 238, 0.12);
+  border-radius: 2px;
 }
 
 /* --- legend --- */

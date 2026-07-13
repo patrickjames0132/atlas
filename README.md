@@ -155,7 +155,12 @@ The Vite dev server proxies `/api/*` to Flask.
    **citation-count slider** (a log-scale min…max window over the papers on
    screen — a display filter, no re-query), drag-to-pin, focus-on-hover, and a
    **Refresh** that busts this seed's day-cached snapshot to re-fetch fresh from
-   Semantic Scholar. Click the **Atlas** brand anytime to go home.
+   Semantic Scholar. **Hand-pick a scope** with the node selector:
+   **alt-drag** a marquee to add papers to the teacher's scope (additive —
+   several sweeps build one cluster), **shift-click** to add/remove one, and
+   **alt-click** empty (or **Clear**) to reset. Picked papers ring cyan and the
+   rest dim; the teacher then grounds only in your selection. Click the
+   **Atlas** brand anytime to go home.
 4. **Learn** (the 🎓 Assistant panel):
    - **Lectures** — the past → present → future arc, narrated over the
      graph **as you built it** (lectures never expand it — only the research
@@ -167,7 +172,8 @@ The Vite dev server proxies `/api/*` to Flask.
      **landmark citers** onward through the work that built on it), and "The
      current frontier" (just the graph's **Latest Publications**). Each lecture
      is **grounded in the papers currently shown on the graph** — filter the
-     graph and you scope the lecture. The chronological lectures are nudged to
+     graph, or hand-pick a cluster with the node selector (alt-drag), and you
+     scope the lecture (and Q&A) to it. The chronological lectures are nudged to
      span the whole publication history — both ends, not just the oldest,
      most-cited papers. Lecture length is tunable too (`min_beats`/`max_beats`
      in the lecturer's config `extras`, default 7–12). Beats light up their

@@ -11,6 +11,7 @@ by identity.
 ```
 hooks/
   useDiscovery.ts — the sim-side discovery merge, in place
+  useMarquee.ts   — alt-drag node selection (the teacher's scope)
   usePinning.ts   — user pins (drag / toggle / release), timeline-aware
   useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
 ```
@@ -41,6 +42,39 @@ tools) into the live graph:
   questions can extend the researcher's grounding without rebuilding
   `base`; on a restored session it's re-collected from the saved nodes'
   `discovered` flags.
+
+## `useMarquee` — hand-pick the teacher's scope
+
+A **modifier-drag, not a mode**: hold **Alt** and drag a rectangle to pick the
+nodes the AI teacher grounds in (its lectures and Q&A). The design choices that
+make it coexist with the sim's own drag-to-pan:
+
+- **Arms only while Alt is held.** A window `keydown`/`keyup` (plus a `blur`
+  reset, so an alt-tab that swallows the keyup can't leave it stuck) flips an
+  `armed` flag; GraphExplorer renders a transparent overlay whose
+  `pointer-events` go live only then. Plain drag still reaches ForceGraph2D and
+  pans — no interaction is stolen.
+- **The overlay captures the drag, so RFG never sees it.** The mousedown lands
+  on the arm overlay (above the canvas, below the controls in z-order), and the
+  move/up run on `window` so the gesture completes even if Alt is released
+  mid-drag.
+- **Hit-testing is in screen space.** `fgRef.graph2ScreenCoords` maps each
+  *visible* node's sim position to canvas-local pixels, compared against the
+  rectangle (measured off the wrap's bounding box — the canvas fills the wrap,
+  so their origins coincide). Only what's on screen is eligible, matching the
+  `selected ∩ visible` grounding rule.
+- **The marquee is additive.** Each alt-drag **unions** the enclosed nodes onto
+  the pick, so several sweeps build one scope; a negligible drag (below a few
+  pixels) is an alt-click on empty space that **clears** it, as does the
+  controls' Clear button. We deliberately **don't** use Alt+Shift for a
+  "replace vs. add" split — that combo is the OS keyboard-layout switch on
+  Windows, which steals the modifier and the window focus mid-drag. Single-node
+  **shift-click** add/remove lives in GraphExplorer's click handler, not here.
+
+The selected ids live in the **workspace slice** (`selectedNodeIds`) — the one
+piece of this hook's state that's genuinely cross-cutting, since
+`selectGroundingNodes` reads it to scope the teacher. The rectangle and the
+`armed` flag stay local (only the canvas paints them).
 
 ## `usePinning` + `useTimeline` — two layouts, one pin vocabulary
 

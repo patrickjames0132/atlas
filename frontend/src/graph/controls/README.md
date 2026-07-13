@@ -9,7 +9,8 @@ controls/
   GraphControls.tsx — layout toggle, per-relation filter chips, the
                       dual-knob year slider, the citation-count threshold
                       slider, count readout, release/fit/refresh actions,
-                      the gesture hint line
+                      the node-selector row (gesture hint + picked-count /
+                      clear), the gesture hint line
   Legend.tsx        — the color legend (agent entries appear on first use)
 ```
 
@@ -39,6 +40,13 @@ canvas about what "a reference" looks like, and both style via
 - **The year slider only renders when the graph spans more than one
   year** — a single-year graph gets nothing to filter. Its two knobs clamp
   against each other (`lo ≤ hi`).
+- **The node-selector row teaches the marquee gestures and reports the
+  pick.** An always-on hint line (`alt-drag to pick nodes for the teacher ·
+  shift-click to add/remove`) makes the modifier-drag discoverable — the
+  gesture itself lives in `hooks/useMarquee.ts` — and once a selection exists
+  the row also shows the picked count and a `clear` link. The pick scopes the
+  teacher via `selectGroundingNodes` (`selected ∩ visible`), so it reads as a
+  filter alongside the chips/sliders.
 - **The hint line teaches per-layout gestures** — drag-to-pin in Force,
   left→right-by-year in Timeline; double-click-to-reseed in both.
 - **Refresh** busts the seed's day-cached snapshot server-side; the button

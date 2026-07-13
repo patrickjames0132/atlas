@@ -16,11 +16,13 @@ store/
 
 ## The three slices, and who touches them
 
-- **`workspace`** — written by the load/restore thunks and the teacher's
-  discovery dispatches; read by the explorer (builds `base` from `graph`,
-  merges discoveries into the sim), the teacher (grounding = graph ∪
-  discoveries, via `selectGroundingNodes`; the full seed node via
-  `selectSeedNode`), the legend (`selectHasDiscovered`/`HasSearchHits`),
+- **`workspace`** — written by the load/restore thunks, the teacher's
+  discovery dispatches, and the canvas's view-filter + node-selection
+  dispatches; read by the explorer (builds `base` from `graph`, merges
+  discoveries into the sim, paints the selection), the teacher (grounding =
+  `(selected ∩ visible) ∪ discoveries`, via `selectGroundingNodes`; the full
+  seed node via `selectSeedNode`), the legend
+  (`selectHasDiscovered`/`HasSearchHits`),
   the header (seed title), and Save. `epoch` bumps per load/restore — the
   shell keys the teacher panel on it, replacing the old `graphKey` hack.
   `error` is the shared search/graph overlay surface.
@@ -58,9 +60,14 @@ store/
   components never import the raw react-redux hooks. Devtools give an
   action log of every beat, token batch, and discovery: an SSE stream
   debugger for free.
-- **What deliberately stays OUT:** declutter filters, hover, selection,
-  drawer visibility, search state, scope picker, lightbox — each has one
-  render site and lives there.
+- **What deliberately stays OUT:** declutter filters, hover, the
+  detail-panel selection, drawer visibility, search state, scope picker,
+  lightbox — each has one render site and lives there. The **hand-picked
+  node selection** is the exception that proves the rule: it earns
+  `workspace.selectedNodeIds` because it's genuinely cross-cutting — the
+  canvas writes it (marquee / shift-click), the teacher reads it (grounding
+  scope). Like `visibleNodeIds`, it's a transient exploration choice, reset
+  on every load/restore and never persisted in a save.
 
 ## How it's verified
 

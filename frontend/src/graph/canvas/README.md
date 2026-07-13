@@ -18,15 +18,20 @@ paints, the shell decides.
 
 - **Gold glow + gold ring** — the teacher is talking about this paper
   (`highlightIds`).
+- **Cyan ring** — hand-picked into the teacher's scope (`selectedIds`, the
+  alt-drag marquee / shift-click selection). While a selection is active,
+  everything outside it **dims** like a focus set, so the picked cluster
+  stands out; the ring is cyan to stay distinct from the gold, pale-white,
+  and bright-white rings it can coexist with.
 - **Dashed ring** — agent-discovered mid-chat (`node.discovered`).
 - **Pale ring** — user-pinned.
-- **Bright ring** — selected.
+- **Bright ring** — the open detail-panel node (`selectedId`).
 
-Labels are zoom-gated: seed / selected / highlighted always; everyone else
-past 1.6× zoom, truncated at 42 chars, run through `latexToUnicode` (canvas
-`fillText` can't render KaTeX). Influential citations draw heavier (1.6 vs
-0.6); `similar` edges get no arrowhead — they aren't citations, mirroring
-the backend's `influential=null` semantics.
+Labels are zoom-gated: seed / detail-selected / highlighted / hand-picked
+always; everyone else past 1.6× zoom, truncated at 42 chars, run through
+`latexToUnicode` (canvas `fillText` can't render KaTeX). Influential citations
+draw heavier (1.6 vs 0.6); `similar` edges get no arrowhead — they aren't
+citations, mirroring the backend's `influential=null` semantics.
 
 ## The one rule: never copy `data`
 
