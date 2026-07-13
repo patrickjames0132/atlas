@@ -31,12 +31,17 @@ uv run --group research jupyter nbconvert --execute --to notebook \
 
 ```
 research/
-  cite_budget/   — how the adaptive landmark budget was derived
-                   (productionized in ml_pipelines/cite_budget/)
-  latest_gap/    — how the adaptive latest-band boundary was derived
-                   (productionized in ml_pipelines/latest_gap/)
+  cite_budget/       — how the adaptive landmark budget was derived
+                       (productionized in ml_pipelines/cite_budget/)
+  latest_gap/        — how the adaptive latest-band boundary was derived
+                       (productionized in ml_pipelines/latest_gap/)
+  citation_coverage/ — S2 vs OpenAlex citation-coverage comparison behind the
+                       "could we go OpenAlex-only?" question (no pipeline — pure
+                       decision-support; conclusions in docs/citation-coverage.md)
 ```
 
-Each study has its own README pointing at the pipeline it justified. Corpora and
-trained artifacts live with the pipeline in `ml_pipelines/`, not here — the
-notebook reads them from there so there's a single copy.
+Each study has its own README. Most point at the pipeline they justified, with
+corpora and trained artifacts living with the pipeline in `ml_pipelines/` (a
+single copy the notebook reads). `citation_coverage/` is the exception — it
+justified no model, just a design decision, so it has no pipeline and no stored
+corpus (it queries the live S2 + OpenAlex APIs).
