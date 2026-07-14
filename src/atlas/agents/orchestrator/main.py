@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from typing import Iterator
 
-from ...services.graph import Node
+from ...services.graph import Node, Provider
 from .. import events, lecturer, librarian, researcher
 from ..models import Intent, LectureMode, PlayedLecture
 
@@ -112,6 +112,7 @@ def run(
     history: list[dict] | None = None,
     source_ids: list[str] | None = None,
     lectures: list[PlayedLecture] | None = None,
+    provider: Provider = "s2",
 ) -> Iterator[events.Event]:
     """Run one teacher workflow, yielding its full event stream.
 
@@ -127,6 +128,8 @@ def run(
         source_ids: Library scope (research and librarian).
         lectures: Lectures already delivered this session (research only) —
             extra grounding so the answer builds on them instead of repeating.
+        provider: The graph's academic-data provider (research only) — the
+            researcher's expand/search/hydrate follow it.
 
     Yields:
         The workflow's typed events, then exactly one ``Done`` on success or
@@ -147,7 +150,9 @@ def run(
             if question is None or seed is None or nodes is None:
                 yield events.Error(message="research needs a question, a seed, and the visible nodes")
                 return
-            yield from researcher.answer(question, seed, nodes, history, source_ids, lectures)
+            yield from researcher.answer(
+                question, seed, nodes, history, source_ids, lectures, provider
+            )
         elif intent is Intent.LIBRARIAN:
             if question is None:
                 yield events.Error(message="librarian needs a question")

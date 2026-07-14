@@ -101,3 +101,78 @@ def test_rel_tag_maps_every_relation():
         "citations": "citation",
         "similar": "similar",
     }
+
+
+# --- OpenAlex provider ------------------------------------------------------------
+
+
+class FakeOpenAlex:
+    """Fakes the OpenAlex traversal surface the agent layer calls."""
+
+    def __init__(self):
+        self.calls: list[tuple] = []
+
+    def resolve_seed_work(self, node_id):
+        self.calls.append(("resolve", node_id))
+        return {"id": "https://openalex.org/W99"}
+
+    def bare_work_id(self, work):
+        return "W99"
+
+    def references(self, work_id, limit):
+        self.calls.append(("references", work_id, limit))
+        return [HIT]
+
+    def citations(self, work_id, limit):
+        self.calls.append(("citations", work_id, limit))
+        return [HIT]
+
+    def related_works(self, work_id, limit):
+        self.calls.append(("related_works", work_id, limit))
+        return [HIT]
+
+    def search_papers(self, query, limit, year_from, year_to):
+        # openalex.search_papers returns BARE node dicts (NOT the {"node": ...}
+        # traversal shape) — mirror that so the wrap-at-the-boundary is tested.
+        self.calls.append(("search_papers", query, limit, year_from, year_to))
+        return [{"id": "oa-x", "title": "X"}]
+
+
+@pytest.fixture
+def fake_openalex(monkeypatch):
+    fake = FakeOpenAlex()
+    for name in (
+        "resolve_seed_work", "bare_work_id", "references", "citations",
+        "related_works", "search_papers",
+    ):
+        monkeypatch.setattr(traversal.openalex, name, getattr(fake, name))
+    return fake
+
+
+def test_openalex_neighbors_resolve_then_hit_the_matching_endpoint(fake_openalex):
+    """Under OpenAlex each hop resolves the node id to a work, then hits the
+    matching endpoint — similar routes to related_works (no S2 recommendations)."""
+    traversal.neighbors("DOI:10/x", "references", 5, provider="openalex")
+    traversal.neighbors("DOI:10/x", "citations", 5, provider="openalex")
+    traversal.neighbors("DOI:10/x", "similar", 5, provider="openalex")
+    assert [call[0] for call in fake_openalex.calls] == [
+        "resolve", "references", "resolve", "citations", "resolve", "related_works"
+    ]
+
+
+def test_openalex_search_uses_openalex_and_wraps_bare_nodes(fake_openalex):
+    """OpenAlex search hits are bare node dicts; traversal.search wraps them into
+    the {"node": ...} shape the researcher's search tool consumes (else it
+    KeyErrors on hit["node"])."""
+    out = traversal.search("graph neural networks", 10, provider="openalex")
+    assert fake_openalex.calls[0] == ("search_papers", "graph neural networks", 10, None, None)
+    assert out == [{"node": {"id": "oa-x", "title": "X"}}]  # wrapped, not bare
+
+
+def test_provider_scopes_the_cache(fake_s2, fake_openalex):
+    """The same node under different providers keys to different cache entries —
+    neither serves the other, and each provider's endpoints are hit."""
+    traversal.neighbors("p1", "references", 5, provider="s2")
+    traversal.neighbors("p1", "references", 5, provider="openalex")
+    assert ("references", "p1", 5) in fake_s2.calls  # S2 hit by paperId
+    assert ("resolve", "p1") in fake_openalex.calls  # OpenAlex resolved the node id

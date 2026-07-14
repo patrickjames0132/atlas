@@ -28,7 +28,7 @@ from pydantic import ValidationError
 from ..agents import events, orchestrator
 from ..agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
 from ..config import config
-from ..services.graph import Node
+from ..services.graph import Node, resolve_provider
 from .sse import sse, sse_response
 
 bp = Blueprint("agents", __name__)
@@ -229,11 +229,12 @@ def api_ask() -> ResponseReturnValue:
     ``session_id`` so follow-ups keep context, persisted only on success.
 
     Body:
-        ``{question, session_id, seed, nodes, source_ids?, lectures?}`` —
-        ``source_ids`` scopes the researcher's library search to a subset of
-        uploaded sources; ``lectures`` are the lectures already played this
-        session (``[{title, beats: [{heading, text}]}]``), folded in as context
-        the answer may build on instead of re-deriving.
+        ``{question, session_id, seed, nodes, provider?, source_ids?, lectures?}``
+        — ``provider`` (``s2``/``openalex``) matches the graph's backend so the
+        researcher's expand/search/hydrate use it; ``source_ids`` scopes the
+        library search to a subset of uploaded sources; ``lectures`` are the
+        lectures already played this session (``[{title, beats: [{heading,
+        text}]}]``), folded in as context the answer may build on.
 
     Returns:
         An SSE stream: ``trace`` frames (tool steps), ``discovery`` frames
@@ -257,6 +258,7 @@ def api_ask() -> ResponseReturnValue:
     session_id = payload.get("session_id") or ""
     source_ids = _opt_source_ids(payload)
     lectures = _opt_lectures(payload)
+    provider = resolve_provider(payload.get("provider"))
     history = _QA_SESSIONS.get(session_id, []) if session_id else []
 
     return sse_response(
@@ -269,6 +271,7 @@ def api_ask() -> ResponseReturnValue:
                 history=history,
                 source_ids=source_ids,
                 lectures=lectures,
+                provider=provider,
             ),
             store=_QA_SESSIONS,
             session_id=session_id,

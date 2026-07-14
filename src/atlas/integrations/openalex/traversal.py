@@ -39,6 +39,9 @@ log = logging.getLogger(__name__)
 # OpenAlex caps ``per-page`` at 200.
 _PER_PAGE = 200
 
+# OpenAlex caps an OR filter (``a|b|c``) at 50 values per request.
+_OR_FILTER_MAX = 50
+
 # The landmark/latest split is by **publication YEAR**, not an exact date, on
 # purpose: OpenAlex dates are coarse — a large fraction of works carry a
 # year-only ``publication_date`` defaulted to ``<year>-01-01`` — so a rolling
@@ -423,6 +426,71 @@ def citation_relations(
     latest.reverse()
 
     return landmark, latest
+
+
+def _hydrate_ids(work_ids: list[str]) -> list[dict]:
+    """Batch-hydrate bare OpenAlex ids (``W…``) into node entries.
+
+    Uses the ``openalex_id:`` OR filter (capped at ``_OR_FILTER_MAX`` values per
+    request, so ids are chunked). The result order follows OpenAlex's, deduped.
+
+    Args:
+        work_ids: Bare OpenAlex work ids.
+
+    Returns:
+        ``[{"node": <node dict>}]`` entries (no ``influential`` — these aren't
+        citations), skipping works with no usable id.
+
+    Raises:
+        client.OpenAlexError: When a request fails after retries.
+    """
+    entries: list[dict] = []
+    seen: set[str] = set()
+    for start in range(0, len(work_ids), _OR_FILTER_MAX):
+        chunk = work_ids[start : start + _OR_FILTER_MAX]
+        params = {
+            "filter": "openalex_id:" + "|".join(chunk),
+            "per-page": str(_OR_FILTER_MAX),
+            "select": nodes.NEIGHBOR_SELECT,
+        }
+        data = client.request(client.works_url(params))
+        results = data.get("results") if isinstance(data, dict) else None
+        for work in results or []:
+            node = nodes.node(work)
+            if node and node["id"] not in seen:
+                seen.add(node["id"])
+                entries.append({"node": node})
+    return entries
+
+
+def related_works(work_id: str, limit: int | None) -> list[dict]:
+    """A paper's OpenAlex *related works* — the OA analogue of S2's SPECTER2
+    recommendations (the "similar" hop).
+
+    Weaker than S2's embedding similarity: OpenAlex's ``related_works`` is
+    concept/citation-overlap, and it can surface duplicates. Used only by the
+    researcher's ``expand_node(relation="similar")`` under the OpenAlex provider
+    (the seed-graph *Similar* relation was retired in v5.0.0). We read the work's
+    ``related_works`` id list, then batch-hydrate them into nodes.
+
+    Args:
+        work_id: The seed's bare OpenAlex id (``W…``).
+        limit: Max related works, or None for all of them.
+
+    Returns:
+        ``[{"node": <node dict>}]`` entries, in OpenAlex's related order.
+
+    Raises:
+        client.OpenAlexError: When a request fails after retries.
+    """
+    work = _try_entity(work_id, "id,related_works")
+    if not work:
+        return []
+    related = [nodes.bare_openalex_id(url) for url in (work.get("related_works") or [])]
+    ids = [work_ref for work_ref in related if work_ref]
+    if limit is not None:
+        ids = ids[:limit]
+    return _hydrate_ids(ids)
 
 
 def citations(work_id: str, limit: int | None) -> list[dict]:

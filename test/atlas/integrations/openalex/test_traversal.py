@@ -383,6 +383,29 @@ def test_resolve_seed_work_blank_is_none():
     assert traversal.resolve_seed_work("   ") is None
 
 
+def test_related_works_reads_ids_then_batch_hydrates(monkeypatch):
+    """related_works pulls the work's related_works id list, then batch-hydrates
+    them via the openalex_id OR filter."""
+    def fake_request(url):
+        unquoted = urllib.parse.unquote(url)
+        if "/works/W5" in url:  # the seed work lookup (select id,related_works)
+            assert "related_works" in unquoted
+            return {"id": "https://openalex.org/W5",
+                    "related_works": ["https://openalex.org/W1", "https://openalex.org/W2"]}
+        params = _query(url)  # the batch hydrate
+        assert params["filter"] == "openalex_id:W1|W2"
+        return {"results": [_work("W1", doi="10/a"), _work("W2", doi="10/b")]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    out = traversal.related_works("W5", limit=10)
+    assert [entry["node"]["id"] for entry in out] == ["DOI:10/a", "DOI:10/b"]
+
+
+def test_related_works_empty_when_the_work_has_none(monkeypatch):
+    monkeypatch.setattr(client, "request", lambda url: {"id": "https://openalex.org/W5"})
+    assert traversal.related_works("W5", limit=10) == []
+
+
 def test_get_paper_hydrates_a_node(monkeypatch):
     """get_paper resolves a ref to a work and normalizes it to a detail node."""
     monkeypatch.setattr(client, "request", lambda url: _work("W7", doi="10/x", title="Hi"))

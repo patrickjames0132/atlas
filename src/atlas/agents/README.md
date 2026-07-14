@@ -61,20 +61,30 @@ Design points worth knowing:
   `message` (the old event named "error" with a field named "error"
   stuttered).
 
-## `traversal.py` — day-cached S2 hops and search
+## `traversal.py` — day-cached, provider-aware hops and search
 
 The shared plumbing under every "bring in a paper that isn't on screen"
-move: `neighbors(paper_id, relation, limit)` pulls one hop of
+move: `neighbors(paper_id, relation, limit, provider)` pulls one hop of
 references / citations / similar work, `search(query, limit, year_from,
-year_to)` runs a free-text S2 search, and both cache their results for
+year_to, provider)` runs a free-text search, and both cache their results for
 `config.graph.cache_ttl` (the same day-long TTL as a graph snapshot —
 citation data changes slowly).
+
+**Both follow the selected graph provider** (v5.2.0), so an OpenAlex graph
+expands/searches OpenAlex — keeping the pulled-in nodes in the same id space as
+the graph. Under S2 a `similar` hop is SPECTER2 recommendations; under OpenAlex
+it's `related_works` (concept/citation overlap — weaker, but the closest
+analogue, since OpenAlex has no embeddings). The OpenAlex hop first resolves the
+node id (a `DOI:`/`ARXIV:`/`W…` id) to a work, then hits `cited_by:` /
+`cites:` / `related_works`. Provider is part of the cache key.
 
 One consumer today:
 
 - **The researcher's `expand_node` / `search_papers` tools** wrap `neighbors` /
   `search` with everything agentic: budgets, visited-sets, numbering the
-  finds, building `Discovery` events. (The lecture backfill walks that
+  finds, building `Discovery` events. The provider comes from the graph the
+  question is grounded in — threaded `route → orchestrator.run → researcher.answer
+  → ResearcherDeps.provider → the tools`. (The lecture backfill walks that
   also used to loop over `neighbors` are gone — lectures never expand the
   graph.)
 
@@ -82,10 +92,9 @@ Design points worth knowing:
 
 - **The cache is the point.** The researcher re-hits the same hops
   constantly within a session (re-expansions across follow-up questions),
-  and the rate-limited S2 API must not pay for each repeat. This is the
-  *cached, agent-tuned* layer over `integrations.semantic_scholar.traversal`
-  — the deliberate name-cousin that talks to the live API and caches
-  nothing.
+  and the rate-limited APIs must not pay for each repeat. This is the
+  *cached, agent-tuned* layer over the `integrations` traversal clients —
+  the deliberate name-cousins that talk to the live API and cache nothing.
 - **Limits are explicit arguments, and part of the cache key.** The old
   `AGENT_*_LIMIT` globals died in the Phase-1 config purge; each caller's
   own config supplies its limit, and a hop cached at one limit is never

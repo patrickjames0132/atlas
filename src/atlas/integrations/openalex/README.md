@@ -96,7 +96,8 @@ client.py     — talks to OpenAlex over HTTP: URL+credential building, throttle
 nodes.py      — translates a raw OpenAlex "work" into the app's node shape
      ↓                (id, title, abstract, year, citation count, topic tags, ...)
 traversal.py  — resolve_seed_work / resolve_work (seed → work), get_paper (detail
-     ↓          hydration), references (cited_by:), citation_relations/citations (cites:)
+     ↓          hydration), references (cited_by:), citation_relations/citations
+     ↓          (cites:), related_works (the "similar" hop for the agent)
 search.py     — search_papers: free-text relevance search (ungrounded seed discovery)
 vocab.py      — the 26 top-level OpenAlex fields (id + name), for the search filter
 ```
@@ -213,6 +214,12 @@ generous limits are why it's the more rate-limit-resilient provider of the two.)
   verified via `resolve_work`.
 - **`routes/graph.py`** — `/api/paper/<ref>?provider=openalex` calls `get_paper`
   to hydrate a clicked node's detail panel.
+- **`agents/traversal.py`** — under an OpenAlex graph, the researcher's
+  `expand_node` hops through `references` / `citations` / `related_works` (the
+  `similar` hop; `related_works` is OpenAlex's concept/citation-overlap
+  neighbors — weaker than S2's SPECTER2, but the closest analogue) and
+  `search_papers` searches via `search_papers`. `related_works` reads the work's
+  `related_works` id list, then batch-hydrates via the `openalex_id:` OR filter.
 
 ## Testing
 

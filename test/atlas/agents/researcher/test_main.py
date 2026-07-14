@@ -111,7 +111,8 @@ def test_expand_discovers_numbers_and_directs_edges(monkeypatch):
                       citation_count=1, authors=None, url="https://example.org/node03")},
     ]
     monkeypatch.setattr(
-        researcher.tools.traversal, "neighbors", lambda paper_id, relation, limit: hits
+        researcher.tools.traversal, "neighbors",
+        lambda paper_id, relation, limit, provider="s2": hits,
     )
     model = scripted(
         [("expand_node", ['{"index": 1, "relation": "references"}'])],
@@ -130,6 +131,24 @@ def test_expand_discovers_numbers_and_directs_edges(monkeypatch):
     ]
     # Only reads record citations; the model named [4] -> the discovered paper.
     assert out[-1] == events.Cited(node_ids=["anc01"])
+
+
+def test_expand_uses_the_selected_provider(monkeypatch):
+    """answer(provider=…) reaches the tools: expand_node hops through the chosen
+    provider, not always S2."""
+    seen: dict = {}
+
+    def fake_neighbors(paper_id, relation, limit, provider="s2"):
+        seen["provider"] = provider
+        return []
+
+    monkeypatch.setattr(researcher.tools.traversal, "neighbors", fake_neighbors)
+    model = scripted(
+        [("expand_node", ['{"index": 1, "relation": "references"}'])],
+        [final("ok", [])],
+    )
+    run(model, monkeypatch, provider="openalex")
+    assert seen["provider"] == "openalex"
 
 
 def test_search_sources_offered_only_with_a_library(monkeypatch):

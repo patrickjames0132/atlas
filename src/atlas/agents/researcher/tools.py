@@ -23,13 +23,18 @@ from typing import Literal
 
 from pydantic_ai import RunContext
 
+from ...integrations import openalex
 from ...integrations import semantic_scholar as s2
 from ...integrations.arxiv import figures as figures_mod
 from ...integrations.arxiv import fulltext
-from ...services.graph import Edge, Node
+from ...services.graph import Edge, Node, Provider
 from ...services.sources import retrieval
 from .. import events, prompts, traversal
 from .config import BUDGETS
+
+# A hop or search can fail on either provider's client; both come back to the
+# model as steerable text, never raised.
+_TRAVERSAL_ERRORS = (s2.S2Error, openalex.OpenAlexError)
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +55,7 @@ class ResearcherDeps:
     known_ids: set[str]
     scope: list[str] | None  # user-pinned source_ids; overrides the model's pick
     has_sources: bool
+    provider: Provider = "s2"  # the graph provider — expand/search/hydrate follow it
     steps_left: int = 0
     full_reads_left: int = 0
     summary_reads_left: int = 0
@@ -128,18 +134,22 @@ def _figure_list(arxiv_id: str, index: int) -> str:
     )
 
 
-def _paper_text(node: Node, detail: str, index: int) -> str:
+def _paper_text(node: Node, detail: str, index: int, provider: Provider) -> str:
     """The text handed back for one paper read.
 
-    Discovered neighbors arrive without abstract/tldr, so those hydrate from
-    S2 on demand. A full read pulls the ar5iv full text (truncated to the
-    ``fulltext_max_chars`` budget) when the paper has an arXiv render;
-    otherwise it degrades to the summary form with a note.
+    Discovered neighbors arrive without abstract/tldr, so those hydrate on
+    demand — from the graph's provider (OpenAlex fills the abstract from its
+    inverted index; it has no TL;DR). A full read pulls the ar5iv full text
+    (truncated to the ``fulltext_max_chars`` budget) when the paper has an arXiv
+    render; otherwise it degrades to the summary form with a note.
     """
     abstract, tldr = node.abstract, node.tldr
     if abstract is None and tldr is None:
-        lookup = f"ARXIV:{node.arxiv_id}" if node.arxiv_id else node.id
-        hydrated = s2.get_paper(lookup)
+        if provider == "openalex":
+            hydrated = openalex.get_paper(node.id)
+        else:
+            lookup = f"ARXIV:{node.arxiv_id}" if node.arxiv_id else node.id
+            hydrated = s2.get_paper(lookup)
         if hydrated:
             abstract = hydrated.get("abstract")
             tldr = hydrated.get("tldr")
@@ -201,7 +211,7 @@ def read_paper(
     if cache_key in deps.read_cache:
         text = deps.read_cache[cache_key]
     else:
-        text = _paper_text(node, detail, index)
+        text = _paper_text(node, detail, index, deps.provider)
         deps.read_cache[cache_key] = text
         setattr(deps, budget_attr, getattr(deps, budget_attr) - 1)
     deps.emit(events.ReadTrace(ok=True, index=index, title=node.title, detail=detail))
@@ -217,7 +227,7 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
         ctx: The run context carrying the researcher's deps (framework-injected).
         index: The [n] index of the paper to expand from.
         relation: "references" (papers it cites), "citations" (papers citing
-            it), or "similar" (embedding-similar work).
+            it), or "similar" (related work).
 
     Returns:
         The newly numbered neighbors (title + year each), or a
@@ -245,8 +255,8 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
     deps.hops_left -= 1
 
     try:
-        hits = traversal.neighbors(node.id, relation, BUDGETS["expand_limit"])
-    except s2.S2Error as exc:
+        hits = traversal.neighbors(node.id, relation, BUDGETS["expand_limit"], deps.provider)
+    except _TRAVERSAL_ERRORS as exc:
         log.warning("expand_node failed for %r (%s): %s", node.id, relation, exc)
         deps.emit(events.ExpandTrace(ok=False, index=index, title=node.title, relation=relation))
         return f'Couldn\'t expand {relation} of "{node.title}": {exc}'
@@ -303,7 +313,7 @@ def search_papers(
     year_from: int | None = None,
     year_to: int | None = None,
 ) -> str:
-    """Free-text search across all of Semantic Scholar — NOT limited to the
+    """Free-text search across the whole academic corpus — NOT limited to the
     graph's citation neighborhood. Use for recent or topical work that
     expand_node can't reach; hits get numbered and added for you to read.
 
@@ -337,8 +347,8 @@ def search_papers(
     deps.searches_left -= 1
 
     try:
-        hits = traversal.search(query, BUDGETS["search_limit"], year_from, year_to)
-    except s2.S2Error as exc:
+        hits = traversal.search(query, BUDGETS["search_limit"], year_from, year_to, deps.provider)
+    except _TRAVERSAL_ERRORS as exc:
         log.warning("search_papers failed for %r: %s", query, exc)
         deps.emit(events.SearchTrace(ok=False, query=query, reason="error"))
         return f'Couldn\'t search "{query}": {exc}'

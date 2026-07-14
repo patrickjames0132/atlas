@@ -30,6 +30,7 @@ from .traversal import (
     get_paper,
     landmark_max_year,
     references,
+    related_works,
     resolve_seed_work,
     resolve_work,
 )
@@ -45,6 +46,7 @@ __all__ = [
     "landmark_max_year",
     "node",
     "references",
+    "related_works",
     "resolve_seed_work",
     "resolve_work",
     "search_papers",
