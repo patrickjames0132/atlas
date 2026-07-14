@@ -22,6 +22,18 @@ repos:
       - id: ruff
         args: [--fix]
 
+  # The CLAUDE.md naming convention, mechanized: no single-letter identifiers
+  # (`_` as a pure discard excepted), in notebooks as well as modules — ruff
+  # has no minimum-name-length rule (E741 only bans l/I/O), so this is a small
+  # AST walker of our own. See bin/check_identifiers.py's docstring.
+  - repo: local
+    hooks:
+      - id: identifiers
+        name: no single-letter identifiers
+        language: system
+        entry: uv run --no-sync python bin/check_identifiers.py
+        types_or: [python, jupyter]
+
   # Docstring COMPLETENESS: every Args section matches the signature and a
   # Returns section exists wherever a value comes back (config in pyproject's
   # [tool.pydoclint]; ruff's D rules already enforce presence + format).

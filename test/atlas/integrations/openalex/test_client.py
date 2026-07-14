@@ -26,7 +26,8 @@ class _FakeResponse(io.BytesIO):
 
 
 def _query(url):
-    return {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(url).query).items()}
+    return {key: values[0] for key, values in
+            urllib.parse.parse_qs(urllib.parse.urlparse(url).query).items()}
 
 
 def test_works_url_adds_mailto_and_api_key(monkeypatch):

@@ -25,7 +25,8 @@ def _work(work_id, *, doi=None, year=2020, cites=0, title="T"):
 
 def _query(url):
     """Parse a works URL's query params into a flat dict."""
-    return {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(url).query).items()}
+    return {key: values[0] for key, values in
+            urllib.parse.parse_qs(urllib.parse.urlparse(url).query).items()}
 
 
 def test_search_uses_the_relevance_search_param(monkeypatch):

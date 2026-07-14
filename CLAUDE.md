@@ -129,7 +129,11 @@ branch `main`.
   not `x`). Established two- to three-letter shorthands already in the code
   (`ctx`, `fg`, `lo`/`hi`, `aid`, `err`, `msg`, `buf`, `frac`) are fine; the
   rule is specifically about single letters. The whole codebase was swept clean
-  of them once — keep it that way, don't reintroduce them.
+  of them once — keep it that way, don't reintroduce them. **Machine-enforced
+  since v5.3.0**: a pre-commit hook (`bin/check_identifiers.py`, an AST walker)
+  fails the gate on any single-letter *binding* in `.py` files and `.ipynb`
+  code cells alike (`_` as a pure discard is the one allowed single character;
+  attribute reads are out of scope).
 - **Every package has a README, kept current.** A new package — backend or
   frontend, nested sub-packages included (e.g. `graph/canvas/`,
   `teacher/transcript/`) — ships **with its own `README.md`** telling that
@@ -181,7 +185,10 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
   flowing paragraphs) + **pydoclint** (docstring *completeness*: Args match
   the signature, Returns where a value comes back — config in
   `[tool.pydoclint]`; its raises-checks are off because the house style
-  documents *propagated* exceptions too) + the **frontend's format & lint** —
+  documents *propagated* exceptions too) + the repo-local
+  **no-single-letter-identifiers** hook (`bin/check_identifiers.py` — see
+  "Code conventions" above; covers `.py` and `.ipynb`, ruff has no
+  min-name-length rule) + the **frontend's format & lint** —
   prettier (config in `frontend/.prettierrc.json`, scoped to
   `src/**/*.{ts,tsx,css}` + `test/` + `vite.config.ts`; READMEs and the JSONC
   tsconfigs stay hand-formatted) and oxlint (now incl. **jsdoc completeness
@@ -198,7 +205,7 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
   over `getattr` duck-typing, and use `flask.typing.ResponseReturnValue` for
   views that return `(body, status)` tuples.
 - **`tests`** — `pytest` over `test/`, which **mirrors `src/atlas/`**
-  (328 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
+  (419 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
   in `test/conftest.py`: autouse temp-DB isolation (tests can't touch real
   `data/`), `fake_claude` (a scripted Anthropic client built from **real SDK
   event objects** — use it for anything agentic), and `stub_embeddings`
