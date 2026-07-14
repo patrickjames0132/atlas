@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v5.2.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v5.3.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -21,7 +21,8 @@
 > played lectures + lecture-scope picker (v4.12.0), **single-source provider
 > selector — S2 or OpenAlex per graph, the hybrid retired (v5.0.0), provider
 > reach extended to seed search + detail hydration + a per-provider field
-> taxonomy (v5.1.0), provider-aware researcher tools (v5.2.0)**
+> taxonomy (v5.1.0), provider-aware researcher tools (v5.2.0)**,
+> no-single-letter-identifiers pre-commit hook (v5.3.0)
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -1149,6 +1150,26 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       (per `frontend/test/README.md`): `useConversation` driven by scripted
       SSE events, the `fake_claude` idea client-side. *(From the `todos.md`
       inbox, 2026-07-07.)*
+- [x] **No-single-letter-identifiers rule, machine-enforced** *(v5.3.0)* —
+      the v2.4.2 naming convention (every binding named for what it holds)
+      had only `CLAUDE.md` keeping it true; now a **local pre-commit hook**
+      enforces it. Ruff has no minimum-identifier-length rule (E741 only
+      bans the ambiguous `l`/`I`/`O`), so **`bin/check_identifiers.py`**
+      walks the AST itself and flags every single-character *binding* —
+      assignments (incl. walrus), loop/comprehension targets, parameters,
+      function/class names, `except`/`with`/import aliases,
+      `global`/`nonlocal`, `match` captures, PEP 695 type params — with `_`
+      allowed as the pure-discard idiom and attribute *reads* out of scope
+      (react-force-graph's `node.x`, a paper's `_s` field aren't bindings we
+      own). **Notebooks are covered too**: each `.ipynb` code cell is parsed
+      individually and reported ruff-style (`file:cell N:line`; cells that
+      aren't plain Python, e.g. magics, are skipped). The sweep that made it
+      green caught stragglers in four test files and three research
+      notebooks (`k`/`v` → `key`/`values`, `i` → `index`, `lambda *a, **kw`
+      → `*args, **kwargs`) — including one in the days-old v5.1
+      `test_search.py`, exactly the drift the hook exists to stop.
+      Negative-tested: a deliberately bad file fails the run. *(Follow-through
+      on the v2.4.2 sweep.)*
 
 ## Backlog — not yet shipped
 

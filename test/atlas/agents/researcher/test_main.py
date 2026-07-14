@@ -202,7 +202,7 @@ def test_step_budget_steers_the_model_to_answer(monkeypatch):
 
 def test_search_budget_exhausted_is_distinguished_from_an_error(monkeypatch):
     monkeypatch.setitem(researcher_config.BUDGETS, "searches", 1)
-    monkeypatch.setattr(researcher.tools.traversal, "search", lambda *a, **kw: [])
+    monkeypatch.setattr(researcher.tools.traversal, "search", lambda *args, **kwargs: [])
     model = scripted(
         [
             ("search_papers", ['{"query": "momentum methods"}']),

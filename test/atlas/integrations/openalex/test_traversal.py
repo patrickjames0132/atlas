@@ -29,7 +29,8 @@ def _work(work_id, *, doi=None, year=2000, date=None, cites=0, title="T"):
 
 def _query(url):
     """Parse a works URL's query params into a flat dict."""
-    return {k: v[0] for k, v in urllib.parse.parse_qs(urllib.parse.urlparse(url).query).items()}
+    return {key: values[0] for key, values in
+            urllib.parse.parse_qs(urllib.parse.urlparse(url).query).items()}
 
 
 def test_clean_search_strips_punctuation():
@@ -279,7 +280,8 @@ def test_citations_single_relation_sorted_and_cursor_pages(monkeypatch):
     """The single-relation expansion view is a global sorted cites: query,
     cursor-paged (exercises the cursor loop)."""
     pages = {
-        "*": {"results": [_work(f"W{i}", doi=f"10/{i}", cites=200 - i) for i in range(200)],
+        "*": {"results": [_work(f"W{index}", doi=f"10/{index}", cites=200 - index)
+                          for index in range(200)],
               "meta": {"next_cursor": "PAGE2"}},
         "PAGE2": {"results": [_work("Wlast", doi="10/last", cites=1)],
                   "meta": {"next_cursor": None}},

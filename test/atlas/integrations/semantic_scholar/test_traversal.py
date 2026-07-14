@@ -36,7 +36,7 @@ def test_get_papers_chunks_batches_and_skips_nulls(monkeypatch):
 
 
 def test_get_papers_empty_input_no_request(monkeypatch):
-    monkeypatch.setattr(client, "request", lambda *a, **k: pytest.fail("should not be called"))
+    monkeypatch.setattr(client, "request", lambda *args, **kwargs: pytest.fail("should not be called"))
     assert traversal.get_papers(["", None]) == {}
 
 
