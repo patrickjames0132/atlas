@@ -248,9 +248,14 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     // A neighbor is shown when at least one enabled edge reaches it; the seed is
     // always shown. Nodes reached only via a hidden relation drop out — that's
     // how a chip trims the graph, dedupe-safe (a paper kept by its reference
-    // edge stays even if its similar relation is hidden).
+    // edge stays even if its similar relation is hidden). `linked` tracks nodes
+    // with ANY edge, so a genuinely edge-less node (an ungrounded topic-search
+    // hit) can be told apart from one hidden by its relation.
     const reachable = new Set<string>()
+    const linked = new Set<string>()
     base.links.forEach((link) => {
+      linked.add(link._s)
+      linked.add(link._t)
       if (linkOk(link)) {
         reachable.add(link._s)
         reachable.add(link._t)
@@ -261,7 +266,13 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
       if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi)) return false
       const citations = node.citation_count ?? 0
       if (citations < citeMin || citations > citeMax) return false
-      return reachable.has(node.id)
+      if (reachable.has(node.id)) return true
+      // Ungrounded topic-search hits have NO edge to be reached by — show them
+      // when their own relation ('search', always-on) is enabled. A node hidden
+      // only because its relation is off (it HAS edges, just none enabled) stays
+      // hidden.
+      if (!linked.has(node.id)) return node.rels.some((rel) => enabled.has(rel))
+      return false
     }
     const nodes = base.nodes.filter(nodeOk)
     const ids = new Set(nodes.map((node) => node.id))

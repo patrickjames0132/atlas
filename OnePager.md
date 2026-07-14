@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v5.1.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v5.2.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -21,7 +21,7 @@
 > played lectures + lecture-scope picker (v4.12.0), **single-source provider
 > selector — S2 or OpenAlex per graph, the hybrid retired (v5.0.0), provider
 > reach extended to seed search + detail hydration + a per-provider field
-> taxonomy (v5.1.0)**
+> taxonomy (v5.1.0), provider-aware researcher tools (v5.2.0)**
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -1262,14 +1262,19 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       researcher's `expand_node`/`search_papers` tools provider-aware — still
       S2-only.* *(Patrick's asks incl. the OA field taxonomy + arxiv-taxonomy
       removal; browser-tested 2026-07-13.)*
-- [ ] **Provider-aware researcher tools** — the Q&A researcher's `expand_node`
-      (references/citations/similar hops) and `search_papers` tool call S2
-      directly regardless of the selected graph provider. Under an OpenAlex graph
-      they should traverse/search OpenAlex too (its `references`/`citations`/
-      `search_papers` already exist; `recommendations`/similar has no OA analogue —
-      degrade or use `related_works`). Touches `agents/traversal.py` + the
-      researcher tools; thread the provider through the agent context. *(Deferred
-      from Phase 2, 2026-07-13.)*
+- [x] **Provider-aware researcher tools** *(v5.2.0)* — the Q&A researcher's
+      `expand_node` (references/citations/similar hops), `search_papers`, and its
+      lazy detail hydration now follow the **selected graph provider** instead of
+      always hitting S2 — so an OpenAlex graph stays OpenAlex end to end (no more
+      S2-paperId nodes pulled onto an OpenAlex graph). `agents/traversal.py`'s
+      `neighbors`/`search` branch per provider (OpenAlex resolves the node id →
+      work, then `cited_by:`/`cites:`; the **similar** hop uses OpenAlex
+      **`related_works`** — its concept/citation-overlap neighbors, weaker than
+      S2's SPECTER2 but the closest analogue, chosen over a graceful degrade).
+      Provider is in the traversal cache keys and threads
+      `route → orchestrator.run → researcher.answer → ResearcherDeps.provider →
+      the tools`; the frontend sends `provider` on `/api/ask`. *(Patrick's ask;
+      browser-tested 2026-07-13.)*
 - [ ] **Phase 3 — S2 citations corpus (the real Field-Landmarks fix for S2)** —
       the S2 provider's Field Landmarks are drawn from the recent ~10k citer tip
       (live-API offset ceiling, no citation sort), not the full history. The only
@@ -1930,6 +1935,81 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### A running research agent bled its discoveries into the next graph
+
+*Found & fixed on the `provider-aware-agents` branch (Patrick's browser test, 2026-07-13).*
+
+- **Symptom.** Switching providers (or otherwise re-seeding) **while the research
+  agent was mid-search** left the agent running in the background; when the new
+  graph rendered, its `expand_node`/`search_papers` discoveries streamed into the
+  **new** graph's view — papers that had nothing to do with it.
+- **Root cause.** The assistant panel (`Teacher`) is keyed on the workspace
+  `epoch`, so every graph change remounts it — but `useConversation` had **no
+  abort-on-unmount**. The old instance's in-flight `streamAsk` / `streamLecture`
+  fetches kept running after unmount (closures persist), and their `onDiscovery`
+  callbacks kept dispatching `discoveryMerged` into the store — which now held the
+  *new* graph (`loadGraph.fulfilled` had reset `discoveredNodes` to `[]`, so the
+  stale finds landed on a clean slate).
+- **Fix.** An unmount cleanup in `useConversation` aborts the Q&A controller and
+  every lecture controller (`teacher/useConversation.ts`), so a provider switch /
+  re-seed / Home / restore stops any running stream. Captures the ref *objects*
+  so the cleanup reads their live `.current` at unmount.
+- **Lesson / guard.** **A remount does not stop an in-flight async stream** — the
+  fetch and its dispatch callbacks outlive the component unless explicitly
+  aborted. Any component that streams into shared (Redux) state and remounts on a
+  context change needs an abort-on-unmount, or its stale stream mutates the new
+  context's state.
+
+### Topic-search nodes never rendered — the view filter silently ate edge-less nodes
+
+*Found & fixed on the `provider-aware-agents` branch (Patrick's browser test, 2026-07-13).*
+
+- **Symptom.** The researcher's `search_papers` clearly ran (trace chips, "N new"),
+  but the pink **`search`** nodes never appeared on the canvas — under *either*
+  provider. Expand's citation/similar nodes showed fine.
+- **Root cause.** GraphExplorer's `view` filter shows a neighbor only when it's
+  **`reachable`** — i.e., at least one *enabled edge* touches it (that's how a
+  relation chip trims the graph). But an **ungrounded topic-search hit has no edge
+  at all** (it floats near the seed — "the link is topical, not verified"), so it
+  was never in `reachable` → always filtered out. A latent bug since the filter
+  became reachability-based (the per-relation count sliders' retirement); it only
+  surfaced now, exercising search heavily.
+- **Fix.** Track a `linked` set (nodes with ANY edge) alongside `reachable`
+  (`graph/GraphExplorer.tsx`). A node that's genuinely edge-less is shown when its
+  own relation is enabled (`search` is always-on); a node hidden merely because
+  its relation is off (it has edges, just none enabled) still hides.
+- **Lesson / guard.** **Reachability filtering has a blind spot for nodes with no
+  edges** — they can't be "reached." Any relation that legitimately produces
+  edge-less nodes (topic search here) needs an explicit path in the node filter,
+  not just the edge filter.
+
+### `'node'` KeyError ending some OpenAlex-graph chats — a two-shapes search mismatch
+
+*Found & fixed on the `provider-aware-agents` branch (Patrick's browser test, 2026-07-13).*
+
+- **Symptom.** On an **OpenAlex** graph, *some* researcher answers ended with a
+  bare red **`'node'`** error after the prose had already streamed — but only
+  sometimes (many chats were fine).
+- **Root cause.** Two providers, **two search return shapes.** `s2.search_papers`
+  returns the traversal shape `[{"node": …}]`; `openalex.search_papers` returns
+  **bare** node dicts `[{id, …}]` (the shape the *seed-search* discovery path
+  wants). The researcher's `search_papers` tool — and `agents/traversal.search`'s
+  contract — expect `[{"node": …}]` and do `hit["node"]`, so under OpenAlex that
+  raised `KeyError('node')`. The orchestrator caught it and surfaced
+  `str(exc)` = `"'node'"`. It was **rare because it only fired when the model
+  chose the `search_papers` tool** (read/expand-only answers never hit it). Same
+  bug hid the pink **`search` relation** — the tool crashed before adding any of
+  its search-tagged nodes, so an OpenAlex graph only ever showed expand's
+  citation/similar finds.
+- **Fix.** Wrap OpenAlex's bare nodes into `[{"node": …}]` at the agent boundary
+  (`agents/traversal.search`), honoring the function's documented shape for both
+  providers. (A test fake had *masked* this by returning the wrapped shape; it now
+  mirrors the real bare-node return.)
+- **Lesson / guard.** **When two backends fill one interface, pin the shared
+  return *shape* in a test, and make fakes mirror the real contract — not a
+  convenient stand-in.** The fake that returned `{"node": …}` for a function that
+  really returns bare dicts is why the seam passed CI but failed live.
 
 ### OpenAlex detail hydration nulled out a known arXiv id — arXiv tags vanished
 

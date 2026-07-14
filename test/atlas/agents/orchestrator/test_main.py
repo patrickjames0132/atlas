@@ -53,9 +53,10 @@ def test_librarian_intent_relays_and_appends_done(monkeypatch):
 def test_research_intent_passes_everything_through(monkeypatch):
     seen: dict = {}
 
-    def fake_answer(question, seed, nodes, history=None, source_ids=None, lectures=None):
-        seen.update(question=question, seed=seed, nodes=nodes,
-                    history=history, source_ids=source_ids, lectures=lectures)
+    def fake_answer(question, seed, nodes, history=None, source_ids=None,
+                    lectures=None, provider="s2"):
+        seen.update(question=question, seed=seed, nodes=nodes, history=history,
+                    source_ids=source_ids, lectures=lectures, provider=provider)
         yield events.Token(text="ok")
 
     monkeypatch.setattr(orchestrator_main.researcher, "answer", fake_answer)
@@ -63,9 +64,10 @@ def test_research_intent_passes_everything_through(monkeypatch):
     played = [PlayedLecture(title="How we got here",
                             beats=[PlayedBeat(heading="Roots", text="It began.")])]
     out = list(run(Intent.RESEARCH, question="why?", seed=SEED, nodes=NODES,
-                   history=turns, source_ids=["s1"], lectures=played))
+                   history=turns, source_ids=["s1"], lectures=played, provider="openalex"))
     assert seen == {"question": "why?", "seed": SEED, "nodes": NODES,
-                    "history": turns, "source_ids": ["s1"], "lectures": played}
+                    "history": turns, "source_ids": ["s1"], "lectures": played,
+                    "provider": "openalex"}
     assert out[-1] == events.Done()
 
 

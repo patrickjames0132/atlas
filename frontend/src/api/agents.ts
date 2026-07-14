@@ -8,7 +8,7 @@
  */
 
 import { readSSE } from './sse'
-import type { GraphNode, GraphEdge } from './graph'
+import type { GraphNode, GraphEdge, Provider } from './graph'
 
 /**
  * One beat of a lecture: a paragraph of narration bound to the graph nodes
@@ -198,10 +198,11 @@ export interface AskHandlers {
  *
  * @param body The question, a session id for follow-up context, the seed,
  *             the visible nodes (full graph-node shapes — the grounding
- *             scope), optional source_ids scoping the researcher's library
- *             search to a subset of uploaded sources, and optional lectures
- *             already played this session (extra context the answer may build
- *             on).
+ *             scope), the graph's provider (so the researcher's expand/search/
+ *             hydrate use the same backend), optional source_ids scoping the
+ *             researcher's library search to a subset of uploaded sources, and
+ *             optional lectures already played this session (extra context the
+ *             answer may build on).
  * @param h    Event handlers; see {@link AskHandlers}.
  */
 export async function streamAsk(
@@ -210,6 +211,7 @@ export async function streamAsk(
     session_id: string
     seed: GraphNode
     nodes: GraphNode[]
+    provider: Provider
     source_ids?: string[]
     lectures?: PlayedLecture[]
   },

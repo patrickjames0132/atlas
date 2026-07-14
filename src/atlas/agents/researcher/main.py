@@ -31,7 +31,7 @@ from pydantic_ai.run import AgentRunResultEvent
 from pydantic_ai.tools import RunContext, ToolDefinition
 from pydantic_core import from_json
 
-from ...services.graph import Node
+from ...services.graph import Node, Provider
 from ...services.sources import store
 from .. import events, factory, prompts, streams
 from ..models import PlayedLecture
@@ -184,6 +184,7 @@ def answer(
     history: list[dict] | None = None,
     source_ids: list[str] | None = None,
     lectures: list[PlayedLecture] | None = None,
+    provider: Provider = "s2",
 ) -> Iterator[events.Event]:
     """Answer a question agentically: read / expand / search via tool use.
 
@@ -201,6 +202,9 @@ def answer(
             transcript cache) — folded into the prompt as context the answer
             may build on, so it doesn't re-derive a lecture the student saw.
             ``None``/empty when no lecture has played.
+        provider: The graph's academic-data provider (``s2`` / ``openalex``) —
+            expand_node, search_papers, and lazy detail hydration follow it, so
+            the agent stays in the same backend (and id space) as the graph.
 
     Yields:
         ``Trace`` / ``Discovery`` / ``Figure`` events live as the agent
@@ -225,6 +229,7 @@ def answer(
         # without the embedder), so an existing library is enough — and an
         # empty one never pays the torch load.
         has_sources=bool(library),
+        provider=provider,
         steps_left=BUDGETS["max_steps"],
         full_reads_left=BUDGETS["full_reads"],
         summary_reads_left=BUDGETS["summary_reads"],

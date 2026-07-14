@@ -82,6 +82,9 @@ export function useConversation() {
   const dispatch = useAppDispatch()
   const seedNode = useAppSelector(selectSeedNode)
   const groundingNodes = useAppSelector(selectGroundingNodes)
+  // The graph's provider — so the researcher's expand/search/hydrate use the
+  // same backend (and id space) as the graph the question is grounded in.
+  const provider = useAppSelector((state) => state.workspace.provider)
   const chatLength = useAppSelector((state) => state.transcript.chat.length)
   const lectures = useAppSelector((state) => state.transcript.lectures)
   const activeMode = useAppSelector((state) => state.transcript.activeMode)
@@ -114,6 +117,20 @@ export function useConversation() {
   useEffect(() => {
     shownModeRef.current = activeMode
   }, [activeMode])
+
+  // Abort every in-flight stream when the panel unmounts. It remounts on each
+  // graph change (the shell keys it on the workspace epoch), so a provider
+  // switch / re-seed / Home / restore stops a running Q&A or lecture instead of
+  // letting it keep streaming discoveries into the NEW graph. (Capturing the ref
+  // objects — stable — so the cleanup reads their live `.current` at unmount.)
+  useEffect(() => {
+    const asks = askCtrl
+    const lectures = lectureCtrls
+    return () => {
+      asks.current?.abort()
+      lectures.current.forEach((ctrl) => ctrl.abort())
+    }
+  }, [])
   // Keys the backend's per-chat history; clearing the chat mints a new one so
   // the fresh conversation also detaches from server-side context.
   const sessionId = useRef(newSessionId())
@@ -332,6 +349,7 @@ export function useConversation() {
               session_id: sessionId.current,
               seed: seedNode,
               nodes: groundingNodes,
+              provider,
               source_ids: sourceIds,
               lectures: playedLectures.length > 0 ? playedLectures : undefined,
             },
@@ -382,7 +400,7 @@ export function useConversation() {
         setAsking(false)
       }
     },
-    [seedNode, groundingNodes, chatLength, activeMode, lectures, dispatch, highlight],
+    [seedNode, groundingNodes, provider, chatLength, activeMode, lectures, dispatch, highlight],
   )
 
   return {
