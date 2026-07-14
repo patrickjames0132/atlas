@@ -38,10 +38,6 @@ export default function Legend({ hasDiscovered, hasSearchHits }: LegendProps) {
         <i style={{ background: REL_COLOR.latest }} />
         Latest Publications
       </span>
-      <span>
-        <i style={{ background: REL_COLOR.similar }} />
-        Similar
-      </span>
       {hasDiscovered && (
         <span>
           <i className="ring" />

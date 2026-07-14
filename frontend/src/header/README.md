@@ -2,13 +2,17 @@
 
 The top bar: brand, the seed-search form (composed from `search/Search` —
 the search *concern* stays a root feature per the hybrid rule; the header
-just renders its form), the current seed's title, the three drawer toggles,
-and the "Powered by Claude" credit.
+just renders its form), the current seed's title, the **provider dropdown**,
+the three drawer toggles, and the "Powered by Claude" credit.
 
 ## Design decisions worth knowing
 
-- **Purely presentational** — search state and drawer visibility live in
-  the shell and pass through as props.
+- **Purely presentational** — search state, the selected provider, and drawer
+  visibility live in the shell/store and pass through as props.
+- **The provider dropdown ("Data source") is an app-wide setting** (v5.0.0): it
+  picks the academic-data backend (`Semantic Scholar` / `OpenAlex`) every graph is
+  built from. Changing it dispatches `switchProvider`, which re-seeds the current
+  graph under the new backend; it's disabled while a graph load is in flight.
 - **The brand is the Home button** (browser-milestone addition): clicking
   "Atlas" fires `onHome`, which dispatches `workspaceCleared` — back to
   the page-load default (no graph, no results, no panel) without a reload.

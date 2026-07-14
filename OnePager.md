@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v4.12.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
+> **Status:** v5.0.0 · living document · AI teacher (v1.1.0), sidebar figures + PDF
 > link + dual-thumb slider (v1.2.0), Timeline layout (v1.3.0, month granularity
 > v1.3.1), legacy digest backend retired (v1.4.0), agentic Q&A with full-text
 > reading (v1.5.0), cache-first seed search (v1.6.0), agentic graph traversal
@@ -18,7 +18,8 @@
 > button (v2.5.0), Semantic Scholar field-of-study tags in the detail panel
 > (v2.6.0), "What's evolved since" forward lecture mode (v2.7.0), colour-coded
 > lecture buttons + two-view assistant panel (v4.11.0), researcher reuses
-> played lectures + lecture-scope picker (v4.12.0)
+> played lectures + lecture-scope picker (v4.12.0), **single-source provider
+> selector — S2 or OpenAlex per graph, the hybrid retired (v5.0.0)**
 >
 > This file tracks the product vision, feature stack, and roadmap for the major
 > rewrite — and preserves the history of the v0.x.x "digest" era so we don't lose
@@ -663,6 +664,33 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 - **Latest citations** (NEW, light green `#86efac`) — citers from the **rolling
   last 12 months** (via `pub_date`), from the same fetch. "The frontier, right now."
 
+- [x] **Single-source provider selector — the hybrid retired** *(v5.0.0 — major)* —
+      a graph is now built from **one** academic-data backend, chosen per graph in
+      the header's **"Data source"** dropdown (`Semantic Scholar` / `OpenAlex`),
+      instead of the v4.x hybrid (S2 seed/refs/similar + OpenAlex citations merged
+      with `max` counts and cross-source id dedup). Each provider stands alone:
+      **S2** does seed/references/citations via S2 (its live citation API is
+      newest-first + ~10k-offset capped, so Field Landmarks are the top-cited among
+      the *recent* citer tip — a known interim bias, surfaced as a note in the graph
+      controls and lifted later by the offline citations corpus); **OpenAlex** does
+      the whole graph via server-sorted `cites:`/`cited_by:` queries (true top-cited
+      landmarks, no ceiling — but a famous *published* seed resolves to its
+      lower-cited arXiv-preprint record). Wins: **one citation-count scale** (node
+      sizes finally comparable across relations), and the whole cross-source glue
+      (`_upgrade_node` count-max, OA→S2 fallback, `_citation_relations`) deleted.
+      OpenAlex grew the two pieces it was missing to stand alone — `references()`
+      (a `cited_by:` filter) and `resolve_seed_work()` (arXiv id / `DOI:`/`ARXIV:`/
+      `W…`). **Provider is part of the cache key** (`graph:<provider>:<seed>`, so an
+      S2 and an OpenAlex graph for one paper never collide) and the **local cache
+      search is provider-scoped** (a cached paper's "instant" badge is truthful only
+      for the selected backend). `config.graph.default_provider` (`"s2"`) seeds the
+      dropdown; the choice persists across Home and into a saved session. **Rolls up
+      "Drop the Similar relation from the graph"** (below): the purple `similar`
+      relation is off the built graph (chip + legend + build removed), the S2
+      recommendations client kept only for the researcher's `expand_node`.
+      *(Patrick's design; browser-tested 2026-07-13. Phase 1 of the provider work:
+      the seed SEARCH and detail panel still hydrate via S2 for both providers —
+      see the Phase-2 provider-reach ticket in the Backlog.)*
 - [x] **Adaptive latest-band boundary — a trained model sizes the Latest span
       per seed** *(v4.6.0)* — Field Landmarks are a seed's all-time most-cited
       citers (any year); *Latest Publications* fills recent years evenly, one
@@ -1210,23 +1238,37 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Citations & graph data
 
-- [ ] **Drop the Similar relation from the graph (keep the API for the
-      researcher)** — take the purple `similar` nodes (S2 SPECTER2
-      recommendations) **off the built graph entirely**: `build.py` stops adding
-      the `similar` relation and its edges, and the filter chip / legend / count
-      come out with it. The graph then shows only **verified** links (references +
-      the citation relations), not embedding guesses. **Keep the recommendations
-      API wired for the researcher**, though — `expand_node`'s similar hop and the
-      topic-search path still call S2 recommendations on demand, so the agent can
-      reach embedding-neighbors even though they no longer clutter the initial
-      map. Touches `build.py` (drop the recommendation loop + `_is_ghost_similar`
-      prune from the build), `graph/theme.ts` / controls / legend (remove the
-      `similar` chip), and the counts; the researcher's `traversal`/tools keep
-      `recommendations`. **Supersedes "Budget-cap the Similar nodes" below** —
-      no nodes on the graph means nothing to budget. *(From the `todos.md` inbox,
-      2026-07-11.)*
-- [ ] **Budget-cap the Similar nodes with a trained model** *(likely mooted — see
-      "Drop the Similar relation" above)* — the *Similar*
+- [ ] **Phase 2 — extend the provider choice to search + detail** — v5.0.0's
+      provider selector governs the *graph build only*; seed **search** and the
+      **detail panel** still hydrate via S2 for both providers. Close the gap so
+      picking **OpenAlex** is coherent end-to-end: an OpenAlex seed-search path
+      (its own relevance search) with **provider-aware copy** — the hit-list note
+      reads **"Searching OpenAlex…"** in flight and **"From OpenAlex"** once
+      results land (mirroring the current S2 wording) — and detail-panel
+      hydration from OpenAlex (abstract via the inverted index; TL;DR absent, so
+      show the abstract; OA `concepts`/`topics` for the field tags). Also worth
+      folding in: make the researcher's `expand_node`/`search_papers` tools
+      provider-aware (they're S2-only today). *(Deferred from the v5.0.0 provider
+      work, 2026-07-13.)*
+- [ ] **Phase 3 — S2 citations corpus (the real Field-Landmarks fix for S2)** —
+      the S2 provider's Field Landmarks are drawn from the recent ~10k citer tip
+      (live-API offset ceiling, no citation sort), not the full history. The only
+      fix is option **(b)** from `docs/citation-coverage.md`: ingest S2's bulk
+      **`citations`** Datasets release (every citation edge, refreshed monthly) +
+      the **`papers`** release (for citer counts/titles to rank by), store/index
+      it **locally, outside the repo / gitignored** (Patrick's PC has TBs), and
+      query your own copy for a seed's citers — which finally gives the
+      citation-count sort the live API never offered. Design the app against a
+      small `CitationSource` interface (`landmark_citers(id)` / `latest_citers`)
+      with a **DuckDB-over-Parquet** impl now; the long-term shape is an **AWS
+      Airflow** monthly pull into S3 + **Athena** queried from the app when the S2
+      provider is selected (DuckDB→Athena is near the same SQL, so the local
+      prototype ports cleanly). Check the release's current size/schema against
+      the [Datasets API](https://api.semanticscholar.org/api-docs/datasets) before
+      scoping. *(Patrick's plan, filed 2026-07-13.)*
+- [ ] **Budget-cap the Similar nodes with a trained model** *(mooted — Similar was
+      dropped from the graph in v5.0.0; keep only if a future ticket re-adds it)* —
+      the *Similar*
       relation ships a flat `similar_limit` count, the same one-size problem the
       landmark budget solved for citations (v4.5.0). Give it its own budget
       model: cap how many SPECTER2 neighbors to show per seed, trained the same

@@ -184,6 +184,18 @@ class GraphConfig(ConfigModel):
     stay "all-cs".
     """
 
+    default_provider: Literal["s2", "openalex"] = Field(
+        description="Which academic-data backend a new graph is built from when the "
+        "request doesn't name one — the initial state of the header provider selector. "
+        "Since v5.0.0 a graph is built from ONE provider end-to-end (no cross-source "
+        "hybrid): 's2' (Semantic Scholar) is the safe default — the seed's own citation "
+        "count is complete and every relation resolves, though its live citation endpoint "
+        "is newest-first, so landmark citers are recency-biased until the offline S2 "
+        "citations corpus lands. 'openalex' returns server-sorted landmark citers directly, "
+        "but reads the seed from OpenAlex's own record (a famous published paper resolves "
+        "to its lower-cited arXiv-preprint stub). The user overrides this per graph from "
+        "the header dropdown."
+    )
     ref_limit: PositiveInt | None = Field(
         description="References (papers it cites) to ship — the References slider's max. "
         "null = ship them all."

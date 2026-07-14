@@ -5,6 +5,20 @@
 
 import { readSSE } from './sse'
 
+/**
+ * The academic-data backend a graph is built from. Chosen per graph in the
+ * header dropdown and sent on every graph request; the server defaults to
+ * `config.graph.default_provider` when it's omitted. A graph is built from ONE
+ * provider end-to-end — no cross-source hybrid.
+ */
+export type Provider = 's2' | 'openalex'
+
+/** Human-readable provider names for the dropdown / UI. */
+export const PROVIDER_LABEL: Record<Provider, string> = {
+  s2: 'Semantic Scholar',
+  openalex: 'OpenAlex',
+}
+
 /** How two papers on the graph relate. */
 export type EdgeType = 'reference' | 'citation' | 'similar' | 'latest'
 
@@ -85,17 +99,22 @@ export interface GraphResponse {
 }
 
 /**
- * The neighborhood graph for a seed paper (references + citations + similar).
+ * The neighborhood graph for a seed paper (references + citations).
  *
- * @param seed    An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId
- *                (re-seeding works from any node, arXiv or not).
- * @param refresh Bypass the server's day-cached snapshot and rebuild from S2.
+ * @param seed     An arXiv id, a pasted abs/pdf URL, or a raw provider node id
+ *                 (re-seeding works from any node, arXiv or not).
+ * @param provider Which backend to build from ('s2' / 'openalex').
+ * @param refresh  Bypass the server's day-cached snapshot and rebuild.
  * @returns The seed's whole neighborhood graph (nodes, edges, counts).
- * @throws With the server's error message (e.g. "No paper found…", S2
+ * @throws With the server's error message (e.g. "No paper found…", provider
  *         unavailable) when the graph can't be built.
  */
-export async function fetchGraph(seed: string, refresh = false): Promise<GraphResponse> {
-  const params = new URLSearchParams({ seed })
+export async function fetchGraph(
+  seed: string,
+  provider: Provider,
+  refresh = false,
+): Promise<GraphResponse> {
+  const params = new URLSearchParams({ seed, provider })
   if (refresh) params.set('refresh', '1')
   const res = await fetch(`/api/graph?${params.toString()}`)
   if (!res.ok) {
@@ -120,18 +139,20 @@ export interface BuildProgress {
  * emits no `progress` frames (the server returns it before the first stage),
  * so `onProgress` simply never fires and the graph resolves at once.
  *
- * @param seed       An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId.
- * @param refresh    Bypass the server's day-cached snapshot and rebuild from S2.
+ * @param seed       An arXiv id, a pasted abs/pdf URL, or a raw provider node id.
+ * @param provider   Which backend to build from ('s2' / 'openalex').
+ * @param refresh    Bypass the server's day-cached snapshot and rebuild.
  * @param onProgress Called per build stage with `{done, total, label}`.
  * @returns The seed's whole neighborhood graph, same shape as {@link fetchGraph}.
  * @throws With the server's error message when the graph can't be built.
  */
 export async function fetchGraphStream(
   seed: string,
+  provider: Provider,
   refresh = false,
   onProgress?: (progress: BuildProgress) => void,
 ): Promise<GraphResponse> {
-  const params = new URLSearchParams({ seed })
+  const params = new URLSearchParams({ seed, provider })
   if (refresh) params.set('refresh', '1')
   const res = await fetch(`/api/graph/stream?${params.toString()}`)
   let graph: GraphResponse | null = null

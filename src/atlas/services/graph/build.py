@@ -1,25 +1,39 @@
-"""Assemble a paper's neighborhood graph from a hybrid of OpenAlex + S2.
+"""Assemble a paper's neighborhood graph from a single, user-chosen provider.
 
 Given a seed paper, build a Connected-Papers-style graph: the seed plus its
-references (papers it cites — its intellectual ancestors), its citations (papers
-that cite it — its descendants), and recommendation neighbors (embedding-similar
-papers S2 suggests). The seed, references, and similar come from Semantic
-Scholar; the **citations** come from OpenAlex (``_citation_relations``), whose
-server-sorted ``cites:`` queries surface the landmark citers directly — with an
-S2 fallback. Cross-source nodes carry S2-resolvable ids so they hydrate and
-re-seed uniformly, and node **identity resolves through the arXiv id** so the
-same paper arriving under an S2 paperId and an OpenAlex ``DOI:``/``ARXIV:`` id
-merges into one node instead of duplicating. Edges are tagged
-``reference | citation | similar`` so the frontend can colour and route them.
-The whole snapshot is cached (see ``storage/cache.py``) so re-exploring a paper
-doesn't re-hit the rate-limited S2 API.
+references (papers it cites — its intellectual ancestors) and its citations
+(papers that cite it — its descendants, split into all-time landmark citers and
+the recent-years frontier). Every relation is drawn from **one** academic-data
+provider, chosen per graph:
+
+* **Semantic Scholar** (``provider="s2"``) — seed, references, and citations all
+  via S2. Its live citation endpoint is newest-first with no citation sort, so
+  landmark citers are recency-biased for a heavily-cited seed (the interim cost,
+  lifted later by the offline S2 citations corpus).
+* **OpenAlex** (``provider="openalex"``) — seed, references, and citations all
+  via OpenAlex, whose server-sorted ``cites:`` / ``cited_by:`` queries return the
+  most-cited citers and references directly. The tradeoff is seed resolution: a
+  famous published paper resolves to its lower-cited arXiv-preprint record.
+
+This replaced the v4.x **hybrid** (S2 seed/references/similar + OpenAlex
+citations, merged with a ``max`` count and cross-source id dedup). A single
+provider per graph means one citation-count scale (node sizes are finally
+comparable across relations) and no cross-source identity glue. The *Similar*
+relation is retired from the graph build entirely (the recommendations client
+lives on for the researcher's ``expand_node``). Node identity still dedups
+within a provider — a paper reached through two relations, or an OpenAlex
+duplicate work, merges into one node via its arXiv id.
+
+Edges are tagged ``reference | citation | latest`` so the frontend can colour and
+route them. The whole snapshot is cached (see ``storage/cache.py``), keyed by
+**provider *and* seed** so an OpenAlex graph is never served for an S2 selection.
 
 The graph is a typed **Pydantic** ``Graph`` (not a bare dict — the models live
 in ``model.py``), so producers and consumers agree on its shape and it validates
 on the way in and out of the cache. Callers that need JSON (the routes) serialize
-with ``graph.model_dump()``
-/ ``graph.model_dump_json()``. The cost is a validate/deserialize on every cache
-hit — a deliberate trade for a schema that can't silently drift.
+with ``graph.model_dump()`` / ``graph.model_dump_json()``. The cost is a
+validate/deserialize on every cache hit — a deliberate trade for a schema that
+can't silently drift.
 
 This module is the domain core of the app — ``routes/graph.py``'s ``/api/graph``
 is a thin wrapper over ``build_graph`` — so it's commented heavily; the
@@ -42,6 +56,33 @@ from .model import Counts, Edge, Graph, Node, Seed
 
 log = logging.getLogger(__name__)
 
+#: The academic-data providers a graph can be built from — one per graph, chosen
+#: by the caller (the header dropdown), defaulting to ``config.graph.default_provider``.
+Provider = Literal["s2", "openalex"]
+
+
+def resolve_provider(raw: str | None) -> Provider:
+    """Validate a requested provider name, falling back to the configured default.
+
+    The single place request-supplied provider strings are validated — shared by
+    every route that keys off the provider (the graph build and the provider-
+    scoped local cache search), so they can't drift on what counts as valid.
+    Anything unrecognized (missing, blank, stale, or forged) degrades to
+    ``config.graph.default_provider`` rather than erroring.
+
+    Args:
+        raw: The provider string as received (e.g. a request query arg), or None.
+
+    Returns:
+        ``"s2"`` or ``"openalex"``.
+    """
+    normalized = (raw or "").strip().lower()
+    if normalized == "s2":
+        return "s2"
+    if normalized == "openalex":
+        return "openalex"
+    return config.graph.default_provider
+
 
 def _adaptive_cite_limit(seed_paper: dict) -> int | None:
     """The seed-adapted landmark ship count from the trained cite-budget model.
@@ -52,8 +93,8 @@ def _adaptive_cite_limit(seed_paper: dict) -> int | None:
     pipeline that produces it lives in ``src/ml_pipelines/cite_budget``.
 
     Args:
-        seed_paper: The normalized S2 seed node (``year`` and
-            ``citation_count`` drive the model).
+        seed_paper: The normalized seed node (``year`` and ``citation_count``
+            drive the model), from whichever provider resolved it.
 
     Returns:
         The landmark limit to ship — a model-predicted count, or the configured
@@ -63,71 +104,97 @@ def _adaptive_cite_limit(seed_paper: dict) -> int | None:
     return budget.adaptive_cite_limit(seed_paper, as_of_year=datetime.date.today().year)
 
 
-def _citation_relations(seed_paper: dict, seed_id: str) -> tuple[list[dict], list[dict]]:
-    """The seed's landmark + latest citers — from OpenAlex, falling back to S2.
+#: A traversal's payload: ``(seed_node, references, landmark_citers, latest_citers)``.
+#: Each relation list is ``[{"node", "influential"}]`` — the shape graph assembly
+#: consumes, identical across providers. None when the seed can't be resolved.
+_Traversal = tuple[dict, list[dict], list[dict], list[dict]]
 
-    The v4.0.0 hybrid: OpenAlex owns the citation relation because a server-
-    sorted ``cites:`` query returns the most-cited citers directly, killing the
-    landmark recency bias without S2's reference-list mining (see the OpenAlex
-    spike in ``OnePager.md``). We resolve the S2-known seed to its OpenAlex work
-    (by arXiv id / title+year), then split its citers into landmark (historic,
-    most-cited) and latest (recent frontier).
 
-    Falls back to S2's ``citation_relations`` whenever OpenAlex can't help — no
-    work resolved, or the API errored — so the graph is never *worse* than the
-    S2-only build, only better when OpenAlex succeeds. S2 keeps references, the
-    *Similar* relation, and (via each citer's S2-resolvable id) TL;DR hydration.
+def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversal | None:
+    """Resolve the seed and its relations through Semantic Scholar.
 
     Args:
-        seed_paper: The normalized S2 seed node (source of arXiv id / title for
-            OpenAlex resolution).
-        seed_id: The seed's S2 paperId (the S2 fallback's traversal target).
+        seed_ref: An arXiv id or a raw S2 paperId.
+        report: The build-stage progress callback (``step`` 1-indexed, ``label``).
 
     Returns:
-        ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
+        The traversal payload (see :data:`_Traversal`), or None when S2 has no
+        paper for ``seed_ref``.
 
     Raises:
-        s2.S2Error: Only from the S2 fallback path (OpenAlex errors are caught
-            and degrade to that fallback).
+        s2.S2Error: When a Semantic Scholar request fails after retries.
     """
-    # One budget for both sources, so the OpenAlex path and the S2 fallback
-    # agree on how many landmarks a given seed deserves.
-    landmark_limit = _adaptive_cite_limit(seed_paper)
-    try:
-        work = openalex.resolve_work(
-            arxiv_id=seed_paper.get("arxiv_id"),
-            title=seed_paper.get("title"),
-        )
-        work_id = openalex.bare_work_id(work) if work else None
-        if work_id:
-            landmark, latest = openalex.citation_relations(
-                work_id,
-                landmark_limit=landmark_limit,
-                latest_limit=config.graph.latest_limit,
-                band_start=bands.earliest_band_year,
-            )
-            log.info("citations via OpenAlex for seed %s (work %s)", seed_id, work_id)
-            return landmark, latest
-        log.info("OpenAlex resolved no work for seed %s; using S2 citations", seed_id)
-    except openalex.OpenAlexError as exc:
-        log.warning("OpenAlex citations failed for %s (%s); using S2 citations", seed_id, exc)
-    return s2.citation_relations(
+    # An arXiv id has to be handed to S2 as ``ARXIV:<id>`` (its external-id
+    # syntax); a raw paperId is passed through untouched.
+    lookup = f"ARXIV:{seed_ref}" if arxiv.looks_arxiv(seed_ref) else seed_ref
+    seed_paper = s2.get_paper(lookup)
+    if not seed_paper:  # S2 knows no paper for this reference — a dead link.
+        return None
+    seed_id = seed_paper["id"]
+    report(2, "Fetching references…")
+    refs = s2.references(seed_id, config.graph.ref_limit)
+    report(3, "Fetching citations…")
+    # Landmark (most-cited historic citers) + latest frontier (recent per-year
+    # window). S2's live path is recency-biased past its ~10k offset ceiling —
+    # the accepted interim until the offline citations corpus lands.
+    landmark, latest = s2.citation_relations(
         seed_id,
-        landmark_limit=landmark_limit,
+        landmark_limit=_adaptive_cite_limit(seed_paper),
         latest_limit=config.graph.latest_limit,
     )
+    return seed_paper, refs, landmark, latest
+
+
+def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Traversal | None:
+    """Resolve the seed and its relations through OpenAlex.
+
+    Args:
+        seed_ref: An arXiv id, or an S2-resolvable node id an OpenAlex graph
+            carries (``DOI:…`` / ``ARXIV:…`` / ``W…``) when the user re-seeds.
+        report: The build-stage progress callback (``step`` 1-indexed, ``label``).
+
+    Returns:
+        The traversal payload (see :data:`_Traversal`), or None when OpenAlex
+        can't resolve ``seed_ref``.
+
+    Raises:
+        openalex.OpenAlexError: When an OpenAlex request fails after retries.
+    """
+    work = openalex.resolve_seed_work(seed_ref)
+    if not work:
+        return None
+    seed_paper = openalex.node(work)
+    work_id = openalex.bare_work_id(work)
+    if not seed_paper or not work_id:  # a work with no usable id — unrenderable.
+        return None
+    report(2, "Fetching references…")
+    # ``cited_by:`` — the seed's own bibliography, server-sorted by citations.
+    refs = openalex.references(work_id, config.graph.ref_limit)
+    report(3, "Fetching citations…")
+    # Server-sorted ``cites:`` queries return the most-cited landmark citers
+    # directly (no recency bias); the per-seed band-start rule sizes the latest
+    # frontier (see ``bands.earliest_band_year``).
+    landmark, latest = openalex.citation_relations(
+        work_id,
+        landmark_limit=_adaptive_cite_limit(seed_paper),
+        latest_limit=config.graph.latest_limit,
+        band_start=bands.earliest_band_year,
+    )
+    return seed_paper, refs, landmark, latest
+
 
 def _upgrade_node(existing: Node, sighting: dict) -> None:
     """Fold a later sighting's better data into an already-merged node.
 
-    Cross-source merging means the first-seen record wins the node slot, but a
-    later sighting may know the paper better — S2's citation counts are far
-    more complete than OpenAlex's for arXiv papers, and either source can be
-    the one carrying the abstract/date. Field policy: ``citation_count`` takes
-    the max (best-known count — it drives node size and figure-pool ranking);
-    identity/summary fields fill in only where the existing node has none.
-    The first sighting's title and year stay — churning them for a tie is
-    noise.
+    A paper can surface through more than one relation (e.g. it's both a
+    reference the seed cites AND a citer of the seed — a mutual citation), or,
+    for OpenAlex, as a duplicate work sharing the same arXiv id. The first
+    sighting wins the node slot; a later one may still fill a gap. Field policy:
+    ``citation_count`` takes the max (best-known count — it drives node size and
+    figure-pool ranking; within one provider the sightings usually agree, so
+    this mostly reconciles a missing count against a present one); identity/
+    summary fields fill in only where the existing node has none. The first
+    sighting's title and year stay — churning them for a tie is noise.
 
     Args:
         existing: The node already in the table (mutated in place).
@@ -141,66 +208,52 @@ def _upgrade_node(existing: Node, sighting: dict) -> None:
             setattr(existing, field_name, sighting[field_name])
 
 
-def _is_ghost_similar(node_data: dict) -> bool:
-    """Whether a *similar* recommendation is an unverifiable ghost to prune.
-
-    S2's recommendations occasionally surface papers with **zero citations and
-    no publication date at all** — nothing to place them in time and nothing
-    vouching for them, so they read as noise on the graph. This flags exactly
-    that pairing (both conditions must hold); a paper with any citations, or any
-    year/date, stays. Applied only to the ``similar`` relation — references,
-    citations, and latest are verified links, not embedding guesses.
-
-    Args:
-        node_data: The normalized recommendation node dict.
-
-    Returns:
-        True when the node has no citations *and* no year/pub_date.
-    """
-    has_citations = bool(node_data.get("citation_count"))
-    has_date = bool(node_data.get("year") or node_data.get("pub_date"))
-    return not has_citations and not has_date
-
-
 #: Progress callback: ``(steps_done, steps_total, label)``. The streaming
 #: ``/api/graph/stream`` route bridges these into SSE ``progress`` frames so
 #: the "Building graph…" overlay can show a real bar instead of a bare spinner.
 #: Reported only on a cache miss — a cache hit returns before the first step.
 ProgressFn = Callable[[int, int, str], None]
 
-#: Coarse build stages, in order. The seed resolve + three traversals + the
-#: final assemble — enough for a determinate bar without threading sub-progress
-#: through each S2 traversal.
-_BUILD_STEPS = 5
+#: Coarse build stages, in order: the seed resolve + references + citations +
+#: the final assemble — enough for a determinate bar without threading
+#: sub-progress through each traversal.
+_BUILD_STEPS = 4
 
 
 def build_graph(
     seed_ref: str,
     *,
+    provider: Provider | None = None,
     refresh: bool = False,
     on_progress: ProgressFn | None = None,
 ) -> Graph | None:
     """Build (or load from cache) the neighborhood graph for a seed paper.
 
     Args:
-        seed_ref: An **arXiv id** (e.g. ``"1706.03762"``) or a raw **Semantic
-            Scholar paperId** (a node's ``id`` from a previous graph). The
+        seed_ref: An **arXiv id** (e.g. ``"1706.03762"``) or a provider node id
+            from a previous graph (an S2 paperId under ``provider="s2"``, a
+            ``DOI:``/``ARXIV:``/``W…`` id under ``provider="openalex"``). The
             latter is what lets the user re-seed on *any* node — including a
             journal paper with no arXiv id — so visual traversal never
             dead-ends.
-        refresh: When True, bypass the cached snapshot and rebuild from S2.
+        provider: Which academic-data backend to build from (see
+            :data:`Provider`). Defaults to ``config.graph.default_provider``.
+        refresh: When True, bypass the cached snapshot and rebuild from the
+            provider.
         on_progress: Optional coarse-stage progress callback (see
-            :data:`ProgressFn`). Fired only along the S2 rebuild path — a cache
-            hit returns before any step, so the caller sees no frames.
+            :data:`ProgressFn`). Fired only along the rebuild path — a cache hit
+            returns before any step, so the caller sees no frames.
 
     Returns:
         A ``Graph`` — the seed summary, deduped nodes (each carrying its
         ``rels`` and ``is_seed``), typed edges, and per-relation counts. None
-        when ``seed_ref`` is blank or S2 has no paper for it.
+        when ``seed_ref`` is blank or the provider has no paper for it.
 
     Raises:
-        s2.S2Error: When a Semantic Scholar request fails after retries
-            (surfaced by the route as a 502).
+        s2.S2Error: When a Semantic Scholar request fails after retries (the
+            ``s2`` provider; surfaced by the route as a 502).
+        openalex.OpenAlexError: When an OpenAlex request fails after retries (the
+            ``openalex`` provider; surfaced by the route as a 502).
     """
 
     def report(step: int, label: str) -> None:
@@ -213,52 +266,40 @@ def build_graph(
     seed_ref = (seed_ref or "").strip()
     if not seed_ref:
         return None
+    provider = provider or config.graph.default_provider
 
-    # --- Cache: the whole assembled snapshot, keyed by the raw seed reference.
-    # It's stored as JSON (model_dump), so a hit costs a Graph.model_validate to
-    # rebuild the typed object — the deserialization price we accept for a
-    # schema that validates instead of trusting a loose dict.
-    cache_key = f"graph:{seed_ref}"
+    # --- Cache: the whole assembled snapshot, keyed by provider AND the raw seed
+    # reference — an S2 graph and an OpenAlex graph for the same paper are
+    # different snapshots and must not collide. Stored as JSON (model_dump), so a
+    # hit costs a Graph.model_validate to rebuild the typed object.
+    cache_key = f"graph:{provider}:{seed_ref}"
     if not refresh:
         cached = cache.get(cache_key, config.graph.cache_ttl)
         if cached:
             return Graph.model_validate(cached)
 
-    # --- Resolve the seed. An arXiv id has to be handed to S2 as ``ARXIV:<id>``
-    # (its external-id syntax); a raw paperId is passed through untouched.
+    # --- Resolve the seed and traverse its relations through the chosen
+    # provider. One detail call + two traversals (references, citations); the
+    # neighbors come back already hydrated with light display fields, so there's
+    # no extra batch call to flesh them out.
     report(1, "Resolving seed paper…")
-    lookup = f"ARXIV:{seed_ref}" if arxiv.looks_arxiv(seed_ref) else seed_ref
-    seed_paper = s2.get_paper(lookup)
-    if not seed_paper:  # S2 knows no paper for this reference — a dead link.
+    traversal = (
+        _traverse_openalex(seed_ref, report)
+        if provider == "openalex"
+        else _traverse_s2(seed_ref, report)
+    )
+    if traversal is None:  # the provider knows no paper for this reference.
         return None
+    seed_paper, refs, landmark_cites, latest_cites = traversal
     seed_id = seed_paper["id"]
 
-    # --- One detail call (above) + three traversals. The neighbors come back
-    # already hydrated with light display fields, so there's no extra batch
-    # call to flesh them out — what a traversal returns is ready to render.
-    report(2, "Fetching references…")
-    refs = s2.references(seed_id, config.graph.ref_limit)
-    # Citations split into two disjoint relations — landmark (most-cited
-    # historic citers) and the latest frontier (recent per-year bands) — from OpenAlex
-    # (server-sorted ``cites:`` queries, no recency bias), falling back to S2's
-    # paged+mined path when OpenAlex can't resolve the seed. See
-    # ``_citation_relations`` and the OpenAlex spike in OnePager.md.
-    report(3, "Fetching citations…")
-    landmark_cites, latest_cites = _citation_relations(seed_paper, seed_id)
-    report(4, "Finding similar work…")
-    similar = s2.recommendations(seed_id, config.graph.similar_limit)
-
-    report(5, "Assembling graph…")
+    report(4, "Assembling graph…")
 
     # --- Dedupe neighbors into a single node table. The same paper can surface
-    # through more than one relation (e.g. it's both a reference AND a
-    # recommendation) — and, since the OpenAlex hybrid, under more than one ID
-    # SCHEME: S2 relations carry bare paperIds while OpenAlex citers carry
-    # ``DOI:``/``ARXIV:``/``W…`` ids (and OpenAlex itself sometimes holds
-    # duplicate works for one paper). Identity therefore resolves through the
-    # **arXiv id** whenever a sighting has one — the one id both sources agree
-    # on — so a paper reached from both sources ends up ONE node carrying every
-    # relation tag, not two or three nodes (the DQN/DDPG triple of v4.4.0).
+    # through more than one relation (e.g. it's both a reference AND a citer — a
+    # mutual citation) — and, under OpenAlex, as a DUPLICATE WORK for one paper.
+    # Identity resolves through the **arXiv id** whenever a sighting has one, so
+    # such a paper ends up ONE node carrying every relation tag, not two.
     nodes: dict[str, Node] = {}
     # arXiv id (lowercased) -> the node-table key that paper first resolved to.
     arxiv_index: dict[str, str] = {}
@@ -275,9 +316,8 @@ def build_graph(
         differ.
 
         Args:
-            node_data: The normalized node dict (S2 or OpenAlex sourced).
-            rel: The relation that surfaced it (``reference | citation |
-                similar | latest``).
+            node_data: The normalized node dict (from the active provider).
+            rel: The relation that surfaced it (``reference | citation | latest``).
 
         Returns:
             The node-table key this paper resolved to (the surviving node's id).
@@ -297,8 +337,8 @@ def build_graph(
         return key
 
     # The seed goes in first, flagged so the frontend can render it distinctly —
-    # and registered in the identity index, so a citer/recommendation that IS
-    # the seed under another id merges into it instead of duplicating it.
+    # and registered in the identity index, so a citer that IS the seed under
+    # another id merges into it instead of duplicating it.
     seed_node = Node(**seed_paper, rels=["seed"], is_seed=True)
     nodes[seed_id] = seed_node
     if seed_node.arxiv_id:
@@ -314,15 +354,14 @@ def build_graph(
     seen_edges: set[tuple[str, str, str]] = set()
 
     def add_edge(source: str, target: str,
-                 edge_type: Literal["reference", "citation", "similar", "latest"],
+                 edge_type: Literal["reference", "citation", "latest"],
                  influential: bool | None, rank: int) -> bool:
         """Append one edge unless it's a self-loop or already drawn.
 
         Args:
             source: The citing end's canonical node id.
             target: The cited end's canonical node id.
-            edge_type: The relation tag (``reference | citation | similar |
-                latest``).
+            edge_type: The relation tag (``reference | citation | latest``).
             influential: S2's influential-citation flag (None where it doesn't
                 apply).
             rank: The edge's reveal rank within its relation.
@@ -341,14 +380,14 @@ def build_graph(
         return True
 
     # Each relation arrives already ranked (references/citations by citation
-    # count, latest oldest-first so the reveal walks toward the present,
-    # similar by S2 similarity), so an edge's emission index within its
-    # relation IS its `rank` — the order the frontend's per-relation count
-    # slider reveals through. A skipped duplicate doesn't burn a rank.
+    # count, latest oldest-first so the reveal walks toward the present), so an
+    # edge's emission index within its relation IS its `rank` — the order the
+    # frontend's per-relation count slider reveals through. A skipped duplicate
+    # doesn't burn a rank.
 
     # References: papers the SEED cites. The seed is the citer, so the arrow
     # runs seed -> ancestor. ``influential`` flags S2's "highly influential
-    # citation" (the frontend can weight the edge).
+    # citation" (the frontend can weight the edge; always None under OpenAlex).
     reference_rank = 0
     for reference in refs:
         node_id = add_neighbor(reference["node"], "reference")
@@ -370,20 +409,6 @@ def build_graph(
         if add_edge(node_id, seed_id, "latest", latest["influential"], latest_rank):
             latest_rank += 1
 
-    # Recommendations: embedding-similar papers. These are NOT citations, so
-    # there's no direction meaning and no ``influential`` (left None); we draw
-    # seed -> neighbor just to anchor them to the seed visually. Ghost
-    # recommendations (no citations AND no date) are pruned here, before the
-    # count, so the slider's pool stays honest.
-    similar_rank = 0
-    for recommendation in similar:
-        node = recommendation["node"]
-        if _is_ghost_similar(node):
-            continue
-        node_id = add_neighbor(node, "similar")
-        if add_edge(seed_id, node_id, "similar", None, similar_rank):
-            similar_rank += 1
-
     graph = Graph(
         seed=Seed(arxiv_id=seed_node.arxiv_id, id=seed_id, title=seed_node.title),
         nodes=list(nodes.values()),
@@ -391,10 +416,11 @@ def build_graph(
         # Post-dedupe edge counts per relation (what each slider can actually
         # reveal) plus the final node count. Note ``nodes`` < the relation sum
         # whenever a paper appeared in more than one relation and got merged.
+        # ``similar`` is retired from the build (kept at 0 for schema stability).
         counts=Counts(
             references=reference_rank,
             citations=citation_rank,
-            similar=similar_rank,
+            similar=0,
             latest=latest_rank,
             nodes=len(nodes),
         ),

@@ -72,8 +72,10 @@ to anything in this folder.
 ## `model.ts` helpers & `theme.ts`
 
 - `primaryRel`: the one relation that colors a node — seed wins, then
-  reference/citation/similar in priority order, then topic-search hits get
-  their own color.
+  reference/citation/latest in priority order (`REL_TYPES`), then topic-search
+  hits get their own color, falling back to `similar` (which now only appears on
+  researcher-discovered papers — the seed-graph *Similar* relation was retired in
+  v5.0.0).
 - `nodeRadius`: seed fixed-large; others scale with √citations, capped so
   megahits don't swallow the canvas.
 - `citationThreshold`: maps a citation-slider knob position to its citation

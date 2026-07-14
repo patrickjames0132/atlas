@@ -22,6 +22,7 @@ import {
   loadGraph,
   restoreSession,
   saveWorkspace,
+  switchProvider,
   workspaceCleared,
 } from './store/workspace'
 import { useSeedSearch } from './search/useSeedSearch'
@@ -40,7 +41,9 @@ import './atlas.css'
  */
 export default function Atlas() {
   const dispatch = useAppDispatch()
-  const { graph, epoch, loading, buildProgress, error } = useAppSelector((state) => state.workspace)
+  const { graph, epoch, loading, buildProgress, error, provider } = useAppSelector(
+    (state) => state.workspace,
+  )
 
   // Drawer visibility + the assistant toggle — shell-local UI.
   const [showSources, setShowSources] = useState(false)
@@ -127,6 +130,8 @@ export default function Atlas() {
         loadingGraph={loading}
         filters={filters}
         onFilters={setFilters}
+        provider={provider}
+        onProviderChange={(next) => dispatch(switchProvider(next))}
         seedTitle={graph?.seed.title ?? null}
         onHome={goHome}
         onOpenSources={() => setShowSources(true)}

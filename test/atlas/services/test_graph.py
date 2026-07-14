@@ -1,8 +1,11 @@
 """Neighborhood-graph assembly (services/graph/build.py): the typed Graph model —
-dedupe, relation accumulation, edge directions, counts, and the snapshot cache.
+single-provider traversals, within-provider dedupe, edge directions, counts, the
+provider-keyed snapshot cache, and the two provider paths (S2 / OpenAlex).
 
-S2 traversals are monkeypatched with canned node dicts; the cache is real SQLite
-on the per-test temp DB (see conftest ``_isolate``).
+Provider traversals are monkeypatched with canned node dicts; the cache is real
+SQLite on the per-test temp DB (see conftest ``_isolate``). A graph is built from
+ONE provider end-to-end — there is no cross-source hybrid — so each provider gets
+its own fixture.
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from atlas.services.graph.model import Counts, Edge, Graph, Seed
 
 
 def make_node(paper_id: str, **extra) -> dict:
-    """A minimal normalized S2 node dict (the shape build_graph consumes)."""
+    """A minimal normalized node dict (the shape build_graph consumes)."""
     return {
         "id": paper_id, "arxiv_id": None, "title": f"Paper {paper_id}", "abstract": None,
         "tldr": None, "year": 2020, "month": None, "pub_date": None,
@@ -25,21 +28,17 @@ def make_node(paper_id: str, **extra) -> dict:
 
 @pytest.fixture()
 def fake_s2(monkeypatch):
-    """Canned S2: seed detail + one ref, one cite, one similar (with overlap).
-
-    OpenAlex resolution is stubbed to return no work, so citations take the S2
-    fallback path — this fixture exercises the S2 traversal + assembly. The
-    OpenAlex-citations path has its own test below.
+    """Canned Semantic Scholar: seed detail + one reference, one landmark citer,
+    one latest citer. Drives the ``provider="s2"`` build path.
     """
     calls = {"get_paper": 0}
-    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: None)
 
     def get_paper(lookup):
         calls["get_paper"] += 1
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    def citation_relations(pid, *, landmark_limit, latest_limit):
+    def citation_relations(paper_id, *, landmark_limit, latest_limit):
         landmark = [{"node": make_node("cite1"), "influential": False}]
         latest = [{"node": make_node("latest1", pub_date="2026-06-01"), "influential": False}]
         return landmark, latest
@@ -48,14 +47,41 @@ def fake_s2(monkeypatch):
     monkeypatch.setattr(build.s2, "references",
                         lambda pid, limit: [{"node": make_node("ref1"), "influential": True}])
     monkeypatch.setattr(build.s2, "citation_relations", citation_relations)
-    # The similar hit overlaps ref1 — must accumulate rels, not duplicate.
-    monkeypatch.setattr(build.s2, "recommendations",
-                        lambda pid, limit: [{"node": make_node("sim1")}, {"node": make_node("ref1")}])
     return calls
 
 
-def test_build_graph_shape(fake_s2):
-    graph = build.build_graph("1706.03762")
+@pytest.fixture()
+def fake_openalex(monkeypatch):
+    """Canned OpenAlex: seed resolve+hydrate + one reference, one landmark citer,
+    one latest citer. Drives the ``provider="openalex"`` build path.
+    """
+    calls = {"resolve": 0}
+
+    def resolve_seed_work(seed_ref):
+        calls["resolve"] += 1
+        calls["seed_ref"] = seed_ref
+        return {"id": "https://openalex.org/W99"}
+
+    def citation_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
+        calls["work_id"] = work_id
+        landmark = [{"node": make_node("DOI:10/oa-cite"), "influential": False}]
+        latest = [{"node": make_node("DOI:10/oa-latest", pub_date="2026-06-01"),
+                   "influential": False}]
+        return landmark, latest
+
+    monkeypatch.setattr(build.openalex, "resolve_seed_work", resolve_seed_work)
+    monkeypatch.setattr(build.openalex, "node", lambda work: make_node("seed", title="The Seed"))
+    monkeypatch.setattr(build.openalex, "bare_work_id", lambda work: "W99")
+    monkeypatch.setattr(build.openalex, "references",
+                        lambda work_id, limit: [{"node": make_node("ref1"), "influential": False}])
+    monkeypatch.setattr(build.openalex, "citation_relations", citation_relations)
+    return calls
+
+
+def test_build_graph_shape_s2(fake_s2):
+    """The S2 path: seed + reference + landmark + latest, correct edge directions,
+    ranks, and counts — and no `similar` relation (retired from the build)."""
+    graph = build.build_graph("1706.03762", provider="s2")
     assert isinstance(graph, Graph)
     assert graph.seed == Seed(arxiv_id=None, id="seed", title="The Seed")
     # arXiv-looking seeds are looked up with the ARXIV: prefix.
@@ -63,150 +89,98 @@ def test_build_graph_shape(fake_s2):
 
     by_id = {node.id: node for node in graph.nodes}
     assert by_id["seed"].is_seed is True and by_id["seed"].rels == ["seed"]
-    # ref1 was surfaced by both references and recommendations — one node, both rels.
-    assert by_id["ref1"].rels == ["reference", "similar"]
-    assert len(graph.nodes) == 5  # seed, ref1, cite1, sim1, latest1 — deduped
+    assert by_id["ref1"].rels == ["reference"]
+    assert len(graph.nodes) == 4  # seed, ref1, cite1, latest1
 
     # Edge directions: seed cites ref (seed->ref); citer cites seed (cite->seed).
-    # `rank` is each edge's index within its own relation (the slider order).
     assert Edge(source="seed", target="ref1", type="reference", influential=True, rank=0) in graph.edges
     assert Edge(source="cite1", target="seed", type="citation", influential=False, rank=0) in graph.edges
-    # latest citers run citer->seed too, on their own relation.
     assert Edge(source="latest1", target="seed", type="latest", influential=False, rank=0) in graph.edges
-    # similar edges carry no influential (None); sim1 is first (rank 0), ref1 second (rank 1).
-    assert Edge(source="seed", target="sim1", type="similar", rank=0) in graph.edges
-    assert Edge(source="seed", target="ref1", type="similar", rank=1) in graph.edges
-    assert graph.counts == Counts(references=1, citations=1, similar=2, latest=1, nodes=5)
+    # No similar relation is produced; the count stays 0 for schema stability.
+    assert not any(edge.type == "similar" for edge in graph.edges)
+    assert graph.counts == Counts(references=1, citations=1, similar=0, latest=1, nodes=4)
 
 
-def test_is_ghost_similar_needs_both_conditions():
-    """A ghost is zero citations AND no date — either one present rescues it."""
-    ghost = {"citation_count": 0, "year": None, "pub_date": None}
-    assert build._is_ghost_similar(ghost) is True
-    assert build._is_ghost_similar({**ghost, "citation_count": None}) is True  # None == no citations
-    assert build._is_ghost_similar({**ghost, "citation_count": 3}) is False  # has citations
-    assert build._is_ghost_similar({**ghost, "year": 2018}) is False  # has a year
-    assert build._is_ghost_similar({**ghost, "pub_date": "2018-05-01"}) is False  # has a date
+def test_build_graph_shape_openalex(fake_openalex):
+    """The OpenAlex path: the seed resolves through ``resolve_seed_work``, the bare
+    work id drives the citation queries, and references/citations populate the graph."""
+    graph = build.build_graph("1706.03762", provider="openalex")
+    assert isinstance(graph, Graph)
+    assert graph.seed == Seed(arxiv_id=None, id="seed", title="The Seed")
+    assert fake_openalex["seed_ref"] == "1706.03762"  # passed through un-prefixed
+    assert fake_openalex["work_id"] == "W99"  # bare id handed to the cites: query
 
-
-def test_ghost_similar_recommendations_are_pruned(fake_s2, monkeypatch):
-    """A recommendation with no citations AND no date is dropped from `similar`;
-    ones with either a citation or a date stay, and the count follows."""
-    monkeypatch.setattr(
-        build.s2,
-        "recommendations",
-        lambda pid, limit: [
-            {"node": make_node("ghost", citation_count=0, year=None, pub_date=None)},
-            {"node": make_node("cited_nodate", citation_count=7, year=None, pub_date=None)},
-            {"node": make_node("dated_nocite", citation_count=0, year=2019)},
-        ],
-    )
-    graph = build.build_graph("1706.03762")
-    ids = {node.id for node in graph.nodes}
-    assert "ghost" not in ids  # pruned — unverifiable noise
-    assert {"cited_nodate", "dated_nocite"} <= ids  # kept
-    # The count reflects only the survivors, so the slider's pool stays honest.
-    assert graph.counts.similar == 2
-
-
-def test_citations_come_from_openalex_when_seed_resolves(fake_s2, monkeypatch):
-    """The hybrid: when OpenAlex resolves the seed, its citer nodes populate the
-    citation/latest relations instead of S2's (references + similar stay S2)."""
-    resolved = {"id": "https://openalex.org/W99"}
-    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: resolved)
-
-    captured = {}
-
-    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
-        captured["work_id"] = work_id
-        landmark = [{"node": make_node("DOI:10/oa-cite"), "influential": False}]
-        latest = [{"node": make_node("DOI:10/oa-latest", pub_date="2026-06-01"),
-                   "influential": False}]
-        return landmark, latest
-
-    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
-
-    graph = build.build_graph("1706.03762")
     by_id = {node.id: node for node in graph.nodes}
-    assert captured["work_id"] == "W99"  # bare OpenAlex id handed to the cites: query
-    # OpenAlex citer + latest nodes are present; the S2 canned cite1/latest1 are not.
-    assert "DOI:10/oa-cite" in by_id and by_id["DOI:10/oa-cite"].rels == ["citation"]
-    assert "DOI:10/oa-latest" in by_id and by_id["DOI:10/oa-latest"].rels == ["latest"]
-    assert "cite1" not in by_id and "latest1" not in by_id
-    # References + similar still come from S2.
-    assert by_id["ref1"].rels == ["reference", "similar"]
+    assert by_id["ref1"].rels == ["reference"]
+    assert by_id["DOI:10/oa-cite"].rels == ["citation"]
+    assert by_id["DOI:10/oa-latest"].rels == ["latest"]
+    assert Edge(source="DOI:10/oa-cite", target="seed", type="citation",
+                influential=False, rank=0) in graph.edges
+    assert graph.counts == Counts(references=1, citations=1, similar=0, latest=1, nodes=4)
 
 
-def test_same_paper_across_sources_merges_into_one_node(fake_s2, monkeypatch):
-    """The DQN/DDPG bug: one paper arriving as an OpenAlex citer (DOI: id),
-    an OpenAlex duplicate work (ARXIV: id), AND an S2 recommendation (bare
-    paperId) must resolve — via its shared arXiv id — into ONE node carrying
-    both relations, with every edge pointing at the surviving node, no
-    duplicate edges, and compact ranks."""
-    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: {"id": "W99"})
+def test_a_paper_thats_both_a_reference_and_a_citer_merges(fake_s2, monkeypatch):
+    """A mutual citation — a paper the seed cites that also cites the seed —
+    resolves into ONE node carrying both relations, with an edge each way."""
+    monkeypatch.setattr(build.s2, "references",
+                        lambda pid, limit: [{"node": make_node("mutual"), "influential": False}])
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
+    def citation_relations(pid, *, landmark_limit, latest_limit):
+        return [{"node": make_node("mutual"), "influential": False}], []
+
+    monkeypatch.setattr(build.s2, "citation_relations", citation_relations)
+
+    graph = build.build_graph("1706.03762", provider="s2")
+    by_id = {node.id: node for node in graph.nodes}
+    assert by_id["mutual"].rels == ["reference", "citation"]
+    # Both directions are drawn (they're different edge types).
+    assert Edge(source="seed", target="mutual", type="reference", influential=False, rank=0) in graph.edges
+    assert Edge(source="mutual", target="seed", type="citation", influential=False, rank=0) in graph.edges
+
+
+def test_openalex_duplicate_works_merge_via_arxiv_id(fake_openalex, monkeypatch):
+    """OpenAlex sometimes holds duplicate works for one paper (the MuZero-twice
+    problem). Two citer sightings sharing an arXiv id merge into ONE node, with a
+    single citation edge and a compact rank on the next distinct citer."""
+    def citation_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         landmark = [
-            {"node": make_node("DOI:10.48550/arxiv.1509.02971",
-                               arxiv_id="1509.02971", citation_count=5379),
+            {"node": make_node("DOI:10/a", arxiv_id="1909.08593", citation_count=100),
              "influential": False},
             # OpenAlex's duplicate work for the SAME paper, under another id.
-            {"node": make_node("ARXIV:1509.02971",
-                               arxiv_id="1509.02971", citation_count=6787),
-             "influential": True},
+            {"node": make_node("W12345", arxiv_id="1909.08593", citation_count=140),
+             "influential": False},
             {"node": make_node("DOI:10/other", citation_count=50), "influential": False},
         ]
         return landmark, []
 
-    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
-    # The S2 recommendation for the same paper, under its S2 paperId.
-    monkeypatch.setattr(build.s2, "recommendations",
-                        lambda pid, limit: [{"node": make_node("s2ddpg", arxiv_id="1509.02971",
-                                                               citation_count=15607)}])
+    monkeypatch.setattr(build.openalex, "citation_relations", citation_relations)
 
-    graph = build.build_graph("1706.03762")
+    graph = build.build_graph("1706.03762", provider="openalex")
     by_id = {node.id: node for node in graph.nodes}
-
-    # One node for the paper, keyed by its first sighting, carrying both rels.
-    assert "DOI:10.48550/arxiv.1509.02971" in by_id
-    assert "ARXIV:1509.02971" not in by_id and "s2ddpg" not in by_id
-    merged = by_id["DOI:10.48550/arxiv.1509.02971"]
-    assert merged.rels == ["citation", "similar"]
-    # The later sightings upgraded the citation count to the best-known value.
-    assert merged.citation_count == 15607
-
-    # One citation edge (the duplicate work's was skipped), pointing at the
-    # canonical id; the next distinct citer keeps a compact rank.
+    assert "DOI:10/a" in by_id and "W12345" not in by_id
+    # The later sighting upgraded the count to the best-known value.
+    assert by_id["DOI:10/a"].citation_count == 140
     citation_edges = [edge for edge in graph.edges if edge.type == "citation"]
     assert [(edge.source, edge.rank) for edge in citation_edges] == [
-        ("DOI:10.48550/arxiv.1509.02971", 0),
+        ("DOI:10/a", 0),
         ("DOI:10/other", 1),
     ]
-    # The similar edge also lands on the canonical node.
-    similar_edges = [edge for edge in graph.edges if edge.type == "similar"]
-    assert [(edge.target, edge.rank) for edge in similar_edges] == [
-        ("DOI:10.48550/arxiv.1509.02971", 0),
-    ]
-    # Counts reflect what was actually drawn, post-dedupe.
-    assert graph.counts.citations == 2 and graph.counts.similar == 1
+    assert graph.counts.citations == 2
 
 
-def test_a_citer_that_is_the_seed_never_self_loops(fake_s2, monkeypatch):
-    """A seed's OpenAlex twin appearing among its own citers (dirty data)
-    merges into the seed node — no duplicate seed, no self-edge, and the
-    seed keeps its single 'seed' tag."""
-    monkeypatch.setattr(build.openalex, "resolve_work", lambda **kwargs: {"id": "W99"})
+def test_a_citer_that_is_the_seed_never_self_loops(fake_openalex, monkeypatch):
+    """A seed appearing among its own citers (dirty data) merges into the seed
+    node — no duplicate seed, no self-edge, seed keeps its single 'seed' tag."""
+    monkeypatch.setattr(build.openalex, "node",
+                        lambda work: make_node("seed", title="The Seed", arxiv_id="1706.03762"))
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
+    def citation_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         return [{"node": make_node("DOI:10/seed-twin", arxiv_id="1706.03762"),
                  "influential": False}], []
 
-    monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
-    monkeypatch.setattr(build.s2, "get_paper",
-                        lambda lookup: make_node("seed", title="The Seed",
-                                                 arxiv_id="1706.03762"))
+    monkeypatch.setattr(build.openalex, "citation_relations", citation_relations)
 
-    graph = build.build_graph("1706.03762")
+    graph = build.build_graph("1706.03762", provider="openalex")
     by_id = {node.id: node for node in graph.nodes}
     assert "DOI:10/seed-twin" not in by_id
     assert by_id["seed"].rels == ["seed"]
@@ -214,58 +188,80 @@ def test_a_citer_that_is_the_seed_never_self_loops(fake_s2, monkeypatch):
     assert graph.counts.citations == 0
 
 
-def test_openalex_failure_falls_back_to_s2_citations(fake_s2, monkeypatch):
-    """An OpenAlex error never fails the build — it degrades to S2 citations."""
-    monkeypatch.setattr(
-        build.openalex, "resolve_work",
-        lambda **kwargs: (_ for _ in ()).throw(build.openalex.OpenAlexError("down")),
-    )
-    graph = build.build_graph("1706.03762")
-    by_id = {node.id: node for node in graph.nodes}
-    assert "cite1" in by_id and "latest1" in by_id  # S2 fallback citers present
+def test_cache_is_keyed_by_provider(fake_s2, fake_openalex):
+    """An S2 graph and an OpenAlex graph for the same seed are distinct snapshots
+    — one must never be served for the other's provider."""
+    s2_graph = build.build_graph("1706.03762", provider="s2")
+    oa_graph = build.build_graph("1706.03762", provider="openalex")
+    # Different citer ids prove each provider's own traversal ran (no collision).
+    assert {node.id for node in s2_graph.nodes} != {node.id for node in oa_graph.nodes}
+    assert "cite1" in {node.id for node in s2_graph.nodes}
+    assert "DOI:10/oa-cite" in {node.id for node in oa_graph.nodes}
+    # Each is now cache-served (no extra provider calls beyond the first build).
+    build.build_graph("1706.03762", provider="s2")
+    assert fake_s2["get_paper"] == 1
+    build.build_graph("1706.03762", provider="openalex")
+    assert fake_openalex["resolve"] == 1
 
 
 def test_graph_serializes_and_survives_a_cache_round_trip(fake_s2):
-    graph = build.build_graph("1706.03762")
+    graph = build.build_graph("1706.03762", provider="s2")
     dumped = graph.model_dump()
-    # A callable-to-JSON shape the routes can hand to jsonify.
     assert dumped["seed"] == {"arxiv_id": None, "id": "seed", "title": "The Seed"}
     assert {
-        "source": "seed", "target": "sim1", "type": "similar", "influential": None, "rank": 0,
+        "source": "cite1", "target": "seed", "type": "citation", "influential": False, "rank": 0,
     } in dumped["edges"]
     # Re-validating the dump reproduces the object (the cache-hit path).
     assert Graph.model_validate(dumped) == graph
 
 
 def test_raw_paperid_seed_skips_arxiv_prefix(fake_s2):
-    build.build_graph("abc123def")  # not arXiv-shaped
+    build.build_graph("abc123def", provider="s2")  # not arXiv-shaped
     assert fake_s2["lookup"] == "abc123def"
 
 
 def test_snapshot_cache_round_trip(fake_s2):
-    first = build.build_graph("1706.03762")
-    again = build.build_graph("1706.03762")
+    first = build.build_graph("1706.03762", provider="s2")
+    again = build.build_graph("1706.03762", provider="s2")
     assert fake_s2["get_paper"] == 1  # second call served from cache — zero S2 hits
-    assert again == first  # a Graph rebuilt from the cached JSON equals the original
+    assert again == first
 
 
 def test_refresh_bypasses_cache(fake_s2):
-    build.build_graph("1706.03762")
-    build.build_graph("1706.03762", refresh=True)
+    build.build_graph("1706.03762", provider="s2")
+    build.build_graph("1706.03762", provider="s2", refresh=True)
     assert fake_s2["get_paper"] == 2
 
 
-def test_unknown_seed_returns_none(monkeypatch):
+def test_defaults_to_config_provider(fake_s2, monkeypatch):
+    """An omitted provider falls back to config.graph.default_provider."""
+    monkeypatch.setattr(config.graph, "default_provider", "s2")
+    graph = build.build_graph("1706.03762")
+    assert "cite1" in {node.id for node in graph.nodes}  # took the S2 path
+
+
+def test_resolve_provider_validates_and_defaults(monkeypatch):
+    """resolve_provider normalizes valid names and degrades anything else to the
+    configured default — the one place provider strings are trusted."""
+    monkeypatch.setattr(config.graph, "default_provider", "s2")
+    assert build.resolve_provider("openalex") == "openalex"
+    assert build.resolve_provider("S2") == "s2"  # case-normalized
+    assert build.resolve_provider("  openalex  ") == "openalex"  # trimmed
+    assert build.resolve_provider(None) == "s2"  # missing → default
+    assert build.resolve_provider("bogus") == "s2"  # unrecognized → default
+
+
+def test_unknown_seed_returns_none(fake_s2, fake_openalex, monkeypatch):
     monkeypatch.setattr(build.s2, "get_paper", lambda lookup: None)
-    assert build.build_graph("0000.00000") is None
-    assert build.build_graph("   ") is None
+    monkeypatch.setattr(build.openalex, "resolve_seed_work", lambda seed_ref: None)
+    assert build.build_graph("0000.00000", provider="s2") is None
+    assert build.build_graph("0000.00000", provider="openalex") is None
+    assert build.build_graph("   ", provider="s2") is None
 
 
-def test_adaptive_budget_reaches_both_citation_sources(fake_s2, monkeypatch):
-    """The adapted landmark limit is what the traversals actually receive —
-    on the OpenAlex path and the S2 fallback alike. The value is whatever the
-    model returns for the fixture's seed; we assert both sources get the *same*
-    adapted number, not the flat cite_limit."""
+def test_adaptive_budget_reaches_the_traversal(fake_s2, fake_openalex, monkeypatch):
+    """The adapted landmark limit is what each provider's citation traversal
+    actually receives — the genuinely adapted number, not the flat cite_limit."""
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
     monkeypatch.setattr(config.graph, "cite_limit", None)
     expected = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
@@ -277,30 +273,30 @@ def test_adaptive_budget_reaches_both_citation_sources(fake_s2, monkeypatch):
         return [], []
 
     monkeypatch.setattr(build.s2, "citation_relations", s2_relations)
-    build.build_graph("1706.03762")  # fake_s2 resolves no OpenAlex work → S2 path
+    build.build_graph("1706.03762", provider="s2")
     assert received["s2"] == expected
 
     def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         received["openalex"] = landmark_limit
         return [], []
 
-    monkeypatch.setattr(build.openalex, "resolve_work",
-                        lambda **kwargs: {"id": "https://openalex.org/W99"})
     monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
-    build.build_graph("1706.03762", refresh=True)
+    build.build_graph("1706.03762", provider="openalex")
     assert received["openalex"] == expected
 
 
 def test_on_progress_fires_on_a_build_but_not_a_cache_hit(fake_s2):
     stages: list[tuple[int, int, str]] = []
-    build.build_graph("1706.03762", on_progress=lambda done, total, label: stages.append((done, total, label)))
+    build.build_graph("1706.03762", provider="s2",
+                      on_progress=lambda done, total, label: stages.append((done, total, label)))
     # One frame per coarse stage, in order (1-indexed so the last hits 100%),
     # each carrying the same total.
-    assert [done for done, _, _ in stages] == [1, 2, 3, 4, 5]
+    assert [done for done, _, _ in stages] == [1, 2, 3, 4]
     assert {total for _, total, _ in stages} == {build._BUILD_STEPS}
     assert all(label for _, _, label in stages)  # every stage has a human label
 
     # A cache hit returns before the first stage — no frames.
     stages.clear()
-    build.build_graph("1706.03762", on_progress=lambda done, total, label: stages.append((done, total, label)))
+    build.build_graph("1706.03762", provider="s2",
+                      on_progress=lambda done, total, label: stages.append((done, total, label)))
     assert stages == []

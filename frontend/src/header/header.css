@@ -53,6 +53,39 @@
   margin-left: auto;
 }
 
+/* The academic-data backend selector: a labeled dropdown reading as an
+   app-wide setting (which source the graph is built from). */
+.provider-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.provider-select > span {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+.provider-select select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.provider-select select:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-strong);
+}
+.provider-select select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .cc-credit {
   display: inline-flex;
   align-items: center;

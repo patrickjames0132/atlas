@@ -53,17 +53,17 @@ import { CITE_SLIDER_STEPS, citationThreshold, type Base, type VLink, type VNode
  */
 export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const dispatch = useAppDispatch()
-  const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef } =
+  const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef, provider } =
     useAppSelector(selectWorkspace)
   const highlightIds = useAppSelector(selectHighlightSet)
   const selectedIds = useAppSelector(selectNodeSelectionSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
   const hasSearchHits = useAppSelector(selectHasSearchHits)
 
-  // Declutter controls. 'search' is always on (no filter chip): topic-search
-  // hits are agent-discovered and few, so they stay visible; the year slider
-  // still filters them.
-  const [enabled, setEnabled] = useState<Set<string>>(new Set([...REL_TYPES, 'search']))
+  // Declutter controls. 'search' and 'similar' are always on (no filter chip):
+  // both only appear on papers the researcher pulled in mid-conversation (few,
+  // agent-discovered), so they stay visible; the year slider still filters them.
+  const [enabled, setEnabled] = useState<Set<string>>(new Set([...REL_TYPES, 'search', 'similar']))
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
   // The citation-count window's knob positions (0…CITE_SLIDER_STEPS). Full-open
@@ -138,7 +138,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
   // pins reset themselves inside their own hooks.)
   useEffect(() => {
     if (!base) return
-    setEnabled(new Set([...REL_TYPES, 'search']))
+    setEnabled(new Set([...REL_TYPES, 'search', 'similar']))
     setYearLo(base.minYear)
     setYearHi(base.maxYear)
     // A fresh graph shows every citation count; the user narrows from there.
@@ -379,6 +379,11 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             onFit={() => fgRef.current?.zoomToFit(400, 60)}
             onRefresh={onRefresh}
             refreshing={loading}
+            providerNote={
+              provider === 's2'
+                ? 'Semantic Scholar: Field Landmarks are the top-cited among the ~10k most recent citers (live-API limit), not the full citation history — the citations corpus will lift this.'
+                : null
+            }
           />
         )}
 

@@ -29,6 +29,12 @@ store/
   `workspaceCleared` is the Home action: workspace back to initial (epoch
   bumped so the teacher remounts), with the transcript and highlights
   clearing themselves via `extraReducers` — one dispatch, page-load state.
+  It also holds **`provider`** (the header "Data source" dropdown — the
+  academic-data backend every graph is built from): written by `providerSet` /
+  the `switchProvider` thunk (which re-seeds the current graph), read by
+  `loadGraph` (sent on every build) and `useSeedSearch` (scopes the local cache
+  search), and persisted in a Save. Unlike the graph, it **survives Home** — an
+  app-wide setting, not per-graph.
 - **`transcript`** — written by the teacher's stream dispatches; read by the
   panel to render and by `saveWorkspace` to persist. This slice is why the
   old `onStateChange` → `teacherStateRef` plumbing died: the transcript used

@@ -4,7 +4,7 @@
  * date / field-of-study filters on the live search.
  */
 
-import type { GraphNode } from './graph'
+import type { GraphNode, Provider } from './graph'
 
 /**
  * The `/api/search` response: the echoed query plus its hits. Hits are full
@@ -79,7 +79,7 @@ export async function searchLive(
  * when the live APIs are rate-limiting us.
  */
 export interface LocalHit {
-  /** Semantic Scholar paperId (always usable as a graph seed). */
+  /** A provider node id, always usable as a graph seed under that provider. */
   id: string
   arxiv_id: string | null
   title: string
@@ -87,30 +87,37 @@ export interface LocalHit {
   year: number | null
   citation_count: number | null
   url?: string | null
-  /** A fresh graph snapshot exists — explores without hitting S2. */
+  /** A fresh snapshot exists under the selected provider — explores instantly. */
   has_graph: boolean
 }
 
 /**
- * Instant search over papers already seen on previous graphs.
+ * Instant search over papers already seen on previous graphs, scoped to the
+ * selected provider.
+ *
+ * Only the chosen backend's cached snapshots are searched (snapshots are cached
+ * per provider), so a hit — and its "instant" badge — reflects what can
+ * actually be explored instantly *under the provider the user has selected*.
  *
  * Failures degrade to "no local hits" (an empty array) rather than throwing —
  * this must never block the live search running alongside it. The year
  * filter applies; the field filter doesn't (cached nodes are matched purely
  * on text).
  *
- * @param q       The search query.
- * @param limit   Maximum hits to return (default 10).
- * @param filters Optional filters — only the year window applies locally.
+ * @param q        The search query.
+ * @param limit    Maximum hits to return (default 10).
+ * @param filters  Optional filters — only the year window applies locally.
+ * @param provider The selected backend — only its cached snapshots are searched.
  * @returns The cached hits (empty on any failure).
  */
 export async function searchLocal(
   q: string,
   limit = 10,
   filters?: SearchFilters,
+  provider: Provider = 's2',
 ): Promise<LocalHit[]> {
   try {
-    const params = new URLSearchParams({ q, limit: String(limit) })
+    const params = new URLSearchParams({ q, limit: String(limit), provider })
     applyFilters(params, filters)
     params.delete('fields') // not supported locally
     const res = await fetch(`/api/local_search?${params.toString()}`)

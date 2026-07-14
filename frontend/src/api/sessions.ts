@@ -3,7 +3,7 @@
  * transcript, then reopen it later without a Semantic Scholar rebuild.
  */
 
-import type { GraphNode, GraphEdge } from './graph'
+import type { GraphNode, GraphEdge, Provider } from './graph'
 import type { AnswerFigure, Beat, LectureMode, RetrieveEvent, TraceEvent } from './agents'
 
 /**
@@ -50,6 +50,12 @@ export interface SessionSeed {
 export interface SessionData {
   seed: SessionSeed
   layout: 'force' | 'timeline'
+  /**
+   * The academic-data backend this graph was built from — restored so a later
+   * Refresh / re-seed rebuilds under the same provider. Absent on pre-v5.0.0
+   * saves (they default to 's2' on restore).
+   */
+  provider?: Provider
   nodes: GraphNode[]
   edges: GraphEdge[]
   chat: ChatMsg[]

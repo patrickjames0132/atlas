@@ -46,21 +46,26 @@ you upload (embedded locally; nothing leaves your machine).
 > and the roadmap.
 
 ```
-┌──────────┐  find seed   ┌─────────┐  citations         ┌──────────┐
-│  search  │ ───────────▶ │ backend │ ─────────────────▶ │ OpenAlex │
-│  (S2+LLM)│  (title/id)  │ (Flask) │  refs/similar/TLDR  └──────────┘
-└──────────┘              └────┬────┘ ─────────────────▶ ┌──────────────────┐
-                               │ /api/graph (thin cache) │ Semantic Scholar │
-                               ▼                         └──────────────────┘
+┌──────────┐  find seed   ┌─────────┐   whole graph      ┌──────────────────┐
+│  search  │ ───────────▶ │ backend │ ─── seed/refs/ ──▶ │  Semantic Scholar│
+│  (S2+LLM)│  (title/id)  │ (Flask) │     citations      │       — or —      │
+└──────────┘              └────┬────┘  (one provider)    │     OpenAlex     │
+                               │ /api/graph (thin cache)  └──────────────────┘
+                               ▼
                      ┌───────────────────────┐
                      │  React + force graph  │  ← the interactive map you explore
                      └───────────────────────┘
 ```
 
-Since **v4.0.0** the citation graph is a **hybrid**: OpenAlex supplies the
-citation relations (its sorted `cites:` queries return a seed's landmark citers
-directly — no recency bias), while Semantic Scholar keeps the seed resolve,
-references, similar papers, and TL;DRs. The two are matched by DOI / arXiv id.
+Since **v5.0.0** the citation graph is built from **one** academic-data provider,
+chosen per graph in the header's **"Data source"** dropdown (the v4.x
+S2+OpenAlex hybrid is retired). **OpenAlex** returns true top-cited landmark
+citers via server-sorted `cites:` queries (no offset ceiling); **Semantic
+Scholar** does the whole graph too, but its live citation API is newest-first and
+~10k-offset capped, so its Field Landmarks come from the recent citer tip — a
+known interim bias the offline S2 citations corpus (roadmap) will lift. The
+*Similar* relation is retired from the built graph (kept for the researcher's
+`expand_node`).
 
 **Stack:** Python/Flask + uv · [PydanticAI](https://ai.pydantic.dev) agents on
 Claude · React + TypeScript (strict) + Vite + Redux Toolkit ·
@@ -134,11 +139,12 @@ The Vite dev server proxies `/api/*` to Flask.
    badge marks papers whose whole neighborhood is cached. Optional filters:
    a publication-year window (1800 → now) and S2 **fields of study**.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🌱 latest ·
-   🟣 similar · 💗 found-by-search. Citers (from **OpenAlex**) split into two
-   relations: **Field Landmarks** (green) are the all-time most-cited papers
-   citing the seed — the historic giants, returned directly by a sorted `cites:`
-   query (no recency bias, no mining), with **how many to show sized per-seed by
-   a small trained model** (an old classic maps out large, a young hot paper
+   💗 found-by-search. Citers split into two relations: **Field Landmarks**
+   (green) are the most-cited papers citing the seed — the historic giants
+   (under **OpenAlex**, the true all-time top-cited, returned directly by a sorted
+   `cites:` query; under **Semantic Scholar**, the top-cited among the recent
+   citer tip — see the "Data source" note), with **how many to show sized per-seed
+   by a small trained model** (an old classic maps out large, a young hot paper
    stays tight — see `src/ml_pipelines/cite_budget/`); **Latest Publications** (light
    green) is the recent frontier — recent citers, per-year banded for even
    coverage, with the band's **start sized per-seed by a second trained model**

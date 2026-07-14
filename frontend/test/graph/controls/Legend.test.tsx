@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * The color legend never explains marks that aren't on screen: the five
+ * The color legend never explains marks that aren't on screen: the four
  * relation entries are static, the two agent entries appear on first use.
+ * (Similar was retired from the seed-graph build in v5.0.0 — no legend entry.)
  */
 
 import { describe, expect, it } from 'vitest'
@@ -9,17 +10,16 @@ import { render, screen } from '@testing-library/react'
 import Legend from '../../../src/graph/controls/Legend'
 
 describe('Legend', () => {
-  it('always shows the five relation entries', () => {
+  it('always shows the four relation entries', () => {
     render(<Legend hasDiscovered={false} hasSearchHits={false} />)
-    for (const label of [
-      'Seed',
-      'References',
-      'Field Landmarks',
-      'Latest Publications',
-      'Similar',
-    ]) {
+    for (const label of ['Seed', 'References', 'Field Landmarks', 'Latest Publications']) {
       expect(screen.getByText(label)).toBeTruthy()
     }
+  })
+
+  it('no longer shows a Similar entry (relation retired from the build)', () => {
+    render(<Legend hasDiscovered={false} hasSearchHits={false} />)
+    expect(screen.queryByText('Similar')).toBeNull()
   })
 
   it('hides the agent entries until the agent has actually acted', () => {

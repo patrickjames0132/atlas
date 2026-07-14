@@ -22,6 +22,7 @@ from ...config import config
 from ...integrations import arxiv
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
+from ..graph import Provider
 
 
 def _analyze(query: str) -> query_analyst.Expansion:
@@ -154,14 +155,23 @@ def local_search(
     limit: int = 10,
     year_from: int | None = None,
     year_to: int | None = None,
+    provider: Provider = "s2",
 ) -> list[dict]:
-    """Search papers already sitting in the local graph-snapshot cache.
+    """Search papers already sitting in the local graph-snapshot cache, scoped to
+    one provider.
 
     Matches every whitespace token of ``query`` against a paper's title +
     authors (case-insensitive substring). Stale snapshots still count — a
     paper's title doesn't expire. Results are deduped across snapshots (keeping
     whichever record carries more detail) and ranked: whole-phrase title matches
     first, then papers explored directly as seeds, then by citation count.
+
+    **Scoped to ``provider``:** since snapshots are cached per provider
+    (``graph:<provider>:<seed>``), only the selected backend's snapshots are
+    scanned — so a cached paper surfaces here (and the ``has_graph`` "instant"
+    badge is truthful) only when it can actually be explored *instantly under
+    the provider the user has selected*, not merely because some *other*
+    provider once cached it.
 
     Args:
         query: The search text; blank/whitespace-only returns no hits.
@@ -170,13 +180,14 @@ def local_search(
             is set, papers with no known year are excluded — a user filtering by
             date doesn't want undatable hits.
         year_to: Latest publication year (inclusive), or None.
+        provider: The selected backend — only its snapshots are searched.
 
     Returns:
         Hit dicts with keys ``id, arxiv_id, title, authors, year,
         citation_count, url, has_graph`` — ``has_graph`` is True when a *fresh*
-        snapshot exists for the paper as a seed, i.e. exploring it won't touch
-        the S2 API. (No field filter here — these are cached S2 nodes, matched
-        purely on text.)
+        snapshot exists for the paper as a seed under this provider, i.e.
+        exploring it won't touch the provider's API. (No field filter here —
+        these are cached nodes, matched purely on text.)
 
     Raises:
         sqlite3.Error: On cache database failures.
@@ -211,7 +222,7 @@ def local_search(
     fresh_seeds: set[str] = set()  # ids whose own graph is cached & unexpired
     best: dict[str, dict] = {}  # paper id -> richest matching record
 
-    for _key, snapshot, created in cache.scan("graph:"):
+    for _key, snapshot, created in cache.scan(f"graph:{provider}:"):
         if not isinstance(snapshot, dict):
             continue
         if (now - created) <= config.graph.cache_ttl:

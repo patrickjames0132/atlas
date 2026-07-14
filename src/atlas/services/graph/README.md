@@ -4,14 +4,16 @@ Neighborhood-graph assembly — the domain core of arXiv Atlas.
 
 ```
 graph/
-  build.py   — build_graph: the assembly logic (S2 traversals, dedupe, cached)
+  build.py   — build_graph: assembly logic (single-provider traversal, dedupe,
+               cached); Provider + resolve_provider
   model.py   — the Pydantic Graph / Node / Edge / Seed / Counts
   budget.py  — adaptive landmark-budget serving: load the trained model, predict
   bands.py   — adaptive latest-band serving: where a seed's Latest bands start
 ```
 
-`__init__.py` re-exports `build_graph` and the models, so callers use
-`graph.build_graph(...)` / `graph.Graph` without reaching into the submodules.
+`__init__.py` re-exports `build_graph`, `Provider`, `resolve_provider`, and the
+models, so callers use `graph.build_graph(...)` / `graph.Provider` without
+reaching into the submodules.
 
 ## Why it exists
 
@@ -19,10 +21,32 @@ Everything the user sees on screen — the force-directed graph of papers around
 seed — is the output of one function, `build_graph()`. `routes/graph.py`'s
 `/api/graph` endpoint is a thin HTTP wrapper over it.
 
-Given a **seed paper**, it produces a Connected-Papers-style graph: the seed at
-the center, surrounded by four kinds of neighbor — references, landmark
-citations, latest (recent-frontier) citations, and embedding-similar papers —
-each a different relationship to the seed.
+Given a **seed paper** and a **provider**, it produces a Connected-Papers-style
+graph: the seed at the center, surrounded by three kinds of neighbor —
+references, landmark citations, and latest (recent-frontier) citations.
+
+## One provider per graph (v5.0.0)
+
+A graph is built from **exactly one** academic-data backend, chosen by the caller
+(the header dropdown → `provider` query arg → `build_graph(provider=…)`):
+
+- **`"s2"`** (Semantic Scholar) — seed / references / citations all via S2. Its
+  live citation endpoint is newest-first with no citation sort, so landmark
+  citers are recency-biased for a heavily-cited seed (the interim cost, lifted
+  later by the offline S2 citations corpus).
+- **`"openalex"`** — seed / references / citations all via OpenAlex, whose
+  server-sorted `cites:` / `cited_by:` queries return the most-cited citers and
+  references directly. Tradeoff: a famous published paper resolves to its
+  lower-cited arXiv-preprint record.
+
+This replaced the v4.x **hybrid** (S2 seed/refs/similar + OpenAlex citations,
+merged with `max` counts and cross-source id dedup). A single provider means one
+citation-count scale (node sizes are finally comparable across relations) and no
+cross-source identity glue. The **Similar relation was retired** from the build
+entirely (the S2 recommendations client lives on only for the researcher's
+`expand_node`). `provider` defaults to `config.graph.default_provider` when
+omitted; `resolve_provider(raw)` is the shared validator (unknown → default) used
+by both the graph and search routes.
 
 ## The shape it builds
 
@@ -32,187 +56,146 @@ each a different relationship to the seed.
               │  edge: seed ──▶ ancestor        (the seed is the citer)
               │
    ┌──────────┴──────────┐
-   │        SEED         │──▶ similar neighbor   (embedding-similar; no direction meaning)
+   │        SEED         │
    └──────────┬──────────┘
               │
               │  edge: descendant ──▶ seed       (the descendant is the citer)
               ▼
-        citations (papers that cite the seed — its descendants)
+        citations (papers that cite the seed — its descendants:
+                   landmark "citation" + recent-frontier "latest")
 ```
 
 `build_graph()` returns a typed **Pydantic `Graph`** (not a bare dict), with:
 - **`seed`** (`Seed`) — `{arxiv_id, id, title}`, a compact summary for the header.
-- **`nodes`** (`list[Node]`) — deduped papers, each the normalized S2 node fields
+- **`nodes`** (`list[Node]`) — deduped papers, each the normalized node fields
   plus a `rels` list (which relations surfaced it) and an `is_seed` flag.
 - **`edges`** (`list[Edge]`) — `{source, target, type, influential, rank}`;
-  `type` is `reference | citation | latest | similar`; `influential` is `None` on
-  `similar` edges (it's a citation-only flag); `rank` is the edge's 0-based
-  position within its relation's order (the frontend count slider reveals
-  `rank < value`).
-- **`counts`** (`Counts`) — post-dedupe edge counts per relation (what each
-  slider can actually reveal) plus the final deduped node count.
+  `type` is `reference | citation | latest` from the build (the `similar` literal
+  survives on the model for researcher-discovered nodes, but the seed build never
+  emits it); `influential` is S2's highly-influential flag (always `None` under
+  OpenAlex); `rank` is the edge's 0-based position within its relation's order.
+- **`counts`** (`Counts`) — post-dedupe edge counts per relation plus the final
+  deduped node count. `counts.similar` is always `0` (kept for schema stability).
 
 The models live in `model.py`, beside `build.py`'s `build_graph`. Callers that
-need JSON serialize with `graph.model_dump()` / `graph.model_dump_json()` — the
-routes hand `model_dump()` to `jsonify`. The model is also what goes in and out
-of the cache (stored as JSON, re-validated on read), so the shape can't silently
-drift — at the cost of a validate on each cache hit, a deliberate trade.
+need JSON serialize with `graph.model_dump()` — the routes hand it to `jsonify`.
+The model is also what goes in and out of the cache (stored as JSON, re-validated
+on read), so the shape can't silently drift — at the cost of a validate on each
+cache hit, a deliberate trade.
 
 ## How it works, step by step
 
-1. **Blank-guard + cache.** Empty seed → `None`. Otherwise check the cache under
-   `graph:<seed_ref>`. The *whole assembled snapshot* is cached (TTL
-   `config.graph.cache_ttl`), so re-opening a paper is free and doesn't re-hit
-   the rate-limited S2 API. The key is the *raw* seed reference — an arXiv id and
-   the S2 paperId it resolves to are cached as separate entry points on purpose,
-   to avoid a resolution round-trip just to normalize the key.
+1. **Blank-guard, resolve provider, cache.** Empty seed → `None`. `provider`
+   defaults to `config.graph.default_provider`. The cache is keyed by
+   **`graph:<provider>:<seed_ref>`** — an S2 graph and an OpenAlex graph for the
+   same paper are separate snapshots and must never collide. The *whole assembled
+   snapshot* is cached (TTL `config.graph.cache_ttl`), so re-opening a paper is
+   free. The key uses the *raw* seed reference — an arXiv id and the provider node
+   id it resolves to are separate entry points on purpose, to avoid a resolution
+   round-trip just to normalize the key.
 
-2. **Resolve the seed.** The seed reference can be two different things, and S2
-   addresses them differently:
-   - an **arXiv id** (from the search box) → looked up as `ARXIV:<id>` (S2's
-     external-id syntax),
-   - a raw **S2 paperId** (from clicking a node in an existing graph) → passed
-     through untouched.
+2. **Resolve the seed + traverse, per provider.** `build_graph` dispatches to
+   `_traverse_s2` or `_traverse_openalex`, each returning the same payload:
+   `(seed_node, references, landmark_citers, latest_citers)`, or `None` when the
+   provider has no paper for the reference.
+   - **S2**: an arXiv-shaped ref is looked up as `ARXIV:<id>` (S2's external-id
+     syntax); a raw S2 paperId passes through untouched. `arxiv.looks_arxiv()`
+     tells them apart with `ID_RE.fullmatch`. References via `s2.references`,
+     citers via `s2.citation_relations`.
+   - **OpenAlex**: `openalex.resolve_seed_work` accepts an arXiv id or a
+     `DOI:`/`ARXIV:`/`W…` node id; references via `openalex.references`
+     (`cited_by:`), citers via `openalex.citation_relations` (`cites:`), with the
+     adaptive `band_start` wired in.
 
-   `arxiv.looks_arxiv()` tells them apart with `ID_RE.fullmatch` (whole-string
-   match — a bare paperId must not be mistaken for an id). This is the mechanism
-   that lets you **re-seed on any node**, including a journal paper with no arXiv
-   id, so exploration never dead-ends. If S2 has no paper → `None`.
+   This is the mechanism that lets you **re-seed on any node**, including a
+   journal paper with no arXiv id, so exploration never dead-ends.
 
-3. **One detail call + three traversals.** `get_paper` (already done, for the
-   seed) then `references`, `citations`, `recommendations` — each capped by its
-   own `config.graph.*_limit`. Neighbors come back already hydrated with light
-   display fields, so no extra batch call is needed.
+3. **Adaptive budgets** (shared by both providers). The **landmark budget adapts
+   to the seed** when `config.graph.adaptive_cite_limit` is on: `_adaptive_cite_limit`
+   delegates to `budget.adaptive_cite_limit`, which loads a **scikit-learn model
+   trained offline** (`src/ml_pipelines/cite_budget/model.joblib`) and calls
+   `.predict()` on the seed's age and citation count — an old classic (Hawking)
+   earns a large budget because its top citers span decades; a young hot paper
+   (DQN ~60, Attention ~30) gets a tight one. Clamped to `[floor, cite_limit]`;
+   a seed with no year, the toggle off, or an unloadable model passes the flat
+   `cite_limit` through. See `budget.py` and `src/ml_pipelines/cite_budget/README.md`.
 
-   The **landmark budget adapts to the seed** when
-   `config.graph.adaptive_cite_limit` is on: `_adaptive_cite_limit` delegates to
-   `budget.adaptive_cite_limit`, which loads a **scikit-learn model trained
-   offline** (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()`
-   on the seed's age and citation count — an old classic (Hawking Radiation)
-   earns a large budget because its top citers span decades and read as a map; a
-   young, well-cited paper (DQN) gets ~60 because its top citers are same-era
-   pile-on; a brand-new one (Attention Is All You Need) ~30. The prediction is
-   clamped to `[floor, cite_limit]`. The model is fit on real data — *not*
-   hand-tuned constants — by `src/ml_pipelines/cite_budget/train.py`, which learns
-   the "density budget" (where per-year citer clutter sets in) across ~60
-   OpenAlex seeds; the finding is that **age carries the signal** and citation
-   count is a mild *positive* term. One budget is computed per build and handed
-   to *both* citation sources (OpenAlex and the S2 fallback), so they agree. A
-   seed with no publication year, the toggle off, or an unloadable model passes
-   the flat `cite_limit` through unchanged. See `budget.py` for the serving side
-   and `src/ml_pipelines/cite_budget/README.md` for the derivation and how to
-   retrain.
+   The **latest bands adapt** too (`config.graph.adaptive_latest_band`): `bands.py`
+   places the band start at the **density tail edge** of the landmark cluster (a
+   second offline model, `src/ml_pipelines/latest_gap/model.joblib`), closing the
+   gap for an old seed and keeping a tight frontier for a young one. `build.py`
+   injects `bands.earliest_band_year` as the OpenAlex `band_start` callable so
+   `integrations` stays below `services` in the import order. See
+   `src/ml_pipelines/latest_gap/README.md`.
 
-   The **latest bands adapt to the seed** too, when
-   `config.graph.adaptive_latest_band` is on. Latest Publications fills recent
-   years evenly with one query per year, up to the current year; the *lower edge*
-   defaults to a fixed `latest_band_years` offset, but for an old seed whose
-   landmarks tail off well before that, the timeline shows a dead stretch between
-   the last landmark and the first band. `bands.py` closes it: `citation_relations`
-   hands the shipped landmarks' years to `bands.earliest_band_year`, which places
-   the start at the **density tail edge** of the landmark cluster — the most recent
-   year still holding ≥ `tau` of the peak year's count (a second model trained
-   offline, `src/ml_pipelines/latest_gap/model.joblib`), floored by a `max_span` cost
-   cap. There's no only-widen clamp, so a young seed whose cluster edge is recent
-   gets a tight frontier (QMIX → 3 bands) while an old seed widens back (Hawking →
-   start 2020). Unlike the budget, the boundary is a property of the landmark
-   *distribution*, not seed features — a feature regression on age/citations fails,
-   and a *quantile* is the wrong detector (mass-based, dragged years before the
-   visible edge); see `research/latest_gap`. `build.py` injects
-   `bands.earliest_band_year` as the `band_start` callable so `integrations/openalex`
-   stays below `services` in the import order; a missing model or the toggle off
-   falls back to the fixed span. See `src/ml_pipelines/latest_gap/README.md`.
+4. **Dedupe + relation accumulation.** The `add_neighbor()` closure merges
+   neighbors into one node table — keyed by raw id, with identity resolved through
+   the **arXiv id** whenever a sighting has one. Within a single provider this
+   still earns its keep: a paper that's both a reference *and* a citer (a mutual
+   citation) merges into one node carrying both rels, and OpenAlex **duplicate
+   works** for one paper (two works sharing an arXiv id) collapse into one node.
+   First sighting wins the slot; later ones append their tag to `rels` and fill
+   fields via `_upgrade_node` (max `citation_count`, fill-if-None for summary/date
+   fields). `add_neighbor` returns the **canonical id** the edge loops must use —
+   for a merged paper it differs from the sighting's own id.
 
-4. **Dedupe with cross-source identity + relation accumulation.** The
-   `add_neighbor()` closure merges neighbors into one node table — keyed by raw
-   id, with identity resolved through the **arXiv id** whenever a sighting has
-   one. That second layer exists because the hybrid ships two id schemes: S2
-   relations carry bare paperIds while OpenAlex citers carry
-   `DOI:`/`ARXIV:`/`W…` ids (and OpenAlex sometimes holds duplicate works for
-   one paper — verified live: two QMIX works share the same DOI). First
-   sighting wins the node slot; every later sighting appends its tag to that
-   node's `rels` and upgrades fields it knows better (`_upgrade_node`: max
-   `citation_count` — S2's counts are far more complete for arXiv papers —
-   fill-if-None for the summary/date fields). `add_neighbor` returns the
-   **canonical id** and the edge loops must use it: for a merged paper it
-   differs from the sighting's own id. Papers without an arXiv id on both
-   sides (e.g. a journal-DOI record vs. its preprint twin) still can't merge —
-   the known residual, deliberately left rather than risking title matching.
+   A dedupe consequence for edges: two sightings can collapse onto one endpoint,
+   so `add_edge()` skips self-loops and already-drawn `(source, target, type)`
+   triples, and each relation's `rank` counter only advances on an edge actually
+   drawn — ranks stay compact for the frontend's reveal sliders.
 
-   A dedupe consequence for edges: two sightings can collapse onto one
-   endpoint, so `add_edge()` skips self-loops and already-drawn
-   `(source, target, type)` triples, and each relation's `rank` counter only
-   advances on an edge actually drawn — ranks stay compact for the frontend's
-   reveal sliders.
-
-5. **Build typed edges — direction is load-bearing.** An edge always points
-   from the citing paper to the cited one:
-   - **reference** → `seed → ancestor` (the seed cites it), carries `influential`
+5. **Build typed edges — direction is load-bearing.** An edge always points from
+   the citing paper to the cited one:
+   - **reference** → `seed → ancestor` (the seed cites it), carries `influential`.
    - **citation** (landmark) and **latest** (recent-frontier) → `descendant →
      seed` (it cites the seed) — *opposite* direction — carry `influential`. Both
-     are citers; they're split by recency into two relations (see the citation
-     package's README).
-   - **similar** → `seed → neighbor` — recommendations aren't citations, so
-     there's no citation direction and no `influential`; the edge just anchors
-     the neighbor to the seed visually. **Ghost recommendations are pruned
-     here** (`_is_ghost_similar`): S2 occasionally suggests a paper with **zero
-     citations AND no year/date** — unverifiable noise — so it's dropped before
-     the node and the `similar` count, keeping the slider's pool honest. This
-     applies only to `similar`; a verified reference/citation/latest link is
-     never pruned this way.
+     are citers, split by recency into two relations (see the provider READMEs).
 
-   Getting a direction backwards would silently invert the citation arrows in
-   the UI, which is why this is the most-commented part of the code.
+   Getting a direction backwards would silently invert the citation arrows in the
+   UI, which is why this is the most-commented part of the code.
 
 6. **Assemble + cache.** Package the `Graph` and cache its `model_dump`. Note
-   `counts.nodes < references + citations + similar` whenever dedup merged a
-   paper that appeared in multiple relations.
+   `counts.nodes < references + citations` whenever dedup merged a paper that
+   appeared in multiple relations.
 
 ## Design decisions worth knowing
 
-- **The whole snapshot is cached, not the individual S2 calls.** One cache entry
-  per seed, TTL'd, rather than caching each traversal separately — the route
-  wants an all-or-nothing snapshot, and this keeps the cache key simple.
-- **`arxiv.looks_arxiv` uses `fullmatch`, not `search`.** (Shared with
-  `routes/graph.py`'s paper hydration — it lives in `integrations.arxiv`.) We only want to treat a
-  reference as an arXiv id when it is *entirely* one; a random paperId that
-  happens to contain id-shaped digits must fall through to the paperId path.
-  (`routes/graph.py` uses `arxiv.ID_RE.search` instead — it's pulling an id out
-  of pasted free text, a different job.)
+- **The whole snapshot is cached, not the individual calls.** One cache entry per
+  `(provider, seed)`, TTL'd, rather than caching each traversal separately.
+- **`arxiv.looks_arxiv` uses `fullmatch`, not `search`.** (Shared with the S2
+  seed lookup — it lives in `integrations.arxiv`.) We only treat a reference as an
+  arXiv id when it is *entirely* one; a paperId that happens to contain id-shaped
+  digits must fall through to the paperId path. (`routes/graph.py` uses
+  `arxiv.ID_RE.search` instead — it's pulling an id out of pasted free text.)
 - **Neighbors aren't re-hydrated.** The traversal responses carry enough for
   display, so `build_graph` never does a follow-up batch fetch. Clicking a node
-  for its full detail panel is a *separate* `get_paper` call in the route.
+  for its full detail panel is a *separate* `get_paper` call in the route (which
+  stays on S2 in this phase, for both providers — OpenAlex nodes carry
+  S2-resolvable ids so this works).
 
-## Who uses it, and how/why (traced, not yet ported)
+## Who uses it
 
-- **`routes/graph.py`** — `GET /api/graph?seed=…&refresh=…` calls `build_graph`
-  and returns `graph.model_dump()` as JSON, catching `s2.S2Error` and turning it
-  into an HTTP 502. The `refresh` query param maps straight to the `refresh`
-  kwarg (the "rebuild this graph" button).
+- **`routes/graph.py`** — `GET /api/graph?seed=…&provider=…&refresh=…` calls
+  `build_graph` and returns `graph.model_dump()` as JSON, catching `s2.S2Error`
+  *and* `openalex.OpenAlexError` and turning either into an HTTP 502 (named for
+  the active provider). The `refresh` param maps straight to the kwarg.
+- **`routes/search.py`** — imports `resolve_provider` to scope the local cache
+  search to the selected provider's snapshots.
 
 ## Testing
 
-`test_graph.py` monkeypatches the four S2 calls (`get_paper` / `references` /
-`citations` / `recommendations`) with canned node dicts — one shared between the
-references and recommendations lists — and uses the real SQLite cache on the
-per-test temp DB. It asserts: the typed `Seed`/`Edge`/`Counts` values and that an
-arXiv-shaped seed is looked up as `ARXIV:<id>` (a raw paperId is not); that the
-shared paper becomes one `Node` with `rels == ["reference", "similar"]`; the
-three edge directions exactly; that `model_dump()` round-trips through
-`Graph.model_validate` (the cache-hit path); the cache round-trip (second call
-makes zero S2 hits) and that `refresh=True` bypasses it; and that an unknown or
-blank seed returns `None`.
+`test_graph.py` monkeypatches each provider's traversal calls with canned node
+dicts and uses the real SQLite cache on the per-test temp DB. It asserts: the S2
+and OpenAlex build shapes (seed + references + landmark + latest, correct edge
+directions and counts, `similar` always 0); that a mutual-citation paper and an
+OpenAlex duplicate-work merge into one node; that a citer that *is* the seed never
+self-loops; that the cache is **keyed by provider** (S2 and OpenAlex snapshots
+don't collide, and each is served from its own entry); `model_dump()` round-trips
+through `Graph.model_validate`; refresh bypasses the cache; `resolve_provider`
+validates/defaults; an unknown or blank seed returns `None`; and the adapted
+budget is what *both* providers' citation traversals receive.
 
-The adaptive budget's own tests live in **`test_budget.py`** (the serving side):
-they load the committed model and pin the four working anchors to its
-predictions, check age monotonically lifts the budget, the ceiling/floor clamps
-hold, and every fallback (toggle off, missing year, unloadable model) returns
-the flat `cite_limit`. Here in `test_graph.py`, one wiring test asserts the
-adapted budget is what *both* citation sources actually receive. The adaptive
-latest band's serving tests live in **`test_bands.py`**: the committed model
-loads, the density tail edge finds the recent dense year (ignoring sparse
-stragglers), an old cluster is capped at `max_span` while a young one starts at
-its recent edge (no only-widen), a couple of misdated-future years don't move the
-boundary, and every fallback returns `None` (keep the fixed span). The training
-pipelines that produce both models have their own offline tests under
-`test/ml_pipelines/`.
+The adaptive budget's own tests live in **`test_budget.py`** and the latest-band
+serving tests in **`test_bands.py`** (they load the committed models and pin the
+anchors / fallbacks). The training pipelines that produce both models have their
+own offline tests under `test/ml_pipelines/`.

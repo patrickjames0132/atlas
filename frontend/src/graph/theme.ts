@@ -65,8 +65,14 @@ export const DIM_EDGE = 'rgba(120,130,150,0.05)'
  */
 export const YEAR_SPACING = 120
 
-/** The relation types the user can filter by (seed/search are always shown). */
-export const REL_TYPES = ['reference', 'citation', 'latest', 'similar'] as const
+/**
+ * The relation types the user can filter by, in colour-priority order. `seed`
+ * and `search` are always shown (no chip); `similar` is no longer a seed-graph
+ * relation (retired from the build in v5.0.0) — it survives only on papers the
+ * researcher's `expand_node` pulls in, which stay visible with no chip, so it's
+ * out of this list too. Its colour is still defined below for those nodes/edges.
+ */
+export const REL_TYPES = ['reference', 'citation', 'latest'] as const
 
 /** Display labels for the filter chips. The two citing relations read as the
  * two halves of "Citations" (grouped under that heading in GraphControls). */
@@ -74,5 +80,4 @@ export const REL_LABEL: Record<string, string> = {
   reference: 'References',
   citation: 'Field Landmarks',
   latest: 'Latest Publications',
-  similar: 'Similar',
 }

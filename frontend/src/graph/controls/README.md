@@ -25,9 +25,13 @@ canvas about what "a reference" looks like, and both style via
 
 - **The relation chips are the only node-type filter.** Each toggles one
   relation on/off; a hidden relation's edges drop, and neighbors reachable
-  only through them fall out of the view. (The old per-relation count
-  sliders were retired — the backend already citation-budgets each pool, so
-  a second per-relation cap was redundant chrome.)
+  only through them fall out of the view. The chips are driven by `REL_TYPES`
+  (References / Field Landmarks / Latest Publications) — `similar` was retired
+  from the seed graph in v5.0.0, so there's no Similar chip; `search`- and
+  `similar`-tagged papers (both only from the researcher) have no chip and stay
+  visible. (The old per-relation count sliders were retired too — the backend
+  already citation-budgets each pool, so a second per-relation cap was redundant
+  chrome.)
 - **The citation-count slider is a dual-knob window, not a fetch.** Like the
   year range — and bounded the same way, by the graph's actual min…max
   citation counts so neither knob has dead travel — two thumbs bound a
@@ -51,11 +55,15 @@ canvas about what "a reference" looks like, and both style via
   left→right-by-year in Timeline; double-click-to-reseed in both.
 - **Refresh** busts the seed's day-cached snapshot server-side; the button
   disables while a load is in flight.
+- **The `providerNote` line** surfaces a provider-specific caveat under the
+  controls when one applies — currently the Semantic Scholar ~10k citer-offset
+  limit (Field Landmarks come from the recent citer tip, not the full history).
+  `GraphExplorer` passes the string (or `null`) based on the active provider.
 
 ## `Legend` — never explain marks that aren't on screen
 
-The five relation entries are static; the two agent-related entries are
-conditional: "Discovered by teacher" (dashed ring) appears only once the
+The four relation entries (Seed / References / Field Landmarks / Latest
+Publications) are static; the two agent-related entries are conditional: "Discovered by teacher" (dashed ring) appears only once the
 agent has actually pulled a paper in mid-conversation, "Found by search"
 (pink) only once an ungrounded topic-search hit landed. The flags come from
 the workspace slice's selectors (`selectHasDiscovered` /

@@ -167,7 +167,7 @@ def _snapshot(seed: dict, nodes: list[dict]) -> dict:
 
 
 def test_local_search_matches_tokens_and_flags_fresh_graph():
-    cache.set("graph:1706.03762", _snapshot(
+    cache.set("graph:s2:1706.03762", _snapshot(
         {"arxiv_id": "1706.03762", "id": "seedA", "title": "Attention Is All You Need"},
         [
             _node("seedA", "Attention Is All You Need", is_seed=True,
@@ -175,25 +175,41 @@ def test_local_search_matches_tokens_and_flags_fresh_graph():
             _node("nB", "Some Other Paper", authors="Smith"),
         ],
     ))
-    out = discovery.local_search("attention")
+    out = discovery.local_search("attention", provider="s2")
     ids = [hit["id"] for hit in out]
     assert ids == ["seedA"]  # only the token-matching paper
     assert out[0]["has_graph"] is True  # a fresh snapshot exists with it as seed
 
 
+def test_local_search_is_scoped_to_the_selected_provider():
+    """A cached paper surfaces only for the provider whose snapshot holds it —
+    the other provider's cache is invisible, so the 'instant' badge is truthful."""
+    cache.set("graph:s2:X", _snapshot(
+        {"id": "s2seed", "title": "S2 Snapshot"},
+        [_node("s2paper", "Reinforcement Learning Survey", is_seed=True)]))
+    cache.set("graph:openalex:Y", _snapshot(
+        {"id": "oaseed", "title": "OpenAlex Snapshot"},
+        [_node("oapaper", "Reinforcement Learning Survey", is_seed=True)]))
+
+    s2_hits = {hit["id"] for hit in discovery.local_search("reinforcement", provider="s2")}
+    oa_hits = {hit["id"] for hit in discovery.local_search("reinforcement", provider="openalex")}
+    assert s2_hits == {"s2paper"}  # only the S2 snapshot's paper
+    assert oa_hits == {"oapaper"}  # only the OpenAlex snapshot's paper
+
+
 def test_local_search_dedupes_keeping_the_richer_record():
     # The same paper as a bare neighbor in one snapshot and hydrated in another.
-    cache.set("graph:s1", _snapshot(
+    cache.set("graph:s2:s1", _snapshot(
         {"id": "s1", "title": "Seed One"}, [_node("shared", "Shared Paper Title")]))
-    cache.set("graph:s2", _snapshot(
+    cache.set("graph:s2:s2b", _snapshot(
         {"id": "s2b", "title": "Seed Two"},
         [_node("shared", "Shared Paper Title", authors="Rich Author")]))
-    (hit,) = discovery.local_search("shared paper")
+    (hit,) = discovery.local_search("shared paper", provider="s2")
     assert hit["id"] == "shared" and hit["authors"] == "Rich Author"
 
 
 def test_local_search_year_filter_excludes_out_of_range_and_undated():
-    cache.set("graph:y", _snapshot(
+    cache.set("graph:s2:y", _snapshot(
         {"id": "y", "title": "Y"},
         [
             _node("old", "Deep Learning 2010", year=2010, authors="A"),
@@ -201,12 +217,12 @@ def test_local_search_year_filter_excludes_out_of_range_and_undated():
             _node("undated", "Deep Learning Undated", year=None, authors="C"),
         ],
     ))
-    out = discovery.local_search("deep learning", year_from=2015)
+    out = discovery.local_search("deep learning", year_from=2015, provider="s2")
     assert {hit["id"] for hit in out} == {"new"}  # 2010 too old, undated excluded under a bound
 
 
 def test_local_search_ranks_phrase_title_then_seed_then_citations():
-    cache.set("graph:r", _snapshot(
+    cache.set("graph:s2:r", _snapshot(
         {"id": "seedX", "title": "Neural Networks"},
         [
             _node("seedX", "Neural Networks", is_seed=True, authors="S", citation_count=5),
@@ -214,7 +230,7 @@ def test_local_search_ranks_phrase_title_then_seed_then_citations():
             _node("partial", "Networks of Neural Cells", authors="P", citation_count=50),
         ],
     ))
-    order = [hit["id"] for hit in discovery.local_search("neural networks")]
+    order = [hit["id"] for hit in discovery.local_search("neural networks", provider="s2")]
     # phrase-in-title (seedX, exact) beat non-phrase (partial); among the two,
     # the explored seed beats the plain hit.
     assert order.index("seedX") < order.index("exact") < order.index("partial")

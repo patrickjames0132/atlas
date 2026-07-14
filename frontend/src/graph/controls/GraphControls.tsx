@@ -52,10 +52,13 @@ export interface GraphControlsProps {
   onReleaseAll: () => void
   /** Re-center the graph (zoomToFit). */
   onFit: () => void
-  /** Bust this seed's cached snapshot and re-fetch it from Semantic Scholar. */
+  /** Bust this seed's cached snapshot and re-fetch it from the provider. */
   onRefresh: () => void
   /** A graph load/refresh is in flight (disables Refresh). */
   refreshing: boolean
+  /** A provider-specific caveat to surface below the controls (e.g. S2's ~10k
+   *  citer-offset limit), or null when the active provider has none. */
+  providerNote?: string | null
 }
 
 /**
@@ -89,6 +92,7 @@ export default function GraphControls({
   onFit,
   onRefresh,
   refreshing,
+  providerNote,
 }: GraphControlsProps) {
   // The year slider only makes sense when the graph spans more than one year.
   const showYears = maxYear > minYear
@@ -260,6 +264,8 @@ export default function GraphControls({
           ? 'papers placed left→right by year · double-click to re-seed'
           : 'drag to pin · double-click a node to re-seed'}
       </div>
+
+      {providerNote && <div className="provider-note">ⓘ {providerNote}</div>}
     </div>
   )
 }

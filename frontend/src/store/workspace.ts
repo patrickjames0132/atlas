@@ -19,6 +19,7 @@ import {
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
+  type Provider,
   type SavedSessionMeta,
 } from '../api'
 import { cleanNode, countRels } from '../graph/model'
@@ -55,6 +56,13 @@ export interface WorkspaceState {
    */
   selectedNodeIds: string[]
   layout: 'force' | 'timeline'
+  /**
+   * The academic-data backend graphs are built from — the header dropdown's
+   * choice. An app-wide setting (persists across Home, unlike the graph
+   * itself); `loadGraph` sends it on every build, and it's carried into a
+   * saved session so a restore's Refresh rebuilds under the same provider.
+   */
+  provider: Provider
   /** Bumps on every load/restore — the teacher panel remounts per epoch. */
   epoch: number
   loading: boolean
@@ -77,6 +85,7 @@ const initialState: WorkspaceState = {
   visibleNodeIds: [],
   selectedNodeIds: [],
   layout: 'timeline',
+  provider: 's2',
   epoch: 0,
   loading: false,
   buildProgress: null,
@@ -84,18 +93,42 @@ const initialState: WorkspaceState = {
 }
 
 /**
- * Load (or re-seed) the graph for an arXiv id, pasted URL, or S2 paperId.
+ * Load (or re-seed) the graph for an arXiv id, pasted URL, or provider node id.
+ * The build always uses the workspace's currently-selected `provider` (the
+ * header dropdown), so a re-seed and a Refresh stay on the same backend.
  *
  * @param seed    The paper reference to build the neighborhood around.
  * @param refresh Bypass the server's day-cached snapshot for this seed and
- *                rebuild from Semantic Scholar (the "Refresh" action) —
- *                useful when S2's data for a paper has visibly changed.
+ *                rebuild from the provider (the "Refresh" action) — useful when
+ *                the provider's data for a paper has visibly changed.
  */
-export const loadGraph = createAsyncThunk(
-  'workspace/loadGraph',
-  ({ seed, refresh = false }: { seed: string; refresh?: boolean }, { dispatch }) =>
-    fetchGraphStream(seed, refresh, (progress) => dispatch(buildProgressSet(progress))),
+export const loadGraph = createAsyncThunk<
+  GraphResponse,
+  { seed: string; refresh?: boolean },
+  { state: { workspace: WorkspaceState } }
+>('workspace/loadGraph', ({ seed, refresh = false }, { dispatch, getState }) =>
+  fetchGraphStream(seed, getState().workspace.provider, refresh, (progress) =>
+    dispatch(buildProgressSet(progress)),
+  ),
 )
+
+/**
+ * Switch the academic-data backend, then rebuild the current graph (if any)
+ * under it. The provider is an app-wide choice, but changing it re-seeds the
+ * paper on screen so the switch is immediately visible.
+ *
+ * @param provider The backend to switch to ('s2' / 'openalex').
+ */
+export const switchProvider = createAsyncThunk<
+  void,
+  Provider,
+  { state: { workspace: WorkspaceState } }
+>('workspace/switchProvider', (provider, { dispatch, getState }) => {
+  const { provider: current, seedRef } = getState().workspace
+  if (provider === current) return
+  dispatch(providerSet(provider))
+  if (seedRef) dispatch(loadGraph({ seed: seedRef }))
+})
 
 /**
  * Reopen a saved session: rebuild its graph directly (no S2 fetch, so no
@@ -118,6 +151,8 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
   return {
     graph,
     layout: data.layout ?? ('timeline' as const),
+    // Pre-v5.0.0 saves have no provider; the app was S2-backed then, so default there.
+    provider: data.provider ?? ('s2' as const),
     // (Old saves may carry a hist_trace field from the retired lecture
     // backfill — ignored; lectures no longer expand the graph.)
     transcript: {
@@ -150,6 +185,7 @@ export const saveWorkspace = createAsyncThunk<
     name,
     seed: graph.seed,
     layout: workspace.layout,
+    provider: workspace.provider,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
     nodes: [...graph.nodes, ...workspace.discoveredNodes].map((node) => cleanNode(node as VNode)),
     edges: [...graph.edges, ...workspace.discoveredEdges],
@@ -196,6 +232,16 @@ const workspaceSlice = createSlice({
      */
     layoutSet(state, action: PayloadAction<'force' | 'timeline'>) {
       state.layout = action.payload
+    },
+    /**
+     * Set the academic-data backend (the header dropdown). Prefer the
+     * `switchProvider` thunk, which also re-seeds the current graph.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the provider.
+     */
+    providerSet(state, action: PayloadAction<Provider>) {
+      state.provider = action.payload
     },
     /**
      * A build-stage frame from the SSE build stream (see `loadGraph`).
@@ -327,6 +373,7 @@ const workspaceSlice = createSlice({
         state.visibleNodeIds = []
         state.selectedNodeIds = []
         state.layout = action.payload.layout
+        state.provider = action.payload.provider
         state.epoch += 1
         state.loading = false
       })
@@ -340,6 +387,7 @@ const workspaceSlice = createSlice({
 export const {
   discoveryMerged,
   layoutSet,
+  providerSet,
   buildProgressSet,
   visibleNodesSet,
   nodeSelectionSet,

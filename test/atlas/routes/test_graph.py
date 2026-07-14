@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import json
 
-from atlas.integrations import semantic_scholar
+from atlas.config import config
+from atlas.integrations import openalex, semantic_scholar
 from atlas.routes import graph as graph_routes
 from atlas.services.graph import Counts, Graph, Node, Seed
 
@@ -35,42 +36,68 @@ def make_graph() -> Graph:
     )
 
 
-def test_graph_normalizes_pasted_urls_and_serializes_the_model(client, monkeypatch):
+def test_graph_normalizes_pasted_urls_and_threads_the_provider(client, monkeypatch):
     seen = {}
 
-    def fake_build(seed, refresh=False):
-        seen["seed"], seen["refresh"] = seed, refresh
+    def fake_build(seed, provider="s2", refresh=False):
+        seen["seed"], seen["provider"], seen["refresh"] = seed, provider, refresh
         return make_graph()
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
-    response = client.get("/api/graph?seed=https://arxiv.org/abs/1312.5602v2&refresh=1")
+    response = client.get(
+        "/api/graph?seed=https://arxiv.org/abs/1312.5602v2&provider=openalex&refresh=1"
+    )
     assert response.status_code == 200
-    assert seen == {"seed": "1312.5602", "refresh": True}  # URL + version stripped
+    # URL + version stripped; the chosen provider is threaded through.
+    assert seen == {"seed": "1312.5602", "provider": "openalex", "refresh": True}
     assert response.json["seed"]["id"] == "s2id01"
     assert response.json["counts"]["nodes"] == 1
+
+
+def test_graph_invalid_provider_falls_back_to_default(client, monkeypatch):
+    """A missing / bogus provider degrades to config.graph.default_provider."""
+    seen = {}
+
+    def fake_build(seed, provider="s2", refresh=False):
+        seen["provider"] = provider
+        return make_graph()
+
+    monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
+    monkeypatch.setattr(config.graph, "default_provider", "s2")
+    client.get("/api/graph?seed=1312.5602&provider=bogus")
+    assert seen["provider"] == "s2"
 
 
 def test_graph_error_taxonomy(client, monkeypatch):
     assert client.get("/api/graph").status_code == 400  # missing seed
 
     monkeypatch.setattr(
-        graph_routes.graph_service, "build_graph", lambda seed, refresh=False: None
+        graph_routes.graph_service, "build_graph", lambda seed, provider="s2", refresh=False: None
     )
     assert client.get("/api/graph?seed=1312.5602").status_code == 404  # unknown paper
 
-    def s2_down(seed, refresh=False):
+    def s2_down(seed, provider="s2", refresh=False):
         raise semantic_scholar.S2Error("rate limited")
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", s2_down)
     assert client.get("/api/graph?seed=1312.5602").status_code == 502  # S2 down
 
+    def openalex_down(seed, provider="s2", refresh=False):
+        raise openalex.OpenAlexError("over budget")
+
+    monkeypatch.setattr(graph_routes.graph_service, "build_graph", openalex_down)
+    # An OpenAlex failure on the OpenAlex path is a 502 too, named for the provider.
+    response = client.get("/api/graph?seed=1312.5602&provider=openalex")
+    assert response.status_code == 502
+    assert "OpenAlex" in response.json["error"]
+
 
 def test_graph_stream_reports_progress_then_the_graph(client, monkeypatch):
-    def fake_build(seed, refresh=False, on_progress=None):
+    def fake_build(seed, provider="s2", refresh=False, on_progress=None):
         # A real build fires coarse stages through on_progress before returning.
         if on_progress:
-            on_progress(0, 5, "Resolving seed paper…")
-            on_progress(2, 5, "Fetching citations…")
+            on_progress(1, 4, "Resolving seed paper…")
+            on_progress(3, 4, "Fetching citations…")
         return make_graph()
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
@@ -79,7 +106,7 @@ def test_graph_stream_reports_progress_then_the_graph(client, monkeypatch):
     assert response.mimetype == "text/event-stream"
     events = frames(response)
     assert [event for event, _ in events] == ["progress", "progress", "done"]
-    assert events[0][1] == {"done": 0, "total": 5, "label": "Resolving seed paper…"}
+    assert events[0][1] == {"done": 1, "total": 4, "label": "Resolving seed paper…"}
     assert events[-1][1]["seed"]["id"] == "s2id01"  # the serialized graph
 
 
@@ -90,12 +117,12 @@ def test_graph_stream_error_frames(client, monkeypatch):
     monkeypatch.setattr(
         graph_routes.graph_service,
         "build_graph",
-        lambda seed, refresh=False, on_progress=None: None,
+        lambda seed, provider="s2", refresh=False, on_progress=None: None,
     )
     events = frames(client.get("/api/graph/stream?seed=1312.5602"))
     assert events[-1][0] == "error"  # unknown paper -> error frame, not 404
 
-    def s2_down(seed, refresh=False, on_progress=None):
+    def s2_down(seed, provider="s2", refresh=False, on_progress=None):
         raise semantic_scholar.S2Error("rate limited")
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", s2_down)

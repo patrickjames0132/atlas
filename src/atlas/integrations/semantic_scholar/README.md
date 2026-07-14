@@ -41,12 +41,13 @@ A package (not a flat module) split by concern, four files instead of one
   — they had identical loops before this was factored out.
 - **`traversal.py`** — "what's connected to this paper?": `references()`
   (blue nodes — what it cites), `citation_relations()` (splits citers into
-  **landmark** green nodes and **latest** light-green nodes — the **fallback**
-  path now, see the citations section below), `citations()` (the single-relation
-  landmark view for on-demand graph expansion), `recommendations()` (purple
-  nodes — SPECTER2 embedding similarity), plus `get_papers()`/`get_paper()` to
-  hydrate full details for known ids. These relation types are literally the
-  colors in the graph legend.
+  **landmark** green nodes and **latest** light-green nodes — the citation path
+  **when the S2 provider is selected**, see the citations section below),
+  `citations()` (the single-relation landmark view for on-demand graph
+  expansion), `recommendations()` (SPECTER2 embedding similarity — now used
+  **only** by the researcher's `expand_node`; the seed-graph *Similar* relation
+  was retired in v5.0.0), plus `get_papers()`/`get_paper()` to hydrate full
+  details for known ids.
 - **`search.py`** — "search all of S2 for X," with no source paper at all.
   Exists specifically because citation/similarity traversal is
   *lineage-biased*: a brand-new paper citing a 2017 seed has no citations
@@ -84,14 +85,15 @@ package needs to know it's a package internally.
   `http_request`/`response` not `req`/`resp`, `year_from`/`year_to` not
   `lo`/`hi`.
 
-## Citations: landmark vs latest (now the FALLBACK path)
+## Citations: landmark vs latest (the S2 provider's citation path)
 
-> **Since v4.0.0, citations come from OpenAlex**, not here — its sorted `cites:`
-> queries return a seed's most-cited citers directly, so the whole landmark
-> **mining + verification** apparatus this section used to document is **gone**
-> (see `integrations/openalex/README.md`). `citation_relations()`/`citations()`
-> remain as the **fallback** for when OpenAlex can't resolve a seed, and are
-> described here.
+> **Since v5.0.0 a graph is built from one provider.** When the user picks
+> **Semantic Scholar** in the header dropdown, `citation_relations()` is the
+> **primary** citation path (not a fallback). It carries a known interim
+> limitation — the ~10k offset recency bias below — that OpenAlex avoids with
+> server-sorted `cites:` queries and that the offline S2 **citations corpus**
+> will eventually fix. (In v4.x this path was the OpenAlex-can't-resolve
+> fallback; the v5.0.0 provider split promoted it back to a first-class path.)
 
 A seed's citers are split into **two disjoint relations** by
 `citation_relations()`, both built from **one paged citer fetch**
@@ -112,11 +114,12 @@ and missing mid-era citers. So the fallback build **pages** (offsets 0, 1000,
 the `_MAX_OFFSET` (~10k) ceiling. Graph expansion (`citations()`, `deep=False`)
 stays one page — it wants the tip, fast.
 
-**Known limit of this fallback:** without OpenAlex's sorted queries it is
+**Known limit of the S2 provider:** without OpenAlex's sorted queries it is
 newest-first and offset-capped, so a hyper-cited seed's oldest landmarks (past
-~10k) are unreachable and the landmark relation is recency-biased. That's exactly
-the artifact OpenAlex fixed — which is why this is now only the rare-miss
-fallback, and the mining that used to paper over it has been retired.
+~10k) are unreachable and the landmark relation is drawn from the most-cited
+citers *within the recent ~10k*, not the full citation history. That's the
+artifact OpenAlex avoids and the offline citations corpus will fix; picking
+OpenAlex in the dropdown sidesteps it today.
 
 ## Relation ordering (what each traversal returns — and the slider walks)
 
@@ -149,13 +152,14 @@ paper; the ~65 anonymous dots of a graph don't need it).
 
 ## Who uses it, and how/why
 
-- **`services/graph.py`** — `build_graph()` is the whole point of this
-  package's existence: one `get_paper()` to hydrate the seed's rich
-  details, then `references()`/`citation_relations()`/`recommendations()` to
-  build the graph's relation types (references, landmark citations, latest
-  citations, similar) that make up the visible graph. Also uses
-  `arxiv.ID_RE` (not this package) to decide whether the seed reference
-  needs an `ARXIV:` prefix before hitting S2, or is already a raw S2 paperId.
+- **`services/graph.py`** — when the graph is built with `provider="s2"`,
+  `build_graph()`'s `_traverse_s2` calls one `get_paper()` to hydrate the seed,
+  then `references()` + `citation_relations()` for the graph's relations
+  (references, landmark citations, latest citations). It **no longer calls
+  `recommendations()`** — the *Similar* relation was retired from the build in
+  v5.0.0. Also uses `arxiv.looks_arxiv` (from `integrations.arxiv`) to decide
+  whether the seed reference needs an `ARXIV:` prefix, or is already a raw S2
+  paperId.
 - **`agents/traversal.py`** — wraps `references()`/`citations()`/
   `recommendations()`/`search_papers()` behind its own day-long cache (see
   `storage/README.md`) — this *is* the mechanism behind the agentic Q&A

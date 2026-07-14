@@ -26,6 +26,8 @@ from .traversal import (
     citation_relations,
     citations,
     landmark_max_year,
+    references,
+    resolve_seed_work,
     resolve_work,
 )
 
@@ -38,5 +40,7 @@ __all__ = [
     "citations",
     "landmark_max_year",
     "node",
+    "references",
+    "resolve_seed_work",
     "resolve_work",
 ]

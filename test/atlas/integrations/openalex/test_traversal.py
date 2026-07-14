@@ -1,5 +1,5 @@
-"""Seed resolution and citer traversal: resolve_work, citation_relations,
-citations, and the title sanitizer.
+"""Seed resolution and citer traversal: resolve_work, resolve_seed_work,
+references, citation_relations, citations, and the title sanitizer.
 
 client.request is faked directly — no network.
 """
@@ -294,3 +294,63 @@ def test_citations_single_relation_sorted_and_cursor_pages(monkeypatch):
     monkeypatch.setattr(client, "request", fake_request)
     out = traversal.citations("W5", limit=201)
     assert len(out) == 201 and out[0]["node"]["id"] == "DOI:10/0"
+
+
+def test_references_use_cited_by_filter_sorted(monkeypatch):
+    """references() = the seed's own bibliography, a server-sorted ``cited_by:``
+    query (the outbound direction), most-cited first."""
+    def fake_request(url):
+        params = _query(url)
+        assert params["filter"] == "cited_by:W5"  # outbound: works the seed cites
+        assert params["sort"] == "cited_by_count:desc"
+        return {"results": [_work("Wr1", doi="10/r1", cites=50),
+                            _work("Wr2", doi="10/r2", cites=10)],
+                "meta": {"next_cursor": None}}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    refs = traversal.references("W5", limit=10)
+    assert [entry["node"]["id"] for entry in refs] == ["DOI:10/r1", "DOI:10/r2"]
+    assert all(entry["influential"] is False for entry in refs)  # OpenAlex has no such flag
+
+
+def test_resolve_seed_work_by_openalex_id(monkeypatch):
+    """A bare ``W…`` id resolves through the free entity path, with the DETAIL
+    select so the seed carries its (inverted-index) abstract."""
+    calls = []
+
+    def fake_request(url):
+        calls.append(url)
+        return _work("W7", doi="10/x")
+
+    monkeypatch.setattr(client, "request", fake_request)
+    work = traversal.resolve_seed_work("W7")
+    assert traversal.bare_work_id(work) == "W7"
+    assert "/works/W7" in calls[0]
+    assert "abstract_inverted_index" in urllib.parse.unquote(calls[0])  # DETAIL select
+
+
+def test_resolve_seed_work_by_doi_prefix(monkeypatch):
+    """A ``DOI:<doi>`` node id resolves through the free DOI entity path."""
+    calls = []
+    monkeypatch.setattr(client, "request", lambda url: calls.append(url) or _work("W8"))
+    traversal.resolve_seed_work("DOI:10.1/paper")
+    assert "/works/doi:10.1/paper" in urllib.parse.unquote(calls[0])
+
+
+def test_resolve_seed_work_by_arxiv_id_and_arxiv_node_id(monkeypatch):
+    """Both a bare arXiv id and an ``ARXIV:`` node id resolve via the arXiv-DOI
+    entity (the resolve_work path)."""
+    calls = []
+    monkeypatch.setattr(
+        client, "request",
+        lambda url: calls.append(url) or _work("W9", doi="10.48550/arXiv.2101.00001"),
+    )
+    traversal.resolve_seed_work("2101.00001")
+    traversal.resolve_seed_work("ARXIV:2101.00001")
+    assert len(calls) == 2
+    assert all("10.48550/arXiv.2101.00001" in urllib.parse.unquote(url) for url in calls)
+
+
+def test_resolve_seed_work_blank_is_none():
+    assert traversal.resolve_seed_work("") is None
+    assert traversal.resolve_seed_work("   ") is None

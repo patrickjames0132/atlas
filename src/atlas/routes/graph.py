@@ -26,8 +26,9 @@ from typing import Iterator
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from ..integrations import arxiv, huggingface, semantic_scholar
+from ..integrations import arxiv, huggingface, openalex, semantic_scholar
 from ..services import graph as graph_service
+from ..services.graph import Provider
 from .sse import sse, sse_response
 
 bp = Blueprint("graph", __name__)
@@ -36,6 +37,28 @@ bp = Blueprint("graph", __name__)
 # its worker thread) must use a module logger, never ``current_app`` — see
 # routes/sse.py.
 log = logging.getLogger(__name__)
+
+# A graph build now talks to exactly one academic-data backend; either provider's
+# client can fail. Both surface to the client as a 502.
+_BUILD_ERRORS = (semantic_scholar.S2Error, openalex.OpenAlexError)
+
+
+def _requested_provider() -> Provider:
+    """The academic-data backend to build from, parsed from the request.
+
+    Reads the ``provider`` query arg (the header dropdown's choice) and validates
+    it through the shared ``graph_service.resolve_provider`` — a stale/forged
+    value degrades to ``config.graph.default_provider`` rather than erroring.
+
+    Returns:
+        ``"s2"`` or ``"openalex"``.
+    """
+    return graph_service.resolve_provider(request.args.get("provider"))
+
+
+def _provider_name(provider: Provider) -> str:
+    """Human-readable provider name for user-facing error messages."""
+    return "OpenAlex" if provider == "openalex" else "Semantic Scholar"
 
 
 def normalize_arxiv_id(raw: str) -> str:
@@ -57,29 +80,32 @@ def api_graph() -> ResponseReturnValue:
     """Build the neighborhood graph for a seed paper.
 
     Query args:
-        seed: An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId.
+        seed: An arXiv id, a pasted abs/pdf URL, or a raw provider node id.
+        provider: ``s2`` or ``openalex`` — which backend to build from (defaults
+            to ``config.graph.default_provider``).
         refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
 
     Returns:
         JSON ``{seed, nodes, edges, counts}`` on success; ``{error}`` with
-        HTTP 400 for a missing seed, 404 when S2 has no such paper, or 502
-        when Semantic Scholar is unavailable.
+        HTTP 400 for a missing seed, 404 when the provider has no such paper, or
+        502 when the provider is unavailable.
     """
     seed = normalize_arxiv_id(request.args.get("seed", ""))
     if not seed:
         return jsonify({"error": "missing 'seed' arXiv id"}), 400
+    provider = _requested_provider()
     refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
     try:
-        result = graph_service.build_graph(seed, refresh=refresh)
-    except semantic_scholar.S2Error as exc:
-        current_app.logger.warning("graph build failed for %s: %s", seed, exc)
-        return jsonify({"error": "Semantic Scholar is unavailable — try again."}), 502
+        result = graph_service.build_graph(seed, provider=provider, refresh=refresh)
+    except _BUILD_ERRORS as exc:
+        current_app.logger.warning("graph build failed for %s (%s): %s", seed, provider, exc)
+        return jsonify({"error": f"{_provider_name(provider)} is unavailable — try again."}), 502
     if not result:
-        return jsonify({"error": f"No paper found on Semantic Scholar for {seed}."}), 404
+        return jsonify({"error": f"No paper found on {_provider_name(provider)} for {seed}."}), 404
     return jsonify(result.model_dump())
 
 
-def _build_stream(seed: str, refresh: bool) -> Iterator[str]:
+def _build_stream(seed: str, provider: Provider, refresh: bool) -> Iterator[str]:
     """Build a seed's graph in a worker thread, streaming progress as SSE.
 
     ``build_graph`` is synchronous and reports coarse stages through a
@@ -93,19 +119,22 @@ def _build_stream(seed: str, refresh: bool) -> Iterator[str]:
     barely flickers.
 
     Args:
-        seed: The normalized seed reference (arXiv id / S2 paperId).
-        refresh: Bypass the cached snapshot and rebuild from S2.
+        seed: The normalized seed reference (arXiv id / provider node id).
+        provider: Which backend to build from (``s2`` / ``openalex``).
+        refresh: Bypass the cached snapshot and rebuild from the provider.
 
     Yields:
         ``progress`` frames (``{done, total, label}``), then exactly one
         ``done`` (the serialized graph) or ``error`` (``{message}``) frame.
     """
     frames: queue.Queue[tuple[str, object]] = queue.Queue()
+    provider_name = _provider_name(provider)
 
     def worker() -> None:
         try:
             result = graph_service.build_graph(
                 seed,
+                provider=provider,
                 refresh=refresh,
                 on_progress=lambda done, total, label: frames.put(
                     ("progress", {"done": done, "total": total, "label": label})
@@ -113,13 +142,13 @@ def _build_stream(seed: str, refresh: bool) -> Iterator[str]:
             )
             if not result:
                 frames.put(
-                    ("error", {"message": f"No paper found on Semantic Scholar for {seed}."})
+                    ("error", {"message": f"No paper found on {provider_name} for {seed}."})
                 )
             else:
                 frames.put(("done", result.model_dump()))
-        except semantic_scholar.S2Error as exc:
-            log.warning("graph build failed for %s: %s", seed, exc)
-            frames.put(("error", {"message": "Semantic Scholar is unavailable — try again."}))
+        except _BUILD_ERRORS as exc:
+            log.warning("graph build failed for %s (%s): %s", seed, provider, exc)
+            frames.put(("error", {"message": f"{provider_name} is unavailable — try again."}))
         except Exception:
             log.exception("graph build failed for %s", seed)
             frames.put(("error", {"message": "Could not build that graph."}))
@@ -141,7 +170,9 @@ def api_graph_stream() -> ResponseReturnValue:
     show a real percent bar (stage / total) instead of a bare spinner.
 
     Query args:
-        seed: An arXiv id, a pasted abs/pdf URL, or a raw S2 paperId.
+        seed: An arXiv id, a pasted abs/pdf URL, or a raw provider node id.
+        provider: ``s2`` or ``openalex`` — which backend to build from (defaults
+            to ``config.graph.default_provider``).
         refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
 
     Returns:
@@ -153,8 +184,9 @@ def api_graph_stream() -> ResponseReturnValue:
     seed = normalize_arxiv_id(request.args.get("seed", ""))
     if not seed:
         return jsonify({"error": "missing 'seed' arXiv id"}), 400
+    provider = _requested_provider()
     refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
-    return sse_response(_build_stream(seed, refresh))
+    return sse_response(_build_stream(seed, provider, refresh))
 
 
 @bp.get("/api/paper/<path:paper_ref>")

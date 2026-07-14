@@ -16,6 +16,7 @@ from flask.typing import ResponseReturnValue
 
 from ..integrations import arxiv, semantic_scholar
 from ..services import search as search_service
+from ..services.graph import resolve_provider
 
 bp = Blueprint("search", __name__)
 
@@ -107,6 +108,9 @@ def local_search_route() -> Response:
     Query args:
         q: The search text. Blank returns an empty result.
         limit: Maximum hits (default 10, clamped to 1–50).
+        provider: ``s2`` or ``openalex`` — only that backend's cached snapshots
+            are searched (defaults to ``config.graph.default_provider``), so a
+            hit's "instant" badge reflects the provider actually selected.
         year_from: Earliest publication year (inclusive; optional).
         year_to: Latest publication year (inclusive; optional). No field
             filter — cached nodes are matched purely on text.
@@ -129,6 +133,7 @@ def local_search_route() -> Response:
             limit=limit,
             year_from=_opt_year("year_from"),
             year_to=_opt_year("year_to"),
+            provider=resolve_provider(request.args.get("provider")),
         )
     except Exception:
         current_app.logger.exception("local search failed for %r", query)

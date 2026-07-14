@@ -19,6 +19,7 @@
     }
   },
   "graph": {
+    "default_provider": "s2",
     "ref_limit": 100,
     "cite_limit": 150,
     "adaptive_cite_limit": true,

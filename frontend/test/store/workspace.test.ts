@@ -12,8 +12,10 @@ import reducer, {
   nodeSelectionCleared,
   nodeSelectionSet,
   nodeSelectionToggled,
+  providerSet,
   selectGroundingNodes,
   visibleNodesSet,
+  workspaceCleared,
 } from '../../src/store/workspace'
 import type { WorkspaceState } from '../../src/store/workspace'
 
@@ -112,6 +114,26 @@ describe('selectGroundingNodes', () => {
       stateWith({ visibleNodeIds: ['a', 'b'], selectedNodeIds: ['c'] }),
     )
     expect(grounding).toEqual([])
+  })
+})
+
+describe('provider selection', () => {
+  it('defaults to Semantic Scholar', () => {
+    expect(initial().provider).toBe('s2')
+  })
+
+  it('providerSet switches the backend', () => {
+    const state = reducer(initial(), providerSet('openalex'))
+    expect(state.provider).toBe('openalex')
+  })
+
+  it('survives Home (an app-wide setting, not per-graph)', () => {
+    // Unlike the graph itself, the provider choice persists across a workspace
+    // clear — it reads as a global setting, so Home must not reset it.
+    let state = reducer(initial(), providerSet('openalex'))
+    state = reducer(state, workspaceCleared())
+    expect(state.graph).toBeNull() // the graph is cleared…
+    expect(state.provider).toBe('openalex') // …but the provider choice stays
   })
 })
 

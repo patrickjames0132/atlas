@@ -99,8 +99,10 @@ def _try_entity(entity_id: str, select: str) -> dict | None:
     return result if isinstance(result, dict) else None
 
 
-def resolve_work(*, arxiv_id: str | None, title: str | None) -> dict | None:
-    """Find the OpenAlex work for a seed the app resolved through S2.
+def resolve_work(
+    *, arxiv_id: str | None, title: str | None, select: str = nodes.NEIGHBOR_SELECT
+) -> dict | None:
+    """Find the OpenAlex work for a seed given its arXiv id and/or title.
 
     arXiv→work resolution is the spike's known friction point (OpenAlex has no
     filterable arXiv id, and the arXiv-minted DOI only resolves for
@@ -118,14 +120,17 @@ def resolve_work(*, arxiv_id: str | None, title: str | None) -> dict | None:
 
     Args:
         arxiv_id: The seed's bare arXiv id, when it has one.
-        title: The seed's title (from the S2 seed node).
+        title: The seed's title, when known (the title-search fallback needs it).
+        select: The OpenAlex ``select`` field list to request — defaults to the
+            light ``NEIGHBOR_SELECT``; a seed resolve passes ``DETAIL_SELECT`` so
+            the resolved work carries its abstract.
 
     Returns:
         The raw OpenAlex work object (carrying ``id``), or None when neither
         path finds it.
     """
     if arxiv_id:
-        work = _try_entity(f"doi:10.48550/arXiv.{arxiv_id}", nodes.NEIGHBOR_SELECT)
+        work = _try_entity(f"doi:10.48550/arXiv.{arxiv_id}", select)
         if work:
             return work
     cleaned = _clean_search(title or "")
@@ -135,11 +140,82 @@ def resolve_work(*, arxiv_id: str | None, title: str | None) -> dict | None:
         "filter": f"title.search:{cleaned}",
         "sort": "cited_by_count:desc",
         "per-page": "1",
-        "select": nodes.NEIGHBOR_SELECT,
+        "select": select,
     }
     data = client.request(client.works_url(params))
     results = data.get("results") if isinstance(data, dict) else None
     return results[0] if results else None
+
+
+def resolve_seed_work(seed_ref: str) -> dict | None:
+    """Resolve a seed reference to its OpenAlex work, hydrated for the seed node.
+
+    The OpenAlex twin of the S2 seed lookup (``s2.get_paper``): it accepts every
+    id form a seed can arrive as — a bare **arXiv id** (a fresh search), or one
+    of the S2-resolvable ids an OpenAlex graph node carries when the user
+    re-seeds on it: ``DOI:<doi>``, ``ARXIV:<id>``, or a bare OpenAlex ``W…``
+    (see ``nodes.resolvable_id``). Uses ``DETAIL_SELECT`` so the resolved seed
+    carries its abstract — the seed node is grounding context, unlike the light
+    neighbor traversals.
+
+    Known limit (the spike's resolution friction, now unmasked): a bare arXiv id
+    resolves cheapest-first through the arXiv-minted DOI, which lands on the
+    **preprint** record — for a paper with a separate published version of
+    record, that stub is lower-cited than the canonical record. The old hybrid
+    hid this behind S2's seed count; an OpenAlex-only build reads the preprint's
+    count. A canonical-record heuristic is deferred (see docs/citation-coverage.md).
+
+    Args:
+        seed_ref: A bare arXiv id, ``DOI:…``, ``ARXIV:…``, or a bare ``W…`` id.
+
+    Returns:
+        The raw OpenAlex work (carrying ``id`` for ``cites:``/``cited_by:``
+        queries and the fields :func:`nodes.node` needs), or None when
+        unresolvable.
+
+    Raises:
+        client.OpenAlexError: When a non-404 request fails after retries.
+    """
+    ref = (seed_ref or "").strip()
+    if not ref:
+        return None
+    # An OpenAlex/DOI node-id form → a free path lookup (no title-search needed).
+    if re.fullmatch(r"W\d+", ref):
+        return _try_entity(ref, nodes.DETAIL_SELECT)
+    if ref[:4].upper() == "DOI:":
+        return _try_entity(f"doi:{ref[4:]}", nodes.DETAIL_SELECT)
+    # A bare arXiv id, or an ``ARXIV:`` node id → the arXiv-DOI/title path.
+    arxiv_id = ref[6:] if ref[:6].upper() == "ARXIV:" else ref
+    return resolve_work(arxiv_id=arxiv_id, title=None, select=nodes.DETAIL_SELECT)
+
+
+def references(work_id: str, limit: int | None) -> list[dict]:
+    """The papers a seed CITES — its bibliography (the OpenAlex twin of
+    ``s2.references``).
+
+    A ``cited_by:<work_id>`` filter returns exactly the works in the seed's own
+    reference list (outbound citations). OpenAlex sorts them server-side by
+    ``cited_by_count:desc``, so — unlike the S2 path, whose endpoint offers no
+    ``sort`` and must over-fetch a pool and rank locally — the most-cited
+    references come back directly.
+
+    Args:
+        work_id: The seed's bare OpenAlex id (``W…``).
+        limit: Max references to return, or None for the unbounded cap.
+
+    Returns:
+        ``[{"node", "influential"}]`` entries, most-cited first (``influential``
+        always False — OpenAlex has no influential-citation flag).
+
+    Raises:
+        client.OpenAlexError: When a page request fails after retries.
+    """
+    return _fetch_citers(
+        f"cited_by:{work_id}",
+        "cited_by_count:desc",
+        limit if limit is not None else UNBOUNDED_LANDMARK_CAP,
+        nodes.NEIGHBOR_SELECT,
+    )
 
 
 def bare_work_id(work: dict) -> str | None:

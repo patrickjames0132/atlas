@@ -11,6 +11,7 @@
 import { useCallback, useState } from 'react'
 import { EMPTY_FILTERS, searchLive, searchLocal } from '../api'
 import type { GraphNode, LocalHit, SearchFilters } from '../api'
+import { useAppSelector } from '../store'
 
 /** What {@link useSeedSearch} returns for Atlas to wire up. */
 export interface SeedSearchApi {
@@ -42,6 +43,9 @@ export interface SeedSearchApi {
  * @returns The search state + handlers (see {@link SeedSearchApi}).
  */
 export function useSeedSearch(onError: (message: string | null) => void): SeedSearchApi {
+  // The local cache search is scoped to the selected provider, so a cached hit's
+  // "instant" badge is truthful for the backend that would actually build it.
+  const provider = useAppSelector((state) => state.workspace.provider)
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<SearchFilters>(EMPTY_FILTERS)
   const [hits, setHits] = useState<GraphNode[] | null>(null)
@@ -68,8 +72,9 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
       setLocalHits(null)
       setLiveFailed(false)
       // Cache-first: local hits resolve near-instantly and render while the
-      // live search is still in flight (or failing, when rate-limited).
-      const localPromise = searchLocal(text, 10, filters)
+      // live search is still in flight (or failing, when rate-limited). Scoped
+      // to the selected provider so the cached hits match what a click builds.
+      const localPromise = searchLocal(text, 10, filters, provider)
       localPromise.then((local) => setLocalHits(local.length ? local : null))
       try {
         const res = await searchLive(text, 12, filters)
@@ -84,7 +89,7 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
         setSearching(false)
       }
     },
-    [onError, filters],
+    [onError, filters, provider],
   )
 
   return {

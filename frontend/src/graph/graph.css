@@ -242,6 +242,18 @@
   opacity: 0.75;
 }
 
+/* Provider-specific caveat (e.g. S2's ~10k citer-offset limit) — a muted,
+   wrapping note under the controls, set apart with a top border. */
+.provider-note {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  max-width: 260px;
+}
+
 /* Marquee node-selector. The arm is a transparent full-canvas overlay that goes
  * live only while Alt is held (see useMarquee), capturing the drag so
  * ForceGraph2D never pans; the rect is the painted selection outline. Both sit

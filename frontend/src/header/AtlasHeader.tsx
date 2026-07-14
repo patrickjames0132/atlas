@@ -8,7 +8,8 @@
  */
 
 import type { FormEvent } from 'react'
-import type { SearchFilters } from '../api'
+import type { Provider, SearchFilters } from '../api'
+import { PROVIDER_LABEL } from '../api'
 import Search from '../search/Search'
 import './header.css'
 
@@ -17,6 +18,10 @@ export interface AtlasHeaderProps {
   /** The controlled search box value (passed through to Search). */
   query: string
   onQueryChange: (q: string) => void
+  /** The academic-data backend graphs are built from (the dropdown value). */
+  provider: Provider
+  /** Switch the backend — re-seeds the current graph under the new provider. */
+  onProviderChange: (provider: Provider) => void
   /** Submit the search form (routes to graph-load or keyword search). */
   onSubmit: (e: FormEvent) => void
   /** A search is in flight. */
@@ -53,6 +58,8 @@ export default function AtlasHeader({
   loadingGraph,
   filters,
   onFilters,
+  provider,
+  onProviderChange,
   seedTitle,
   onHome,
   onOpenSources,
@@ -85,8 +92,25 @@ export default function AtlasHeader({
           {seedTitle}
         </div>
       )}
+      <label
+        className="provider-select top-right-start"
+        title="Which academic database the graph is built from — references, citations, and the seed all come from this one source"
+      >
+        <span>Data source</span>
+        <select
+          value={provider}
+          onChange={(event) => onProviderChange(event.target.value as Provider)}
+          disabled={loadingGraph}
+        >
+          {(Object.keys(PROVIDER_LABEL) as Provider[]).map((key) => (
+            <option key={key} value={key}>
+              {PROVIDER_LABEL[key]}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
-        className="sources-toggle top-right-start"
+        className="sources-toggle"
         onClick={onOpenSources}
         title="Your sources — books, PDFs, and pages the teacher can search"
       >
