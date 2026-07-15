@@ -104,10 +104,16 @@ def _adaptive_cite_limit(seed_paper: dict) -> int | None:
     return budget.adaptive_cite_limit(seed_paper, as_of_year=datetime.date.today().year)
 
 
-#: A traversal's payload: ``(seed_node, references, landmark_citers, latest_citers)``.
-#: Each relation list is ``[{"node", "influential"}]`` — the shape graph assembly
-#: consumes, identical across providers. None when the seed can't be resolved.
-_Traversal = tuple[dict, list[dict], list[dict], list[dict]]
+#: Where an s2 graph's citer relations came from — mirrors ``Graph.citation_source``.
+CitationSource = Literal["corpus", "live"]
+
+#: A traversal's payload: ``(seed_node, references, landmark_citers, latest_citers,
+#: citation_source)``. Each relation list is ``[{"node", "influential"}]`` — the
+#: shape graph assembly consumes, identical across providers. ``citation_source``
+#: records where the citers came from (``"corpus"``/``"live"`` for s2, None for
+#: OpenAlex), surfaced on the ``Graph`` so the UI can label the Field Landmarks.
+#: The whole payload is None when the seed can't be resolved.
+_Traversal = tuple[dict, list[dict], list[dict], list[dict], CitationSource | None]
 
 
 def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversal | None:
@@ -134,15 +140,37 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
     report(2, "Fetching references…")
     refs = s2.references(seed_id, config.graph.ref_limit)
     report(3, "Fetching citations…")
-    # Landmark (most-cited historic citers) + latest frontier (recent per-year
-    # window). S2's live path is recency-biased past its ~10k offset ceiling —
-    # the accepted interim until the offline citations corpus lands.
-    landmark, latest = s2.citation_relations(
-        seed_id,
-        landmark_limit=_adaptive_cite_limit(seed_paper),
+    landmark_limit = _adaptive_cite_limit(seed_paper)
+    # Prefer the offline citations corpus: it holds every citation edge with the
+    # citers' own counts, so landmark citers come back citation-sorted across all
+    # history — the ranking S2's live endpoint can't give (newest-first, ~10k
+    # offset ceiling). It returns None when unavailable (no corpus configured/
+    # ingested) or when it can't resolve the seed locally, and we fall back to the
+    # live path (recency-biased past the offset ceiling — the accepted interim).
+    relations = s2.corpus.citation_relations(
+        seed_paper,
+        seed_ref,
+        landmark_limit=landmark_limit,
         latest_limit=config.graph.latest_limit,
     )
-    return seed_paper, refs, landmark, latest
+    citation_source: CitationSource
+    if relations is not None:
+        citation_source = "corpus"
+        log.debug("s2 citations for %s: served from the offline citations corpus", seed_id)
+    else:
+        citation_source = "live"
+        log.debug(
+            "s2 citations for %s: corpus unavailable or seed unresolved there — "
+            "using the recency-biased live S2 citation endpoint",
+            seed_id,
+        )
+        relations = s2.citation_relations(
+            seed_id,
+            landmark_limit=landmark_limit,
+            latest_limit=config.graph.latest_limit,
+        )
+    landmark, latest = relations
+    return seed_paper, refs, landmark, latest, citation_source
 
 
 def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Traversal | None:
@@ -180,7 +208,9 @@ def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Tr
         latest_limit=config.graph.latest_limit,
         band_start=bands.earliest_band_year,
     )
-    return seed_paper, refs, landmark, latest
+    # OpenAlex's own server-sorted cites: queries already return true top-cited
+    # landmarks, so the corpus/live distinction doesn't apply — None.
+    return seed_paper, refs, landmark, latest, None
 
 
 def _upgrade_node(existing: Node, sighting: dict) -> None:
@@ -290,7 +320,7 @@ def build_graph(
     )
     if traversal is None:  # the provider knows no paper for this reference.
         return None
-    seed_paper, refs, landmark_cites, latest_cites = traversal
+    seed_paper, refs, landmark_cites, latest_cites, citation_source = traversal
     seed_id = seed_paper["id"]
 
     report(4, "Assembling graph…")
@@ -424,6 +454,7 @@ def build_graph(
             latest=latest_rank,
             nodes=len(nodes),
         ),
+        citation_source=citation_source,
     )
     cache.set(cache_key, graph.model_dump(mode="json"))
     return graph

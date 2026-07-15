@@ -22,6 +22,9 @@ nodes.py      — translates S2's raw JSON into the app's own "node" shape
      ↓                (id, title, abstract, year, citation count, url, ...)
 traversal.py  — get_papers/get_paper, references, citations, recommendations
 search.py     — search_papers (free-text, no source paper needed)
+corpus/       — the offline S2 citations corpus (bulk Datasets releases → local
+                Parquet); its citation_relations is preferred over traversal's
+                recency-biased live one when a corpus is ingested
 ```
 
 A package (not a flat module) split by concern, four files instead of one
@@ -114,12 +117,19 @@ and missing mid-era citers. So the fallback build **pages** (offsets 0, 1000,
 the `_MAX_OFFSET` (~10k) ceiling. Graph expansion (`citations()`, `deep=False`)
 stays one page — it wants the tip, fast.
 
-**Known limit of the S2 provider:** without OpenAlex's sorted queries it is
+**Known limit of the *live* S2 path:** without OpenAlex's sorted queries it is
 newest-first and offset-capped, so a hyper-cited seed's oldest landmarks (past
 ~10k) are unreachable and the landmark relation is drawn from the most-cited
-citers *within the recent ~10k*, not the full citation history. That's the
-artifact OpenAlex avoids and the offline citations corpus will fix; picking
-OpenAlex in the dropdown sidesteps it today.
+citers *within the recent ~10k*, not the full citation history.
+
+**The fix — the offline citations corpus (`corpus/`).** When a corpus release is
+downloaded and ingested (`config.storage.s2_corpus_dir` set, a `CURRENT` release
+present), `build.py`'s `_traverse_s2` calls `corpus.citation_relations` **first**
+and only falls back to `traversal.citation_relations` (the recency-biased live
+path above) when the corpus is absent or can't resolve the seed. The corpus holds
+every citation edge with the citers' own counts, so it returns landmark citers
+**citation-sorted across all history** — the ranking the live API can't give. See
+[`corpus/README.md`](corpus/README.md).
 
 ## Relation ordering (what each traversal returns — and the slider walks)
 

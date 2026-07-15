@@ -96,6 +96,13 @@ export interface GraphResponse {
     latest: number
     nodes: number
   }
+  /**
+   * Where an s2 graph's citer relations came from: 'corpus' (the offline
+   * citations corpus — landmarks citation-sorted across all history) or 'live'
+   * (the recency-biased live endpoint). null/absent for OpenAlex graphs and
+   * restored/pre-corpus snapshots. Drives the Field-Landmarks provider note.
+   */
+  citation_source?: 'corpus' | 'live' | null
 }
 
 /**

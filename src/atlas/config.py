@@ -62,11 +62,33 @@ class StorageConfig(ConfigModel):
         description="Directory holding all three SQLite databases. A relative "
         "path is anchored to the repo root, not the process's cwd."
     )
+    s2_corpus_dir: Path | None = Field(
+        description="Root of the offline Semantic Scholar citations corpus (the bulk "
+        "`citations`+`papers` Datasets releases, downloaded and ingested to Parquet by "
+        "`atlas corpus`). When set and a release is ingested there, the s2 provider draws "
+        "Field Landmarks from this local, citation-sorted copy instead of the recency-biased "
+        "live API; when null or empty the app falls back to the live S2 citation endpoint. "
+        "**Kept outside the repo and gitignored** — the corpus is hundreds of GB. A relative "
+        "path anchors to the repo root; an absolute path (e.g. a roomy data drive) is used "
+        "as-is. See integrations/semantic_scholar/corpus/README.md."
+    )
 
     @field_validator("data_dir")
     @classmethod
     def _anchor_to_repo_root(cls, path: Path) -> Path:
         """A relative path in config.json means "relative to the repo root"."""
+        path = path.expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @field_validator("s2_corpus_dir")
+    @classmethod
+    def _anchor_corpus_to_repo_root(cls, path: Path | None) -> Path | None:
+        """Anchor a relative corpus path to the repo root; leave an absolute one
+        (the common case — the corpus lives on a roomy drive) untouched. None
+        stays None: the corpus feature is simply off.
+        """
+        if path is None:
+            return None
         path = path.expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 

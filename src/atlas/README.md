@@ -86,7 +86,9 @@ truth, not a per-feature dependency. By subsystem:
 - **Semantic Scholar client** (`integrations/semantic_scholar/`) reads
   `config.providers.s2.*` (api key, URLs, timeout, throttle interval) to build every
   HTTP request and self-throttle, and `config.graph.recs_pool` to pick the
-  recommendation candidate pool.
+  recommendation candidate pool. Its `corpus/` sub-package reads
+  `config.storage.s2_corpus_dir` — the offline citations corpus's root (outside
+  the repo); unset means the corpus is off and the live citer path is used.
 - **Graph assembly** (`services/graph.py`, `teacher/neighbors.py` — not yet
   ported) will read `config.graph.ref_limit/cite_limit/similar_limit` and
   `config.graph.cache_ttl` to decide how big a neighborhood to build and how

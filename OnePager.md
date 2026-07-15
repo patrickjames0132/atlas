@@ -1306,22 +1306,25 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       `route → orchestrator.run → researcher.answer → ResearcherDeps.provider →
       the tools`; the frontend sends `provider` on `/api/ask`. *(Patrick's ask;
       browser-tested 2026-07-13.)*
-- [ ] **Phase 3 — S2 citations corpus (the real Field-Landmarks fix for S2)** —
-      the S2 provider's Field Landmarks are drawn from the recent ~10k citer tip
-      (live-API offset ceiling, no citation sort), not the full history. The only
-      fix is option **(b)** from `docs/citation-coverage.md`: ingest S2's bulk
-      **`citations`** Datasets release (every citation edge, refreshed monthly) +
-      the **`papers`** release (for citer counts/titles to rank by), store/index
-      it **locally, outside the repo / gitignored** (Patrick's PC has TBs), and
-      query your own copy for a seed's citers — which finally gives the
-      citation-count sort the live API never offered. Design the app against a
-      small `CitationSource` interface (`landmark_citers(id)` / `latest_citers`)
-      with a **DuckDB-over-Parquet** impl now; the long-term shape is an **AWS
-      Airflow** monthly pull into S3 + **Athena** queried from the app when the S2
-      provider is selected (DuckDB→Athena is near the same SQL, so the local
-      prototype ports cleanly). Check the release's current size/schema against
-      the [Datasets API](https://api.semanticscholar.org/api-docs/datasets) before
-      scoping. *(Patrick's plan, filed 2026-07-13.)*
+- [x] **Phase 3 — S2 citations corpus (the real Field-Landmarks fix for S2)**
+      *(v5.4.0)* — option **(b)** from `docs/citation-coverage.md`, shipped as a
+      corpus-**optional** pipeline in `integrations/semantic_scholar/corpus/`. The
+      bulk **`citations`** (2.4B edges, ~255GB) + **`papers`** (200M, ~45GB)
+      Datasets releases are downloaded (resumable, checkpointed, signed-URL-expiry
+      aware) and ingested via **DuckDB → Parquet**: papers projected + arXiv-indexed,
+      citations **hash-partitioned on `citedcorpusid`** so a single seed's citer
+      lookup reads ~1/1024 of the edge list. The app queries its own copy through a
+      small **`CitationSource`** seam (`landmark_citers`/`latest_citers`) — a
+      **`DuckDBCitationSource`** now, the **Athena-over-S3** impl (the AWS Airflow
+      endgame) later behind the same two methods. `build.py::_traverse_s2` prefers
+      the corpus (landmarks **citation-sorted across all history** — the ranking the
+      live ~10k-offset endpoint can't give) and falls back to the recency-biased
+      live path when the corpus is absent or can't resolve the seed. Operator
+      workflow via the **`atlas corpus`** CLI (`status`/`download`/`ingest`/`activate`);
+      corpus root is `config.storage.s2_corpus_dir` (gitignored, outside the repo).
+      Which path served a build is on `Graph.citation_source` and surfaced in the UI
+      (the Field-Landmarks note reads "offline citations corpus" vs the live caveat),
+      plus a DEBUG build log. *(Patrick's plan, filed 2026-07-13; shipped 2026-07-15.)*
 - [ ] **Budget-cap the Similar nodes with a trained model** *(mooted — Similar was
       dropped from the graph in v5.0.0; keep only if a future ticket re-adds it)* —
       the *Similar*

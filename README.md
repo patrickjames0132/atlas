@@ -62,9 +62,15 @@ chosen per graph in the header's **"Data source"** dropdown (the v4.x
 S2+OpenAlex hybrid is retired). **OpenAlex** returns true top-cited landmark
 citers via server-sorted `cites:` queries (no offset ceiling); **Semantic
 Scholar** does the whole graph too, but its live citation API is newest-first and
-~10k-offset capped, so its Field Landmarks come from the recent citer tip — a
-known interim bias the offline S2 citations corpus (roadmap) will lift. The
-*Similar* relation is retired from the built graph (kept for the researcher's
+~10k-offset capped, so its Field Landmarks come from the recent citer tip. Since
+**v5.4.0** that bias is lifted by an **offline S2 citations corpus** (opt-in): the
+bulk `citations`+`papers` Datasets releases are downloaded and ingested to local
+DuckDB-over-Parquet via the `atlas corpus` CLI, and the S2 provider then draws
+Field Landmarks **citation-sorted across all history** from your own copy (the
+graph's note says which source is behind the landmarks). It's the local prototype
+of the eventual AWS Airflow→S3→Athena pipeline; see
+[`src/atlas/integrations/semantic_scholar/corpus/README.md`](src/atlas/integrations/semantic_scholar/corpus/README.md).
+The *Similar* relation is retired from the built graph (kept for the researcher's
 `expand_node`).
 
 **Stack:** Python/Flask + uv · [PydanticAI](https://ai.pydantic.dev) agents on

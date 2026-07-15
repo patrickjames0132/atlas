@@ -32,8 +32,12 @@ A graph is built from **exactly one** academic-data backend, chosen by the calle
 
 - **`"s2"`** (Semantic Scholar) — seed / references / citations all via S2. Its
   live citation endpoint is newest-first with no citation sort, so landmark
-  citers are recency-biased for a heavily-cited seed (the interim cost, lifted
-  later by the offline S2 citations corpus).
+  citers are recency-biased for a heavily-cited seed. `_traverse_s2` therefore
+  prefers the **offline S2 citations corpus** (`s2.corpus.citation_relations`,
+  citation-sorted across all history) when it's ingested and can resolve the
+  seed, falling back to the recency-biased live path otherwise. Which one served
+  a given build is recorded on `Graph.citation_source` (`"corpus"`/`"live"`) —
+  surfaced to the UI's Field-Landmarks note.
 - **`"openalex"`** — seed / references / citations all via OpenAlex, whose
   server-sorted `cites:` / `cited_by:` queries return the most-cited citers and
   references directly. Tradeoff: a famous published paper resolves to its
@@ -76,6 +80,10 @@ by both the graph and search routes.
   OpenAlex); `rank` is the edge's 0-based position within its relation's order.
 - **`counts`** (`Counts`) — post-dedupe edge counts per relation plus the final
   deduped node count. `counts.similar` is always `0` (kept for schema stability).
+- **`citation_source`** (`"corpus"` / `"live"` / `None`) — for an s2 graph, where
+  the citer relations came from (the offline corpus vs. the recency-biased live
+  endpoint); `None` for OpenAlex (server-sorted, so N/A) and pre-corpus cached
+  snapshots. Drives the frontend's Field-Landmarks provider note.
 
 The models live in `model.py`, beside `build.py`'s `build_graph`. Callers that
 need JSON serialize with `graph.model_dump()` — the routes hand it to `jsonify`.
@@ -96,12 +104,13 @@ cache hit, a deliberate trade.
 
 2. **Resolve the seed + traverse, per provider.** `build_graph` dispatches to
    `_traverse_s2` or `_traverse_openalex`, each returning the same payload:
-   `(seed_node, references, landmark_citers, latest_citers)`, or `None` when the
-   provider has no paper for the reference.
+   `(seed_node, references, landmark_citers, latest_citers, citation_source)`, or
+   `None` when the provider has no paper for the reference.
    - **S2**: an arXiv-shaped ref is looked up as `ARXIV:<id>` (S2's external-id
      syntax); a raw S2 paperId passes through untouched. `arxiv.looks_arxiv()`
      tells them apart with `ID_RE.fullmatch`. References via `s2.references`,
-     citers via `s2.citation_relations`.
+     citers via `s2.corpus.citation_relations` when the offline corpus can serve
+     the seed, else the live `s2.citation_relations` fallback.
    - **OpenAlex**: `openalex.resolve_seed_work` accepts an arXiv id or a
      `DOI:`/`ARXIV:`/`W…` node id; references via `openalex.references`
      (`cited_by:`), citers via `openalex.citation_relations` (`cites:`), with the
