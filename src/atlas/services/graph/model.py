@@ -101,3 +101,10 @@ class Graph(BaseModel):
     nodes: list[Node]
     edges: list[Edge]
     counts: Counts
+    citation_source: Literal["corpus", "live"] | None = None
+    """Where an **s2** graph's citer relations came from: ``"corpus"`` (the
+    offline citations corpus — landmarks citation-sorted across all history) or
+    ``"live"`` (the recency-biased live endpoint the corpus couldn't replace for
+    this seed). ``None`` for OpenAlex graphs (not applicable) and for snapshots
+    cached before this field existed. The frontend keys the provider note off it
+    so the user knows which citation source is behind the Field Landmarks."""

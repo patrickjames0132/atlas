@@ -101,6 +101,48 @@ def test_build_graph_shape_s2(fake_s2):
     assert graph.counts == Counts(references=1, citations=1, similar=0, latest=1, nodes=4)
 
 
+def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
+    """When the offline corpus can serve the seed, its citers are used and the
+    recency-biased live citation endpoint is never called."""
+    def corpus_relations(seed_paper, seed_ref, *, landmark_limit, latest_limit):
+        landmark = [{"node": make_node("CorpusId:2", title="BERT"), "influential": True}]
+        latest = [{"node": make_node("CorpusId:3", pub_date="2026-07-01"), "influential": False}]
+        return landmark, latest
+
+    def live_should_not_run(paper_id, *, landmark_limit, latest_limit):
+        raise AssertionError("live citation_relations called despite an available corpus")
+
+    monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_relations)
+    monkeypatch.setattr(build.s2, "citation_relations", live_should_not_run)
+
+    graph = build.build_graph("1706.03762", provider="s2")
+    by_id = {node.id: node for node in graph.nodes}
+    assert by_id["CorpusId:2"].rels == ["citation"] and by_id["CorpusId:2"].title == "BERT"
+    assert by_id["CorpusId:3"].rels == ["latest"]
+    assert graph.citation_source == "corpus"  # surfaced to the UI's Field-Landmarks note
+
+
+def test_s2_build_falls_back_to_live_when_corpus_declines(fake_s2, monkeypatch):
+    """When the corpus returns None (absent, or can't resolve the seed), the build
+    falls back to the live citation path."""
+    live_calls = {"n": 0}
+
+    def corpus_declines(seed_paper, seed_ref, *, landmark_limit, latest_limit):
+        return None
+
+    def live_relations(paper_id, *, landmark_limit, latest_limit):
+        live_calls["n"] += 1
+        return [{"node": make_node("cite1"), "influential": False}], []
+
+    monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_declines)
+    monkeypatch.setattr(build.s2, "citation_relations", live_relations)
+
+    graph = build.build_graph("1706.03762", provider="s2")
+    assert live_calls["n"] == 1
+    assert any(node.id == "cite1" for node in graph.nodes)
+    assert graph.citation_source == "live"
+
+
 def test_build_graph_shape_openalex(fake_openalex):
     """The OpenAlex path: the seed resolves through ``resolve_seed_work``, the bare
     work id drives the citation queries, and references/citations populate the graph."""
@@ -117,6 +159,7 @@ def test_build_graph_shape_openalex(fake_openalex):
     assert Edge(source="DOI:10/oa-cite", target="seed", type="citation",
                 influential=False, rank=0) in graph.edges
     assert graph.counts == Counts(references=1, citations=1, similar=0, latest=1, nodes=4)
+    assert graph.citation_source is None  # not applicable to OpenAlex's sorted citers
 
 
 def test_a_paper_thats_both_a_reference_and_a_citer_merges(fake_s2, monkeypatch):

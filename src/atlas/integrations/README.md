@@ -8,11 +8,13 @@ Since v5.0.0 a graph is built from **one** of two interchangeable providers,
 chosen per graph in the header's "Data source" dropdown:
 
 - **`semantic_scholar/`** — the S2 Academic Graph + Recommendations client; as a
-  graph provider it supplies the seed, references, and citer relations (with a
-  ~10k-offset landmark recency bias — the interim limit the citations corpus will
-  fix). Also holds S2's fields-of-study vocabulary (`vocab`) and the
-  recommendations client the researcher's `expand_node` still uses. Its own
-  package; see its own README.
+  graph provider it supplies the seed, references, and citer relations. Its live
+  citer path has a ~10k-offset landmark recency bias, now fixed by its
+  **`corpus/`** sub-package (the offline bulk-Datasets **citations corpus** →
+  local Parquet, queried via DuckDB and preferred over the live path when a
+  release is ingested; the AWS Athena-over-S3 endgame's local prototype). Also
+  holds S2's fields-of-study vocabulary (`vocab`) and the recommendations client
+  the researcher's `expand_node` still uses. Its own package; see its own README.
 - **`openalex/`** — the OpenAlex client: seed resolution, references, citations,
   and the Latest-Publications banding. As a graph provider it supplies the whole
   graph via server-sorted `cites:`/`cited_by:` queries (true top-cited landmarks,

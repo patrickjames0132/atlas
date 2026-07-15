@@ -51,6 +51,27 @@ import { CITE_SLIDER_STEPS, citationThreshold, type Base, type VLink, type VNode
  *
  * @returns The graph exploration area.
  */
+/**
+ * The Field-Landmarks provider note: tells the user which citation source backs
+ * an s2 graph's landmarks, or null when it doesn't apply (OpenAlex returns its
+ * landmarks server-sorted; no graph yet means nothing to annotate).
+ *
+ * @param provider        The active data provider.
+ * @param citationSource  Where the s2 graph's citers came from ('corpus' full
+ *                        history, or 'live' recency-biased), when known.
+ * @returns The note text, or null when no note should show.
+ */
+function landmarkNote(
+  provider: 's2' | 'openalex',
+  citationSource: 'corpus' | 'live' | null | undefined,
+): string | null {
+  if (provider !== 's2') return null
+  if (citationSource === 'corpus') {
+    return 'Semantic Scholar: Field Landmarks are drawn from the offline citations corpus — the full citation history, ranked by citation count.'
+  }
+  return 'Semantic Scholar: Field Landmarks are the top-cited among the ~10k most recent citers (live-API limit), not the full citation history — the citations corpus will lift this.'
+}
+
 export default function GraphExplorer({ children }: { children?: ReactNode }) {
   const dispatch = useAppDispatch()
   const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef, provider } =
@@ -390,11 +411,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
             onFit={() => fgRef.current?.zoomToFit(400, 60)}
             onRefresh={onRefresh}
             refreshing={loading}
-            providerNote={
-              provider === 's2'
-                ? 'Semantic Scholar: Field Landmarks are the top-cited among the ~10k most recent citers (live-API limit), not the full citation history — the citations corpus will lift this.'
-                : null
-            }
+            providerNote={landmarkNote(provider, graph?.citation_source)}
           />
         )}
 

@@ -128,5 +128,185 @@ def forget(source_id: str) -> None:
     click.echo("Deleted." if sources.delete_source(source_id) else "No such source.")
 
 
+# --- Offline S2 citations corpus (the real Field-Landmarks fix) --------------
+
+
+@cli.group(help="Download/ingest the offline Semantic Scholar citations corpus.")
+def corpus() -> None:
+    """Command group for the offline S2 citations corpus.
+
+    The bulk ``citations`` + ``papers`` Datasets releases are ~300 GB, so this is
+    an operator workflow (run on your own machine, resumable), not a request-path
+    action: ``download`` pulls the shards, ``ingest`` builds the queryable
+    Parquet, and ``activate`` flips the app over to a finished release. See
+    ``integrations/semantic_scholar/corpus/README.md``.
+    """
+
+
+def _require_corpus_dir() -> None:
+    """Fail cleanly when no corpus directory is configured.
+
+    Raises:
+        click.ClickException: When ``config.storage.s2_corpus_dir`` is unset —
+            every corpus command needs somewhere to read/write.
+    """
+    from atlas.config import config
+
+    if config.storage.s2_corpus_dir is None:
+        raise click.ClickException(
+            "config.storage.s2_corpus_dir is not set — point it at a roomy drive "
+            "(outside the repo) first, e.g. \"E:\\\\s2corpus\"."
+        )
+
+
+@corpus.command("status", help="Show the corpus location, releases, and active pointer.")
+def corpus_status() -> None:
+    """Print the corpus root, its releases, and which one is active."""
+    from atlas.config import config
+    from atlas.integrations.semantic_scholar.corpus import paths as corpus_paths
+
+    root = config.storage.s2_corpus_dir
+    if root is None:
+        click.echo("s2_corpus_dir: (unset — corpus feature off, using live S2)")
+        return
+    click.echo(f"corpus root: {root}")
+    click.echo(f"exists:      {root.exists()}")
+    active = corpus_paths.read_current_release(root) if root.exists() else None
+    click.echo(f"active release (CURRENT): {active or '(none)'}")
+    releases_dir = root / "releases"
+    if releases_dir.exists():
+        for release in sorted(child.name for child in releases_dir.iterdir() if child.is_dir()):
+            release_paths = corpus_paths.ReleasePaths(root=root, release_id=release)
+            papers_done = release_paths.parquet_dataset("papers").exists()
+            cites_done = release_paths.parquet_dataset("citations").exists()
+            click.echo(f"  {release}: papers-parquet={papers_done} citations-parquet={cites_done}")
+
+
+@corpus.command("download", help="Download (or resume) a release's shards.")
+@click.option("--release", "release_id", default=None, help="Release id (default: latest).")
+@click.option(
+    "--dataset",
+    "datasets_opt",
+    type=click.Choice(["papers", "citations"]),
+    multiple=True,
+    help="Restrict to one dataset (repeatable). Default: both.",
+)
+@click.option(
+    "--shards",
+    type=int,
+    default=None,
+    help="Cap shards per dataset — a quick sample (e.g. 1 ≈ 1 GB) before the full ~300 GB.",
+)
+def corpus_download(release_id: str | None, datasets_opt: tuple[str, ...], shards: int | None) -> None:
+    """Download a release's shards, resuming any partial pull.
+
+    Args:
+        release_id: The release to download; defaults to the latest release.
+        datasets_opt: Datasets to pull (``papers``/``citations``); both by default.
+        shards: Optional per-dataset shard cap for a quick sample.
+
+    Raises:
+        click.ClickException: When the corpus dir is unset or a download fails.
+    """
+    _require_corpus_dir()
+    from atlas.integrations.semantic_scholar.corpus import datasets, download
+    from atlas.integrations.semantic_scholar.corpus.datasets import CorpusError
+    from atlas.integrations.semantic_scholar.corpus.paths import DATASETS
+
+    release_id = release_id or datasets.latest_release_id()
+    wanted = datasets_opt or DATASETS
+    click.echo(f"Downloading release {release_id} ({', '.join(wanted)})" + (f", {shards} shard(s) each" if shards else ""))
+
+    def on_progress(dataset: str, filename: str, done: int, total: int | None) -> None:
+        pct = f"{100 * done / total:5.1f}%" if total else "  ?  "
+        click.echo(f"\r  {dataset:9} {filename[:32]:32} {done / 1e6:8.1f} MB {pct}", nl=False)
+
+    try:
+        download.download_release(
+            release_id, datasets_wanted=tuple(wanted), shards=shards, on_progress=on_progress
+        )
+    except CorpusError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo("\nDownload complete.")
+
+
+@corpus.command("ingest", help="Ingest downloaded shards into queryable Parquet.")
+@click.option("--release", "release_id", default=None, help="Release id (default: latest).")
+@click.option(
+    "--dataset",
+    "datasets_opt",
+    type=click.Choice(["papers", "citations"]),
+    multiple=True,
+    help="Restrict to one dataset (repeatable). Default: both.",
+)
+@click.option(
+    "--activate/--no-activate",
+    default=True,
+    help="On success, point CURRENT at this release (the app then queries it). Default: on.",
+)
+def corpus_ingest(release_id: str | None, datasets_opt: tuple[str, ...], activate: bool) -> None:
+    """Ingest a downloaded release to Parquet and (by default) activate it.
+
+    Args:
+        release_id: The release to ingest; defaults to the latest release.
+        datasets_opt: Datasets to ingest; both by default.
+        activate: Flip ``CURRENT`` to this release when the ingest succeeds.
+
+    Raises:
+        click.ClickException: When the corpus dir is unset or the ingest fails.
+    """
+    _require_corpus_dir()
+    from atlas.config import config
+    from atlas.integrations.semantic_scholar.corpus import datasets, ingest
+    from atlas.integrations.semantic_scholar.corpus.datasets import CorpusError
+    from atlas.integrations.semantic_scholar.corpus.paths import DATASETS, write_current_release
+
+    release_id = release_id or datasets.latest_release_id()
+    wanted = datasets_opt or DATASETS
+    click.echo(f"Ingesting release {release_id} ({', '.join(wanted)})…")
+
+    def on_progress(dataset: str, filename: str, index: int, total: int) -> None:
+        click.echo(f"\r  {dataset:9} shard {index}/{total}: {filename[:40]:40}", nl=False)
+
+    try:
+        ingest.ingest_release(release_id, datasets_wanted=tuple(wanted), on_progress=on_progress)
+    except CorpusError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo("\nIngest complete.")
+    if activate and set(DATASETS).issubset(wanted):
+        assert config.storage.s2_corpus_dir is not None  # _require_corpus_dir checked
+        write_current_release(config.storage.s2_corpus_dir, release_id)
+        click.echo(f"Activated {release_id} (CURRENT).")
+    elif activate:
+        click.echo("Not activated — activate only after both datasets are ingested "
+                   "(`atlas corpus activate`).")
+
+
+@corpus.command("activate", help="Point CURRENT at a release so the app queries it.")
+@click.option("--release", "release_id", default=None, help="Release id (default: latest).")
+def corpus_activate(release_id: str | None) -> None:
+    """Mark a release active (write the ``CURRENT`` pointer).
+
+    Args:
+        release_id: The release to activate; defaults to the latest release.
+
+    Raises:
+        click.ClickException: When the corpus dir is unset or the release's
+            papers Parquet is missing (nothing to activate).
+    """
+    _require_corpus_dir()
+    from atlas.config import config
+    from atlas.integrations.semantic_scholar.corpus import datasets
+    from atlas.integrations.semantic_scholar.corpus.paths import ReleasePaths, write_current_release
+
+    release_id = release_id or datasets.latest_release_id()
+    assert config.storage.s2_corpus_dir is not None  # _require_corpus_dir checked
+    root = config.storage.s2_corpus_dir
+    if not ReleasePaths(root=root, release_id=release_id).parquet_dataset("papers").exists():
+        raise click.ClickException(f"release {release_id} has no ingested papers Parquet — ingest first")
+    write_current_release(root, release_id)
+    click.echo(f"Activated {release_id} (CURRENT).")
+
+
 if __name__ == "__main__":
     cli()

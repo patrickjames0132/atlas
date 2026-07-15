@@ -21,6 +21,10 @@ Split by concern:
 * ``vocab``     — S2's fields of study (``fields`` / ``valid_fields``): the ~20
   coarse subjects the seed-search filter uses. (arXiv's parallel finer
   vocabulary is ``arxiv.vocab``.)
+* ``corpus``    — the offline S2 citations corpus (bulk Datasets releases,
+  downloaded and ingested to local Parquet). Its ``corpus.citation_relations``
+  is the drop-in the graph build prefers over the recency-biased live citation
+  endpoint, falling back to it when the corpus is absent.
 
 Everything callers need is re-exported here, so ``from ..integrations import
 semantic_scholar as s2`` and ``s2.get_papers(...)`` etc. work exactly as if
@@ -30,7 +34,7 @@ this were still one file. (The ``vocab`` submodule is accessed as
 
 from __future__ import annotations
 
-from . import vocab
+from . import corpus, vocab
 from .client import S2Error
 from .search import match_title, search_papers
 from .traversal import (
@@ -46,6 +50,7 @@ __all__ = [
     "S2Error",
     "citation_relations",
     "citations",
+    "corpus",
     "get_paper",
     "get_papers",
     "match_title",
