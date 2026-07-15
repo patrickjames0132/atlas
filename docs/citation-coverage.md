@@ -210,10 +210,12 @@ to a reference on the same graph.)
   batch/build) S2 dependency.
 - **(b) Ingest S2's bulk citations dataset offline.** The only way to get S2's
   full, sortable ML citation graph. There is **no per-paper bulk endpoint**: the
-  live REST `/paper/{id}/citations` is offset-only, capped at `offset + limit ≤
-  ~10k` (our `_MAX_OFFSET = 9000`), newest-first with no server-side sort — so a
-  hyper-cited paper's citers past ~10k (possibly including its most-cited
-  landmarks) are unreachable live, and the token-paged bulk *search* endpoint is
+  live REST `/paper/{id}/citations` is offset-only, capped near `offset + limit ≈
+  10k` (empirically `offset=9000&limit=1000` 400s and `offset=8000` serves, so our
+  `_MAX_OFFSET = 8000` and the reachable pool is ~9k), newest-first with no
+  server-side sort — so a hyper-cited paper's citers past that wall (possibly
+  including its most-cited landmarks) are unreachable live, and the token-paged
+  bulk *search* endpoint is
   query-based with no `cites:{id}` filter. The complete data exists only as the
   Datasets API **`citations` release** — every citation edge for the *entire*
   corpus (~200M papers → billions of edges, gzipped JSONL, refreshed monthly).

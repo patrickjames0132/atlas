@@ -9,7 +9,7 @@
  * exactly as the inline code it replaced did.
  */
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 // react-force-graph's own force lib (d3-force-3d) ships no types; we only need
 // forceCollide to space timeline nodes out by their radius.
 // @ts-expect-error - no type declarations
@@ -40,10 +40,11 @@ export interface UseTimelineArgs {
 export interface TimelineApi {
   /**
    * A node's timeline x: its year plus a month fraction, so papers sit
-   * *between* the yearly gridlines by publication month (unknown month →
-   * start of year; no year → the seed's own exact x — same year AND month
-   * fraction, not just the same year column — falling back to the earliest
-   * year if the seed itself has none).
+   * *between* the yearly gridlines by publication month (unknown month → start
+   * of year). An undated node has no honest x and Timeline filters it out of the
+   * view entirely (see `GraphExplorer`'s `nodeOk`), so this only runs on dated
+   * nodes — bar an undated *seed*, which is always shown and anchors at the
+   * earliest year.
    */
   nodeTimelineX: (node: { year: number | null; month?: number | null }) => number
   /**
@@ -83,41 +84,31 @@ export function useTimeline({
   yearLo,
   yearHi,
 }: UseTimelineArgs): TimelineApi {
-  // A dateless paper sits in the seed's own column — pixel-exact, not just
-  // the same year — rather than an "n.d." lane at the far edge. S2 simply
-  // not knowing a date is not evidence the paper predates everything else
-  // on the graph, and a node reached from the seed tends to be
-  // contemporaneous with it anyway. Computed from the seed's own year+month
-  // (the same formula nodeTimelineX uses for any dated node) rather than
-  // re-derived from year alone, so a dateless node lands exactly on the
-  // seed's vertical, not just somewhere in its year. Falls back to the
-  // earliest year if the seed itself has no year.
-  const noDateX = useMemo(() => {
-    if (!base) return 0
-    const seed = base.nodes.find((node) => node.is_seed)
-    const year = typeof seed?.year === 'number' ? seed.year : base.minYear
-    const frac = typeof seed?.month === 'number' ? (seed.month - 1) / 12 : 0
-    return (year - base.minYear + frac) * YEAR_SPACING
-  }, [base])
-
   // Map a year to its gridline x on the timeline.
   const yearToX = useCallback(
-    (year: number | null | undefined) => {
+    (year: number) => {
       if (!base) return 0
-      if (typeof year !== 'number') return noDateX
       return (year - base.minYear) * YEAR_SPACING
     },
-    [base, noDateX],
+    [base],
   )
 
+  // Undated papers used to be parked on the seed's own exact column, on the
+  // reasoning that S2 not knowing a date isn't evidence the paper is old, and a
+  // citer tends to be contemporaneous with its seed anyway. True enough — but
+  // every one of them landed on a single x, so they rendered as a vertical bar
+  // skewered through the seed. Placing a paper on a time axis IS a claim about
+  // when it came out, and we have no such claim to make here; the view filters
+  // them out instead (GraphExplorer's `nodeOk`). Only an undated seed survives
+  // the filter — it's always shown — and it anchors at the earliest year.
   const nodeTimelineX = useCallback(
     (node: { year: number | null; month?: number | null }) => {
       if (!base) return 0
-      if (typeof node.year !== 'number') return noDateX
+      if (typeof node.year !== 'number') return 0
       const frac = typeof node.month === 'number' ? (node.month - 1) / 12 : 0
       return (node.year - base.minYear + frac) * YEAR_SPACING
     },
-    [base, noDateX],
+    [base],
   )
 
   const applyLayoutPhysics = useCallback(

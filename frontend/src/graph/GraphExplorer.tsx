@@ -284,6 +284,12 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     })
     const nodeOk = (node: VNode) => {
       if (node.is_seed) return true // the seed is always shown, ignoring filters
+      // Timeline is a time axis: placing a paper on it claims a publication
+      // date, and an undated paper gives us none to claim. They used to be
+      // parked on the seed's column, which drew them as a vertical bar through
+      // the seed — so Timeline hides them and Force (where x means nothing)
+      // still shows them.
+      if (layout === 'timeline' && typeof node.year !== 'number') return false
       if (typeof node.year === 'number' && (node.year < yearLo || node.year > yearHi)) return false
       const citations = node.citation_count ?? 0
       if (citations < citeMin || citations > citeMax) return false
@@ -304,7 +310,7 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     // graphVersion isn't read directly — it's a signal that base.nodes/links
     // were mutated in place (discoveries) and this must recompute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, enabled, yearLo, yearHi, citeLo, citeHi, graphVersion])
+  }, [base, enabled, layout, yearLo, yearHi, citeLo, citeHi, graphVersion])
 
   // Publish the on-screen node ids so agent grounding (selectGroundingNodes)
   // tracks the visible view, not the whole shipped pool. Fires whenever the

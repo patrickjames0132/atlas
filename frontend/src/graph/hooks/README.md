@@ -83,16 +83,24 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
 - **Force mode:** drag pins where dropped; unpin frees the node entirely.
 - **Timeline mode:** a node's x is ALWAYS its date column — dragging only
   sets height, unpinning restores the column pin, and `releaseAll` keeps
-  the date structure. `nodeTimelineX` maps year + month fraction to x
-  (papers sit *between* year gridlines by publication month; a paper with
-  no year sits at the **seed's own exact x** — same year AND month
-  fraction, so it's pixel-aligned with the seed's own column rather than
-  parked in an "n.d." lane at the timeline's edge. S2 not knowing a date
-  isn't evidence the paper predates everything else on the graph, and a
-  node reached from the seed tends to be contemporaneous with it anyway.
-  Falls back to the earliest year only if the seed itself has none; there's
-  no day-level precision anywhere in this system, only year+month, so
-  "exact" tops out at whatever precision the seed has).
+  the date structure. `nodeTimelineX` maps year + month fraction to x, so
+  papers sit *between* year gridlines by publication month (an unknown
+  month means the year's own gridline; there's no day-level precision
+  anywhere in this system, only year+month).
+- **Undated papers are not on the Timeline at all** (v5.5.0). They used to
+  sit at the **seed's own exact x**, reasoning that S2 not knowing a date
+  isn't evidence a paper is old, and a citer tends to be contemporaneous
+  with its seed anyway. That reasoning holds, but the rendering didn't:
+  every undated paper landed on that one x, so they drew as a vertical bar
+  skewered through the seed (visible on QMIX, ~12 of them). Placing a paper
+  on a time axis *is* a claim about when it came out, and an undated paper
+  gives us none to make — so **`GraphExplorer`'s `nodeOk` filters them out
+  of the Timeline view**, while Force (where x carries no date meaning)
+  still shows them. Only an undated *seed* survives the filter, since the
+  seed always renders; it anchors at the earliest year. The backend also
+  stopped shipping undated *citers* as Field Landmarks (a landmark is
+  "top-cited citer of year Y" — a claim an undated paper can't make; see
+  `services/graph/budget.py`), so in practice little reaches this filter.
 - **Timeline physics:** pin every x, add a radius-sized collide force so a
   year column spreads out instead of clumping; `freezeSettledY` freezes
   heights once the sim settles so dragging one node can't re-relax the

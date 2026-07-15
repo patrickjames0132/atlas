@@ -110,9 +110,10 @@ def test_citation_relations_splits_latest_from_landmark(monkeypatch):
     assert [hit["node"]["id"] for hit in latest] == ["fresh", "fresher"]  # oldest-first
 
 
-def test_citation_relations_undated_citer_is_landmark_not_latest(monkeypatch):
-    """A citer with no publication date can't be placed in the rolling window,
-    so it competes as a historic landmark rather than being guessed into latest."""
+def test_citation_relations_dateless_citer_is_landmark_not_latest(monkeypatch):
+    """A citer with neither a date nor a year can't be placed in the rolling
+    window, so it competes as a historic landmark rather than being guessed into
+    latest."""
 
     def fake_request(url, **kw):
         if _offset_of(url):
@@ -128,6 +129,67 @@ def test_citation_relations_undated_citer_is_landmark_not_latest(monkeypatch):
     landmark, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
     assert [hit["node"]["id"] for hit in landmark] == ["undated"]
     assert [hit["node"]["id"] for hit in latest] == ["recent"]
+
+
+def test_citation_relations_year_settles_a_dateless_citer_inside_the_window(monkeypatch):
+    """A citer S2 gave no publicationDate but a year AFTER the cutoff's year is
+    unambiguously in the window — it's months old, not a historic landmark.
+    Misfiling those was what drew a vertical line at the graph's right edge."""
+    next_year = datetime.date.today().year + 1
+
+    def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
+        return {"data": [{"citingPaper": {"paperId": "dateless-but-current",
+                                          "citationCount": 3, "year": next_year}}]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    landmark, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
+    assert [hit["node"]["id"] for hit in latest] == ["dateless-but-current"]
+    assert landmark == []
+
+
+def test_citation_relations_cutoff_year_stays_a_landmark_when_dateless(monkeypatch):
+    """The cutoff's OWN year is genuinely ambiguous without a month (January is
+    outside the window, December inside), so it stays a landmark — the
+    conservative read."""
+    this_year = datetime.date.today().year
+
+    def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
+        return {"data": [{"citingPaper": {"paperId": "ambiguous",
+                                          "citationCount": 3, "year": this_year - 1}}]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    landmark, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
+    assert [hit["node"]["id"] for hit in landmark] == ["ambiguous"]
+    assert latest == []
+
+
+def test_latest_orders_a_dateless_citer_where_the_timeline_draws_it(monkeypatch):
+    """A year-only citer sorts as Jan 1 of its year — exactly where the timeline
+    pins it (no month → the year's gridline) — so the reveal slider's order and
+    the on-screen left-to-right order agree."""
+    next_year = datetime.date.today().year + 1
+
+    def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
+        return {
+            "data": [
+                {"citingPaper": {"paperId": "june", "citationCount": 1, "year": next_year,
+                                 "publicationDate": f"{next_year}-06-01"}},
+                {"citingPaper": {"paperId": "year-only", "citationCount": 1, "year": next_year}},
+                {"citingPaper": {"paperId": "march", "citationCount": 1, "year": next_year,
+                                 "publicationDate": f"{next_year}-03-01"}},
+            ]
+        }
+
+    monkeypatch.setattr(client, "request", fake_request)
+    _, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
+    # Oldest-first: the year-only citer sits at January, ahead of March and June.
+    assert [hit["node"]["id"] for hit in latest] == ["year-only", "march", "june"]
 
 
 def test_citation_relations_respects_each_limit(monkeypatch):
@@ -177,6 +239,71 @@ def test_citation_relations_none_limit_ships_everything(monkeypatch):
     assert len(landmark) == 6 and len(latest) == 4  # every citer, uncapped
 
 
+def _landmark_pool(monkeypatch, years: list[int]) -> None:
+    """Serve one page of older (landmark-era) citers, most-cited first by
+    construction — ``years[index]`` is the year of the index-th most-cited citer.
+    """
+
+    def fake_request(url, **kw):
+        if _offset_of(url):
+            return {"data": []}
+        return {
+            "data": [
+                {"citingPaper": {"paperId": f"old{index}", "citationCount": 1000 - index,
+                                 "year": year, "publicationDate": _iso(1000 + index)}}
+                for index, year in enumerate(years)
+            ]
+        }
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+
+def test_citation_relations_landmark_select_picks_the_band(monkeypatch):
+    """An injected selector chooses which ranked landmarks ship, and WINS over the
+    flat landmark_limit. It picks by index, so it can skip — which is the point: a
+    flat count could only ever keep a prefix."""
+    _landmark_pool(monkeypatch, [2020] * 5)
+    landmark, _ = traversal.citation_relations(
+        "p1", landmark_limit=10, latest_limit=10, landmark_select=lambda years: [0, 2, 4]
+    )
+    assert [hit["node"]["id"] for hit in landmark] == ["old0", "old2", "old4"]
+
+
+def test_citation_relations_landmark_select_reads_the_ranked_years(monkeypatch):
+    """The selector sees the citer years in CITATION-RANK order, and its indices
+    are read back against that same ranking — a mismatch would ship the wrong
+    papers, not merely the wrong number of them."""
+    _landmark_pool(monkeypatch, [2018, 2024, 2019, 2024])
+    seen: dict[str, object] = {}
+
+    def record(years):
+        seen["years"] = list(years)
+        return None
+
+    traversal.citation_relations(
+        "p1", landmark_limit=None, latest_limit=10, landmark_select=record
+    )
+    assert seen["years"] == [2018, 2024, 2019, 2024]  # most-cited first, not sorted by year
+
+
+def test_citation_relations_landmark_select_declining_keeps_the_flat_limit(monkeypatch):
+    """A selector that returns None (the adaptive toggle off) leaves the flat
+    landmark_limit in charge rather than shipping the whole pool."""
+    _landmark_pool(monkeypatch, [2024] * 20)
+    landmark, _ = traversal.citation_relations(
+        "p1", landmark_limit=4, latest_limit=10, landmark_select=lambda years: None
+    )
+    assert len(landmark) == 4
+
+
+def test_citation_relations_without_a_selector_is_unchanged(monkeypatch):
+    """The default (no rule) keeps the flat-limit behavior — the expansion path
+    and every pre-existing caller are untouched."""
+    _landmark_pool(monkeypatch, [2024] * 20)
+    landmark, _ = traversal.citation_relations("p1", landmark_limit=6, latest_limit=10)
+    assert len(landmark) == 6
+
+
 def test_references_none_limit_returns_all_fetched(monkeypatch):
     """A null ref_limit returns the whole fetched (ranked) reference page."""
 
@@ -208,10 +335,11 @@ def _offset_of(url: str) -> int:
     return int(match.group(1)) if match else 0
 
 
-def test_citation_relations_pages_until_the_window_boundary(monkeypatch):
-    """The fallback build pages newest-first while pages hold in-window citers
-    and stops at the first page fully past the window — so `latest` spans
-    multiple pages and the boundary page's older citers become landmarks."""
+def test_citation_relations_pages_past_the_latest_window(monkeypatch):
+    """The fallback build pages the WHOLE reachable list, not just the latest
+    window. A page holding no in-window citer used to stop it — which gutted the
+    landmark relation, since the landmarks are exactly what lives further down
+    (DQN: the window ends by offset 2000, the list runs back to 2019)."""
     seen_offsets = []
 
     def fake_request(url, method="GET", body=None, **kw):
@@ -219,19 +347,37 @@ def test_citation_relations_pages_until_the_window_boundary(monkeypatch):
         seen_offsets.append(offset)
         if offset == 0:
             return {"data": [{"citingPaper": {"paperId": "new0", "citationCount": 1,
-                                              "publicationDate": _iso(10)}}]}
-        if offset == 1000:
-            return {"data": [{"citingPaper": {"paperId": "new1", "citationCount": 1,
-                                              "publicationDate": _iso(200)}}]}
-        # offset 2000: all older than the 12-month window → boundary crossed.
-        return {"data": [{"citingPaper": {"paperId": "old", "citationCount": 500,
-                                          "publicationDate": _iso(3000)}}]}
+                                              "year": 2026, "publicationDate": _iso(10)}}]}
+        if offset >= 4000:
+            return {"data": []}  # the citation list ends here
+        # Everything from offset 1000 on is past the 12-month window — and is
+        # precisely the landmark material the old stop condition threw away.
+        return {"data": [{"citingPaper": {"paperId": f"old{offset}", "citationCount": 5000,
+                                          "year": 2020, "publicationDate": _iso(2000)}}]}
 
     monkeypatch.setattr(client, "request", fake_request)
     landmark, latest = traversal.citation_relations("p1", landmark_limit=10, latest_limit=10)
-    assert seen_offsets == [0, 1000, 2000]  # paged through the boundary page, then stopped
-    assert {hit["node"]["id"] for hit in latest} == {"new0", "new1"}  # both in-window pages
-    assert "old" in {hit["node"]["id"] for hit in landmark}  # boundary page → landmark
+    # Kept paging past the first out-of-window page (1000) to the list's end.
+    assert seen_offsets == [0, 1000, 2000, 3000, 4000]
+    assert {hit["node"]["id"] for hit in latest} == {"new0"}  # the window is unaffected
+    assert {hit["node"]["id"] for hit in landmark} == {"old1000", "old2000", "old3000"}
+
+
+def test_deep_paging_stops_at_the_offset_ceiling(monkeypatch):
+    """A seed whose citer list outruns S2's servable offset window stops at
+    _MAX_OFFSET rather than paging forever — S2 400s past it (verified live)."""
+    seen_offsets = []
+
+    def fake_request(url, method="GET", body=None, **kw):
+        offset = _offset_of(url)
+        seen_offsets.append(offset)
+        return {"data": [{"citingPaper": {"paperId": f"c{offset}", "citationCount": 1,
+                                          "year": 2020, "publicationDate": _iso(2000)}}]}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    traversal.citation_relations("p1", landmark_limit=None, latest_limit=None)
+    assert seen_offsets[-1] == traversal._MAX_OFFSET  # never requests past the ceiling
+    assert seen_offsets == list(range(0, traversal._MAX_OFFSET + 1, 1000))
 
 
 def test_citations_expansion_fetches_one_newest_page(monkeypatch):

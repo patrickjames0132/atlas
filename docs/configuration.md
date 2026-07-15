@@ -44,13 +44,24 @@ because those are chat/tool-use credentials, not graph data sources).
   an old classic's top citers span decades and read as a map (Hawking
   Radiation earns a large budget), while a young hot paper's top citers are
   same-era pile-on (DQN reads better at ~60, "Attention Is All You Need" at
-  ~30). When on, the landmark ship count is predicted from the seed's age and
-  citation count by a **scikit-learn model trained on real data** (not
-  hand-tuned numbers), clamped to `[floor, cite_limit]`. The app loads the
-  model (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()` in
-  `services/graph/budget.py`; it's fit by `src/ml_pipelines/cite_budget/train.py`
-  (see that package's README, and `research/cite_budget/` for the exploratory
-  study). Turn off to always ship the flat `cite_limit`.
+  ~30). When on, the landmark ship count is sized per seed — by one of two
+  routes to the same criterion, both in `services/graph/budget.py`:
+  - **Predicted** from the seed's age and citation count by a **scikit-learn
+    model trained on real data** (not hand-tuned numbers), clamped to
+    `[floor, cite_limit]`. Used wherever the citers come back all-time-ranked —
+    the OpenAlex provider and the offline S2 citations corpus. The app loads the
+    model (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()`;
+    it's fit by `src/ml_pipelines/cite_budget/train.py` (see that package's
+    README, and `research/cite_budget/` for the exploratory study).
+  - **Selected** from the citer pool directly — up to `DENSITY_CAP` (12) landmarks
+    **per publication year**, taking the most-cited in each. Used by the **live S2
+    citation fallback**, which holds its whole pool in memory before trimming, so
+    nothing has to be predicted. It also can't use a count: a count keeps a prefix
+    of the ranking, and DQN's prefix is entirely 2019–2023 — leaving an 18-month
+    hole before the Latest frontier. Per-year banding ships 84 landmarks evenly
+    across 2019–2025 instead, with no hole. No model artifact needed.
+
+  Turn off to always ship the flat `cite_limit` on every path.
 - **`adaptive_latest_band: true`** — the *Latest Publications* relation fills
   recent years evenly, one query per year up to the current year; the lower edge
   defaults to a fixed `latest_band_years` offset (5). For an old seed whose

@@ -7,6 +7,8 @@ from __future__ import annotations
 import datetime
 import logging
 import urllib.parse
+from collections.abc import Sequence
+from typing import Callable
 
 from ...config import config
 from . import client, nodes
@@ -26,22 +28,30 @@ _BATCH_MAX = 500  # S2 caps /paper/batch at 500 ids per call.
 # size for deep paging (below): S2's max per-request `limit`.
 _RANK_POOL = 1000
 
-# Deepest offset a citations page may request. S2 rejects offset+limit past
-# ~10k, so with a 1000-id page the last servable window is offset 9000
-# (9000+1000 = 10000). Deep paging stops here; anything older is only
-# reachable via landmark mining.
-_MAX_OFFSET = 9000
+# Deepest offset a citations page may request. S2 rejects a page whose window
+# reaches ~10k — verified live 2026-07-15: ``offset=9000&limit=1000`` is an HTTP
+# 400 (on two different seeds), while ``offset=8000`` serves fine. So 8000 is the
+# last servable page and the reachable pool tops out at ~9k citers, not the 10k
+# the arithmetic suggests. Anything older is unreachable from the live API at any
+# price — only the offline citations corpus has it.
+_MAX_OFFSET = 8000
 
 # The "latest" citation window: a citer whose publication date falls within
 # this many months of today is the recent *frontier* (its own graph relation),
 # not a historic landmark. A rolling window, not a calendar year, so it stays
 # populated year-round (a hard "current year" cut is near-empty every January).
 _LATEST_WINDOW_MONTHS = 12
-# Citation traversal here is the FALLBACK path: since v4.0.0 the primary
-# landmark/latest source is OpenAlex (``integrations/openalex``), whose sorted
-# ``cites:`` queries need no mining. This module runs only when OpenAlex can't
-# resolve a seed — so it keeps deep paging (fill the latest window + reachable
-# mid band) but the reference-list mining/verification apparatus is gone.
+# Citation traversal here is the s2 provider's FALLBACK path, used when the
+# offline citations corpus can't serve a seed. Its landmark story is a scar worth
+# knowing: v3.1.0 mined landmarks from past the offset ceiling (harvest citers'
+# reference lists, co-citation rank, verify), v3.4.0 added the deep pager to fill
+# the *latest* window, and v4.0.0 retired the mining when OpenAlex's sorted
+# ``cites:`` queries made it redundant. That left the landmark relation riding on
+# a pager built for a different purpose — and when v5.0.0 promoted s2 back to a
+# first-class provider, nothing replaced the mining. v5.5.0 stops the pager
+# short-changing landmarks (it now pages the whole reachable list, not just the
+# latest window); reaching *past* the ceiling is the corpus's job, not this
+# module's.
 
 
 def get_papers(paper_ids: list[str], fields: str = nodes.DETAIL_FIELDS) -> dict[str, dict]:
@@ -128,13 +138,50 @@ def _latest_cutoff() -> str:
 def _is_latest(entry: dict, cutoff: str) -> bool:
     """Whether a citer falls in the recent "latest" window.
 
-    True only when the node has a ``pub_date`` at or after ``cutoff``. A citer
-    with no publication date can't be placed in the rolling window, so it
-    competes as a historic ``citation`` rather than being guessed into
-    ``latest``.
+    True when the node's ``pub_date`` is at or after ``cutoff`` — or, when S2
+    gave no date at all, when its ``year`` alone settles it: a citer from a year
+    *after* the cutoff's year is inside the window no matter which month it came
+    out. Only the cutoff's own year is genuinely ambiguous (January is outside
+    the window, December is in), and that stays a ``citation`` — the conservative
+    read, since a landmark misfiled as frontier is the worse error.
+
+    The year fallback matters because S2's dating is patchy on exactly the papers
+    this decides: without it, a **2026** citer with no ``publicationDate`` gets
+    filed as a historic Field Landmark, which is nonsense — it's months old. Those
+    then pile onto one x in the timeline (no month → the year's gridline), and
+    they're a bare vertical line the moment the Latest chip is toggled off. The
+    OpenAlex traversal hit the same trap and answered it the same way (it splits
+    by year outright, its dating being coarser still — see its module docstring).
     """
-    pub_date = entry["node"].get("pub_date")
-    return bool(pub_date) and pub_date >= cutoff
+    node = entry["node"]
+    pub_date = node.get("pub_date")
+    if pub_date:
+        return pub_date >= cutoff
+    year = node.get("year")
+    return bool(year) and year > int(cutoff[:4])
+
+
+def _latest_order(entry: dict) -> str:
+    """A latest citer's recency sort key: its ``pub_date``, or Jan 1 of its year.
+
+    The year fallback keeps the reveal order and the timeline's x placement in
+    agreement — a citer with only a year is drawn on that year's gridline (the
+    January position), so it should sort there too rather than ahead of every
+    dated paper in the window.
+
+    Args:
+        entry: A ``{"node", "influential"}`` citer entry.
+
+    Returns:
+        An ISO-ish ``YYYY-MM-DD`` string, comparable lexicographically; ``""``
+        for a citer with neither a date nor a year.
+    """
+    node = entry["node"]
+    pub_date = node.get("pub_date")
+    if pub_date:
+        return str(pub_date)
+    year = node.get("year")
+    return f"{year:04d}-01-01" if year else ""
 
 
 def _fetch_page(path: str, key: str, limit: int, offset: int = 0) -> list[dict]:
@@ -211,19 +258,34 @@ def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
     """Fetch the reachable citer pool, newest-first, deduped.
 
     ``deep=False`` (graph expansion) is a single newest page — the recent tip.
-    ``deep=True`` (the seed build) pages S2's newest-first citation list until
-    the whole rolling ``latest`` window is captured: it keeps fetching 1000-id
-    pages (offset 0, 1000, 2000, …) and stops once a page holds NO in-window
-    citer (so the window boundary is behind us), the list runs out, or the
-    ``_MAX_OFFSET`` ceiling is hit. For a hyper-cited seed whose newest 1000
-    citers are all inside the window, that means paging deep — up to ~10k
-    citers — which is the point: it both completes ``latest`` and surfaces the
-    mid-era citers just past the boundary (the landmark "middle band" one page
-    overshoots).
+    ``deep=True`` (the seed build) pages S2's newest-first citation list all the
+    way down: 1000-id pages (offset 0, 1000, 2000, …) until the list runs out or
+    the ``_MAX_OFFSET`` ceiling is hit, giving up to ~9k citers.
+
+    **It pages the whole list, not just the ``latest`` window** — and that's the
+    whole point, because the *landmarks* are what live down there. Until v5.5.0
+    this stopped at the first page holding no in-window citer, on the reasoning
+    that the window was then behind us and the boundary page's overshoot would
+    seed the landmark "middle band". For a hyper-cited seed that reasoning quietly
+    gutted the landmark relation: measured live on DQN, page 1 holds exactly ONE
+    in-window citer and page 2 holds none, so paging stopped at offset 2000 with a
+    pool covering 2024–2026 — while the full reachable list runs back to **2019**
+    and holds the citers anyone would call landmarks (Conservative Q-Learning,
+    Decision Transformer, Dota 2). Six-sevenths of the reachable pool was never
+    fetched, so "Field Landmarks" ranked whatever recent survey happened to be in
+    the overshoot.
+
+    Paging on changes ``latest`` not at all — every deeper page is older than the
+    window, so they feed only the landmark pool — but it does cost requests the
+    window alone wouldn't need, scaling with the citer list up to the ceiling
+    (measured on a cache miss, authenticated: QMIX 4 pages / ~8s, DQN 9 pages /
+    ~15s). Only a seed whose citers fit in one page is free. That's the trade: a
+    slower cold build for a landmark relation that isn't noise. Snapshots cache
+    for a day, and the build's progress bar covers the wait.
 
     Args:
         paper_id: An S2 paperId or prefixed id.
-        deep: Page to the window boundary/ceiling (seed build) vs. one page.
+        deep: Page the whole reachable list (seed build) vs. one page (expansion).
 
     Returns:
         The deduped ``[{"node", "influential"}]`` pool, newest-first.
@@ -237,11 +299,10 @@ def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
     if not deep:
         return _fetch_page(path, "citingPaper", _RANK_POOL)
 
-    cutoff = _latest_cutoff()
     pool: list[dict] = []
     seen: set[str] = set()
     offset = 0
-    while True:
+    while offset <= _MAX_OFFSET:
         try:
             page = _fetch_page(path, "citingPaper", _RANK_POOL, offset=offset)
         except client.S2Error:
@@ -255,13 +316,7 @@ def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
             if paper not in seen:
                 seen.add(paper)
                 pool.append(entry)
-        # Newest-first: once a page holds no in-window citer, the rolling window
-        # is fully behind us — stop. Otherwise keep paging (bounded by the ceiling).
-        if not any(_is_latest(entry, cutoff) for entry in page):
-            break
         offset += _RANK_POOL
-        if offset > _MAX_OFFSET:
-            break
     return pool
 
 
@@ -291,32 +346,56 @@ def citations(paper_id: str, limit: int) -> list[dict]:
     return _select_by_influence(_fetch_citers(paper_id, deep=False), limit)
 
 
+#: Injected landmark selector: ``(ranked citer years) -> indices to ship | None``.
+#: ``services/graph`` passes ``budget.density_selection``, which bands the ranking
+#: by year; None falls back to the flat ``landmark_limit``. It takes years and
+#: returns indices because the rule only reasons about *when* citers were
+#: published — the entries themselves stay here. A parameter, not an import, so
+#: ``integrations`` stays below ``services`` in the dependency order — the same
+#: shape as OpenAlex's ``BandStartFn``.
+LandmarkSelectFn = Callable[[Sequence[int | None]], list[int] | None]
+
+
 def citation_relations(
     paper_id: str,
     *,
     landmark_limit: int | None,
     latest_limit: int | None,
+    landmark_select: LandmarkSelectFn | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's citers into two relations: landmarks and the latest frontier.
 
-    The FALLBACK path (used only when OpenAlex can't resolve the seed). The citer
-    pool is paged to the latest-window boundary (``_fetch_citers`` with
-    ``deep=True``) then partitioned by publication date: citers inside the
-    rolling ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier**
+    The FALLBACK path (used only when the offline citations corpus can't serve the
+    seed). The whole reachable citer list is paged in (``_fetch_citers`` with
+    ``deep=True`` — up to ~9k) then partitioned by publication date: citers inside
+    the rolling ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier**
     (``latest``, shipped oldest-first so the reveal slider walks toward the
     present; a limit keeps the newest), and everything older competes as a
-    historic **landmark** (``citation``, most-cited first). Deep paging means ``latest``
-    covers the whole window (not just the newest page) and the citers just past
-    the boundary fill the landmark middle band. The two are disjoint, so a
-    recent-but-highly-cited paper shows once, as ``latest``. Without OpenAlex's
-    sorted ``cites:`` queries this path is recency-biased past the ~10k offset
-    ceiling — acceptable for the rare resolution miss it now serves.
+    historic **landmark** (``citation``, most-cited first). The two are disjoint,
+    so a recent-but-highly-cited paper shows once, as ``latest``.
+
+    Paging the whole list rather than just the window is what gives ``landmark``
+    anything to rank: on DQN it's the difference between a pool covering 2024–2026
+    and one running back to 2019 (see :func:`_fetch_citers`). What's still missing
+    is everything past the offset ceiling — for DQN, its 2013–2018 citers, the
+    real giants — which no amount of paging reaches. That's the corpus's job.
+
+    Having the pool in memory is also why the landmark trim takes a
+    ``landmark_select`` rule rather than a flat count. A count can only ever keep a
+    *prefix* of the ranking, which on a seed like DQN is all one era — the top 29
+    are 2019–2023 and 2024–2025 never appear, leaving a visible hole before the
+    Latest frontier. A selector bands the ranking by year instead, so every year
+    from the ceiling to the window gets its slice. See ``budget.density_selection``.
 
     Args:
         paper_id: An S2 paperId or prefixed id.
         landmark_limit: Maximum landmark (historic) citers to return, or ``None``
-            for all (the whole deep-paged older pool).
+            for all (the whole deep-paged older pool). Used when no
+            ``landmark_select`` is supplied, or when it declines to pick.
         latest_limit: Maximum recent-frontier citers to return, or ``None`` for all.
+        landmark_select: Optional rule choosing which of the *ranked* landmark pool
+            to ship, from its citer years (see :data:`LandmarkSelectFn`); its pick
+            wins over ``landmark_limit``. None (the default) uses the flat limit.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -332,10 +411,23 @@ def citation_relations(
     # newest N) then flipped oldest-first to match the OpenAlex path — the
     # frontend's reveal slider walks toward the present. Landmark: most-cited
     # first.
-    latest = sorted(recent, key=lambda entry: entry["node"].get("pub_date") or "", reverse=True)
+    #
+    # A dateless citer sorts as Jan 1 of its year, which is exactly where the
+    # timeline draws it (no month -> the year's gridline), so the reveal order
+    # and the on-screen order agree. Bare `or ""` would instead rank it before
+    # every dated paper in the window while drawing it in the middle of them.
+    latest = sorted(recent, key=_latest_order, reverse=True)
     latest = latest[:latest_limit]
     latest.reverse()
-    return _select_by_influence(older, landmark_limit), latest
+    # Rank the whole older pool first: the selector reads that ranking's years and
+    # answers in its indices, so it can only run after the sort and before the trim.
+    ranked_older = _select_by_influence(older, None)
+    keep: list[int] | None = None
+    if landmark_select is not None:
+        keep = landmark_select([entry["node"].get("year") for entry in ranked_older])
+    if keep is None:
+        return ranked_older[:landmark_limit], latest
+    return [ranked_older[index] for index in keep], latest
 
 
 def recommendations(paper_id: str, limit: int | None, pool: str | None = None) -> list[dict]:

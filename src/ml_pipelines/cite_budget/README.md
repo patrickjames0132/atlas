@@ -14,7 +14,7 @@ citation count — instead of being a hand-tuned constant.
 
 ```
 cite_budget/
-  features.py          — the training-only LABEL: density budget n* (density_budget)
+  features.py          — re-exports the app's feature + label contracts; the K-grid
   collect.py           — pull the labelled corpus from OpenAlex -> corpus.csv
   train.py             — fit LinearRegression, cross-validate, serialize the artifact
   corpus.csv           — the committed corpus (features + n* label per seed)
@@ -22,14 +22,24 @@ cite_budget/
   model.metadata.json  — human-readable sidecar (params, metrics, date)
 ```
 
-The *features* (age, log-citations) are **not** defined here — they're the app's
-contract, `atlas.services.graph.budget.compute_features`, imported by `train.py`.
-Training and serving therefore build the feature vector identically; there's one
-place that can change, and it changes both sides at once.
+Neither the *features* (age, log-citations) nor the *label* (the density budget
+`n*`) is defined here — both are the app's contract in
+`atlas.services.graph.budget` (`compute_features`, `density_budget`/`DENSITY_CAP`),
+re-exported through `features.py` for this pipeline's use. Training and serving
+therefore build the feature vector *and* apply the density rule identically;
+there's one place each can change, and it changes both sides at once.
+
+The label lived here until **v5.5.0**, on the reasoning that the app only ever
+*predicts* `n*` and never computes it. That stopped being true: the **live S2
+fallback** trims its landmark band by measuring the density rule directly on its
+citer pool (which it already holds in memory), because the model — fit on
+all-time-ranked landmarks — doesn't transfer to that path's recency-capped pool.
+So the rule moved into `budget.py` beside the features, and training reads it back.
+See `atlas/services/graph/budget.py`'s module docstring for that split.
 
 ## Method
 
-1. **Label — the density budget `n*`** (`features.density_budget`). For a seed,
+1. **Label — the density budget `n*`** (`budget.density_budget`). For a seed,
    walk its citers ranked by citation count (exactly what the app ships as
    landmarks), counting per publication year; `n*` is the longest **prefix** —
    the first N citers from the top of that ranked list — in which no single year
@@ -37,7 +47,7 @@ place that can change, and it changes both sides at once.
    and stop the instant some year would take its 13th slot; `n*` is how many were
    admitted before that break. That *is* clutter — it caps how many same-year
    papers crowd the view — so it's a principled label, not a guess. (The exact
-   walk, with a worked example, is in `features.py`'s docstring.)
+   walk, with a worked example, is in `density_budget`'s docstring.)
 2. **Collect** (`collect.py`). Sample ~60 seeds stratified across publication-year
    × citation-count bands from live OpenAlex (plus the four working anchors:
    Hawking Radiation, DQN, QMIX, Attention Is All You Need), label each with `n*`,

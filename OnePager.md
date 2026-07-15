@@ -847,7 +847,11 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       (offsets 0, 1000, 2000…), stopping at the first page with no in-window
       citer, the list end, or the `_MAX_OFFSET` (~10k) ceiling. `latest` now
       covers the *whole* rolling window; the citers just past the boundary fill
-      the landmark middle band. **Verified on DQN: ~3k citers paged, landmark
+      the landmark middle band. **The stop-at-the-window half was retired in
+      v5.5.0** — "the boundary page fills the middle band" held only while mining
+      still supplied the real landmarks, and once v4.0.0 retired mining it left
+      `landmark` living off one page of overshoot. See the v5.5.0 entry below and
+      the Bugs entry "Field Landmarks were never landmarks". **Verified on DQN: ~3k citers paged, landmark
       relation went 16 → the full `cite_limit` (60) of real 2016–2024 citers,
       evenly spread.** For hyper-cited seeds (AIAYN) the past-ceiling tail still
       comes from mining — complementary. Graph expansion (`citations()`) stays
@@ -938,6 +942,40 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       enumeration, but against the "no local corpus" philosophy). *(From a
       live v3.0.0 session on 1706.03762, 2026-07-07; design settled same
       day.)*
+- [x] **The s2 live fallback's Field Landmarks made honest** *(v5.5.0 — minor)*.
+      The s2 provider's live citer path (used whenever the offline corpus can't
+      resolve a seed) was shipping a landmark relation that wasn't one: on DQN,
+      2024–2025 LLM-agent surveys led by a 394-cite *Trust in AI*. Four compounding
+      causes, each fixed (full stories in **Bugs**):
+      - **The pager stopped at the `latest` window**, not the ceiling — so the
+        landmark ranking got a 1999-citer pool covering two years while the
+        reachable list runs back to **2019** with 7999. It now pages the whole
+        list; `latest` is unchanged, cold builds cost more (QMIX 4 pages / ~8s,
+        DQN 9 / ~15s). `_MAX_OFFSET` 9000 → **8000** (S2 400s a page whose window
+        reaches ~10k; verified live), so the reachable pool is ~9k, not 10k.
+      - **The cite-budget model was serving a pool it wasn't trained on** — its
+        label came from OpenAlex's whole-history rankings, so it read DQN's age and
+        sized for landmarks spanning decades that a ceiling-truncated pool doesn't
+        have (63 predicted, 29 admitted). The live path now **selects from the pool
+        it already holds** (`budget.density_selection`) instead of predicting; the
+        model still serves the ranked paths (OpenAlex, corpus), where it's valid.
+      - **A count can't express the answer.** The density rule is a *prefix* — one
+        dense year ends the walk — so 2020 filling at rank 29 stranded 2024–2025
+        entirely, leaving an 18-month hole before the Latest frontier. The
+        selection **bands the ranking per year** (≤`DENSITY_CAP` each, skip the
+        full ones): 84 landmarks across 2019–2025, same "no year over the cap"
+        guarantee, no hole. It's the local equivalent of OpenAlex's per-year query
+        bands — S2's `/citations` has no year filter, so it happens over the
+        ranking. `density_budget` stays as the model's training label (a regression
+        label has to be a scalar) and moved into `services/graph/budget.py` beside
+        the features, with `ml_pipelines/cite_budget` importing both back.
+      - **Date-poor papers got a guaranteed quota.** Undated citers are dropped
+        rather than bucketed, `_is_latest`/`_latest_order` fall back to `year` when
+        S2 gives no date (a post-cutoff year is frontier, not history), and
+        Timeline filters undated papers out of the view. Killed both vertical
+        lines. Result on DQN: 84 landmarks, 2019–2025, led by CQL, Decision
+        Transformer, Dota 2. *Still ceiling-bound:* 2013–2018 (AlphaGo, A3C,
+        Rainbow) is unreachable live at any page count — the corpus's job.
 
 ### Saved sessions & workspaces
 
@@ -2029,6 +2067,130 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### Field Landmarks were never landmarks — the relation rode a pager built for something else
+
+*Found & fixed on the `s2-fallback-density-budget` branch (Patrick's browser test, 2026-07-15).*
+
+- **Symptom.** On the s2 provider, DQN's "Field Landmarks" were 2024–2025 LLM-agent
+  surveys — the top one a 394-cite paper called *Trust in AI*. Not one of the
+  citers anyone would name (AlphaGo, CQL, Decision Transformer) appeared, and the
+  whole 1096-node graph crammed into the last two years of a thirteen-year history.
+  Easy to read as "the ~10k offset ceiling, nothing to be done".
+- **Root cause.** Not the ceiling — the **stop condition**. `_fetch_citers(deep=True)`
+  paged only until the rolling 12-month `latest` window was covered, then quit at
+  the first page holding no in-window citer. Landmarks were never its goal: v3.1.0
+  mined them from *past* the ceiling (`_mined_landmarks`), v3.4.0 added deep paging
+  to fill `latest`, and v4.0.0 retired the mining once OpenAlex's sorted `cites:`
+  made it redundant. That left `landmark` quietly living off the `latest` pager's
+  one-page overshoot — and when v5.0.0 promoted s2 back to a first-class provider,
+  nothing replaced the mining. Measured on DQN: page 1 held **exactly one**
+  in-window citer, page 2 held none, so paging stopped at offset 2000 with a pool
+  covering 2024–2025. The full reachable list runs back to **2019** and holds CQL,
+  Decision Transformer and Dota 2 — six-sevenths of it was never fetched.
+- **Fix.** Page the whole reachable list, stopping only at the list's end or the
+  ceiling (`semantic_scholar/traversal.py`). `latest` is byte-identical (every
+  deeper page is older than the window); the landmark pool goes 1999 → 7999. Cold
+  builds cost more, scaling with the citer list (measured: QMIX 4 pages / ~8s, DQN
+  9 pages / ~15s, against ~3 before). Also corrected **`_MAX_OFFSET` 9000 → 8000**:
+  S2 400s `offset=9000&limit=1000` (verified on two seeds) while 8000 serves, so
+  the old constant fired one doomed request per deep build — masked because the
+  window break almost always tripped first.
+- **Lesson / guard.** **When you retire a capability, audit what was quietly
+  depending on the scaffolding it leaves behind.** Deleting the mining was right;
+  what went unnoticed is that `landmark` had no source of its own afterwards and
+  silently inherited a pager optimising for a different relation. The code even
+  said so ("fill the latest window + reachable mid band") and read as intentional.
+  Guarded by `test_citation_relations_pages_past_the_latest_window`, which pins
+  that an out-of-window page no longer stops the walk.
+
+### The cite-budget model was sizing a pool it was never trained on
+
+*Found & fixed on the `s2-fallback-density-budget` branch (2026-07-15).*
+
+- **Symptom.** With `cite_limit: null` (unbounded) the s2 live path still shipped
+  exactly 63 landmarks for DQN — and they piled into two years rather than reading
+  as a map of the field.
+- **Root cause.** `adaptive_cite_limit` predicts the landmark budget from the seed's
+  **age + citation count**, and its label was collected over **OpenAlex** pools —
+  where a seed's citers are ranked across its *whole* history. It reads DQN's
+  age=13 and infers "old classic, landmarks spread over decades, afford ~63". The
+  live S2 pool is truncated at the offset ceiling (2019+, not 2013+), so 63 lands
+  three times denser than the label ever meant. The features transferred; the
+  *label* didn't. `cite_limit: null` was a red herring — with the adaptive toggle on,
+  config is only the ceiling the model clamps against, so a `null` can only ever
+  raise a cap the model is already far under.
+- **Fix.** The live path stops predicting and reads the pool it already holds
+  (`budget.density_selection`) — the model's own rationale (don't fetch a pool just
+  to size a trim) doesn't apply where the pool is in memory. The model still serves
+  the ranked paths (OpenAlex, the offline corpus), where its premise holds.
+- **Lesson / guard.** **A model's training distribution is part of its contract, and
+  identical features don't make two sources interchangeable.** The skew was invisible
+  because the inputs were legal and the output was plausible. It surfaced only by
+  running the model's own label rule against the served pool: 63 predicted, 29
+  admitted. `test_live_s2_fallback_selects_instead_of_predicting` pins which path
+  gets which rule.
+
+### Two vertical lines in the Timeline — date-poor papers handed a guaranteed quota
+
+*Found & fixed on the `s2-fallback-density-budget` branch (Patrick's browser test, 2026-07-15).*
+
+- **Symptom.** QMIX's Timeline drew two bare vertical bars of ~12 nodes each: one
+  skewered through the seed, one at the graph's right edge (visible with the Latest
+  chip off).
+- **Root cause.** Two mechanisms, one theme — **papers S2 gave no `publicationDate`**,
+  each handed a full `DENSITY_CAP` bucket by the new per-year landmark band:
+  1. *At the seed.* Citers with **no year** were given their own bucket, then
+     `useTimeline`'s `noDateX` parked every one of them on the seed's exact x. The
+     placement was a deliberate old decision (S2 not knowing a date isn't evidence a
+     paper is old) and reasonable per-node — it just never accounted for *all* of
+     them landing on one pixel column.
+  2. *At the right edge.* `_is_latest` required a `pub_date`, so a **2026** citer
+     without one was filed as a *historic* landmark — nonsense for a months-old
+     paper. With no month it pinned to the 2026 gridline, and with Latest hidden
+     those 12 stood alone.
+  In both cases the band's per-year cap didn't cause the bad data, it **guaranteed
+  twelve of it**: the buckets were filled by PDF-extraction stubs ("This paper is
+  included in the Proceedings of…") that no citation ranking would otherwise reach.
+- **Fix.** `density_selection` drops undated citers rather than bucketing them (a
+  landmark is "top-cited citer *of year Y*" — a claim a yearless paper can't make);
+  `_is_latest` falls back to `year` when there's no date, so a post-cutoff year is
+  frontier, not history (the cutoff's own year stays a landmark — ambiguous, and
+  misfiling a landmark as frontier is the worse error); `_latest_order` gives the
+  sort the same fallback so reveal order matches on-screen order; and Timeline now
+  filters undated papers out of the view entirely (`GraphExplorer`'s `nodeOk`),
+  `noDateX` deleted. QMIX landmarks 120 → 96 (8 years × 12, no junk).
+- **Lesson / guard.** **A rule that guarantees N of something will find N of the
+  worst things your data has** — quotas are only as good as the pool's floor. And
+  *no date is not an unknown position; it's the absence of a claim* — a time axis
+  should decline to place it rather than guess. Guarded by
+  `test_undated_citers_are_dropped_not_banded`,
+  `test_citation_relations_year_settles_a_dateless_citer_inside_the_window`, and
+  `frontend/test/graph/hooks/useTimeline.test.tsx`.
+
+### `bin/setup` left a venv where `import anthropic` failed — two dists, one import package
+
+*Found & fixed on the `s2-fallback-density-budget` branch (2026-07-15).*
+
+- **Symptom.** After a routine session-start `bin/setup.bat`, the **entire backend
+  suite failed to collect** — 14 collection errors, all from `import anthropic`
+  raising `ModuleNotFoundError: No module named 'docstring_parser'`. Nothing in the
+  working tree had touched either package.
+- **Root cause.** `1609833` correctly removed **pydoclint** from the project env
+  (it pins `docstring-parser-fork`, which collides with the mainline
+  `docstring-parser` that `anthropic` requires). But both distributions install the
+  **same `docstring_parser/` import package**, so uv's uninstall of the fork
+  **deleted the directory the mainline dist owns** — leaving `docstring_parser-0.18.0.dist-info`
+  behind with no code beside it. uv therefore believed the package was installed
+  and `uv sync` was a no-op: a broken env that reports itself as current.
+- **Fix.** `uv sync --reinstall-package docstring-parser`. Only bites machines whose
+  env still had the fork when they pull `1609833`; a fresh checkout is unaffected —
+  which is exactly why it survived CI and landed on `main`.
+- **Lesson / guard.** **Uninstalling one of two distributions that share an import
+  package can silently maim the survivor, and `uv sync` won't detect it** — its
+  metadata says installed. If an import breaks for a package nothing changed, check
+  whether the *directory* still exists before trusting the resolver. The trailhead
+  is the pinned comment in `pyproject.toml`'s dev group explaining the collision.
 
 ### A running research agent bled its discoveries into the next graph
 

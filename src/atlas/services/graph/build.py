@@ -140,17 +140,25 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
     report(2, "Fetching references…")
     refs = s2.references(seed_id, config.graph.ref_limit)
     report(3, "Fetching citations…")
-    landmark_limit = _adaptive_cite_limit(seed_paper)
     # Prefer the offline citations corpus: it holds every citation edge with the
     # citers' own counts, so landmark citers come back citation-sorted across all
     # history — the ranking S2's live endpoint can't give (newest-first, ~10k
     # offset ceiling). It returns None when unavailable (no corpus configured/
     # ingested) or when it can't resolve the seed locally, and we fall back to the
     # live path (recency-biased past the offset ceiling — the accepted interim).
+    #
+    # The two paths pick their landmarks DIFFERENTLY, and deliberately. The corpus
+    # pushes a count into a citation-sorted query, so it must know the budget up
+    # front and takes the model's *prediction* (fit on exactly this kind of
+    # all-time-ranked pool). The live path holds its whole pool in memory by trim
+    # time, so it gets a *selector* instead — one that bands the ranking by year,
+    # which no count could do: a count keeps a prefix, and DQN's prefix is all
+    # 2019–2023, leaving a hole before the Latest frontier. See ``budget.py``'s
+    # module docstring.
     relations = s2.corpus.citation_relations(
         seed_paper,
         seed_ref,
-        landmark_limit=landmark_limit,
+        landmark_limit=_adaptive_cite_limit(seed_paper),
         latest_limit=config.graph.latest_limit,
     )
     citation_source: CitationSource
@@ -166,8 +174,9 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
         )
         relations = s2.citation_relations(
             seed_id,
-            landmark_limit=landmark_limit,
+            landmark_limit=config.graph.cite_limit,
             latest_limit=config.graph.latest_limit,
+            landmark_select=budget.density_selection,
         )
     landmark, latest = relations
     return seed_paper, refs, landmark, latest, citation_source

@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from atlas.config import config
-from atlas.services.graph import build
+from atlas.services.graph import budget, build
 from atlas.services.graph.model import Counts, Edge, Graph, Seed
 
 
@@ -38,7 +38,7 @@ def fake_s2(monkeypatch):
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    def citation_relations(paper_id, *, landmark_limit, latest_limit):
+    def citation_relations(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
         landmark = [{"node": make_node("cite1"), "influential": False}]
         latest = [{"node": make_node("latest1", pub_date="2026-06-01"), "influential": False}]
         return landmark, latest
@@ -109,7 +109,7 @@ def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
         latest = [{"node": make_node("CorpusId:3", pub_date="2026-07-01"), "influential": False}]
         return landmark, latest
 
-    def live_should_not_run(paper_id, *, landmark_limit, latest_limit):
+    def live_should_not_run(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
         raise AssertionError("live citation_relations called despite an available corpus")
 
     monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_relations)
@@ -130,7 +130,7 @@ def test_s2_build_falls_back_to_live_when_corpus_declines(fake_s2, monkeypatch):
     def corpus_declines(seed_paper, seed_ref, *, landmark_limit, latest_limit):
         return None
 
-    def live_relations(paper_id, *, landmark_limit, latest_limit):
+    def live_relations(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
         live_calls["n"] += 1
         return [{"node": make_node("cite1"), "influential": False}], []
 
@@ -168,7 +168,7 @@ def test_a_paper_thats_both_a_reference_and_a_citer_merges(fake_s2, monkeypatch)
     monkeypatch.setattr(build.s2, "references",
                         lambda pid, limit: [{"node": make_node("mutual"), "influential": False}])
 
-    def citation_relations(pid, *, landmark_limit, latest_limit):
+    def citation_relations(pid, *, landmark_limit, latest_limit, landmark_select=None):
         return [{"node": make_node("mutual"), "influential": False}], []
 
     monkeypatch.setattr(build.s2, "citation_relations", citation_relations)
@@ -302,22 +302,23 @@ def test_unknown_seed_returns_none(fake_s2, fake_openalex, monkeypatch):
     assert build.build_graph("   ", provider="s2") is None
 
 
-def test_adaptive_budget_reaches_the_traversal(fake_s2, fake_openalex, monkeypatch):
-    """The adapted landmark limit is what each provider's citation traversal
-    actually receives — the genuinely adapted number, not the flat cite_limit."""
+def test_predicted_budget_reaches_the_ranked_traversals(fake_s2, fake_openalex, monkeypatch):
+    """The RANKED citer paths (OpenAlex, and the offline S2 corpus) get the
+    model's *predicted* budget: they push a count into a citation-sorted query, so
+    they must be told it before they hold any citers to measure."""
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
     monkeypatch.setattr(config.graph, "cite_limit", None)
     expected = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
     assert expected not in (None, build.openalex.UNBOUNDED_LANDMARK_CAP)  # genuinely adapted
     received: dict[str, int | None] = {}
 
-    def s2_relations(pid, *, landmark_limit, latest_limit):
-        received["s2"] = landmark_limit
+    def corpus_relations(seed_paper, seed_ref, *, landmark_limit, latest_limit):
+        received["corpus"] = landmark_limit
         return [], []
 
-    monkeypatch.setattr(build.s2, "citation_relations", s2_relations)
+    monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_relations)
     build.build_graph("1706.03762", provider="s2")
-    assert received["s2"] == expected
+    assert received["corpus"] == expected
 
     def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         received["openalex"] = landmark_limit
@@ -326,6 +327,40 @@ def test_adaptive_budget_reaches_the_traversal(fake_s2, fake_openalex, monkeypat
     monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
     build.build_graph("1706.03762", provider="openalex")
     assert received["openalex"] == expected
+
+
+def test_live_s2_fallback_selects_instead_of_predicting(fake_s2, monkeypatch):
+    """The LIVE S2 fallback is handed the banded selector, not a predicted count.
+
+    Its pool is truncated at S2's offset ceiling, so a count inferred from the
+    seed's age (which assumes landmarks spanning its whole history) over-ships —
+    and a count could only keep a prefix anyway, which strands the recent years.
+    The pool is in memory by trim time, so ``build`` injects
+    ``budget.density_selection`` and passes the flat ``cite_limit`` only as a
+    ceiling.
+    """
+    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
+    monkeypatch.setattr(config.graph, "cite_limit", 200)
+    monkeypatch.setattr(build.s2.corpus, "citation_relations",
+                        lambda seed_paper, seed_ref, **kwargs: None)  # force the live path
+    received: dict[str, object] = {}
+
+    def live_relations(pid, *, landmark_limit, latest_limit, landmark_select=None):
+        received["landmark_limit"] = landmark_limit
+        received["landmark_select"] = landmark_select
+        return [], []
+
+    monkeypatch.setattr(build.s2, "citation_relations", live_relations)
+    build.build_graph("1706.03762", provider="s2")
+
+    # The flat config ceiling, NOT the model's prediction for this seed.
+    assert received["landmark_limit"] == 200
+    assert received["landmark_select"] is budget.density_selection
+    # And the rule it injected really bands: a flooded year is capped without
+    # stranding a later one — the hole a predicted count leaves on a real seed.
+    select = received["landmark_select"]
+    years = [2020] * 30 + [2025] * 3
+    assert [years[index] for index in select(years)] == [2020] * budget.DENSITY_CAP + [2025] * 3
 
 
 def test_on_progress_fires_on_a_build_but_not_a_cache_hit(fake_s2):

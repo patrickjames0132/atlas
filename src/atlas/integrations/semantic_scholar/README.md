@@ -106,21 +106,82 @@ A seed's citers are split into **two disjoint relations** by
   `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. Capped at
   `config.graph.latest_limit`.
 - **landmark** (green nodes) — everything else, the most-cited *historic* citers.
-  Capped at `config.graph.cite_limit`. A citer with no `pub_date` competes here.
+  Chosen by the injected `landmark_select` rule (below), falling back to a flat
+  `landmark_limit`.
+
+**When S2 gives no `publicationDate`, `year` decides** (`_is_latest`). A citer
+from a year *after* the cutoff's year is in the window whatever month it came
+out; only the cutoff's own year is ambiguous (January is outside, December
+inside) and stays a landmark — a landmark misfiled as frontier is the worse
+error. Without this, a **2026** citer with no date got filed as a *historic*
+landmark, which is nonsense for a paper months old; those then shared one x (no
+month → the year's gridline) and drew a bare vertical line at the graph's right
+edge whenever the Latest chip was off. OpenAlex hit the same trap and answered it
+harder — it splits by year outright, its dating being coarser still. The `latest`
+sort key gets the same fallback (`_latest_order`: a year-only citer sorts as Jan 1
+of its year, exactly where the timeline draws it), so the reveal order and the
+on-screen order agree.
+
+### Choosing the landmark band (`landmark_select`)
+
+`citation_relations` takes an optional **`LandmarkSelectFn`** — a rule handed the
+*ranked* landmark pool's citer years, answering with the **indices** to ship; its
+pick wins over the flat `landmark_limit`. `services/graph`'s `build.py` passes
+`budget.density_selection`. A parameter rather than an import, so `integrations`
+stays below `services` in the dependency order (the same shape as OpenAlex's
+`BandStartFn`); years in, indices out, because the rule only reasons about *when*
+citers were published — the entries stay here.
+
+This exists because **this path can't use the model the other paths use, and
+doesn't need to.** The landmark budget is normally *predicted* from the seed's age
+and citation count, which works where the pool is all-time-ranked (OpenAlex; the
+offline corpus) — those push a ship count into a sorted query and must know it
+before they hold any citers. Here the pool is already in memory by trim time, so
+the band can be chosen from the real data.
+
+And it must be, because a count can't express the right answer. A count keeps a
+**prefix** of the ranking, and DQN's prefix is all one era: rank 29 exhausts the
+per-year cap on 2020, and 2024–2025 — 2155 citers sitting in the pool — never
+appear, leaving an 18-month hole before the Latest frontier. `density_selection`
+bands the ranking by year instead (twelve per year, skip the full ones), shipping
+84 across 2019–2025 with no hole and the same "no year over the cap" guarantee.
+It's the local equivalent of the per-year bands OpenAlex gets from its query —
+S2's `/citations` has no year filter, so the banding happens over the ranking.
+See `services/graph/budget.py`'s module docstring.
 
 ### Deep paging
 
 S2 lists citers newest-first, and one page is only 1000 citers. For a heavily-
-cited seed that page can span *less than a year*, truncating the `latest` window
-and missing mid-era citers. So the fallback build **pages** (offsets 0, 1000,
-2000, …), stopping at the first page with no in-window citer, the list end, or
-the `_MAX_OFFSET` (~10k) ceiling. Graph expansion (`citations()`, `deep=False`)
-stays one page — it wants the tip, fast.
+cited seed that page can span *less than a year*. So the seed build **pages** the
+whole reachable list (offsets 0, 1000, 2000, …), stopping only at the list's end
+or the `_MAX_OFFSET` ceiling. Graph expansion (`citations()`, `deep=False`) stays
+one page — it wants the tip, fast.
 
-**Known limit of the *live* S2 path:** without OpenAlex's sorted queries it is
-newest-first and offset-capped, so a hyper-cited seed's oldest landmarks (past
-~10k) are unreachable and the landmark relation is drawn from the most-cited
-citers *within the recent ~10k*, not the full citation history.
+`_MAX_OFFSET` is **8000**, not 9000: verified live 2026-07-15, S2 400s a page whose
+window reaches ~10k (`offset=9000&limit=1000` fails on two different seeds, while
+`offset=8000` serves), so the reachable pool tops out at ~9k citers.
+
+**Why it pages the whole list, not just the `latest` window** (v5.5.0). It used to
+stop at the first page holding no in-window citer — the window was covered, and the
+boundary page's overshoot was meant to seed the landmark "middle band". On a
+hyper-cited seed that quietly gutted the landmark relation. Measured live on DQN:
+page 1 holds exactly *one* in-window citer and page 2 holds none, so paging stopped
+at offset 2000 with a pool covering 2024–2026, and "Field Landmarks" ranked whatever
+recent survey sat in the overshoot. The full reachable list runs back to **2019** and
+holds Conservative Q-Learning, Decision Transformer, and Dota 2 — six-sevenths of it
+was simply never fetched. Paging on leaves `latest` byte-identical (every deeper page
+is older than the window) and buys the landmark relation a pool worth ranking. It
+costs a slower **cold** build, scaling with the citer list: measured authenticated,
+QMIX 4 pages / ~8s and DQN 9 pages / ~15s, against ~3 pages before. Snapshots cache
+for a day and the build's progress bar covers the wait.
+
+**Known limit of the *live* S2 path:** the offset ceiling is a hard wall. DQN's
+2013–2018 citers — its actual giants (AlphaGo, A3C, Rainbow) — are unreachable at
+any page count, so the landmark relation is the most-cited citers *within the
+reachable ~9k*, not the full citation history. Beating that wall was v3.1.0's
+`_mined_landmarks` (harvest citers' reference lists, co-citation rank, verify),
+retired in v4.0.0 when OpenAlex's sorted `cites:` made it redundant; the corpus is
+its replacement.
 
 **The fix — the offline citations corpus (`corpus/`).** When a corpus release is
 downloaded and ingested (`config.storage.s2_corpus_dir` set, a `CURRENT` release

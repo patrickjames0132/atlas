@@ -1,8 +1,13 @@
-"""The cite-budget training pipeline (src/ml_pipelines/cite_budget): label logic + offline fit.
+"""The cite-budget training pipeline (src/ml_pipelines/cite_budget): contracts + offline fit.
 
-Fully offline — no OpenAlex calls. The density-label function is pure; the fit
-runs on a tiny synthetic corpus so the pipeline (feature matrix → LinearRegression
-→ serializable bundle) is exercised without the committed data or the network.
+Fully offline — no OpenAlex calls. The fit runs on a tiny synthetic corpus so the
+pipeline (feature matrix → LinearRegression → serializable bundle) is exercised
+without the committed data or the network.
+
+Both halves of the model's contract — the features AND the density label — are the
+app's (``atlas.services.graph.budget``), so their own behavior is pinned in
+``test/atlas/services/test_budget.py``. What's checked here is that this pipeline
+really uses them rather than a private copy that could drift.
 """
 
 from __future__ import annotations
@@ -11,27 +16,22 @@ import math
 
 import numpy as np
 
+from atlas.services.graph import budget as app_budget
 from atlas.services.graph.budget import FEATURE_NAMES
-from ml_pipelines.cite_budget import train
-from ml_pipelines.cite_budget.features import DENSITY_CAP, DENSITY_CAP_GRID, density_budget
+from ml_pipelines.cite_budget import features, train
 
 
-class TestDensityBudget:
-    """``n*`` — the longest citation-ranked prefix before a year floods."""
+class TestLabelContract:
+    """The label is the app's density rule, not a training-local reimplementation."""
 
-    def test_stops_when_a_year_exceeds_the_cap(self):
-        # Cap 2: the third 2020 (index 4) is the first to break it → prefix 4.
-        years = [2020, 2019, 2020, 2018, 2020, 2017]
-        assert density_budget(years, cap=2) == 4
-
-    def test_returns_full_length_when_never_capped(self):
-        assert density_budget([2020, 2019, 2018, 2017], cap=5) == 4
-
-    def test_empty_pool_is_zero(self):
-        assert density_budget([], cap=3) == 0
+    def test_label_is_the_apps_density_rule(self):
+        # Identity, not equivalence: a copied implementation could drift, and the
+        # live S2 fallback now trims with this exact function.
+        assert features.density_budget is app_budget.density_budget
+        assert features.DENSITY_CAP is app_budget.DENSITY_CAP
 
     def test_grid_includes_the_default_cap(self):
-        assert DENSITY_CAP in DENSITY_CAP_GRID
+        assert features.DENSITY_CAP in features.DENSITY_CAP_GRID
 
 
 class TestTrain:

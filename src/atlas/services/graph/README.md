@@ -7,7 +7,8 @@ graph/
   build.py   — build_graph: assembly logic (single-provider traversal, dedupe,
                cached); Provider + resolve_provider
   model.py   — the Pydantic Graph / Node / Edge / Seed / Counts
-  budget.py  — adaptive landmark-budget serving: load the trained model, predict
+  budget.py  — adaptive landmark-budget serving: predict it from the seed (the
+               trained model) or measure it from a pool in hand (the density rule)
   bands.py   — adaptive latest-band serving: where a seed's Latest bands start
 ```
 
@@ -120,14 +121,40 @@ cache hit, a deliberate trade.
    journal paper with no arXiv id, so exploration never dead-ends.
 
 3. **Adaptive budgets** (shared by both providers). The **landmark budget adapts
-   to the seed** when `config.graph.adaptive_cite_limit` is on: `_adaptive_cite_limit`
-   delegates to `budget.adaptive_cite_limit`, which loads a **scikit-learn model
-   trained offline** (`src/ml_pipelines/cite_budget/model.joblib`) and calls
-   `.predict()` on the seed's age and citation count — an old classic (Hawking)
-   earns a large budget because its top citers span decades; a young hot paper
-   (DQN ~60, Attention ~30) gets a tight one. Clamped to `[floor, cite_limit]`;
-   a seed with no year, the toggle off, or an unloadable model passes the flat
-   `cite_limit` through. See `budget.py` and `src/ml_pipelines/cite_budget/README.md`.
+   to the seed** when `config.graph.adaptive_cite_limit` is on — by one of two
+   routes to the same criterion, chosen by *whether the caller already holds the
+   citer pool*:
+
+   - **Predicted** — `_adaptive_cite_limit` delegates to `budget.adaptive_cite_limit`,
+     which loads a **scikit-learn model trained offline**
+     (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()` on the
+     seed's age and citation count — an old classic (Hawking) earns a large budget
+     because its top citers span decades; a young hot paper (DQN ~60, Attention
+     ~30) gets a tight one. Clamped to `[floor, cite_limit]`; a seed with no year,
+     the toggle off, or an unloadable model passes the flat `cite_limit` through.
+     Used by the **ranked** citer paths — OpenAlex and the offline S2 corpus —
+     which push a ship count into a citation-sorted query and so must know it
+     before they have any citers to look at.
+   - **Selected** — `budget.density_selection` walks the pool's real ranking and
+     admits up to `DENSITY_CAP` citers **per year**, skipping years already full.
+     Used by the **live S2 fallback**, injected as its `landmark_select` callable.
+     That path's deep pager holds the whole pool by trim time, so nothing has to
+     be guessed — and a *count* would be wrong twice over: the model is fit on
+     pools spanning a seed's whole history while that one is truncated at S2's
+     offset ceiling (DQN's reaches 2019, not 2013), and a count can only keep a
+     **prefix**. Measured on DQN: the prefix rule ships 29, all 2019–2023, with
+     nothing from 2024–2025 — an 18-month hole before the Latest frontier. The
+     per-year band ships 84, twelve in each of 2019–2025, and closes it. Both
+     honour the same "no year over the cap" invariant; only the band keeps the
+     sparse years. It's the local equivalent of OpenAlex's per-year query bands.
+
+     Undated citers are **dropped**, not banded: a landmark is the claim
+     "top-cited citer of this seed *in year Y*", which a paper with no year can't
+     make — and it has no place on a time axis either. Giving them a bucket (an
+     earlier cut did) ships a guaranteed `DENSITY_CAP` of what are mostly
+     PDF-extraction stubs, all on one x, drawing a vertical bar through the seed.
+
+   See `budget.py`'s module docstring and `src/ml_pipelines/cite_budget/README.md`.
 
    The **latest bands adapt** too (`config.graph.adaptive_latest_band`): `bands.py`
    places the band start at the **density tail edge** of the landmark cluster (a
@@ -204,7 +231,14 @@ through `Graph.model_validate`; refresh bypasses the cache; `resolve_provider`
 validates/defaults; an unknown or blank seed returns `None`; and the adapted
 budget is what *both* providers' citation traversals receive.
 
-The adaptive budget's own tests live in **`test_budget.py`** and the latest-band
-serving tests in **`test_bands.py`** (they load the committed models and pin the
-anchors / fallbacks). The training pipelines that produce both models have their
-own offline tests under `test/ml_pipelines/`.
+It also pins **which budget route each path gets**: the ranked traversals
+(OpenAlex, the S2 corpus) receive the model's predicted count, while the live S2
+fallback receives `budget.density_cite_limit` as its `landmark_budget` and only
+the flat `cite_limit` as a ceiling.
+
+The adaptive budget's own tests live in **`test_budget.py`** — both routes: the
+predicted one (loading the committed model, pinning the anchors / fallbacks) and
+the measured one (the pure density rule and the trim built on it). The latest-band
+serving tests are in **`test_bands.py`**. The training pipelines that produce both
+models have their own offline tests under `test/ml_pipelines/`, which pin that
+training uses the app's feature *and* label contracts rather than private copies.

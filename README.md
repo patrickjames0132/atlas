@@ -61,9 +61,16 @@ Since **v5.0.0** the citation graph is built from **one** academic-data provider
 chosen per graph in the header's **"Data source"** dropdown (the v4.x
 S2+OpenAlex hybrid is retired). **OpenAlex** returns true top-cited landmark
 citers via server-sorted `cites:` queries (no offset ceiling); **Semantic
-Scholar** does the whole graph too, but its live citation API is newest-first and
-~10k-offset capped, so its Field Landmarks come from the recent citer tip. Since
-**v5.4.0** that bias is lifted by an **offline S2 citations corpus** (opt-in): the
+Scholar** does the whole graph too, but its live citation API is newest-first with
+no citation sort and rejects any page reaching past a ~10k offset, so its Field
+Landmarks can only ever be the best of the citers below that wall. Since **v5.5.0**
+the live path at least mines that whole reachable window and bands it **twelve
+landmarks per publication year**, so a mega-seed's landmarks span the years the API
+can see (DQN: 2019–2025, led by Conservative Q-Learning and Decision Transformer)
+instead of piling into the last two. Everything older than the wall — DQN's
+2013–2018 citers, the ones you'd actually name — stays out of reach live. Since
+**v5.4.0** that ceiling is lifted for real by an **offline S2 citations corpus**
+(opt-in): the
 bulk `citations`+`papers` Datasets releases are downloaded and ingested to local
 DuckDB-over-Parquet via the `atlas corpus` CLI, and the S2 provider then draws
 Field Landmarks **citation-sorted across all history** from your own copy (the
