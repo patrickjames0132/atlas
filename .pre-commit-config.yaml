@@ -37,13 +37,18 @@ repos:
   # Docstring COMPLETENESS: every Args section matches the signature and a
   # Returns section exists wherever a value comes back (config in pyproject's
   # [tool.pydoclint]; ruff's D rules already enforce presence + format).
-  # Runs from the uv env — pydoclint is a dev-group dependency.
+  # Runs in an ISOLATED, pinned uvx env — like ruff above, pydoclint is a tool,
+  # not a project dependency. It must, because pydoclint pins
+  # `docstring_parser_fork`, which ships the same `docstring_parser` import
+  # package as the mainline `docstring-parser` that `anthropic` pulls in; with
+  # both in one env the mainline shadows the fork and pydoclint fails to import
+  # (`DocstringYields` missing). uvx gives it an env containing only the fork.
   - repo: local
     hooks:
       - id: pydoclint
         name: pydoclint (docstring completeness)
         language: system
-        entry: uv run --no-sync pydoclint src/atlas
+        entry: uvx --from pydoclint==0.9.1 pydoclint src/atlas
         files: ^src/atlas/.*\.py$
         pass_filenames: false
 

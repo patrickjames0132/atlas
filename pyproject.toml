@@ -39,7 +39,12 @@ dev = [
     "mypy>=1.11",
     "pytest>=8.0",
     "pre-commit>=3.7",
-    "pydoclint>=0.9",
+    # pydoclint is NOT a project dependency: it pins `docstring_parser_fork`,
+    # which collides (same `docstring_parser` import package) with the mainline
+    # `docstring-parser` that `anthropic` pulls in, and the mainline shadows the
+    # fork so pydoclint won't import. The precommit hook runs it in an isolated,
+    # pinned `uvx` env instead (see .pre-commit-config.yaml) — like ruff, a tool
+    # not a dependency.
 ]
 # Offline analysis notebooks in research/ — opt-in via `uv run --group research`
 # (not part of the default sync; the app never imports these). scikit-learn /
