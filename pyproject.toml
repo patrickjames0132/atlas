@@ -1,6 +1,6 @@
 [project]
 name = "atlas"
-version = "5.9.0"
+version = "5.9.1"
 description = "Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 requires-python = ">=3.11"
 dependencies = [

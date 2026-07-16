@@ -2,9 +2,11 @@
 
 A stepped, spotlight-style product tour (the Yotpo pattern): dim the screen,
 ring one control at a time, explain it in an anchored bubble with Back / Next,
-a step counter, a **jump select** (every stop's title, numbered — pick one to
-skip straight to it instead of Next-ing through the walk), **Skip tips**, and
-a ✕. First motivation: the node-selector's
+a step counter, a **jump select** worn by the bubble's title (the heading
+highlights on hover; click it and pick any stop's numbered title to skip
+straight there instead of Next-ing through the walk — a transparent native
+`<select>` stretched over the h4, so the browser's own dropdown does the
+work), **Skip tips**, and a ✕. First motivation: the node-selector's
 alt-drag / shift-click / alt-click gestures, which are otherwise discoverable
 only through the controls' one-line hint.
 

@@ -1,10 +1,10 @@
 /**
  * A reusable, data-driven coach-mark tour: dims the screen, spotlights one
  * target element at a time, and anchors an explainer bubble beside it, with
- * Back / Next, a step counter, a jump-to-any-stop select, a Skip link, and a
- * ✕ — the Yotpo-style product tour. Purely presentational over a `steps`
- * array; the caller owns when it mounts (mounting starts the tour) and what
- * "seen" means (`onClose`).
+ * Back / Next, a step counter, a title that doubles as a jump-to-any-stop
+ * select, a Skip link, and a ✕ — the Yotpo-style product tour. Purely
+ * presentational over a `steps` array; the caller owns when it mounts
+ * (mounting starts the tour) and what "seen" means (`onClose`).
  *
  * Steps whose target selector matches nothing — or matches an element that is
  * currently hidden — are skipped, so one step list can describe optional UI
@@ -233,24 +233,31 @@ export default function Tour({ steps, onClose, onStage }: TourProps) {
       {spot && <div className="tour-spotlight" style={spot} />}
       <div className="tour-bubble" ref={bubbleRef} style={{ top: bubbleTop, left: bubbleLeft }}>
         <div className="tour-bubble-head">
-          <h4>{step.title}</h4>
+          {/* The title doubles as the jump select: the h4 is the visual, and
+              an invisible native <select> stretched over it supplies the
+              dropdown — click the title, pick any stop. */}
+          <span className="tour-jump">
+            <h4>{step.title}</h4>
+            <span className="tour-jump-caret" aria-hidden="true">
+              ▾
+            </span>
+            <select
+              value={index}
+              onChange={(event) => setIndex(Number(event.target.value))}
+              aria-label="Jump to a tip"
+            >
+              {stops.map((stop, stopIndex) => (
+                <option key={stop.target} value={stopIndex}>
+                  {stopIndex + 1}. {stop.title}
+                </option>
+              ))}
+            </select>
+          </span>
           <button className="tour-close" onClick={() => onClose(false)} aria-label="Quit the tour">
             ✕
           </button>
         </div>
         <p>{step.body}</p>
-        <select
-          className="tour-jump"
-          value={index}
-          onChange={(event) => setIndex(Number(event.target.value))}
-          aria-label="Jump to a tip"
-        >
-          {stops.map((stop, stopIndex) => (
-            <option key={stop.target} value={stopIndex}>
-              {stopIndex + 1}. {stop.title}
-            </option>
-          ))}
-        </select>
         <div className="tour-foot">
           <button className="tour-skip" onClick={() => onClose(false)}>
             Skip tips

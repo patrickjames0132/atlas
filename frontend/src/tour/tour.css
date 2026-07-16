@@ -68,18 +68,44 @@
   color: var(--text-strong);
 }
 
-/* The jump-to-any-stop select — options carry the step titles, so no one has
-   to click Next eight times to reach the tip they came back for. */
+/* The jump-to-any-stop select, worn by the bubble's title: the h4 stays the
+   visual (plus a small caret), and the native <select> is stretched invisibly
+   over both — so clicking the title opens the browser's own dropdown, and no
+   one has to click Next eight times to reach the tip they came back for. */
 .tour-jump {
-  width: 100%;
-  margin: 0 0 10px;
-  background: var(--chip);
-  border: 1px solid var(--border);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 6px;
+  margin-left: -6px; /* the hover pill's pad, without shifting the title */
   border-radius: 6px;
-  color: var(--text);
+}
+.tour-jump:hover,
+.tour-jump:focus-within {
+  background: var(--chip);
+}
+
+.tour-jump h4 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-jump-caret {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tour-jump select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: none;
   cursor: pointer;
-  font-size: 12px;
-  padding: 4px 6px;
 }
 
 .tour-foot {
