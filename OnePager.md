@@ -258,7 +258,10 @@ optional, behind a key.
       measured rule instead) — but "holds in principle" isn't measured. Re-collect
       `n*` against corpus pools for the anchors and compare: if DQN's 63 is right,
       that's a real finding; if it isn't, the same `density_selection` shape the
-      live path uses may fit here too. Both are now testable **offline and for free**
+      live path uses may fit here too — likely, per the predict-vs-compute lens
+      ([docs/predict-vs-compute.md](docs/predict-vs-compute.md)): the corpus
+      pool is local, so it can *compute* the rule rather than predict it.
+      Both are now testable **offline and for free**
       — the corpus is local, so the training collector no longer needs to page a
       live API. *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the
       latest-gap gap.)* **Related:** the live-path counterpart — re-anchoring
@@ -301,14 +304,28 @@ optional, behind a key.
       **Validate offline before wiring:** the corpus can simulate the live
       pool exactly (a seed's newest ~9k citers), so run the density-label rule
       against simulated truncated pools and check the re-anchored predictions
-      track it — one study with the corpus ticket's `n*` re-collection. Watch
-      two edges: the truncation-edge year is *partial* in the pool (an
+      track it — one study with the corpus ticket's `n*` re-collection.
+      **Null hypothesis, stated up front:** on the live path the full pool is
+      already in memory, so the exact density rule is *computable* directly —
+      the re-anchored model may validate as **redundant** there (its
+      prediction just tracking a label we can compute). If so, drop the model
+      from the live path and keep the exact selection; the re-anchoring then
+      only matters wherever a pre-fetch estimate is ever needed. See
+      [docs/predict-vs-compute.md](docs/predict-vs-compute.md) for the
+      predict-vs-compute principle this falls out of. **Why no Latest model
+      either:** a scalar can't say *where in time* nodes go (recency ×
+      citation-count anticorrelation collapses any single ranking to one end
+      of the window), and the `latest_gap` study already measured a
+      seed-feature regression for the boundary at **negative CV R²** — learn
+      the constants (`tau`, `max_span`) offline, run the rule exactly online.
+      Watch two edges: the truncation-edge year is *partial* in the pool (an
       under-filled band there is honest — but don't let counts imply
       completeness), and the latest-gap model was fit on whole-history
       landmark distributions, so eyeball the anchors (DQN, QMIX, Hawking)
       rather than trusting the transfer. Related: "Even Latest-Publications
       spread via citation velocity" below — velocity could serve as the
-      within-band ranking. *(Patrick's design, 2026-07-16.)*
+      within-band ranking. *(Patrick's design, 2026-07-16; predict-vs-compute
+      framing settled same day.)*
 - [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
       — a cache-miss graph on the s2 provider now takes ~54s against the live
       path's ~15s, all of it in the citer query. That's the wrong shape: the whole
