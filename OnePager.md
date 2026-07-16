@@ -261,7 +261,54 @@ optional, behind a key.
       live path uses may fit here too. Both are now testable **offline and for free**
       — the corpus is local, so the training collector no longer needs to page a
       live API. *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the
-      latest-gap gap.)*
+      latest-gap gap.)* **Related:** the live-path counterpart — re-anchoring
+      `cite_budget` at the oldest reachable citer + latest-gap banding — is its
+      own ticket just below; the offline re-collection study should serve both.
+- [ ] **Live-path landmarks & Latest: re-anchor the cite-budget model at the
+      oldest reachable citer, band Latest with the latest-gap model** — the
+      sibling of the corpus-models ticket above, for the live s2 fallback.
+      v5.5.0 took the `cite_budget` model *off* the live path (its
+      OpenAlex-trained age feature described a seed→now span the ~9k-ceiling
+      pool doesn't cover) and left `density_selection`'s flat 12/year cap plus
+      a flat rolling 12-month Latest window (`_latest_cutoff`) — so neither
+      trained model serves the fallback. Patrick's design to bring both back
+      honestly (from the DQN screenshot: the reachable citer list stops at
+      2019 against a 2013 seed):
+      1. Keep paging the whole reachable list (v5.5.0 behavior — to the list's
+         end or the ~9k ceiling, whichever the seed hits first).
+      2. Run the cite-budget model with its **age feature anchored at the
+         oldest citer actually in the pool**, not the seed's publication date
+         — the features then describe the pool being sized (DQN reads as a
+         dense 7-year history, not a 13-year classic), which is exactly the
+         training-distribution repair the "sizing a pool it was never trained
+         on" entry in `docs/bugs.md` left open. The seed's **total** citation
+         count stays the second feature (the citation term is weak, and the
+         young-age/mega-citations corner is anchored by the OpenAlex-misdated
+         Attention test).
+      3. The model's output is the **total** landmark budget only — the
+         per-year banding (`density_selection`'s cap mechanics) still decides
+         *which* papers. A top-N prefix over a truncated pool re-crowds into
+         the densest years and strands the recent ones — v5.5.0's "a count
+         can't express the answer" hole comes straight back. Size from the
+         model, spread from the banding.
+      4. Latest stops being a fixed 12-month window: feed the shipped
+         landmarks' years to `bands.earliest_band_year` (the latest-gap tau
+         model) for the band start, then fill per-year Latest bands from the
+         **in-memory pool** (bucket by year, top-cited per year) — zero extra
+         API calls (S2 has no year filter anyway; we already hold every
+         reachable citer), same shape as the OpenAlex path (`build.py`'s
+         `band_start=`).
+      **Validate offline before wiring:** the corpus can simulate the live
+      pool exactly (a seed's newest ~9k citers), so run the density-label rule
+      against simulated truncated pools and check the re-anchored predictions
+      track it — one study with the corpus ticket's `n*` re-collection. Watch
+      two edges: the truncation-edge year is *partial* in the pool (an
+      under-filled band there is honest — but don't let counts imply
+      completeness), and the latest-gap model was fit on whole-history
+      landmark distributions, so eyeball the anchors (DQN, QMIX, Hawking)
+      rather than trusting the transfer. Related: "Even Latest-Publications
+      spread via citation velocity" below — velocity could serve as the
+      within-band ranking. *(Patrick's design, 2026-07-16.)*
 - [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
       — a cache-miss graph on the s2 provider now takes ~54s against the live
       path's ~15s, all of it in the citer query. That's the wrong shape: the whole
@@ -338,8 +385,10 @@ optional, behind a key.
       neither extreme dominates the selection. The shelved WIP's
       **`_velocity` helper — `citation_count / (age + 1)`** (`stash@{0}`, see
       the mega-papers phase notes in `docs/history.md`) is the starting formula; may need tuning so
-      the balance point lands where the spread looks even. *(Patrick's
-      brainstorm, 2026-07-10.)*
+      the balance point lands where the spread looks even. **Related:** the
+      live-path re-anchoring ticket above bands Latest per year — velocity
+      would slot in as the *within-band* ranking. *(Patrick's brainstorm,
+      2026-07-10.)*
 - [ ] **Latest Publications is thin on arXiv-only seeds — OpenAlex data
       gaps, not S2 offset paging** *(investigated 2026-07-10; the original
       suspicion is settled, the underlying problem is real and still open)* —
