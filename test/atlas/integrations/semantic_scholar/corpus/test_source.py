@@ -11,8 +11,20 @@ from atlas.services.graph.model import Node
 
 def test_active_source_none_when_corpus_off():
     """With no corpus configured (the autouse default), there's no source."""
-    assert config.storage.s2_corpus_dir is None
+    assert config.storage.s2.parquet is None
     assert source.active_source() is None
+
+
+def test_active_source_needs_only_the_parquet_root(synthetic_corpus, monkeypatch):
+    """Serving must not depend on the raw drive: CURRENT lives beside the Parquet,
+    so a machine whose shards are deleted (or whose download drive is absent)
+    keeps serving."""
+    monkeypatch.setattr(config.storage.s2, "raw", None)
+    assert source.active_source() is not None
+    landmark, _latest = source.citation_relations(
+        {"arxiv_id": "1706.03762"}, "1706.03762", landmark_limit=None, latest_limit=None
+    )
+    assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2", "CorpusId:4"]
 
 
 def test_citation_relations_none_without_corpus():

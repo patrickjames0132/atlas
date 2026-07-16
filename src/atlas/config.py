@@ -49,10 +49,63 @@ class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class StorageConfig(ConfigModel):
-    """Where the app keeps its three SQLite databases.
+class S2CorpusStorage(ConfigModel):
+    """Where the offline Semantic Scholar citations corpus lives — both halves.
 
-    Three separate files because three lifecycles: the graph cache is
+    Two roots rather than one, because the halves have **opposite access
+    patterns** and can want different drives:
+
+    * ``raw`` — the downloaded ``.gz`` shards (~400GB/release) plus their
+      ``download.json`` checkpoint. Written once, read once, sequentially: a
+      spinning disk does that perfectly well, and the shards are deletable the
+      moment an ingest succeeds (a re-ingest means a re-download).
+    * ``parquet`` — the ingested, queried working set (~50GB) **and the
+      ``CURRENT`` pointer**. It absorbs the ingest's ~400k partitioned writes and
+      then serves every graph build, so it wants the fast drive (measured:
+      20.6s/shard on NVMe vs 98.2s on an SMR HDD — 2.2h vs 10.6h per release).
+
+    ``parquet`` is the app's **only serving dependency**: ``CURRENT`` lives beside
+    the data it names, so a machine that only serves needs nothing but this root
+    — pull the raw drive and the corpus keeps working. ``raw`` is an operator
+    concern, needed by ``atlas corpus download``/``ingest`` alone.
+
+    Either may be null. Null ``parquet`` turns the corpus off (the s2 provider
+    falls back to the live citation endpoint); null ``raw`` just means this
+    machine doesn't download. Both may point at the same directory when one drive
+    holds everything. Same anchoring as ``data_dir``: relative → repo root,
+    absolute → as-is. **Kept outside the repo and gitignored** — it's hundreds of
+    GB. See integrations/semantic_scholar/corpus/README.md.
+    """
+
+    raw: Path | None = Field(
+        default=None,
+        description="Root for downloaded shards + download.json — `atlas corpus download` "
+        "writes here and `ingest` reads it. Null means this machine doesn't download; "
+        "serving doesn't need it. Deletable after a successful ingest.",
+    )
+    parquet: Path | None = Field(
+        default=None,
+        description="Root for the ingested Parquet + the CURRENT pointer — the app's only "
+        "serving dependency. Null turns the corpus off (live S2 citations instead).",
+    )
+
+    @field_validator("raw", "parquet")
+    @classmethod
+    def _anchor_to_repo_root(cls, path: Path | None) -> Path | None:
+        """Anchor a relative corpus root to the repo root; leave an absolute one
+        (the common case — the corpus lives on its own drive) untouched. None
+        stays None: that half is simply not configured.
+        """
+        if path is None:
+            return None
+        path = path.expanduser()
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+class StorageConfig(ConfigModel):
+    """Where the app keeps its three SQLite databases, and the S2 corpus.
+
+    Three separate DB files because three lifecycles: the graph cache is
     disposable (short TTL), the sources collection is expensive to rebuild
     (re-embedding your PDFs), and saved sessions are precious (never
     auto-evicted). Clearing one can never destroy another.
@@ -62,47 +115,16 @@ class StorageConfig(ConfigModel):
         description="Directory holding all three SQLite databases. A relative "
         "path is anchored to the repo root, not the process's cwd."
     )
-    s2_corpus_dir: Path | None = Field(
-        description="Root of the offline Semantic Scholar citations corpus (the bulk "
-        "`citations`+`papers` Datasets releases, downloaded and ingested to Parquet by "
-        "`atlas corpus`). When set and a release is ingested there, the s2 provider draws "
-        "Field Landmarks from this local, citation-sorted copy instead of the recency-biased "
-        "live API; when null or empty the app falls back to the live S2 citation endpoint. "
-        "**Kept outside the repo and gitignored** — the corpus is hundreds of GB. A relative "
-        "path anchors to the repo root; an absolute path (e.g. a roomy data drive) is used "
-        "as-is. See integrations/semantic_scholar/corpus/README.md."
-    )
-    s2_corpus_parquet_dir: Path | None = Field(
-        default=None,
-        description="Optional separate root for the corpus's *ingested Parquet*, when it "
-        "should live on different storage from the downloaded shards. Null (the default) "
-        "keeps Parquet under `s2_corpus_dir` alongside `raw/`, which is what you want once "
-        "the whole corpus is on one fast drive. The split exists because the two halves have "
-        "opposite access patterns: `raw/` is ~400GB of .gz read exactly once, sequentially "
-        "(a spinning disk does that fine), while the Parquet is the queried working set (~50GB) "
-        "and takes the ingest's ~400k partitioned writes — measured 20.6s/shard on NVMe vs "
-        "98.2s on an SMR HDD, i.e. 2.2h vs 10.6h for a release. So a big slow drive can hold "
-        "the shards while a fast one holds what's actually queried. Same anchoring rules as "
-        "`s2_corpus_dir`; the release subtree (`releases/<id>/parquet`) is mirrored under it."
+    s2: S2CorpusStorage = Field(
+        default_factory=S2CorpusStorage,
+        description="The offline S2 citations corpus's two roots (see S2CorpusStorage). "
+        "Omit entirely to run without a corpus.",
     )
 
     @field_validator("data_dir")
     @classmethod
     def _anchor_to_repo_root(cls, path: Path) -> Path:
         """A relative path in config.json means "relative to the repo root"."""
-        path = path.expanduser()
-        return path if path.is_absolute() else PROJECT_ROOT / path
-
-    @field_validator("s2_corpus_dir", "s2_corpus_parquet_dir")
-    @classmethod
-    def _anchor_corpus_to_repo_root(cls, path: Path | None) -> Path | None:
-        """Anchor a relative corpus path to the repo root; leave an absolute one
-        (the common case — the corpus lives on a roomy drive) untouched. None
-        stays None: the corpus feature is off (``s2_corpus_dir``), or the Parquet
-        simply lives under the corpus root (``s2_corpus_parquet_dir``).
-        """
-        if path is None:
-            return None
         path = path.expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 

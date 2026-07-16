@@ -17,9 +17,13 @@ from pathlib import Path
 
 import pytest
 
-from atlas.config import config
+from atlas.config import S2CorpusStorage, config
 from atlas.integrations.semantic_scholar.corpus import ingest
-from atlas.integrations.semantic_scholar.corpus.paths import release_paths, write_current_release
+from atlas.integrations.semantic_scholar.corpus.paths import (
+    parquet_root,
+    release_paths,
+    write_current_release,
+)
 
 RELEASE_ID = "2026-07-07"
 
@@ -74,20 +78,21 @@ def synthetic_corpus(monkeypatch, tmp_path):
     Points **both** corpus roots at the temp tree (the autouse isolation had
     forced them off), so ``active_source()`` and ``citation_relations`` see a live
     corpus. Both matter: ``ingest_release`` resolves its paths through
-    ``paths.release_paths()``, which reads ``s2_corpus_parquet_dir`` as well — so
-    leaving that one pointing at a real config value writes this synthetic release
-    straight into the machine's actual Parquet root. :data:`RELEASE_ID` is a
-    plausible real release id, so it collides rather than landing somewhere
-    obvious.
+    ``paths.release_paths()``, which reads both — so leaving either pointing at a
+    real config value writes this synthetic release straight into the machine's
+    actual corpus. :data:`RELEASE_ID` is a plausible real release id, so it
+    collides rather than landing somewhere obvious.
+
+    Separate temp roots, not one: the split is the real layout, and using one dir
+    for both would let a path bug that conflates them pass here.
 
     Returns:
         The activated release id.
     """
-    root = tmp_path / "s2corpus"
-    monkeypatch.setattr(config.storage, "s2_corpus_dir", root)
-    monkeypatch.setattr(config.storage, "s2_corpus_parquet_dir", None)  # under `root`
+    monkeypatch.setattr(config.storage, "s2", S2CorpusStorage(
+        raw=tmp_path / "s2corpus-raw", parquet=tmp_path / "s2corpus-parquet"
+    ))
     paths = release_paths(RELEASE_ID)
-    assert paths is not None  # the root was just set
     # Hard guard, and not theoretical: this fixture once wrote its synthetic
     # release into the machine's real (mid-ingest) corpus, because `ingest_release`
     # resolves paths from config and a newly-added root wasn't nulled. Resolve the
@@ -100,5 +105,5 @@ def synthetic_corpus(monkeypatch, tmp_path):
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations000.gz", CITATIONS)
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations001.gz", CITATIONS_SECOND_BATCH)
     ingest.ingest_release(RELEASE_ID)
-    write_current_release(root, RELEASE_ID)
+    write_current_release(parquet_root(), RELEASE_ID)  # CURRENT lives with the data
     return RELEASE_ID

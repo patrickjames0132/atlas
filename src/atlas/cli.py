@@ -11,6 +11,8 @@ the import cost of the parts it doesn't touch.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
 
@@ -143,49 +145,65 @@ def corpus() -> None:
     """
 
 
-def _require_corpus_dir() -> None:
-    """Fail cleanly when no corpus directory is configured.
+def _require_corpus_root(which: str) -> Path:
+    """The named corpus root, or a clean CLI error when it isn't configured.
+
+    Args:
+        which: ``"raw"`` (download/ingest write there) or ``"parquet"`` (ingest
+            writes there; it's also what serving reads).
+
+    Returns:
+        The configured root.
 
     Raises:
-        click.ClickException: When ``config.storage.s2_corpus_dir`` is unset —
-            every corpus command needs somewhere to read/write.
+        click.ClickException: When that half is unset — the command has nowhere
+            to read or write.
     """
     from atlas.config import config
 
-    if config.storage.s2_corpus_dir is None:
+    root = getattr(config.storage.s2, which)
+    if root is None:
         raise click.ClickException(
-            "config.storage.s2_corpus_dir is not set — point it at a roomy drive "
-            "(outside the repo) first, e.g. \"E:\\\\s2corpus\"."
+            f"config.storage.s2.{which} is not set — point it at a roomy drive "
+            f'(outside the repo) first, e.g. "E:\\\\s2corpus".'
         )
+    return root
 
 
-@corpus.command("status", help="Show the corpus location, releases, and active pointer.")
+@corpus.command("status", help="Show the corpus roots, releases, and active pointer.")
 def corpus_status() -> None:
-    """Print the corpus root, its releases, and which one is active."""
+    """Print both corpus roots, their releases, and which one is active."""
     from atlas.config import config
     from atlas.integrations.semantic_scholar.corpus import paths as corpus_paths
 
-    root = config.storage.s2_corpus_dir
-    if root is None:
-        click.echo("s2_corpus_dir: (unset — corpus feature off, using live S2)")
+    raw_root = config.storage.s2.raw
+    parquet_root = config.storage.s2.parquet
+    click.echo(f"raw root (shards):     {raw_root or '(unset — no downloads here)'}")
+    click.echo(f"parquet root (served): {parquet_root or '(unset — corpus off, using live S2)'}")
+    if parquet_root is None:
         return
-    click.echo(f"corpus root: {root}")
-    click.echo(f"exists:      {root.exists()}")
-    parquet_root = config.storage.s2_corpus_parquet_dir
-    # Worth saying out loud: with the split set, the Parquet a release reports
-    # below isn't under the root printed above — the least obvious thing here.
-    click.echo(f"parquet root: {parquet_root or '(under the corpus root)'}")
-    active = corpus_paths.read_current_release(root) if root.exists() else None
+    click.echo(f"exists:                {parquet_root.exists()}")
+    # CURRENT lives at the parquet root, beside the data it names — so serving
+    # never depends on the raw drive being present.
+    active = corpus_paths.read_current_release(parquet_root) if parquet_root.exists() else None
     click.echo(f"active release (CURRENT): {active or '(none)'}")
-    releases_dir = root / "releases"
-    if releases_dir.exists():
-        for release in sorted(child.name for child in releases_dir.iterdir() if child.is_dir()):
-            paths = corpus_paths.release_paths(release)
-            if paths is None:
-                continue
-            papers_done = paths.parquet_dataset("papers").exists()
-            cites_done = paths.parquet_dataset("citations").exists()
-            click.echo(f"  {release}: papers-parquet={papers_done} citations-parquet={cites_done}")
+
+    # A release can exist on either side: downloaded-not-ingested (raw only), or
+    # ingested-and-shards-deleted (parquet only). Show the union.
+    releases: set[str] = set()
+    for root in (raw_root, parquet_root):
+        releases_dir = root / "releases" if root else None
+        if releases_dir and releases_dir.exists():
+            releases.update(child.name for child in releases_dir.iterdir() if child.is_dir())
+    for release in sorted(releases):
+        paths = corpus_paths.release_paths(release)
+        papers_done = paths.parquet_dataset("papers").exists()
+        cites_done = paths.parquet_dataset("citations").exists()
+        shards = raw_root is not None and paths.raw.exists()
+        click.echo(
+            f"  {release}: shards={shards} papers-parquet={papers_done} "
+            f"citations-parquet={cites_done}"
+        )
 
 
 @corpus.command("download", help="Download (or resume) a release's shards.")
@@ -212,9 +230,9 @@ def corpus_download(release_id: str | None, datasets_opt: tuple[str, ...], shard
         shards: Optional per-dataset shard cap for a quick sample.
 
     Raises:
-        click.ClickException: When the corpus dir is unset or a download fails.
+        click.ClickException: When the raw root is unset or a download fails.
     """
-    _require_corpus_dir()
+    _require_corpus_root("raw")
     from atlas.integrations.semantic_scholar.corpus import datasets, download
     from atlas.integrations.semantic_scholar.corpus.datasets import CorpusError
     from atlas.integrations.semantic_scholar.corpus.paths import DATASETS
@@ -259,10 +277,10 @@ def corpus_ingest(release_id: str | None, datasets_opt: tuple[str, ...], activat
         activate: Flip ``CURRENT`` to this release when the ingest succeeds.
 
     Raises:
-        click.ClickException: When the corpus dir is unset or the ingest fails.
+        click.ClickException: When either corpus root is unset or the ingest fails.
     """
-    _require_corpus_dir()
-    from atlas.config import config
+    _require_corpus_root("raw")  # shards are read from here...
+    parquet_root = _require_corpus_root("parquet")  # ...and Parquet + CURRENT written here
     from atlas.integrations.semantic_scholar.corpus import datasets, ingest
     from atlas.integrations.semantic_scholar.corpus.datasets import CorpusError
     from atlas.integrations.semantic_scholar.corpus.paths import DATASETS, write_current_release
@@ -280,8 +298,7 @@ def corpus_ingest(release_id: str | None, datasets_opt: tuple[str, ...], activat
         raise click.ClickException(str(exc)) from exc
     click.echo("\nIngest complete.")
     if activate and set(DATASETS).issubset(wanted):
-        assert config.storage.s2_corpus_dir is not None  # _require_corpus_dir checked
-        write_current_release(config.storage.s2_corpus_dir, release_id)
+        write_current_release(parquet_root, release_id)
         click.echo(f"Activated {release_id} (CURRENT).")
     elif activate:
         click.echo("Not activated — activate only after both datasets are ingested "
@@ -297,11 +314,10 @@ def corpus_activate(release_id: str | None) -> None:
         release_id: The release to activate; defaults to the latest release.
 
     Raises:
-        click.ClickException: When the corpus dir is unset or the release's
+        click.ClickException: When the parquet root is unset or the release's
             papers Parquet is missing (nothing to activate).
     """
-    _require_corpus_dir()
-    from atlas.config import config
+    parquet_root = _require_corpus_root("parquet")
     from atlas.integrations.semantic_scholar.corpus import datasets
     from atlas.integrations.semantic_scholar.corpus.paths import (
         release_paths,
@@ -309,12 +325,10 @@ def corpus_activate(release_id: str | None) -> None:
     )
 
     release_id = release_id or datasets.latest_release_id()
-    assert config.storage.s2_corpus_dir is not None  # _require_corpus_dir checked
-    root = config.storage.s2_corpus_dir
     paths = release_paths(release_id)
-    if paths is None or not paths.parquet_dataset("papers").exists():
+    if not paths.parquet_dataset("papers").exists():
         raise click.ClickException(f"release {release_id} has no ingested papers Parquet — ingest first")
-    write_current_release(root, release_id)
+    write_current_release(parquet_root, release_id)
     click.echo(f"Activated {release_id} (CURRENT).")
 
 

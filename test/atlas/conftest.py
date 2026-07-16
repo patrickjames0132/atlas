@@ -19,7 +19,7 @@ import math
 import pytest
 from pydantic_ai import models as ai_models
 
-from atlas.config import config
+from atlas.config import S2CorpusStorage, config
 from atlas.services.sources import embeddings
 
 # Hard guard: no live LLM calls, ever. Any agent run that reaches a real model
@@ -36,16 +36,16 @@ def _isolate(monkeypatch, tmp_path):
 
     The offline S2 citations corpus is forced **off** — **both** of its roots. A
     real corpus in config.json would otherwise make citation tests query the
-    machine's live one, and **every** path config gained here must be nulled or the
-    isolation leaks: when ``s2_corpus_parquet_dir`` landed, nulling only
-    ``s2_corpus_dir`` left the corpus tests writing their synthetic release into
-    the real (mid-ingest) Parquet root, because the two are resolved together by
-    ``paths.release_paths()``. A corpus test opts back in by pointing both at its
-    own temp dir (see that package's conftest).
+    machine's live one, and **every** root must be nulled or the isolation leaks:
+    when the Parquet root was first split out, nulling only the other one left the
+    corpus tests writing their synthetic release into the real (mid-ingest) Parquet
+    root, because both are resolved together by ``paths.release_paths()``. Nulling
+    the whole ``s2`` group rather than its fields means a *third* root added later
+    is off by default instead of quietly live. A corpus test opts back in by
+    pointing both at its own temp dir (see that package's conftest).
     """
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
-    monkeypatch.setattr(config.storage, "s2_corpus_dir", None)
-    monkeypatch.setattr(config.storage, "s2_corpus_parquet_dir", None)
+    monkeypatch.setattr(config.storage, "s2", S2CorpusStorage())
     monkeypatch.setattr(config.providers.s2, "min_interval", 0.0)
     monkeypatch.setattr(config.providers.openalex, "min_interval", 0.0)
 

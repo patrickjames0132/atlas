@@ -50,18 +50,31 @@ source.py    — the query side: CitationSource seam, DuckDBCitationSource, cita
 
 ### On-disk layout (`paths.py`)
 
+Two roots, one per half — they have opposite access patterns and can want
+different drives (`config.storage.s2.raw` / `.parquet`; point both at one
+directory if a single drive holds everything):
+
 ```
-<s2_corpus_dir>/
+<storage.s2.raw>/                      the downloads — write once, read once
+  releases/<release_id>/
+    raw/{papers,citations}/*.gz        <- downloaded shards
+    download.json                      <- per-shard download checkpoint
+
+<storage.s2.parquet>/                  what gets queried
   CURRENT                              <- text file: the active release_id
   releases/<release_id>/
-    raw/{papers,citations}/*.gz        <- downloaded shards (download.json checkpoint)
     parquet/papers/*.parquet           <- projected paper rows, one file per shard
     parquet/arxiv_index/*.parquet      <- arxiv_id → corpusid (small, sorted)
     parquet/citations/bucket=<N>/…     <- edges, hash-partitioned on citedcorpusid
-
-# with s2_corpus_parquet_dir set, the parquet/ half moves (raw/ + CURRENT stay put):
-<s2_corpus_parquet_dir>/releases/<release_id>/parquet/…
 ```
+
+**`CURRENT` sits with the Parquet, not the shards** (v5.7.0): it names an
+*ingested* release, so it belongs beside the data it points at. The payoff is that
+the parquet root is the app's **only serving dependency** — delete the shards after
+an ingest, or unplug that drive entirely, and graph builds carry on. `raw` is
+purely an operator concern. `download.json` likewise lives with the shards it
+tracks, so discarding a raw root discards its checkpoint too, and a later
+re-download starts clean rather than trusting a record of files that are gone.
 
 Each release is isolated so a fresh monthly pull downloads and ingests alongside
 the live one; only `CURRENT` (flipped by `atlas corpus ingest`/`activate`) decides
@@ -76,14 +89,12 @@ are ~0% ingested, and `citation_relations` returns `([], …)` — a valid tuple
 random sample of whatever shards happen to be done, labelled "corpus". Move
 `CURRENT` aside before re-ingesting an active release.
 
-**The Parquet can live elsewhere** (`config.storage.s2_corpus_parquet_dir`),
-mirroring the same `releases/<id>/parquet` subtree on another drive. The two halves
-want opposite storage: `raw/` is ~400 GB read once, sequentially (fine on a spinning
-disk), while the Parquet is the queried working set and takes the ingest's ~400k
-partitioned writes (measured: **20.6s/shard on NVMe vs 98.2s on an SMR HDD**).
-`paths.release_paths(release_id)` wires both roots from config — **build
-`ReleasePaths` through it**, never by hand, or `parquet_root` defaults to None and
-the split is silently ignored.
+The two halves want opposite storage: `raw/` is ~400 GB read once, sequentially
+(fine on a spinning disk), while the Parquet is the queried working set and takes
+the ingest's ~400k partitioned writes (measured: **20.6s/shard on NVMe vs 98.2s on
+an SMR HDD** — 2.2h vs 10.6h per release). `paths.release_paths(release_id)` wires
+both roots from config — **build `ReleasePaths` through it**, never by hand, or the
+root you forget stays None and raises only when something touches it.
 
 ### Ingest layout, chosen for the one query (`ingest.py`)
 
@@ -175,8 +186,11 @@ atlas corpus ingest                       # JSONL.gz → Parquet, then flip CURR
 atlas corpus activate                     # (re)point CURRENT at a finished release
 ```
 
-Point `config.storage.s2_corpus_dir` at a roomy drive **outside the repo** first
-(e.g. `E:\s2corpus`); leave it `null` and the app just uses the live S2 path.
+Point `config.storage.s2.raw` and `.parquet` at drives **outside the repo** first
+(e.g. `{"raw": "E:\\s2corpus", "parquet": "D:\\s2corpus"}`, or the same directory
+twice if one drive holds everything); leave `parquet` `null` and the app just uses
+the live S2 path. `download` needs only `raw`, `activate` only `parquet`, `ingest`
+both.
 
 ## Design decisions worth knowing
 

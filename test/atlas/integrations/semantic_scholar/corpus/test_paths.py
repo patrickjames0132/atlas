@@ -1,8 +1,10 @@
-"""The corpus on-disk layout and the CURRENT-release pointer."""
+"""The corpus's two-root on-disk layout and the CURRENT-release pointer."""
 
 from __future__ import annotations
 
-from atlas.config import config
+import pytest
+
+from atlas.config import S2CorpusStorage, config
 from atlas.integrations.semantic_scholar.corpus.paths import (
     ReleasePaths,
     read_current_release,
@@ -11,13 +13,60 @@ from atlas.integrations.semantic_scholar.corpus.paths import (
 )
 
 
-def test_release_paths_layout(tmp_path):
-    """Every path hangs off the corpus root under releases/<id>/."""
-    paths = ReleasePaths(root=tmp_path, release_id="2026-07-07")
-    assert paths.base == tmp_path / "releases" / "2026-07-07"
-    assert paths.raw_dataset("papers") == paths.base / "raw" / "papers"
-    assert paths.parquet_dataset("citations") == paths.base / "parquet" / "citations"
-    assert paths.download_state == paths.base / "download.json"
+def _use_roots(monkeypatch, raw, parquet):
+    """Point config at the given corpus roots (either may be None)."""
+    monkeypatch.setattr(config.storage, "s2", S2CorpusStorage(raw=raw, parquet=parquet))
+
+
+def test_each_half_hangs_off_its_own_root(tmp_path):
+    """The halves live on separate roots: shards + their checkpoint on one, the
+    queryable Parquet on the other, each under releases/<id>/."""
+    shards, fast = tmp_path / "slow", tmp_path / "fast"
+    paths = ReleasePaths(release_id="2026-07-07", raw_root=shards, parquet_root=fast)
+    assert paths.raw_dataset("papers") == shards / "releases" / "2026-07-07" / "raw" / "papers"
+    assert paths.download_state == shards / "releases" / "2026-07-07" / "download.json"
+    assert paths.parquet_dataset("citations") == (
+        fast / "releases" / "2026-07-07" / "parquet" / "citations"
+    )
+
+
+def test_one_drive_for_everything_is_just_the_same_root_twice(tmp_path):
+    """No special case for the simple setup — point both at one directory."""
+    paths = ReleasePaths(release_id="2026-07-07", raw_root=tmp_path, parquet_root=tmp_path)
+    base = tmp_path / "releases" / "2026-07-07"
+    assert paths.raw == base / "raw"
+    assert paths.parquet == base / "parquet"
+
+
+def test_touching_an_unconfigured_half_raises(tmp_path):
+    """A serving-only machine has no raw root. Asking for its shard paths is a
+    mistake worth surfacing — the alternative (defaulting to the other root) is
+    how Parquet once got written to a drive nobody asked for."""
+    paths = ReleasePaths(release_id="2026-07-07", parquet_root=tmp_path)
+    assert paths.parquet == tmp_path / "releases" / "2026-07-07" / "parquet"
+    with pytest.raises(ValueError, match=r"storage\.s2\.raw"):
+        _ = paths.raw
+    with pytest.raises(ValueError, match=r"storage\.s2\.raw"):
+        _ = paths.download_state
+
+
+def test_release_paths_wires_both_roots_from_config(monkeypatch, tmp_path):
+    """`release_paths` is how callers should build these — by hand, each root
+    defaults to None and the half you forget raises only when touched."""
+    _use_roots(monkeypatch, raw=tmp_path / "slow", parquet=tmp_path / "fast")
+    paths = release_paths("2026-07-07")
+    assert paths.raw.is_relative_to(tmp_path / "slow")
+    assert paths.parquet.is_relative_to(tmp_path / "fast")
+
+
+def test_release_paths_carries_a_null_half_through(monkeypatch, tmp_path):
+    """Corpus off (no parquet root) still yields paths — whether a half is usable
+    is the caller's question, asked by touching it."""
+    _use_roots(monkeypatch, raw=tmp_path, parquet=None)
+    paths = release_paths("2026-07-07")
+    assert paths.raw.is_relative_to(tmp_path)
+    with pytest.raises(ValueError, match=r"storage\.s2\.parquet"):
+        _ = paths.parquet
 
 
 def test_current_release_roundtrip(tmp_path):
@@ -31,43 +80,3 @@ def test_current_release_blank_is_none(tmp_path):
     """An empty CURRENT file reads as no active release."""
     (tmp_path / "CURRENT").write_text("  \n", encoding="utf-8")
     assert read_current_release(tmp_path) is None
-
-
-def test_parquet_root_splits_parquet_onto_other_storage(tmp_path):
-    """The Parquet half can live on a different drive from the shards: raw is
-    ~400GB read once sequentially (fine on a spinning disk), the Parquet is the
-    queried working set and takes the ingest's ~400k partitioned writes (not)."""
-    shards, fast = tmp_path / "slow", tmp_path / "fast"
-    paths = ReleasePaths(root=shards, release_id="2026-07-07", parquet_root=fast)
-    # Shards, and the download checkpoint beside them, stay on the big drive.
-    assert paths.raw_dataset("citations") == shards / "releases" / "2026-07-07" / "raw" / "citations"
-    assert paths.download_state == shards / "releases" / "2026-07-07" / "download.json"
-    # The Parquet mirrors the same release subtree on the fast one.
-    assert paths.parquet_dataset("citations") == (
-        fast / "releases" / "2026-07-07" / "parquet" / "citations"
-    )
-
-
-def test_parquet_root_unset_keeps_parquet_under_the_corpus_root(tmp_path):
-    """The default (and the right answer once one drive holds everything)."""
-    paths = ReleasePaths(root=tmp_path, release_id="2026-07-07")
-    assert paths.parquet_root is None
-    assert paths.parquet == paths.base / "parquet"
-
-
-def test_release_paths_wires_both_roots_from_config(tmp_path, monkeypatch):
-    """`release_paths` is how callers should build these — constructing
-    ReleasePaths by hand defaults parquet_root to None and would silently ignore
-    the configured split."""
-    monkeypatch.setattr(config.storage, "s2_corpus_dir", tmp_path / "slow")
-    monkeypatch.setattr(config.storage, "s2_corpus_parquet_dir", tmp_path / "fast")
-    paths = release_paths("2026-07-07")
-    assert paths.root == tmp_path / "slow"
-    assert paths.parquet_root == tmp_path / "fast"
-    assert paths.parquet.is_relative_to(tmp_path / "fast")
-
-
-def test_release_paths_none_when_corpus_off(monkeypatch):
-    """No corpus dir → no paths, and callers fall back to the live S2 endpoint."""
-    monkeypatch.setattr(config.storage, "s2_corpus_dir", None)
-    assert release_paths("2026-07-07") is None

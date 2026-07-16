@@ -34,21 +34,34 @@ because those are chat/tool-use credentials, not graph data sources).
   (id/DOI lookups are free either way — see `config.py` for the pricing
   notes, verified live 2026-07-09).
 
-## `storage` — where the corpus lives
+## `storage.s2` — where the citations corpus lives
 
-- **`s2_corpus_dir: null`** — off by default; the app uses the live S2 citation
-  endpoint. Point it at a roomy drive to enable the offline citations corpus (~400 GB
-  of shards, ~50 GB ingested). See
-  [`corpus/README.md`](../src/atlas/integrations/semantic_scholar/corpus/README.md).
-- **`s2_corpus_parquet_dir: null`** — optional, and only worth setting when your
-  corpus drive is slow. The two halves of the corpus have opposite access patterns:
-  `raw/` is ~400 GB of `.gz` read **exactly once, sequentially** — a spinning disk
-  does that perfectly well — while the ingested Parquet is the queried working set
-  (~50 GB) and absorbs the ingest's ~400k partitioned writes, which a spinning disk
-  does *not*. Measured on one citations shard: **20.6s on NVMe vs 98.2s on an SMR
-  HDD** — 2.2h vs 10.6h for a full release. So a big slow drive can hold the shards
-  while a fast one holds what's actually queried. Leave it `null` once the whole
-  corpus is on one fast drive; that's the simpler end state.
+Two roots, because the corpus's halves have **opposite access patterns**. Both
+default to `null` (corpus off — the s2 provider uses the live citation endpoint).
+See [`corpus/README.md`](../src/atlas/integrations/semantic_scholar/corpus/README.md).
+
+- **`s2.raw`** — the downloaded `.gz` shards (~400 GB/release) plus their
+  `download.json` checkpoint. Written once, read once, **sequentially** — which
+  even a 5400-RPM drive does perfectly well, so this is where a big slow disk
+  earns its keep. Deletable the moment an ingest succeeds; a re-ingest just means
+  a re-download. `null` on a machine that only serves.
+- **`s2.parquet`** — the ingested working set (~50 GB) **and the `CURRENT`
+  pointer**. It absorbs the ingest's ~400k partitioned writes and then serves every
+  graph build, so it wants the fast drive: measured on one citations shard,
+  **20.6s on NVMe vs 98.2s on an SMR HDD** — 2.2h vs 10.6h for a full release.
+  `null` turns the corpus off.
+
+**`parquet` is the app's only serving dependency.** `CURRENT` lives beside the data
+it names, so once a release is ingested you can pull the raw drive (or delete its
+shards) and graph builds carry on. `raw` is an operator concern — only
+`atlas corpus download`/`ingest` read it.
+
+Point both at the same directory when one drive holds everything; there's no
+special case for it. A typical split:
+
+```json
+"s2": { "raw": "E:\\s2corpus", "parquet": "D:\\s2corpus" }
+```
 
 ## `graph` — neighborhood size
 
