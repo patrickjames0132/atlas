@@ -1408,6 +1408,27 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       overlapping second batch the way S2 does, so the plain landmark assertions fail
       if the dedupe is removed. Full story in **Bugs → Upstream**. *(Found right after
       the first full corpus went live, 2026-07-16.)*
+- [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
+      — a cache-miss graph on the s2 provider now takes ~54s against the live
+      path's ~15s, all of it in the citer query. That's the wrong shape: the whole
+      point of hash-partitioning on `citedcorpusid` is that a seed lookup touches
+      **one of 1024 buckets** (~1/1024 of 5.1B edges), and sorting by
+      `citedcorpusid` *within* each write gives Parquet row-group zone maps so the
+      query skips most of even that bucket. It should be a few MB read, not 54s.
+      **Prime suspect:** a bucket now holds **390 files** (one per shard, post-v5.6.0),
+      so DuckDB must open 390 Parquet **footers** before any zone map can rule a
+      row group out — the skipping works, but the per-file metadata cost is paid
+      first, 390 times, and it dwarfs the read. Measured: bucket 247 (DQN's) is
+      ~5.2M rows / 390 files. **Things to try, cheapest first:** (a) confirm the
+      diagnosis — time a query against one bucket compacted to a single file vs the
+      390; (b) **compact each bucket after ingest** (one `COPY … ORDER BY
+      citedcorpusid` per bucket → 1024 files total, not ~400k) — this likely also
+      kills the O(n²) ingest scaling below, since a compaction pass replaces the
+      per-shard file accretion; (c) revisit `NBUCKETS` — fewer, bigger buckets mean
+      fewer files but more rows scanned each. Note (b) is the same shape as the
+      classic small-files problem in any Hive-partitioned lake, and the Athena
+      endgame will care about it even more than DuckDB does. *(Patrick noticed
+      fetching citations is slow, 2026-07-16.)*
 - [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
       (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
