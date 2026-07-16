@@ -67,7 +67,11 @@ For each feature, follow this cycle:
    work. If a **notable bug** was found & fixed along the
    way — non-obvious root cause, surprising repro, a lesson worth keeping — add
    an entry to the **Bugs** section of **`OnePager.md`** (newest-first; see its
-   header for the format).
+   header for the format). It has two halves: **Ours** (we wrote it, we fixed
+   it) and **Upstream** (a provider's data/service is wrong — we can only work
+   around it, so the entry justifies code that looks paranoid and stops a later
+   cleanup deleting the guard). File by *where the root cause lives*, not who
+   noticed it.
    Small, obvious fixes don't need one — the commit message is enough.
 4. **Commit on the branch, merge into `main`, tag, and push** (details below) —
    commit the approved work on the feature branch, merge it back into `main`,

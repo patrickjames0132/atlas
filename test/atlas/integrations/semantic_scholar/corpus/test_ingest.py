@@ -22,7 +22,14 @@ def test_ingest_builds_arxiv_index(synthetic_corpus):
 
 
 def test_citations_partitioned_on_cited_bucket(synthetic_corpus):
-    """Edges land in the bucket dir for their citedcorpusid (seed id 1 -> bucket 1)."""
+    """Edges land in the bucket dir for their citedcorpusid (seed id 1 -> bucket 1).
+
+    Five rows for three distinct edges: the fixture ships a second, overlapping
+    export batch the way S2 really does. **Ingest stores what upstream sent,
+    verbatim** — it can't dedupe, because a duplicate pair spans two shards and
+    each shard is written independently. Collapsing them is the query's job
+    (`source._citers`).
+    """
     paths = release_paths(RELEASE_ID)
     bucket = 1 % NBUCKETS
     bucket_dir = paths.parquet_dataset("citations") / f"bucket={bucket}"
@@ -30,7 +37,12 @@ def test_citations_partitioned_on_cited_bucket(synthetic_corpus):
     rows = duckdb.sql(
         f"SELECT count(*) FROM read_parquet('{(bucket_dir / '*.parquet').as_posix()}')"
     ).fetchone()
-    assert rows[0] == 3  # all three edges cite the seed
+    assert rows[0] == 5  # 3 edges + 2 re-shipped by the second batch
+    distinct = duckdb.sql(
+        f"""SELECT count(*) FROM (SELECT DISTINCT citingcorpusid, citedcorpusid
+            FROM read_parquet('{(bucket_dir / '*.parquet').as_posix()}'))"""
+    ).fetchone()
+    assert distinct[0] == 3  # all three edges cite the seed
 
 
 def test_ingest_is_idempotent(synthetic_corpus):

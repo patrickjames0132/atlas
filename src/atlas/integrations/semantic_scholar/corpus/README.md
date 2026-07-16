@@ -114,6 +114,27 @@ skipped; a citations shard records a `_done/<shard>.ok` marker (its output is
 spread across bucket dirs, so existence alone can't tell). A rerun after an
 interrupted ingest resumes.
 
+### S2 ships every edge twice (their bug, our GROUP BY)
+
+A release's `citations` dataset comes as **more than one export batch, and the
+batches overlap**. `2026-07-07` advertises 390 shards — 240 stamped
+`…_00151_3g69z_…` and 150 stamped `…_00016_bxc9g_…` — carrying **5.1B rows for
+~2.7B distinct edges**. The download is correct; that's just what S2 lists.
+
+So `_citers` **groups by `citingcorpusid` before the join and the limit**.
+Without it a `limit` counts *rows, not papers*: DQN's 63-landmark budget bought
+~32 real landmarks (27,230 rows / 13,729 distinct = 1.98x). It hid because
+`build.py`'s `add_edge` dedupes endpoints — the graph stayed correct, just
+half-empty — and because S2's *API* reports DQN at 13,824 citations, matching the
+**distinct** count, so their own two surfaces disagree by 2x.
+
+**It can't be fixed at ingest:** a duplicate pair spans two different shards, and
+each shard is written independently, so a per-shard `DISTINCT` never sees both
+copies. Ingest stores upstream's rows verbatim; the query collapses them.
+`isinfluential` is `bool_or`-ed, because the batches disagree about it. Don't
+remove the grouping — the fixture ships an overlapping batch precisely so the
+landmark tests fail if you do. See **Bugs → Upstream** in `OnePager.md`.
+
 ### The query seam (`source.py`)
 
 `CitationSource` is a tiny `Protocol` — `landmark_citers(corpus_id, limit)` and

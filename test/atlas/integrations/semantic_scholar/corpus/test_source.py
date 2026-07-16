@@ -112,3 +112,35 @@ def test_non_arxiv_citer_url_uses_corpusid(synthetic_corpus):
     node = latest[0]["node"]  # the recent paper has no external ids
     assert node["url"] == "https://www.semanticscholar.org/paper/CorpusID:3"
     assert node["arxiv_id"] is None
+
+
+def test_citers_are_deduped_across_export_batches(synthetic_corpus):
+    """S2 re-ships edges across overlapping export batches, so a citer must still
+    appear ONCE. Without this the limit counts rows rather than papers and halves
+    the relation — DQN's budget of 63 bought ~32 real landmarks."""
+    landmark, _latest = source.citation_relations(
+        {"arxiv_id": "1706.03762"}, "1706.03762", landmark_limit=None, latest_limit=None
+    )
+    ids = [entry["node"]["id"] for entry in landmark]
+    assert ids == ["CorpusId:2", "CorpusId:4"]  # each once, despite the second batch
+    assert len(ids) == len(set(ids))
+
+
+def test_a_limit_counts_papers_not_duplicate_rows(synthetic_corpus):
+    """The bug this guards: `LIMIT 1` over un-deduped rows could return one row
+    that's a *second copy* of a citer — spending the budget on nothing."""
+    landmark, _latest = source.citation_relations(
+        {"arxiv_id": "1706.03762"}, "1706.03762", landmark_limit=1, latest_limit=None
+    )
+    assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2"]  # the most-cited
+
+
+def test_influential_is_or_ed_across_duplicate_edges(synthetic_corpus):
+    """The batches disagree: BERT's edge is influential in the first and not in the
+    second. The flag is a claim that *some* record marks it influential, so OR."""
+    landmark, _latest = source.citation_relations(
+        {"arxiv_id": "1706.03762"}, "1706.03762", landmark_limit=None, latest_limit=None
+    )
+    by_id = {entry["node"]["id"]: entry for entry in landmark}
+    assert by_id["CorpusId:2"]["influential"] is True   # True in batch 1, False in batch 2
+    assert by_id["CorpusId:4"]["influential"] is False  # False in both

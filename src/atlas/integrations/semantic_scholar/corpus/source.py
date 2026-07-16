@@ -219,17 +219,38 @@ class DuckDBCitationSource:
         return None
 
     def _citers(self, corpus_id: int, *, recent: bool, limit: int | None) -> list[dict]:
-        """Query one side of the citer split (landmark or latest).
+        """Query one side of the citer split (landmark or latest), deduped.
+
+        **The edge list arrives with duplicates, and they're upstream's, not
+        ours.** S2 ships a release's ``citations`` dataset as more than one export
+        batch, and the batches *overlap*: the 2026-07-07 release advertises 390
+        shards — 240 stamped ``…_00151_3g69z_…`` and 150 stamped
+        ``…_00016_bxc9g_…`` — carrying ~5.1B rows for ~2.7B distinct edges. Every
+        edge lands about twice. So this **groups by the citing paper** before
+        joining. Without it a ``limit`` counts *rows*, not papers, and silently
+        halves the relation: DQN's landmark budget of 63 bought ~32 actual
+        landmarks. (``build.py``'s ``add_edge`` dedupes endpoints, so the graph
+        stayed *correct* — just half-empty, which is why this hid for so long.)
+
+        Deduping here rather than at ingest is deliberate: a duplicate pair spans
+        **two different shards**, so a per-shard ``SELECT DISTINCT`` would never
+        see both copies. The grouping is bucket-local and runs on a few thousand
+        rows, so it costs nothing measurable.
+
+        ``isinfluential`` is OR'd across the copies: the flag is a claim that *some*
+        edge record marks this citation influential, and the batches needn't agree.
 
         Args:
             corpus_id: The seed's ``corpusid``.
             recent: True for the latest window (``publicationdate >= cutoff``,
                 oldest-first), False for historic landmarks (older, most-cited
                 first).
-            limit: Max citers to return, or None for all.
+            limit: Max citers to return, or None for all. Counts distinct citing
+                papers.
 
         Returns:
-            ``{"node", "influential"}`` entries in the relation's reveal order.
+            ``{"node", "influential"}`` entries in the relation's reveal order,
+            one per citing paper.
         """
         bucket = corpus_id % NBUCKETS
         citations_glob = f"{self._citations_root}/bucket={bucket}/*.parquet"
@@ -245,11 +266,17 @@ class DuckDBCitationSource:
             date_clause = "(p.publicationdate IS NULL OR p.publicationdate < ?)"
             order = "p.citationcount DESC NULLS LAST"
         limit_clause = f"LIMIT {int(limit)}" if limit is not None else ""
+        # One row per citing paper, BEFORE the join and the limit — see above.
+        deduped_edges = (
+            "(SELECT citingcorpusid, bool_or(isinfluential) AS isinfluential "
+            f"FROM read_parquet('{citations_glob}', hive_partitioning=false) "
+            "WHERE citedcorpusid = ? GROUP BY citingcorpusid)"
+        )
         query = (
             f"SELECT {_CITER_SELECT} "
-            f"FROM read_parquet('{citations_glob}', hive_partitioning=false) c "
+            f"FROM {deduped_edges} c "
             f"JOIN read_parquet('{self._papers_glob}') p ON p.corpusid = c.citingcorpusid "
-            f"WHERE c.citedcorpusid = ? AND {date_clause} "
+            f"WHERE {date_clause} "
             f"ORDER BY {order} {limit_clause}"
         )
         with self._lock:

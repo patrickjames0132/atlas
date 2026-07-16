@@ -1396,6 +1396,18 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       prints both. Full stories in **Bugs**; the residual O(n²) scaling and the
       `activate`-only-checks-papers hole are filed below. *(Found while ingesting
       the 2026-07-07 release, 2026-07-15.)*
+- [x] **Corpus citers deduped — S2 ships every edge twice** *(v5.6.1 — patch)*.
+      The `2026-07-07` citations release is **two overlapping export batches** (240
+      shards `…_00151_3g69z_…` + 150 `…_00016_bxc9g_…`, exactly as S2's API lists
+      them): 5.1B rows for ~2.7B distinct edges. So `landmark_citers(limit=63)`
+      counted **rows, not papers**, and DQN's 63-landmark budget bought ~32 — the
+      right papers, half the graph. `source._citers` now groups by `citingcorpusid`
+      before the join and the limit, `bool_or`-ing `isinfluential` (the batches
+      disagree). Can't be done at ingest: a duplicate pair spans two shards, so a
+      per-shard `DISTINCT` never sees both copies. The synthetic fixture now ships an
+      overlapping second batch the way S2 does, so the plain landmark assertions fail
+      if the dedupe is removed. Full story in **Bugs → Upstream**. *(Found right after
+      the first full corpus went live, 2026-07-16.)*
 - [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
       (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
@@ -2136,7 +2148,16 @@ test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
 
-### The corpus ingest wrote 3.5 KB Parquet files — one DuckDB default against our 1024 buckets
+Split in two, because the categories age differently. **Ours** are bugs we wrote
+and repaired; the lesson is about our own code, and the guard is a test. **Upstream**
+are bugs in a provider's data or service — we can't repair those, only work around
+them, and the entry's real job is to justify a piece of code that looks wrong
+until you know the story. An upstream entry is a **standing** hazard: it can
+recur with the next data release, and its workaround must survive future cleanups.
+
+### Ours
+
+#### The corpus ingest wrote 3.5 KB Parquet files — one DuckDB default against our 1024 buckets
 
 *Found & fixed on the `corpus-ingest-perf` branch (2026-07-15), while the first full release was ingesting.*
 
@@ -2173,7 +2194,7 @@ later.
   populated tree, not an empty one** — per-shard cost isn't constant when the job's
   own output becomes part of its input state (see the O(n²) backlog ticket).
 
-### Field Landmarks were never landmarks — the relation rode a pager built for something else
+#### Field Landmarks were never landmarks — the relation rode a pager built for something else
 
 *Found & fixed on the `s2-fallback-density-budget` branch (Patrick's browser test, 2026-07-15).*
 
@@ -2209,7 +2230,7 @@ later.
   Guarded by `test_citation_relations_pages_past_the_latest_window`, which pins
   that an out-of-window page no longer stops the walk.
 
-### The cite-budget model was sizing a pool it was never trained on
+#### The cite-budget model was sizing a pool it was never trained on
 
 *Found & fixed on the `s2-fallback-density-budget` branch (2026-07-15).*
 
@@ -2236,7 +2257,7 @@ later.
   admitted. `test_live_s2_fallback_selects_instead_of_predicting` pins which path
   gets which rule.
 
-### Two vertical lines in the Timeline — date-poor papers handed a guaranteed quota
+#### Two vertical lines in the Timeline — date-poor papers handed a guaranteed quota
 
 *Found & fixed on the `s2-fallback-density-budget` branch (Patrick's browser test, 2026-07-15).*
 
@@ -2273,7 +2294,7 @@ later.
   `test_citation_relations_year_settles_a_dateless_citer_inside_the_window`, and
   `frontend/test/graph/hooks/useTimeline.test.tsx`.
 
-### `bin/setup` left a venv where `import anthropic` failed — two dists, one import package
+#### `bin/setup` left a venv where `import anthropic` failed — two dists, one import package
 
 *Found & fixed on the `s2-fallback-density-budget` branch (2026-07-15).*
 
@@ -2297,7 +2318,7 @@ later.
   whether the *directory* still exists before trusting the resolver. The trailhead
   is the pinned comment in `pyproject.toml`'s dev group explaining the collision.
 
-### A running research agent bled its discoveries into the next graph
+#### A running research agent bled its discoveries into the next graph
 
 *Found & fixed on the `provider-aware-agents` branch (Patrick's browser test, 2026-07-13).*
 
@@ -2322,7 +2343,7 @@ later.
   context change needs an abort-on-unmount, or its stale stream mutates the new
   context's state.
 
-### Topic-search nodes never rendered — the view filter silently ate edge-less nodes
+#### Topic-search nodes never rendered — the view filter silently ate edge-less nodes
 
 *Found & fixed on the `provider-aware-agents` branch (Patrick's browser test, 2026-07-13).*
 
@@ -2345,7 +2366,7 @@ later.
   edge-less nodes (topic search here) needs an explicit path in the node filter,
   not just the edge filter.
 
-### `'node'` KeyError ending some OpenAlex-graph chats — a two-shapes search mismatch
+#### `'node'` KeyError ending some OpenAlex-graph chats — a two-shapes search mismatch
 
 *Found & fixed on the `provider-aware-agents` branch (Patrick's browser test, 2026-07-13).*
 
@@ -2372,7 +2393,7 @@ later.
   convenient stand-in.** The fake that returned `{"node": …}` for a function that
   really returns bare dicts is why the seam passed CI but failed live.
 
-### OpenAlex detail hydration nulled out a known arXiv id — arXiv tags vanished
+#### OpenAlex detail hydration nulled out a known arXiv id — arXiv tags vanished
 
 *Found & fixed on the `provider-reach` branch (Patrick's browser test, 2026-07-13).*
 
@@ -2399,7 +2420,139 @@ later.
   that shouldn't regress. (The genuine OA gap remains: a published-only record
   with no arXiv location has no id to show — that's data, not this bug.)
 
-### OpenAlex couldn't find "Attention Is All You Need" — a hard seed-resolve failure
+#### Alt+Shift+drag never added to the node selection (Windows)
+
+*Found & fixed on the `node-selector` branch (2026-07-12).*
+
+- **Symptom.** The node selector's other gestures worked — alt-drag picked a
+  cluster, shift-click toggled one, alt-click cleared — but the **Alt+Shift+drag
+  "add this rectangle to the pick"** gesture did nothing (or panned/replaced
+  instead). Only that one modifier combo was dead, and only on Windows.
+- **Root cause.** **Alt+Shift is the OS keyboard-layout switch on Windows.** The
+  moment both were held, Windows grabbed the combo: the browser never saw a
+  clean `event.shiftKey` mid-drag, and the layout-switch focus change fired a
+  window `blur` — which our `useMarquee` used to **disarm** the capture overlay,
+  so the mousedown fell through to react-force-graph and panned instead of
+  marqueeing. Nothing wrong with the code's logic (the reducer + a jsdom test of
+  the shift branch both passed) — the gesture was simply un-triggerable on the
+  target OS.
+- **Fix.** Dropped the "replace vs. add" modifier split entirely and made the
+  marquee **additive**: every alt-drag unions its rectangle onto the pick (reset
+  is alt-click empty / Clear). No second modifier, so no OS collision. The
+  `shiftKey` branch and its test are gone; a new test drives two sweeps and
+  asserts they accumulate.
+- **Lesson / guard.** **Don't build gestures on OS-reserved modifier combos** —
+  Alt+Shift (layout switch) and Ctrl+Alt (AltGr on international keyboards) are
+  claimed by the platform before the browser sees them, and a passing unit test
+  proves nothing about whether a human can actually *fire* the gesture.
+  Single-modifier drags (Alt alone here) are safe; anything richer needs an
+  in-app affordance (a mode toggle, a button), not a chord.
+
+#### "Event loop is closed" when several lectures stream at once
+
+*Found & fixed on the `color-lecture-buttons` branch (2026-07-11).*
+
+- **Symptom.** Playing all four lectures at once (each button clicked before the
+  last finished) surfaced a red **`Event loop is closed`** error in the assistant
+  panel. The lectures still played — the error was cosmetic — but it looked
+  broken. It only ever appeared under **concurrency**; a single lecture at a time
+  never triggered it.
+- **Root cause.** The agents, and the one **shared Anthropic `AsyncClient`** they
+  hold, are module-level singletons — but `agents/streams.py::drive` opened a
+  **fresh `asyncio` event loop per call and closed it at the end**. Fine
+  sequentially. But Flask is threaded, so concurrent lectures each ran `drive` on
+  their **own** loop over that **one shared httpx connection pool** — and a pool
+  binds to the first loop that touches it. The first stream to finish closed
+  *its* loop, tearing the pool out from under the streams still running on it →
+  `Event loop is closed`.
+- **Fix.** `streams.py` now runs all agent async work on **one long-lived event
+  loop** (a daemon thread; request threads reach it via
+  `asyncio.run_coroutine_threadsafe`). The shared client stays bound to a single
+  loop for the process's life, and asyncio multiplexes the concurrent streams the
+  way it's meant to. `drive`'s external contract — a sync generator yielding one
+  event at a time, context manager always exited — is unchanged, so the lecturer
+  and researcher both benefit with no caller edits.
+- **Lesson / guard.** A shared async client and a per-call event loop are
+  incompatible the moment anything runs concurrently — the loop a pooled
+  connection was born on must outlive every stream using it. New test
+  `test/atlas/agents/test_streams.py` drives **8 streams concurrently** and
+  asserts they all complete cleanly (the prior suite only ever drove one at a
+  time, so it couldn't have caught this).
+
+#### The same paper as two (actually three) nodes — cross-source identity in the hybrid graph
+
+*Found & fixed in v4.5.1 (2026-07-10).*
+
+- **Symptom.** Seeding on DQN showed "Continuous control with deep reinforcement
+  learning" as **two** node instances, each with a partial view of the paper
+  (different rels, wildly different citation counts). An audit of the four
+  cached graphs found 24/11/43/30 duplicate-title groups — the graph had been
+  quietly double-counting papers since the v4.0.0 hybrid.
+- **Root cause.** The node table was keyed by raw id, but the hybrid ships
+  **two id schemes**: S2 relations (references, similar) carry bare paperIds
+  while OpenAlex citers carry `DOI:`/`ARXIV:`/`W…` ids. The "duplicate" was
+  actually **three** sightings — an OpenAlex `ARXIV:` citer, an OpenAlex `DOI:`
+  citer from a *duplicate OpenAlex work* (verified live: two QMIX works share
+  one DOI), and an S2-paperId similar hit — each minting its own node.
+- **Fix.** `build.py::add_neighbor` resolves identity through the **arXiv id**,
+  the one id both sources agree on: first sighting wins the node slot, later
+  sightings append their rels and upgrade fields they know better
+  (`_upgrade_node`: max `citation_count` — S2's counts are far more complete —
+  fill-if-None for summary/date fields). `add_neighbor` returns the canonical
+  id and the edge loops use it; `add_edge` skips self-loops and duplicate
+  `(source, target, type)` triples with ranks staying compact; `counts` are
+  post-dedupe. The seed registers its own arXiv id, so a citer that IS the seed
+  under another id merges instead of self-looping. Two pinned tests.
+- **Lesson / guard.** A graph fed by two sources needs an explicit **identity
+  key**, not "whatever id arrived". The known residual is deliberate: a
+  journal-DOI record vs. its preprint twin where neither side carries the arXiv
+  id can't merge — title matching was rejected as riskier than the rare leftover
+  duplicate (same-title distinct papers exist, e.g. Living Reviews editions).
+
+### Upstream — their bug, our problem
+
+Root cause outside our code: a provider's data or service. We can't fix these,
+only work around them — so the entry exists to explain why some piece of our code
+looks paranoid, and to stop a later cleanup from quietly removing the guard.
+**Fix** here means *our* workaround, not a repair; **Lesson / guard** is what keeps
+us honest when their data changes again.
+
+#### Semantic Scholar ships every citation edge twice — a release is two overlapping export batches
+
+*Found on the `corpus-dedupe` branch (2026-07-16), an hour after the first full corpus went live.*
+
+- **Symptom.** With the corpus finally serving, DQN's Field Landmarks came back
+  **citation-sorted across all history and visibly right** — DDPG, Soft Actor-Critic,
+  A3C, TRPO, Rainbow — but only **32 of them**, against an adaptive budget of 63. The
+  relation was half-empty with no error anywhere, and the papers it *did* show were
+  the correct ones, which is precisely why it looked fine.
+- **Root cause.** **S2's own data.** A release's `citations` dataset is published as
+  more than one export batch, and the batches **overlap**. The `2026-07-07` release
+  advertises 390 shards — 240 stamped `…_00151_3g69z_…` and 150 stamped
+  `…_00016_bxc9g_…` — and our download pulled exactly what their API listed. Together
+  they carry **5,112,091,751 rows for ~2.7B distinct edges**: every edge lands about
+  twice (DQN: 27,230 rows, 13,729 distinct — 1.98x). So a `LIMIT 63` in
+  `landmark_citers` counted **rows, not papers**, and bought ~32 real landmarks.
+  Two things hid it: `build.py`'s `add_edge` dedupes endpoints, so the *graph* stayed
+  correct — just half-empty; and S2's own `citationCount` for DQN says 13,824, which
+  matches the *distinct* count, so the API and the bulk dataset quietly disagree by 2x.
+- **Fix (workaround).** `source._citers` groups by `citingcorpusid` **before** the
+  join and the limit, so a limit counts distinct citing papers;
+  `bool_or(isinfluential)` merges the copies, which matters because **the batches
+  disagree** — an edge is influential in one and not the other. Deduping at *ingest*
+  is impossible: a duplicate pair spans two different shards, and each shard is
+  written independently, so a per-shard `DISTINCT` never sees both copies. Ingest
+  therefore stores upstream's rows verbatim and the query collapses them.
+- **Lesson / guard.** **A bulk dataset is not a set — don't assume a vendor's export
+  is deduplicated, and don't trust the row count as an entity count.** The tell was
+  arithmetic, not an error: 27,230 ≈ 2 × 13,824, and 63 → 32. Any `LIMIT` over
+  un-deduped edges silently spends the budget on duplicates. The synthetic fixture now
+  **ships a second, overlapping batch that disagrees on `isinfluential`**, exactly as
+  S2 does, so the ordinary landmark assertions fail if the dedupe is ever removed —
+  the guard is in the *data*, not just a test name. Expect this every release; if a
+  future one stops duplicating, the grouping is still correct and costs nothing.
+
+#### OpenAlex couldn't find "Attention Is All You Need" — a hard seed-resolve failure
 
 *Found & fixed on the `provider-reach` branch (Patrick's browser test, 2026-07-13).*
 
@@ -2431,96 +2584,7 @@ later.
   and the 2025-misdate — a *data* tradeoff, documented in
   `docs/citation-coverage.md`, not this bug.)
 
-### Alt+Shift+drag never added to the node selection (Windows)
-
-*Found & fixed on the `node-selector` branch (2026-07-12).*
-
-- **Symptom.** The node selector's other gestures worked — alt-drag picked a
-  cluster, shift-click toggled one, alt-click cleared — but the **Alt+Shift+drag
-  "add this rectangle to the pick"** gesture did nothing (or panned/replaced
-  instead). Only that one modifier combo was dead, and only on Windows.
-- **Root cause.** **Alt+Shift is the OS keyboard-layout switch on Windows.** The
-  moment both were held, Windows grabbed the combo: the browser never saw a
-  clean `event.shiftKey` mid-drag, and the layout-switch focus change fired a
-  window `blur` — which our `useMarquee` used to **disarm** the capture overlay,
-  so the mousedown fell through to react-force-graph and panned instead of
-  marqueeing. Nothing wrong with the code's logic (the reducer + a jsdom test of
-  the shift branch both passed) — the gesture was simply un-triggerable on the
-  target OS.
-- **Fix.** Dropped the "replace vs. add" modifier split entirely and made the
-  marquee **additive**: every alt-drag unions its rectangle onto the pick (reset
-  is alt-click empty / Clear). No second modifier, so no OS collision. The
-  `shiftKey` branch and its test are gone; a new test drives two sweeps and
-  asserts they accumulate.
-- **Lesson / guard.** **Don't build gestures on OS-reserved modifier combos** —
-  Alt+Shift (layout switch) and Ctrl+Alt (AltGr on international keyboards) are
-  claimed by the platform before the browser sees them, and a passing unit test
-  proves nothing about whether a human can actually *fire* the gesture.
-  Single-modifier drags (Alt alone here) are safe; anything richer needs an
-  in-app affordance (a mode toggle, a button), not a chord.
-
-### "Event loop is closed" when several lectures stream at once
-
-*Found & fixed on the `color-lecture-buttons` branch (2026-07-11).*
-
-- **Symptom.** Playing all four lectures at once (each button clicked before the
-  last finished) surfaced a red **`Event loop is closed`** error in the assistant
-  panel. The lectures still played — the error was cosmetic — but it looked
-  broken. It only ever appeared under **concurrency**; a single lecture at a time
-  never triggered it.
-- **Root cause.** The agents, and the one **shared Anthropic `AsyncClient`** they
-  hold, are module-level singletons — but `agents/streams.py::drive` opened a
-  **fresh `asyncio` event loop per call and closed it at the end**. Fine
-  sequentially. But Flask is threaded, so concurrent lectures each ran `drive` on
-  their **own** loop over that **one shared httpx connection pool** — and a pool
-  binds to the first loop that touches it. The first stream to finish closed
-  *its* loop, tearing the pool out from under the streams still running on it →
-  `Event loop is closed`.
-- **Fix.** `streams.py` now runs all agent async work on **one long-lived event
-  loop** (a daemon thread; request threads reach it via
-  `asyncio.run_coroutine_threadsafe`). The shared client stays bound to a single
-  loop for the process's life, and asyncio multiplexes the concurrent streams the
-  way it's meant to. `drive`'s external contract — a sync generator yielding one
-  event at a time, context manager always exited — is unchanged, so the lecturer
-  and researcher both benefit with no caller edits.
-- **Lesson / guard.** A shared async client and a per-call event loop are
-  incompatible the moment anything runs concurrently — the loop a pooled
-  connection was born on must outlive every stream using it. New test
-  `test/atlas/agents/test_streams.py` drives **8 streams concurrently** and
-  asserts they all complete cleanly (the prior suite only ever drove one at a
-  time, so it couldn't have caught this).
-
-### The same paper as two (actually three) nodes — cross-source identity in the hybrid graph
-
-*Found & fixed in v4.5.1 (2026-07-10).*
-
-- **Symptom.** Seeding on DQN showed "Continuous control with deep reinforcement
-  learning" as **two** node instances, each with a partial view of the paper
-  (different rels, wildly different citation counts). An audit of the four
-  cached graphs found 24/11/43/30 duplicate-title groups — the graph had been
-  quietly double-counting papers since the v4.0.0 hybrid.
-- **Root cause.** The node table was keyed by raw id, but the hybrid ships
-  **two id schemes**: S2 relations (references, similar) carry bare paperIds
-  while OpenAlex citers carry `DOI:`/`ARXIV:`/`W…` ids. The "duplicate" was
-  actually **three** sightings — an OpenAlex `ARXIV:` citer, an OpenAlex `DOI:`
-  citer from a *duplicate OpenAlex work* (verified live: two QMIX works share
-  one DOI), and an S2-paperId similar hit — each minting its own node.
-- **Fix.** `build.py::add_neighbor` resolves identity through the **arXiv id**,
-  the one id both sources agree on: first sighting wins the node slot, later
-  sightings append their rels and upgrade fields they know better
-  (`_upgrade_node`: max `citation_count` — S2's counts are far more complete —
-  fill-if-None for summary/date fields). `add_neighbor` returns the canonical
-  id and the edge loops use it; `add_edge` skips self-loops and duplicate
-  `(source, target, type)` triples with ranks staying compact; `counts` are
-  post-dedupe. The seed registers its own arXiv id, so a citer that IS the seed
-  under another id merges instead of self-looping. Two pinned tests.
-- **Lesson / guard.** A graph fed by two sources needs an explicit **identity
-  key**, not "whatever id arrived". The known residual is deliberate: a
-  journal-DOI record vs. its preprint twin where neither side carries the arXiv
-  id can't merge — title matching was rejected as riskier than the rare leftover
-  duplicate (same-title distinct papers exist, e.g. Living Reviews editions).
-
-### OpenAlex misdates "Attention Is All You Need" to 2025 — nearly broke the cite-budget model
+#### OpenAlex misdates "Attention Is All You Need" to 2025 — nearly broke the cite-budget model
 
 *Found & handled during the v4.5.0 adaptive-budget build (2026-07-10).*
 
@@ -2546,7 +2610,7 @@ later.
   wrong year, and CV score alone can hide a catastrophic failure on a single
   important point. Always eyeball the anchors, not just the aggregate metric.
 
-### OpenAlex's coarse dates emptied the "Latest Publications" relation
+#### OpenAlex's coarse dates emptied the "Latest Publications" relation
 
 *Found & fixed during the v4.0.0 OpenAlex hybrid build (2026-07-09).*
 
@@ -2568,7 +2632,7 @@ later.
   year-granular (or tolerate `-01-01`) or it quietly drops year-only records.
   Pinned by `test_latest_uses_year_window_not_exact_date`.
 
-### Tripled MathML soup in ar5iv figure captions
+#### Tripled MathML soup in ar5iv figure captions
 
 *Found & fixed v3.2.0 (2026-07-08), while shipping "Proper subscripts & math
 notation".*

@@ -45,6 +45,18 @@ CITATIONS = [
     {"citingcorpusid": 4, "citedcorpusid": 1, "isinfluential": False},
     {"citingcorpusid": 3, "citedcorpusid": 1, "isinfluential": False},
 ]
+#: A SECOND citations shard that re-ships edges already in the first — because
+#: that's what S2 actually does. A release's `citations` dataset comes as more
+#: than one export batch and the batches overlap: 2026-07-07 advertises 240 shards
+#: stamped `…_00151_3g69z_…` and 150 stamped `…_00016_bxc9g_…`, together ~5.1B rows
+#: for ~2.7B distinct edges. Note BERT's copy here **disagrees** on
+#: `isinfluential`, and that the duplicate spans a different *shard* — so a
+#: per-shard dedupe at ingest could never catch it. Keeping this in the fixture
+#: means the ordinary landmark assertions fail if the query stops deduping.
+CITATIONS_SECOND_BATCH = [
+    {"citingcorpusid": 2, "citedcorpusid": 1, "isinfluential": False},
+    {"citingcorpusid": 4, "citedcorpusid": 1, "isinfluential": False},
+]
 
 
 def write_gzip_jsonl(path: Path, rows: list[dict]) -> None:
@@ -86,6 +98,7 @@ def synthetic_corpus(monkeypatch, tmp_path):
         assert path.is_relative_to(tmp_path), f"corpus test would write outside tmp: {path}"
     write_gzip_jsonl(paths.raw_dataset("papers") / "papers000.gz", PAPERS)
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations000.gz", CITATIONS)
+    write_gzip_jsonl(paths.raw_dataset("citations") / "citations001.gz", CITATIONS_SECOND_BATCH)
     ingest.ingest_release(RELEASE_ID)
     write_current_release(root, RELEASE_ID)
     return RELEASE_ID
