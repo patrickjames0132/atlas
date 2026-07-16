@@ -1214,6 +1214,26 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Teacher & agent reach
 
+- [ ] **Say whether the researcher may answer from its own knowledge — right now
+      the prompt leans "no"** — the ask was to confirm the researcher blends its
+      own LLM knowledge with the papers. It isn't *forbidden* (the result's `cited`
+      list is explicitly allowed to be empty), but nothing invites it and the
+      wording pushes the other way: `SYSTEM_PROMPT` opens *"Answer from real
+      content: read the papers you draw on"*, and the one escape hatch it names —
+      *"pull in outside work"* — is defined as `expand_node`/`search_papers`, i.e.
+      **more papers**, not recall. A model reading that will reasonably conclude
+      everything must be grounded in a fetched paper. So the honest answer to "is
+      this already the case?" is *probably not, and by accident*.
+      Decide what we actually want, then say it explicitly. It's a real design
+      question, not just wording: background a paper *assumes* (what a Bellman
+      equation is, why on-policy vs off-policy matters) is exactly what a student
+      needs and exactly what no cited paper will state. The knobs: does recall get
+      used freely, only to bridge gaps, or only when tools come up empty? How is it
+      **attributed** — `cited: []` reads as "ungrounded" today, and the frontend's
+      citation chips have nothing to point at, so the UI may need a way to show
+      "this part is background, not from a paper". And the guard has to be that
+      recall never quietly substitutes for reading a paper we *have*. *(From the
+      `todos.md` inbox, 2026-07-16.)*
 - [ ] **Reconcile when the researcher should search vs. expand** — the agent has
       two "reach beyond the graph" tools with fuzzy boundaries: `expand_node`
       (a lineage hop — references/citations/similar of a paper *on* the graph) and
@@ -1431,6 +1451,25 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       **Breaking:** an old `config.json` fails validation loudly (`extra="forbid"`)
       rather than silently losing the corpus — the right trade. *(Patrick's call on
       the shape, 2026-07-16.)*
+- [ ] **The corpus path uses neither adaptive model properly — one is untrained
+      for it, the other isn't wired at all** — now that the s2 corpus serves real
+      all-history citers, both trained models want re-examining against it.
+      **Confirmed: `bands.earliest_band_year` is never applied to the corpus.**
+      `band_start=` appears exactly once in the app (`build.py`, the OpenAlex call);
+      `corpus.citation_relations` doesn't take one, so its Latest Publications is
+      the **flat rolling 12-month window** inherited from the live fallback
+      (`_latest_cutoff()`), not per-seed density-tail bands. The corpus has every
+      edge with dates, so it *could* band per year exactly like OpenAlex — it's the
+      one provider with no excuse. **And `cite_budget`** is fit on OpenAlex-collected
+      labels; the corpus's pools are all-time-ranked like OpenAlex's, so the premise
+      *holds* here (unlike the live fallback, which is why v5.5.0 gave that path a
+      measured rule instead) — but "holds in principle" isn't measured. Re-collect
+      `n*` against corpus pools for the anchors and compare: if DQN's 63 is right,
+      that's a real finding; if it isn't, the same `density_selection` shape the
+      live path uses may fit here too. Both are now testable **offline and for free**
+      — the corpus is local, so the training collector no longer needs to page a
+      live API. *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the
+      latest-gap gap.)*
 - [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
       — a cache-miss graph on the s2 provider now takes ~54s against the live
       path's ~15s, all of it in the citer query. That's the wrong shape: the whole
@@ -1667,6 +1706,42 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
   relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
 ### UI & rendering polish
+
+- [ ] **One "Abstract" section in the detail panel, with a TL;DR toggle** — today
+      the panel shows the abstract and S2's `tldr` as *separate sections*, and an
+      OpenAlex paper has no TL;DR at all (its detail hydration returns no `tldr`,
+      so the panel just shows the abstract — see the Bugs entry on OA hydration).
+      Make it **one section titled ABSTRACT**, defaulting to the abstract on both
+      providers, with an in-section toggle to a TL;DR view — **no second section**.
+      - **S2** has `tldr` already (`DETAIL_FIELDS` requests it, `nodes.node` pulls
+        `tldr.text`); the toggle just swaps what the one section renders.
+      - **OpenAlex** has no equivalent, so **we generate one**: a small Claude
+        agent that summarises the paper in a short paragraph — the old "summarize"
+        button from the digest era, now a per-paper TL;DR. That means a new agent
+        package (`agents/<name>/`, its own config entry + README, per the agents
+        convention), an endpoint, and a decision on **caching** (per-paper, in
+        `data/`?) so re-opening a node doesn't re-bill. Note the abstract is
+        already hydrated lazily on node-open, so the summary should ride that same
+        request rather than adding a second round trip.
+      - The toggle's *form* is open — a button, a segmented control, a link. Wants
+        a look at the panel before deciding; the constraint is that it lives inside
+        the section, not beside it. *(From the `todos.md` inbox, 2026-07-16.)*
+- [ ] **A settings modal — and let the user choose corpus vs live citations** —
+      there's nowhere in the UI to configure anything; the corpus is a `config.json`
+      edit plus a server restart. Add a **settings button (top-right)** opening a
+      modal that can at least (a) point at the citations corpus
+      (`storage.s2.parquet` — and `.raw` if downloads are wanted) and (b) **toggle
+      the corpus off**, falling back to the live S2 citation endpoint. The fallback
+      already exists and is automatic when the corpus can't serve a seed; this makes
+      it a *choice* — useful when the corpus is stale, mid-ingest, or suspect.
+      Design questions worth settling first: config today is **load-once at import**
+      (`config.py`'s `config = load_settings()`), so a UI that writes `config.json`
+      either needs a reload path or an honest "restart required" — and a
+      *per-request* provider/source override (like `?provider=`) may be the cleaner
+      model than mutating global config. The graph cache is keyed by
+      `(provider, seed)` and **not** by citation source, so a toggle must bust or
+      key around it or the old snapshot just comes back. *(From the `todos.md`
+      inbox, 2026-07-16.)*
 
 - [x] **Rename the "Sources" button to "Library"** *(v5.3.1)* — the top-bar
       toggle reads **📚 Library**, and the drawer's own heading/aria-label
