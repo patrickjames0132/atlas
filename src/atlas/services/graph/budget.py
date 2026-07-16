@@ -302,20 +302,43 @@ def density_selection(citer_years: Sequence[int | None]) -> list[int] | None:
     """
     if not config.graph.adaptive_cite_limit:
         return None
+    keep = density_selection_rule(citer_years)
+    ceiling = config.graph.cite_limit
+    if ceiling is not None:
+        keep = keep[:ceiling]
+    log.info(
+        "landmark selection: %d of %d ranked citers (cap %d/year)",
+        len(keep), len(citer_years), DENSITY_CAP,
+    )
+    return keep
+
+
+def density_selection_rule(citer_years: Sequence[int | None],
+                           cap: int = DENSITY_CAP) -> list[int]:
+    """The per-year selection walk itself, config-free — shared by serving and pipelines.
+
+    The pure rule :func:`density_selection` gates and trims for the app: admit
+    each ranked citer whose publication year isn't full yet, skip citers whose
+    year is, drop the undated. Factored out (the :func:`model_budget` precedent)
+    so the ``live_pool_validation`` study can run the exact serving rule over
+    simulated pools without depending on the local ``config.json``.
+
+    Args:
+        citer_years: The ranked landmark pool's publication years, most-cited
+            first, ``None`` where the provider gave no year.
+        cap: The per-year density cap (see :data:`DENSITY_CAP`).
+
+    Returns:
+        The indices of ``citer_years`` to ship, ascending (most-cited-first
+        within the shipped band).
+    """
     per_year: Counter[int] = Counter()
     keep: list[int] = []
     for index, year in enumerate(citer_years):
         if year is None:
             continue  # no year -> no band to belong to, and no place on a timeline
-        if per_year[year] >= DENSITY_CAP:
+        if per_year[year] >= cap:
             continue  # this year is already full — skip on, don't stop
         per_year[year] += 1
         keep.append(index)
-    ceiling = config.graph.cite_limit
-    if ceiling is not None:
-        keep = keep[:ceiling]
-    log.info(
-        "landmark selection: %d of %d ranked citers, %d per year (cap %d)",
-        len(keep), len(citer_years), len(per_year), DENSITY_CAP,
-    )
     return keep

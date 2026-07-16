@@ -155,13 +155,18 @@ cache hit, a deliberate trade.
      PDF-extraction stubs, all on one x, drawing a vertical bar through the seed.
 
    See `budget.py`'s module docstring and `src/ml_pipelines/cite_budget/README.md`.
+   Both selectors carry a **config-free core** (`density_selection_rule`,
+   `model_budget`) so pipelines can run the exact serving rule without the local
+   `config.json` — `live_pool_validation` measures both over simulated truncated
+   pools.
 
    The **latest bands adapt** too (`config.graph.adaptive_latest_band`): `bands.py`
    places the band start at the **density tail edge** of the landmark cluster (a
    second offline model, `src/ml_pipelines/latest_gap/model.joblib`), closing the
    gap for an old seed and keeping a tight frontier for a young one. `build.py`
    injects `bands.earliest_band_year` as the OpenAlex `band_start` callable so
-   `integrations` stays below `services` in the import order. See
+   `integrations` stays below `services` in the import order (its config-free
+   core is `bands.band_start_rule`, shared with the validation pipeline). See
    `src/ml_pipelines/latest_gap/README.md`.
 
 4. **Dedupe + relation accumulation.** The `add_neighbor()` closure merges

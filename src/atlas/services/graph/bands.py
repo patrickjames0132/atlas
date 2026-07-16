@@ -161,6 +161,27 @@ def earliest_band_year(landmark_years: list[int], landmark_max_year: int) -> int
     """
     if not config.graph.adaptive_latest_band:
         return None
+    return band_start_rule(landmark_years, landmark_max_year)
+
+
+def band_start_rule(landmark_years: list[int], landmark_max_year: int) -> int | None:
+    """The fitted tail-edge rule itself, config-free — shared by serving and pipelines.
+
+    :func:`earliest_band_year` gates this on ``config.graph.adaptive_latest_band``
+    for the app; the rule is factored out (the ``budget.model_budget`` precedent)
+    so the ``live_pool_validation`` study can place band starts over simulated
+    pools without depending on the local ``config.json``. Still returns None when
+    the artifact isn't loadable or the seed has too few dated landmark years.
+
+    Args:
+        landmark_years: Publication years of the seed's shipped landmark citers.
+        landmark_max_year: The last landmark-era year — the ``max_span`` floor is
+            measured back from it.
+
+    Returns:
+        The adaptive first band year, or None when no trustworthy boundary can
+        be placed.
+    """
     dated = [year for year in landmark_years if year]
     if len(dated) < MIN_LANDMARK_YEARS:
         return None

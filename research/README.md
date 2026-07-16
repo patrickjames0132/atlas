@@ -38,6 +38,12 @@ research/
   citation_coverage/ — S2 vs OpenAlex citation-coverage comparison behind the
                        "could we go OpenAlex-only?" question (no pipeline — pure
                        decision-support; conclusions in docs/citation-coverage.md)
+  live_pool_validation/ — do the two trained models survive the live S2 path's
+                       ~9k truncation, and does re-anchoring the age feature fix
+                       the mismatch? (collector in
+                       ml_pipelines/live_pool_validation/ — a validation
+                       pipeline, no artifact; principle in
+                       docs/predict-vs-compute.md)
 ```
 
 Each study has its own README. Most point at the pipeline they justified, with

@@ -15,12 +15,16 @@ puts `src/` on the path.
 src/ml_pipelines/
   cite_budget/   — the adaptive landmark-budget model (graph.adaptive_cite_limit)
   latest_gap/    — the adaptive latest-band boundary (graph.adaptive_latest_band)
+  live_pool_validation/ — validation only: both models measured against the live
+                   S2 path's truncated pools, simulated from the offline corpus
 ```
 
 Each sub-package holds everything for its model — the collector, trainer, corpus,
 README, **and** the committed artifact (`model.joblib` + `model.metadata.json`).
 (There is no shared `models/` directory; each model's artifact lives with its
-code.)
+code.) `live_pool_validation/` is the one exception to "produces an artifact":
+it's a **validation** pipeline — collector + committed corpus + a verdict
+notebook in `research/`, no trainer unless its findings demand one.
 
 ## The dependency direction
 

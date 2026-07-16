@@ -36,6 +36,12 @@ _RANK_POOL = 1000
 # price — only the offline citations corpus has it.
 _MAX_OFFSET = 8000
 
+#: The most citers a deep-paged live fetch can ever return: the last servable
+#: page's window end (``_MAX_OFFSET + _RANK_POOL``). Public because the
+#: ``live_pool_validation`` pipeline simulates this exact truncation against the
+#: offline corpus — the constant must be the pager's own, not a copied number.
+REACHABLE_CITERS = _MAX_OFFSET + _RANK_POOL
+
 # The "latest" citation window: a citer whose publication date falls within
 # this many months of today is the recent *frontier* (its own graph relation),
 # not a historic landmark. A rolling window, not a calendar year, so it stays
