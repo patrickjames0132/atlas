@@ -61,13 +61,30 @@ ProgressFn = Callable[[str, str, int, int], None]
 def _connect() -> duckdb.DuckDBPyConnection:
     """A DuckDB connection tuned for a bulk single-machine ingest.
 
+    The one setting that matters is ``partitioned_write_max_open_files``.
+    DuckDB defaults it to **100**, and a ``PARTITION_BY`` spanning more partitions
+    than it can hold open has to close and reopen them as it cycles through — but
+    a closed Parquet file can't be appended to, so every reopen starts a **new**
+    one. Against :data:`NBUCKETS` = 1024 that turned a single citations shard into
+    ~21k files averaging 3.5 KB, nearly all Parquet footer rather than data, on a
+    trajectory to ~8M files for the release. File *creation*, not throughput,
+    became the bottleneck (measured: ~2.8 min/shard, ~18h projected; merely
+    listing the output directory timed out). Holding every bucket open costs one
+    file per bucket per shard instead — ~1024, at ~70 KB each.
+
+    Threads and memory are left at DuckDB's own defaults, which it sizes to the
+    machine (16 threads / 25 GiB here). They used to be pinned to 8 and 8GB, which
+    contradicted this docstring's own intent and made the file explosion *worse* —
+    a tighter memory limit forces the partition writers to flush sooner, and every
+    premature flush is another small file.
+
     Returns:
-        An in-memory connection with a generous memory limit and all cores — the
-        ingest is the one place we want DuckDB to use the whole box.
+        An in-memory connection sized for the whole box — the ingest is the one
+        place we want that.
     """
     connection = duckdb.connect(":memory:")
-    connection.execute("PRAGMA threads=8")
-    connection.execute("PRAGMA memory_limit='8GB'")
+    # Headroom over NBUCKETS so no bucket ever has to be evicted mid-shard.
+    connection.execute(f"SET partitioned_write_max_open_files={NBUCKETS + 24}")
     return connection
 
 
@@ -195,12 +212,11 @@ def ingest_release(
         CorpusError: When the corpus root is unset or a dataset has no downloaded
             shards to ingest.
     """
-    from .paths import corpus_root
+    from .paths import release_paths
 
-    root = corpus_root()
-    if root is None:
+    paths = release_paths(release_id)
+    if paths is None:
         raise CorpusError("config.storage.s2_corpus_dir is not set — nothing to ingest")
-    paths = ReleasePaths(root=root, release_id=release_id)
     connection = _connect()
 
     # papers first (citations don't depend on it, but the arXiv index does, and

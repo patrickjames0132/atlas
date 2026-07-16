@@ -171,14 +171,20 @@ def corpus_status() -> None:
         return
     click.echo(f"corpus root: {root}")
     click.echo(f"exists:      {root.exists()}")
+    parquet_root = config.storage.s2_corpus_parquet_dir
+    # Worth saying out loud: with the split set, the Parquet a release reports
+    # below isn't under the root printed above — the least obvious thing here.
+    click.echo(f"parquet root: {parquet_root or '(under the corpus root)'}")
     active = corpus_paths.read_current_release(root) if root.exists() else None
     click.echo(f"active release (CURRENT): {active or '(none)'}")
     releases_dir = root / "releases"
     if releases_dir.exists():
         for release in sorted(child.name for child in releases_dir.iterdir() if child.is_dir()):
-            release_paths = corpus_paths.ReleasePaths(root=root, release_id=release)
-            papers_done = release_paths.parquet_dataset("papers").exists()
-            cites_done = release_paths.parquet_dataset("citations").exists()
+            paths = corpus_paths.release_paths(release)
+            if paths is None:
+                continue
+            papers_done = paths.parquet_dataset("papers").exists()
+            cites_done = paths.parquet_dataset("citations").exists()
             click.echo(f"  {release}: papers-parquet={papers_done} citations-parquet={cites_done}")
 
 
@@ -297,12 +303,16 @@ def corpus_activate(release_id: str | None) -> None:
     _require_corpus_dir()
     from atlas.config import config
     from atlas.integrations.semantic_scholar.corpus import datasets
-    from atlas.integrations.semantic_scholar.corpus.paths import ReleasePaths, write_current_release
+    from atlas.integrations.semantic_scholar.corpus.paths import (
+        release_paths,
+        write_current_release,
+    )
 
     release_id = release_id or datasets.latest_release_id()
     assert config.storage.s2_corpus_dir is not None  # _require_corpus_dir checked
     root = config.storage.s2_corpus_dir
-    if not ReleasePaths(root=root, release_id=release_id).parquet_dataset("papers").exists():
+    paths = release_paths(release_id)
+    if paths is None or not paths.parquet_dataset("papers").exists():
         raise click.ClickException(f"release {release_id} has no ingested papers Parquet — ingest first")
     write_current_release(root, release_id)
     click.echo(f"Activated {release_id} (CURRENT).")

@@ -16,8 +16,21 @@ once it's complete — the app never reads a half-ingested release.
           parquet/citations/bucket=NNN/*.parquet
           download.json              <- per-shard download checkpoint
 
+The Parquet half can live on **different storage** from the shards
+(``config.storage.s2_corpus_parquet_dir``), because the two have opposite access
+patterns: ``raw/`` is ~400GB read exactly once, sequentially — which even a
+spinning disk does fine — while the Parquet is the queried working set (~50GB)
+and absorbs the ingest's ~400k partitioned writes, which a spinning disk does
+*not* do fine (measured: 20.6s/shard on NVMe against 98.2s on an SMR HDD). When
+set, the release subtree is mirrored under it:
+
+    <corpus_parquet_dir>/releases/2026-07-07/parquet/…
+
+Unset (the default) it stays under ``<corpus_dir>``, which is what you want once
+the whole corpus is on one fast drive.
+
 Every path in the corpus derives from a :class:`ReleasePaths`, so relocating
-the corpus (a different drive, or the eventual S3 prefix) is a one-line config
+either half (a different drive, or the eventual S3 prefix) is a one-line config
 change. Nothing here touches the network or DuckDB — it's pure path algebra,
 so it's safe to import and call without the corpus present.
 """
@@ -51,16 +64,33 @@ def corpus_root() -> Path | None:
     return config.storage.s2_corpus_dir
 
 
+def corpus_parquet_root() -> Path | None:
+    """The configured root for the ingested Parquet, or None to keep it under
+    :func:`corpus_root`.
+
+    Returns:
+        ``config.storage.s2_corpus_parquet_dir`` (anchored like the corpus root),
+        or None when the Parquet simply lives beside the shards.
+    """
+    return config.storage.s2_corpus_parquet_dir
+
+
 @dataclass(frozen=True)
 class ReleasePaths:
-    """Every path within one Datasets release, derived from the corpus root.
+    """Every path within one Datasets release, derived from the corpus root(s).
 
     Frozen and cheap to build — construct one per operation rather than caching
-    it, so a config change (or a test's temp dir) is always honored.
+    it, so a config change (or a test's temp dir) is always honored. Prefer
+    :func:`release_paths`, which wires both roots from config.
     """
 
     root: Path
     release_id: str
+    parquet_root: Path | None = None
+    """Where the ingested Parquet lives, when it shouldn't sit under ``root`` —
+    see the module docstring on why the two halves may want different storage.
+    None keeps it under ``root`` (the default, and correct once the whole corpus
+    is on one fast drive)."""
 
     @property
     def base(self) -> Path:
@@ -78,8 +108,15 @@ class ReleasePaths:
 
     @property
     def parquet(self) -> Path:
-        """Directory holding the ingested, queryable Parquet."""
-        return self.base / "parquet"
+        """Directory holding the ingested, queryable Parquet.
+
+        Under ``parquet_root`` when one is set — mirroring the same
+        ``releases/<id>/`` subtree, so a release is self-contained on either
+        drive — and under ``root`` otherwise.
+        """
+        if self.parquet_root is None:
+            return self.base / "parquet"
+        return self.parquet_root / "releases" / self.release_id / "parquet"
 
     def parquet_dataset(self, dataset: str) -> Path:
         """The Parquet directory for one dataset (``papers`` / ``citations``)."""
@@ -89,6 +126,27 @@ class ReleasePaths:
     def download_state(self) -> Path:
         """The per-shard download checkpoint (JSON), enabling resume."""
         return self.base / "download.json"
+
+
+def release_paths(release_id: str) -> ReleasePaths | None:
+    """One release's paths, wired from config — how callers should build them.
+
+    Reads *both* roots, so the Parquet split is honoured in one place.
+    Constructing :class:`ReleasePaths` by hand is easy to get subtly wrong: it
+    defaults ``parquet_root`` to None and would silently keep writing Parquet
+    under the corpus root, ignoring the config.
+
+    Args:
+        release_id: The release the paths are for.
+
+    Returns:
+        The release's paths, or None when the corpus feature is off
+        (``s2_corpus_dir`` unset).
+    """
+    root = corpus_root()
+    if root is None:
+        return None
+    return ReleasePaths(root=root, release_id=release_id, parquet_root=corpus_parquet_root())
 
 
 def current_release_file(root: Path) -> Path:

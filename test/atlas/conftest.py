@@ -33,12 +33,19 @@ def _isolate(monkeypatch, tmp_path):
 
     The three DB paths derive from ``data_dir``, so one override relocates
     them all. Zeroing the ``min_interval`` throttles keeps tests from sleeping.
-    The offline S2 citations corpus is forced **off** (a real ``s2_corpus_dir``
-    in config.json would otherwise make citation tests hit the machine's live
-    corpus); a corpus test opts back in by pointing it at its own temp dir.
+
+    The offline S2 citations corpus is forced **off** — **both** of its roots. A
+    real corpus in config.json would otherwise make citation tests query the
+    machine's live one, and **every** path config gained here must be nulled or the
+    isolation leaks: when ``s2_corpus_parquet_dir`` landed, nulling only
+    ``s2_corpus_dir`` left the corpus tests writing their synthetic release into
+    the real (mid-ingest) Parquet root, because the two are resolved together by
+    ``paths.release_paths()``. A corpus test opts back in by pointing both at its
+    own temp dir (see that package's conftest).
     """
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
     monkeypatch.setattr(config.storage, "s2_corpus_dir", None)
+    monkeypatch.setattr(config.storage, "s2_corpus_parquet_dir", None)
     monkeypatch.setattr(config.providers.s2, "min_interval", 0.0)
     monkeypatch.setattr(config.providers.openalex, "min_interval", 0.0)
 
