@@ -144,7 +144,7 @@ each shard is written independently, so a per-shard `DISTINCT` never sees both
 copies. Ingest stores upstream's rows verbatim; the query collapses them.
 `isinfluential` is `bool_or`-ed, because the batches disagree about it. Don't
 remove the grouping — the fixture ships an overlapping batch precisely so the
-landmark tests fail if you do. See **Bugs → Upstream** in `OnePager.md`.
+landmark tests fail if you do. See **Upstream** in `docs/bugs.md`.
 
 ### The query seam (`source.py`)
 

@@ -43,7 +43,8 @@ you upload (embedded locally; nothing leaves your machine).
 >   and restore with zero API calls.
 >
 > See **[OnePager.md](OnePager.md)** for the vision, the full feature stack,
-> and the roadmap.
+> and the open backlog — and **[docs/history.md](docs/history.md)** for the
+> complete shipped record, version by version.
 
 ```
 ┌──────────┐  find seed   ┌─────────┐   whole graph      ┌──────────────────┐

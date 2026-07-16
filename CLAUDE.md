@@ -11,8 +11,12 @@ field. It connects to **Semantic Scholar** dynamically instead of storing a pape
 corpus locally. The repo is still named `arxiv-digest` (it began as a daily
 digest app; that era is being retired).
 
-- **Vision, feature stack, and phase roadmap live in [OnePager.md](OnePager.md).**
-  Keep it current. Read it to understand where we are and what's next.
+- **Vision, feature stack, and the open Backlog live in [OnePager.md](OnePager.md).**
+  Keep it current. Read it to understand where we are and what's next. The
+  shipped record (every shipped item's full story + version tag) lives in
+  **[docs/history.md](docs/history.md)**; the notable-bugs log in
+  **[docs/bugs.md](docs/bugs.md)** — split out 2026-07-16 so the OnePager stays
+  a working document.
 - Backend: Python/Flask + uv (`src/atlas/`, standard src-layout,
   installed editable). Frontend: React + TS +
   Vite (`frontend/`). Graph rendering via `react-force-graph-2d`.
@@ -50,23 +54,22 @@ For each feature, follow this cycle:
    feature/ticket, cut a fresh branch from an up-to-date `main`
    (`git switch -c <short-feature-name> main`). All the work below happens on
    that branch, keeping `main` clean and tidy. **Skip the branch for lightweight,
-   doc-only changes** — updating READMEs, other markdown, `CLAUDE.md`, or
-   `OnePager.md` (e.g. filing `todos.md`, ticking roadmap boxes) — those commit
-   straight to `main`.
+   doc-only changes** — updating READMEs, other markdown, `CLAUDE.md`,
+   `OnePager.md`, or `docs/` (e.g. filing `todos.md`, moving a shipped item to
+   `docs/history.md`) — those commit straight to `main`.
 1. **Build** the feature. Run `npm run build --prefix frontend` to typecheck the
    frontend; verify backend changes with a quick script or the Flask test client.
    Run the whole quality gate — backend *and* frontend — with **`uv run nox`**
    (see below) before handing off.
 2. **Hand off for testing** — Patrick tests it **in the browser himself** first.
    Give him specific things to check. **Do NOT commit until he approves.**
-3. On approval, **update the docs**: `README.md` and `OnePager.md` (tick roadmap
-   boxes, note what shipped). **When a whole Backlog *section* becomes fully
-   complete** (every box ticked — e.g. all of "UI & rendering polish"), promote
-   that section out of the Backlog and up into the shipped Roadmap checklist so
-   it lives with the other completed groups; the Backlog only holds unfinished
-   work. If a **notable bug** was found & fixed along the
+3. On approval, **update the docs**: `README.md`, plus the OnePager/history
+   split — **move the shipped item's entry out of `OnePager.md`'s Backlog and
+   into `docs/history.md`'s matching theme section**, ticked `[x]` and keeping
+   its full story + version tag (history entries stay verbatim; the Backlog
+   only ever holds open work). If a **notable bug** was found & fixed along the
    way — non-obvious root cause, surprising repro, a lesson worth keeping — add
-   an entry to the **Bugs** section of **`OnePager.md`** (newest-first; see its
+   an entry to **`docs/bugs.md`** (newest-first; see its
    header for the format). It has two halves: **Ours** (we wrote it, we fixed
    it) and **Upstream** (a provider's data/service is wrong — we can only work
    around it, so the entry justifies code that looks paranoid and stops a later
@@ -87,14 +90,15 @@ Patrick brainstorms on the fly while I'm building, so `todos.md` at the repo roo
 is a scratch **inbox** — not a durable list. When he points me at it (or brings
 it up at the start of a session), I:
 
-1. **File** each item into `OnePager.md` — feature ideas into the roadmap
-   ("Enhancements & tech debt", or a new phase where it fits) so OnePager stays
-   the single source of truth.
+1. **File** each item into `OnePager.md`'s Backlog — into the theme section
+   where it fits ("Enhancements & tech debt", "UI & rendering polish", …) so
+   the OnePager stays the single source of truth for open work.
 2. **Clear** each item out of `todos.md` as I file it, leaving it an empty inbox
    (just the `TODOs:` header) for the next round.
 
-OnePager wins — its roadmap boxes get ticked as we ship. `todos.md` is gitignored
-scratch; never treat leftover items there as authoritative.
+OnePager wins — its Backlog items move to `docs/history.md` as we ship.
+`todos.md` is gitignored scratch; never treat leftover items there as
+authoritative.
 
 ## Release mechanics
 

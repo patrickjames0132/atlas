@@ -270,5 +270,5 @@ The raw comparisons live in
 [`research/citation_coverage/analyze.ipynb`](../research/citation_coverage/analyze.ipynb) —
 re-runnable against the live APIs (slowly; see the study's
 [README](../research/citation_coverage/README.md)). See also the
-OpenAlex-single-source tradeoff notes and the "drop Similar relation" ticket
-in [`../OnePager.md`](../OnePager.md).
+OpenAlex-single-source tradeoff notes and the v5.0.0 Similar-relation removal
+in [`history.md`](history.md).
