@@ -1408,6 +1408,29 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       overlapping second batch the way S2 does, so the plain landmark assertions fail
       if the dedupe is removed. Full story in **Bugs → Upstream**. *(Found right after
       the first full corpus went live, 2026-07-16.)*
+- [x] **The corpus's two roots, named for what they hold** *(v5.7.0 — minor;
+      **breaking config change**)*. v5.6.0's split bolted a second path onto a flat
+      key: `s2_corpus_dir` + `s2_corpus_parquet_dir`. The first name stopped being
+      true the moment the second existed — it reads "the corpus root" but meant
+      "wherever the shards live, plus the pointer", with the Parquet a bolt-on.
+      Now they're peers under one group, each named for its contents:
+      ```json
+      "storage": { "s2": { "raw": "E:\\s2corpus", "parquet": "D:\\s2corpus" } }
+      ```
+      matching how `providers.s2` / `llm.providers` already group. **`CURRENT` moved
+      to the parquet root** — it names an *ingested* release, so it belongs beside
+      the data it points at, and the payoff is real: the parquet root is now the
+      app's **only serving dependency**, so shards can be deleted (or their drive
+      pulled) and graph builds carry on. Previously serving needed both drives just
+      to read a one-line pointer. `download.json` likewise sits with the shards it
+      tracks. `paths` gains `raw_root()`/`parquet_root()`; `ReleasePaths` takes both
+      and **raises** on an unconfigured half rather than defaulting to the other —
+      silently defaulting is how Parquet once got written to a drive nobody asked
+      for. `corpus status` prints both roots and a per-release `shards=` column, so
+      "downloaded but not ingested" and "ingested, shards deleted" are both legible.
+      **Breaking:** an old `config.json` fails validation loudly (`extra="forbid"`)
+      rather than silently losing the corpus — the right trade. *(Patrick's call on
+      the shape, 2026-07-16.)*
 - [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
       — a cache-miss graph on the s2 provider now takes ~54s against the live
       path's ~15s, all of it in the citer query. That's the wrong shape: the whole

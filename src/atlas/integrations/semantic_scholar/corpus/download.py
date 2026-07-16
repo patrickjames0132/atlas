@@ -28,7 +28,7 @@ from typing import Callable
 
 from . import datasets
 from .datasets import CorpusError
-from .paths import DATASETS, ReleasePaths, release_paths
+from .paths import DATASETS, ReleasePaths, raw_root, release_paths
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def _load_state(paths: ReleasePaths) -> dict:
 
 def _save_state(paths: ReleasePaths, state: dict) -> None:
     """Persist the checkpoint atomically (write-temp-then-rename)."""
-    paths.base.mkdir(parents=True, exist_ok=True)
+    paths.download_state.parent.mkdir(parents=True, exist_ok=True)
     tmp = paths.download_state.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     tmp.replace(paths.download_state)
@@ -136,9 +136,9 @@ def download_release(
         CorpusError: When the corpus root is unconfigured, or a shard fails even
             after refreshing its URL.
     """
+    if raw_root() is None:
+        raise CorpusError("config.storage.s2.raw is not set — nowhere to download to")
     paths = release_paths(release_id)
-    if paths is None:
-        raise CorpusError("config.storage.s2_corpus_dir is not set — nowhere to download to")
     state = _load_state(paths)
 
     for dataset in datasets_wanted:
