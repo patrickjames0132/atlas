@@ -290,8 +290,8 @@ def active_source() -> DuckDBCitationSource | None:
     release_id = read_current_release(root)
     if not release_id:
         return None
-    paths = ReleasePaths(root=root, release_id=release_id)
-    if not paths.parquet_dataset("papers").exists():
+    paths = corpus_paths.release_paths(release_id)
+    if paths is None or not paths.parquet_dataset("papers").exists():
         return None
     return DuckDBCitationSource(paths)
 

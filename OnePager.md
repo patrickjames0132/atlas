@@ -1375,6 +1375,74 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       of similarity scores? a drop-off / knee in the ranked similarity? seed
       features?) during the study. Mirrors the `cite_budget` / `latest_gap`
       pattern. *(From the `todos.md` inbox, 2026-07-10.)*
+- [x] **Corpus ingest made viable — the partition-limit fix + a split parquet root**
+      *(v5.6.0 — minor)*. Ingesting the first full release surfaced two things. The
+      **bug**: DuckDB's `partitioned_write_max_open_files` defaults to **100** while
+      we partition into **1024** buckets, so it cycled partitions open/closed and —
+      Parquet being unappendable once closed — started a *new file* each time. One
+      shard → ~21k files at **3.5 KB** (nearly all footer), ~8M projected for the
+      release; file *creation*, not throughput, was the bottleneck (2.8 min/shard,
+      ~18h projected; listing the output dir timed out). `_connect()` now raises the
+      limit past `NBUCKETS` and stops pinning `threads=8`/`memory_limit=8GB` *below*
+      DuckDB's own machine-sized defaults (16 / 25 GiB), which its docstring already
+      claimed it wanted. Measured: **1024 files/shard, one per bucket, at 61 KB.**
+      The **design point**: `raw/` is ~400 GB read exactly once, sequentially (fine
+      on a spinning disk), while the Parquet is the queried working set and takes
+      the ~400k partitioned writes — 20.6s/shard on NVMe vs 98.2s on an SMR HDD. New
+      optional **`config.storage.s2_corpus_parquet_dir`** puts the halves on
+      different drives (null = today's layout, and the right answer once one fast
+      drive holds everything); `paths.release_paths()` wires both roots so a
+      hand-built `ReleasePaths` can't silently ignore the split, and `corpus status`
+      prints both. Full stories in **Bugs**; the residual O(n²) scaling and the
+      `activate`-only-checks-papers hole are filed below. *(Found while ingesting
+      the 2026-07-07 release, 2026-07-15.)*
+- [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
+      re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
+      (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
+      1024 buckets), but the per-shard cost still climbs with accumulated output.
+      Measured live on the 2026-07-07 citations ingest (390 shards, NVMe Parquet
+      root):
+      ```
+      shards   1-41    31.9 s/shard        first 10:  26.5 s/shard
+      shards 201-241   44.6               last 10:   76.0 s/shard  (2.9x)
+      shards 281-321   72.9
+      shards 321-328   89.4
+      ```
+      Roughly linear in shards-done, i.e. **O(n²) over a release**: ~5.7h actual
+      against the ~2.2h a single-shard benchmark predicted. **Suspected cause:**
+      `OVERWRITE_OR_IGNORE` + our `FILENAME_PATTERN '<stem>_{i}'` makes DuckDB scan
+      each of the 1024 partition dirs to find the next free `{i}`, so every shard
+      re-walks the ~400k files already written. **First thing to try:** DuckDB's
+      newer `APPEND` mode, which skips that search — our pattern already embeds the
+      shard stem, so filenames are unique per shard without needing `{i}` resolved
+      against the directory. **Benchmark against a *populated* tree, not an empty
+      one** — timing shard 1 into a fresh dir is exactly what produced the wrong
+      2.2h estimate. Matters because it's paid again on every monthly release; a
+      fresh box or a re-ingest is a whole evening either way. *(Found while
+      ingesting the first full release, 2026-07-15.)*
+- [ ] **`corpus activate` only checks papers — it will happily activate a corpus
+      with no citation edges** — the guard is
+      `if not paths.parquet_dataset("papers").exists(): raise`. It never looks at
+      citations, and `ingest_release` does papers first (rebuilding the arXiv index
+      as it goes), so a release can have a *complete* seed index and ~0% of its
+      edges. Then `corpus.citation_relations` resolves the seed, finds few or no
+      edges, and returns `([], …)` — a valid tuple, **not** `None` — so `build.py`
+      prefers the corpus and ships a graph whose Field Landmarks are a random
+      sample of whichever shards happen to be done, labelled *"drawn from the
+      offline citations corpus — the full citation history"*. Confirmed live on
+      2026-07-15: with papers at 60/60 and citations at 2/390, DQN resolved and
+      `citation_relations` returned **(60 landmarks, 0 latest)**. The empty case
+      would at least announce itself; this one looks plausible and claims the
+      strongest provenance we have. Two halves to fix: **(a)** `activate` should
+      verify citations too (and the same hole is in `active_source()`, which only
+      checks `parquet_dataset("papers").exists()`); **(b)** a resolved-but-edgeless
+      seed should arguably fall back to live rather than ship an empty relation —
+      needs a rule that can tell "no edges ingested" from "genuinely uncited".
+      Related: the module docstring's "the app never queries a half-built corpus"
+      only holds for a release that isn't active *yet* — re-ingesting an already-
+      active one walks straight through it (documented in `corpus/README.md`;
+      the workaround is to move `CURRENT` aside first). *(Found while re-ingesting
+      the active release, 2026-07-15.)*
 - [ ] **Even Latest-Publications spread via citation velocity** — the
       stratified/per-year band approach has been tried several times and the
       spread still isn't even. Revisit **citation velocity** as the ranking
@@ -2067,6 +2135,43 @@ changed, and where), and **Lesson / guard** (what keeps it from coming back — 
 test, an invariant). Small, obvious bugs don't need an entry — the commit
 message is enough. This section is for the ones you'd want to re-read a year
 later.
+
+### The corpus ingest wrote 3.5 KB Parquet files — one DuckDB default against our 1024 buckets
+
+*Found & fixed on the `corpus-ingest-perf` branch (2026-07-15), while the first full release was ingesting.*
+
+- **Symptom.** The ingest was "really slow" — 2.8 min/shard, ~18h projected for 390
+  citations shards, having managed 18. Merely *listing* the output directory timed
+  out after five minutes. Nothing looked broken; it was just never going to finish.
+- **Root cause.** **`partitioned_write_max_open_files` defaults to 100**, and we
+  partition into `NBUCKETS = 1024`. A `PARTITION_BY` spanning more partitions than
+  DuckDB can hold open must close and reopen them as it cycles — and a closed
+  Parquet file can't be appended to, so **every reopen starts a new file**. One
+  shard produced ~21k files averaging **3.5 KB**, nearly all Parquet footer rather
+  than data, on course for ~8M files. Sequential throughput was never the
+  bottleneck; **file creation** was. Two aggravators: the corpus sat on the box's
+  only spinning disk (an SMR 5400-RPM drive, beside two idle NVMe SSDs), where
+  every file create is a seek; and `_connect()` pinned `threads=8` /
+  `memory_limit='8GB'` while DuckDB would have sized itself to the machine (16 /
+  25 GiB) — *below* its defaults, contradicting the function's own docstring ("the
+  ingest is the one place we want DuckDB to use the whole box"), and the tighter
+  memory made the premature flushing worse.
+- **Fix.** Raise the limit past `NBUCKETS` and stop under-provisioning
+  (`corpus/ingest.py::_connect`). One shard, measured: **1024 files across 1024
+  buckets — exactly 1.0 each, at 61 KB** (was ~21 per bucket at 3.5 KB); 98.2s on
+  the HDD (was ~168s) and **20.6s on NVMe**. Since `raw/` is read once
+  sequentially — which a spinning disk does fine — while the Parquet absorbs all
+  the partitioned writes, a new optional `config.storage.s2_corpus_parquet_dir`
+  lets the two halves live on different drives; `paths.release_paths()` wires both
+  roots so a hand-built `ReleasePaths` can't silently ignore the split.
+- **Lesson / guard.** **A partition count is a contract with your writer, not just
+  a read-side choice** — 1024 buckets were picked to make a seed lookup touch
+  ~1/1024 of the edge list, and nothing connected that to a write-side default four
+  orders of magnitude away. The corpus README now states the coupling: *changing
+  `NBUCKETS` must move `partitioned_write_max_open_files` with it*. Second lesson,
+  learned when the 2.2h estimate became 5.7h: **benchmark a bulk job against a
+  populated tree, not an empty one** — per-shard cost isn't constant when the job's
+  own output becomes part of its input state (see the O(n²) backlog ticket).
 
 ### Field Landmarks were never landmarks — the relation rode a pager built for something else
 

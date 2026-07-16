@@ -58,11 +58,32 @@ source.py    — the query side: CitationSource seam, DuckDBCitationSource, cita
     parquet/papers/*.parquet           <- projected paper rows, one file per shard
     parquet/arxiv_index/*.parquet      <- arxiv_id → corpusid (small, sorted)
     parquet/citations/bucket=<N>/…     <- edges, hash-partitioned on citedcorpusid
+
+# with s2_corpus_parquet_dir set, the parquet/ half moves (raw/ + CURRENT stay put):
+<s2_corpus_parquet_dir>/releases/<release_id>/parquet/…
 ```
 
 Each release is isolated so a fresh monthly pull downloads and ingests alongside
 the live one; only `CURRENT` (flipped by `atlas corpus ingest`/`activate`) decides
-which release the app queries — it never reads a half-built one.
+which release the app queries.
+
+**That guard has one hole, and it bites:** it protects a release that isn't active
+*yet*. Re-ingesting a release `CURRENT` **already** points at — e.g. after a
+partial first pass — exposes the half-built state live. Papers ingest first and
+rebuild the arXiv index, so seeds start *resolving* against a corpus whose edges
+are ~0% ingested, and `citation_relations` returns `([], …)` — a valid tuple, not
+`None` — so the build prefers the corpus and ships a graph whose landmarks are a
+random sample of whatever shards happen to be done, labelled "corpus". Move
+`CURRENT` aside before re-ingesting an active release.
+
+**The Parquet can live elsewhere** (`config.storage.s2_corpus_parquet_dir`),
+mirroring the same `releases/<id>/parquet` subtree on another drive. The two halves
+want opposite storage: `raw/` is ~400 GB read once, sequentially (fine on a spinning
+disk), while the Parquet is the queried working set and takes the ingest's ~400k
+partitioned writes (measured: **20.6s/shard on NVMe vs 98.2s on an SMR HDD**).
+`paths.release_paths(release_id)` wires both roots from config — **build
+`ReleasePaths` through it**, never by hand, or `parquet_root` defaults to None and
+the split is silently ignored.
 
 ### Ingest layout, chosen for the one query (`ingest.py`)
 
@@ -77,6 +98,16 @@ choices make that cheap against billions of rows:
 - **an arXiv index** (`arxiv_id → corpusid`, only rows that have an arXiv id)
   makes resolving a seed — nearly always an arXiv paper — a small sorted lookup
   instead of a 200M-row scan.
+
+Those 1024 buckets make one DuckDB setting load-bearing: **`partitioned_write_max_open_files`,
+which defaults to 100**. A `PARTITION_BY` spanning more partitions than DuckDB can
+hold open must close and reopen them as it cycles — and a closed Parquet file can't
+be appended to, so every reopen starts a *new* one. Left at the default, one
+citations shard produced **~21k files averaging 3.5 KB** (nearly all footer, no
+data), on course for ~8M files per release; file *creation*, not throughput, was the
+bottleneck — 2.8 min/shard, ~18h projected, and merely listing the output directory
+timed out. `_connect()` raises it past `NBUCKETS`, giving one ~61 KB file per bucket
+per shard. **Any change to `NBUCKETS` has to move that limit with it.**
 
 Ingest is **incremental/idempotent**: a papers shard whose `.parquet` exists is
 skipped; a citations shard records a `_done/<shard>.ok` marker (its output is

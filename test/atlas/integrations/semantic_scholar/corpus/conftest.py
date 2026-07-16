@@ -19,7 +19,7 @@ import pytest
 
 from atlas.config import config
 from atlas.integrations.semantic_scholar.corpus import ingest
-from atlas.integrations.semantic_scholar.corpus.paths import ReleasePaths, write_current_release
+from atlas.integrations.semantic_scholar.corpus.paths import release_paths, write_current_release
 
 RELEASE_ID = "2026-07-07"
 
@@ -59,16 +59,31 @@ def write_gzip_jsonl(path: Path, rows: list[dict]) -> None:
 def synthetic_corpus(monkeypatch, tmp_path):
     """Ingest the synthetic release into a temp corpus dir and activate it.
 
-    Points ``config.storage.s2_corpus_dir`` at the temp root (the autouse
-    isolation had forced it off), so ``active_source()`` and
-    ``citation_relations`` see a live corpus.
+    Points **both** corpus roots at the temp tree (the autouse isolation had
+    forced them off), so ``active_source()`` and ``citation_relations`` see a live
+    corpus. Both matter: ``ingest_release`` resolves its paths through
+    ``paths.release_paths()``, which reads ``s2_corpus_parquet_dir`` as well — so
+    leaving that one pointing at a real config value writes this synthetic release
+    straight into the machine's actual Parquet root. :data:`RELEASE_ID` is a
+    plausible real release id, so it collides rather than landing somewhere
+    obvious.
 
     Returns:
         The activated release id.
     """
     root = tmp_path / "s2corpus"
     monkeypatch.setattr(config.storage, "s2_corpus_dir", root)
-    paths = ReleasePaths(root=root, release_id=RELEASE_ID)
+    monkeypatch.setattr(config.storage, "s2_corpus_parquet_dir", None)  # under `root`
+    paths = release_paths(RELEASE_ID)
+    assert paths is not None  # the root was just set
+    # Hard guard, and not theoretical: this fixture once wrote its synthetic
+    # release into the machine's real (mid-ingest) corpus, because `ingest_release`
+    # resolves paths from config and a newly-added root wasn't nulled. Resolve the
+    # paths the CODE will use and refuse to run unless they're inside tmp_path —
+    # asserting on hand-built paths instead just fails later with "no files found",
+    # long after the damage.
+    for path in (paths.raw, paths.parquet):
+        assert path.is_relative_to(tmp_path), f"corpus test would write outside tmp: {path}"
     write_gzip_jsonl(paths.raw_dataset("papers") / "papers000.gz", PAPERS)
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations000.gz", CITATIONS)
     ingest.ingest_release(RELEASE_ID)

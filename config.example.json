@@ -1,7 +1,8 @@
 {
   "storage": {
     "data_dir": "data",
-    "s2_corpus_dir": null
+    "s2_corpus_dir": null,
+    "s2_corpus_parquet_dir": null
   },
   "providers": {
     "s2": {

@@ -72,6 +72,19 @@ class StorageConfig(ConfigModel):
         "path anchors to the repo root; an absolute path (e.g. a roomy data drive) is used "
         "as-is. See integrations/semantic_scholar/corpus/README.md."
     )
+    s2_corpus_parquet_dir: Path | None = Field(
+        default=None,
+        description="Optional separate root for the corpus's *ingested Parquet*, when it "
+        "should live on different storage from the downloaded shards. Null (the default) "
+        "keeps Parquet under `s2_corpus_dir` alongside `raw/`, which is what you want once "
+        "the whole corpus is on one fast drive. The split exists because the two halves have "
+        "opposite access patterns: `raw/` is ~400GB of .gz read exactly once, sequentially "
+        "(a spinning disk does that fine), while the Parquet is the queried working set (~50GB) "
+        "and takes the ingest's ~400k partitioned writes — measured 20.6s/shard on NVMe vs "
+        "98.2s on an SMR HDD, i.e. 2.2h vs 10.6h for a release. So a big slow drive can hold "
+        "the shards while a fast one holds what's actually queried. Same anchoring rules as "
+        "`s2_corpus_dir`; the release subtree (`releases/<id>/parquet`) is mirrored under it."
+    )
 
     @field_validator("data_dir")
     @classmethod
@@ -80,12 +93,13 @@ class StorageConfig(ConfigModel):
         path = path.expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 
-    @field_validator("s2_corpus_dir")
+    @field_validator("s2_corpus_dir", "s2_corpus_parquet_dir")
     @classmethod
     def _anchor_corpus_to_repo_root(cls, path: Path | None) -> Path | None:
         """Anchor a relative corpus path to the repo root; leave an absolute one
         (the common case — the corpus lives on a roomy drive) untouched. None
-        stays None: the corpus feature is simply off.
+        stays None: the corpus feature is off (``s2_corpus_dir``), or the Parquet
+        simply lives under the corpus root (``s2_corpus_parquet_dir``).
         """
         if path is None:
             return None

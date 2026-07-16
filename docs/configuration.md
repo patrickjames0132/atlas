@@ -34,6 +34,22 @@ because those are chat/tool-use credentials, not graph data sources).
   (id/DOI lookups are free either way — see `config.py` for the pricing
   notes, verified live 2026-07-09).
 
+## `storage` — where the corpus lives
+
+- **`s2_corpus_dir: null`** — off by default; the app uses the live S2 citation
+  endpoint. Point it at a roomy drive to enable the offline citations corpus (~400 GB
+  of shards, ~50 GB ingested). See
+  [`corpus/README.md`](../src/atlas/integrations/semantic_scholar/corpus/README.md).
+- **`s2_corpus_parquet_dir: null`** — optional, and only worth setting when your
+  corpus drive is slow. The two halves of the corpus have opposite access patterns:
+  `raw/` is ~400 GB of `.gz` read **exactly once, sequentially** — a spinning disk
+  does that perfectly well — while the ingested Parquet is the queried working set
+  (~50 GB) and absorbs the ingest's ~400k partitioned writes, which a spinning disk
+  does *not*. Measured on one citations shard: **20.6s on NVMe vs 98.2s on an SMR
+  HDD** — 2.2h vs 10.6h for a full release. So a big slow drive can hold the shards
+  while a fast one holds what's actually queried. Leave it `null` once the whole
+  corpus is on one fast drive; that's the simpler end state.
+
 ## `graph` — neighborhood size
 
 - **`ref_limit` / `cite_limit` / `similar_limit` = 100 / 150 / 60** — ship
