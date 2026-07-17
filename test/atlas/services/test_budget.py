@@ -22,6 +22,7 @@ from collections import Counter
 import pytest
 
 from atlas.config import config
+from atlas.integrations import openalex
 from atlas.services.graph import budget
 
 # Fix the age reference so pins don't drift with the wall clock; the
@@ -200,6 +201,21 @@ class TestSkipRule:
         years = [year for year in range(2019, 2026) for _ in range(500)]
         keep = budget.select_landmarks(years)
         assert keep == [0, 1, 2, 3, 4]  # a prefix of the citation-ranked selection
+
+    def test_unset_cite_limit_still_means_the_unbounded_cap(self, monkeypatch):
+        """An unset limit is the unbounded cap, not infinity — as the model's clamp
+        has always read it. Moot while this rule only saw the live path's truncated
+        pool (the count is PER_YEAR_CAP x span, and a few years can't reach 500);
+        load-bearing since the corpus path started computing over whole histories.
+        Hawking's citers span 1954-2026, which would otherwise ship 54 x 12 = 612.
+        """
+        monkeypatch.setattr(config.graph, "cite_limit", None)
+        hawking_span = [year for year in range(1954, 2027) for _ in range(50)]
+        keep = budget.select_landmarks(hawking_span)
+        assert len(keep) == openalex.UNBOUNDED_LANDMARK_CAP
+        # ...and the two sizings agree on what "unset" means.
+        assert budget.predicted_budget(1975, 10_825, as_of_year=2026) <= (
+            openalex.UNBOUNDED_LANDMARK_CAP)
 
     def test_toggle_off_declines_so_the_flat_limit_applies(self, monkeypatch):
         monkeypatch.setattr(config.graph, "adaptive_cite_limit", False)

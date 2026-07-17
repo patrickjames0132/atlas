@@ -132,9 +132,19 @@ cache hit, a deliberate trade.
      because its top citers span decades; a young hot paper (DQN ~60, Attention
      ~30) gets a tight one. Clamped to `[floor, cite_limit]`; a seed with no year,
      the toggle off, or an unloadable model passes the flat `cite_limit` through.
-     Used by the **ranked** citer paths — OpenAlex and the offline S2 corpus —
-     which push a ship count into a citation-sorted query and so must know it
-     before they have any citers to look at.
+     Used by **OpenAlex alone** since v5.11.0 — the only path that pushes a ship
+     count into a *remote* server-sorted query and so must know it before any citer
+     is in hand. (The corpus used to be here too. It stopped: measured on DQN, its
+     `LIMIT` saved 0.9% of a 22s query — the scan, dedupe and 200M-row join
+     dominate either way, so the query had already paid for the pool and was
+     discarding it. See `docs/predict-vs-compute.md` and the
+     `live_pool_validation` verdict.)
+   - **Computed** — `budget.computed_cite_limit` runs the **STOP** rule over the
+     real citer years and returns a count, for the same citation-ranked prefix the
+     model used to size. Used by the **offline corpus**, injected as its
+     `landmark_budget` callable. Same answer the model was estimating (its training
+     label *is* this rule), minus the ~21 mean absolute error: DQN 63 where the
+     model said 60, Hawking 176 where it said 160.
    - **Selected** — `budget.select_landmarks` walks the pool's real ranking and
      admits up to `PER_YEAR_CAP` citers **per year**, skipping years already full
      (the **SKIP** rule). Used by the **live S2 fallback**, injected as its
@@ -250,14 +260,18 @@ through `Graph.model_validate`; refresh bypasses the cache; `resolve_provider`
 validates/defaults; an unknown or blank seed returns `None`; and the adapted
 budget is what *both* providers' citation traversals receive.
 
-It also pins **which budget route each path gets**: the ranked traversals
-(OpenAlex, the S2 corpus) receive the model's predicted count, while the live S2
-fallback receives `budget.density_cite_limit` as its `landmark_budget` and only
-the flat `cite_limit` as a ceiling.
+It also pins **which budget route each path gets** — since v5.11.0, **OpenAlex is
+the only one predicting**. It receives the model's count because its query is
+remote and server-sorted, so nothing is in hand at the moment of decision. The
+corpus receives `budget.computed_cite_limit` (measure the pool you already
+fetched), the live fallback `budget.select_landmarks` (band it, since a prefix of a
+truncated pool strands the recent years), and both take the flat `cite_limit` only
+as a ceiling.
 
 The adaptive budget's own tests live in **`test_budget.py`** — both routes: the
-predicted one (loading the committed model, pinning the anchors / fallbacks) and
-the measured one (the pure density rule and the trim built on it). The latest-band
+predicted one (loading the committed model, pinning the worked examples /
+fallbacks) and the computed one (the two pure rules and the trim built on them).
+The latest-band
 serving tests are in **`test_bands.py`**. The training pipelines that produce both
 models have their own offline tests under `test/ml_pipelines/`, which pin that
 training uses the app's feature *and* label contracts rather than private copies.
