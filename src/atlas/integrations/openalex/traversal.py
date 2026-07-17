@@ -28,6 +28,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
+from collections.abc import Sequence
 from typing import Callable
 
 from ...config import config
@@ -330,6 +331,67 @@ def _by_recency(entry: dict) -> tuple:
 #: dependency order.
 BandStartFn = Callable[[list[int], int], int | None]
 
+#: Injected landmark budget: ``(ranked citer years) -> how many to ship | None``.
+#: ``services/graph`` passes ``budget.computed_cite_limit`` — the same STOP rule
+#: the corpus path runs — and None (from the rule) falls back to the flat cap.
+#: Identical to the corpus source's ``LandmarkBudgetFn``: a **count** for a
+#: citation-ranked prefix, because this path's landmark pool is a whole-history
+#: ranking too (see :func:`_budgeted_landmarks` for why computing it here is
+#: as cheap as predicting was).
+LandmarkBudgetFn = Callable[[Sequence[int | None]], int | None]
+
+
+def _budgeted_landmarks(filter_clause: str, cap: int,
+                        landmark_budget: LandmarkBudgetFn | None) -> list[dict]:
+    """Fetch the landmark band, sized by the STOP rule when a budget is injected.
+
+    Without a ``landmark_budget`` this is one capped fetch — the flat behavior.
+    With one, the fetch is a **probe of a single ranked page** (200, the API's
+    ``per-page`` maximum), and the rule runs over its years. That works because
+    the STOP rule is **prefix-local** — it never reads past the first year to
+    overflow — and the server sort puts that prefix at the top of page one, so
+    for nearly every seed the exact budget is computable from the one request
+    the predicted path was already making (computed budgets across the 58-seed
+    validation corpus: mean ~76, max 176). This is what retired the trained
+    ``cite_budget`` model from serving: its reason to exist was that computing
+    was assumed to need the *whole* pool (~30k citers for DQN) across the
+    network, and it doesn't — it needs the top of the ranking, which is one page.
+
+    The probe is conclusive when the rule stops inside it or the citer list
+    itself ends inside it. A seed whose top-200 spread so evenly that no year
+    overflows pays for one second, ceiling-sized fetch and re-measures over the
+    longer ranking (and a rule answer of None — the adaptive toggle off — falls
+    back to the flat ``cap``, extending the same way).
+
+    Trimming to the rule's count also restores the ``PER_YEAR_CAP`` invariant
+    on this path: a predicted count could only *size* the band, so a blockbuster
+    year could exceed the cap; a STOP prefix cannot.
+
+    Args:
+        filter_clause: The landmark ``filter=`` value (``cites:`` + date bound).
+        cap: The ceiling — the configured ``cite_limit``, or the unbounded cap.
+        landmark_budget: Optional rule measuring how many of the ranked pool to
+            ship (see :data:`LandmarkBudgetFn`).
+
+    Returns:
+        The landmark entries, most-cited first, trimmed to the budget (or cap).
+
+    Raises:
+        client.OpenAlexError: When a page request fails after retries.
+    """
+    if landmark_budget is None:
+        return _fetch_citers(filter_clause, "cited_by_count:desc", cap, nodes.NEIGHBOR_SELECT)
+    probe_cap = min(_PER_PAGE, cap)
+    landmark = _fetch_citers(
+        filter_clause, "cited_by_count:desc", probe_cap, nodes.NEIGHBOR_SELECT
+    )
+    budget = landmark_budget([entry["node"].get("year") for entry in landmark])
+    ranking_continues = len(landmark) == probe_cap and probe_cap < cap
+    if ranking_continues and (budget is None or budget >= probe_cap):
+        landmark = _fetch_citers(filter_clause, "cited_by_count:desc", cap, nodes.NEIGHBOR_SELECT)
+        budget = landmark_budget([entry["node"].get("year") for entry in landmark])
+    return landmark[:budget] if budget is not None else landmark[:cap]
+
 
 def citation_relations(
     work_id: str,
@@ -337,12 +399,16 @@ def citation_relations(
     landmark_limit: int | None,
     latest_limit: int | None,
     band_start: BandStartFn | None = None,
+    landmark_budget: LandmarkBudgetFn | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's OpenAlex citers into landmark and latest relations.
 
     * **landmark** (green, *Field Landmarks*) — the **all-time most-cited**
       citers: ``to_publication_date:<end of the last landmark year>``,
-      ``sort=cited_by_count:desc``. The historic giants; naturally old.
+      ``sort=cited_by_count:desc``. The historic giants; naturally old. With a
+      ``landmark_budget`` the band's length is **computed** from the ranking's
+      years (the STOP rule over a one-page probe — see
+      :func:`_budgeted_landmarks`); without one it's the flat cap.
     * **latest** (light-green, *Latest Publications*) — **recent** citers as
       **per-year bands**: one ``publication_year:<Y>`` query per year (each top
       ``latest_per_year`` by citations), from the band start up to the current
@@ -369,6 +435,10 @@ def citation_relations(
             years and the landmark-max year → first band year, or None to keep
             the fixed span). None (the default) always uses the fixed
             ``latest_band_years`` span.
+        landmark_budget: Optional rule computing how many of the ranked landmark
+            pool to ship (see :data:`LandmarkBudgetFn`); its count wins over
+            ``landmark_limit``, which stays the ceiling. None (the default)
+            ships the flat cap.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -382,11 +452,10 @@ def citation_relations(
     per_year = config.graph.latest_per_year
 
     # FIELD LANDMARKS: the all-time giants, up to the last landmark year.
-    landmark = _fetch_citers(
+    landmark = _budgeted_landmarks(
         f"cites:{work_id},to_publication_date:{max_landmark_year}-12-31",
-        "cited_by_count:desc",
         cap,
-        nodes.NEIGHBOR_SELECT,
+        landmark_budget,
     )
     landmark_ids = {entry["node"]["id"] for entry in landmark}
 

@@ -100,14 +100,24 @@ package needs to know it's a package internally.
 
 A seed's citers are split into **two disjoint relations** by
 `citation_relations()`, both built from **one paged citer fetch**
-(`_fetch_citers(deep=True)`):
+(`_fetch_reachable_pool`) — and the split's *shape* depends on whether that
+fetch reached the end of the citation list (since v5.13.0):
 
-- **latest** (light-green nodes) — citers published within the rolling last
-  `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. Capped at
-  `config.graph.latest_limit`.
-- **landmark** (green nodes) — everything else, the most-cited *historic* citers.
-  Chosen by the injected `landmark_select` rule (below), falling back to a flat
-  `landmark_limit`.
+- **Complete pool** — the list ended before the offset ceiling (most seeds; the
+  verdict is S2's own `next` flag, not a page-length heuristic). The pool is the
+  seed's *whole* citation history, so it ships the **corpus shape**
+  (`_complete_pool_relations`): landmarks are a citation-ranked **prefix** sized
+  by the STOP rule (`landmark_budget` — the same `budget.computed_cite_limit`
+  the corpus and OpenAlex run), and Latest is **per-year bands** from the tau
+  `band_start` rule up to the current year. The truncation caveats below simply
+  don't apply to these seeds.
+- **Truncated pool** — the ceiling cut the list off (a hyper-cited seed):
+  - **latest** (light-green nodes) — citers published within the rolling last
+    `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. Capped at
+    `config.graph.latest_limit`.
+  - **landmark** (green nodes) — everything else, the most-cited *historic*
+    citers. Chosen by the injected `landmark_select` rule (below), falling back
+    to a flat `landmark_limit`.
 
 **When S2 gives no `publicationDate`, `year` decides** (`_is_latest`). A citer
 from a year *after* the cutoff's year is in the window whatever month it came
@@ -122,26 +132,24 @@ sort key gets the same fallback (`_latest_order`: a year-only citer sorts as Jan
 of its year, exactly where the timeline draws it), so the reveal order and the
 on-screen order agree.
 
-### Choosing the landmark band (`landmark_select`)
+### Choosing the landmark band (`landmark_select` / `landmark_budget`)
 
-`citation_relations` takes an optional **`LandmarkSelectFn`** — a rule handed the
-*ranked* landmark pool's citer years, answering with the **indices** to ship; its
-pick wins over the flat `landmark_limit`. `services/graph`'s `build.py` passes
-`budget.select_landmarks`. A parameter rather than an import, so `integrations`
-stays below `services` in the dependency order (the same shape as OpenAlex's
-`BandStartFn`); years in, indices out, because the rule only reasons about *when*
-citers were published — the entries stay here.
+`citation_relations` takes two optional rules, one per pool kind, both injected
+by `services/graph`'s `build.py` (parameters rather than imports, so
+`integrations` stays below `services` in the dependency order; years in,
+indices/count out, because the rules only reason about *when* citers were
+published — the entries stay here):
 
-This exists because **this path can't use the model the other paths use, and
-doesn't need to.** The landmark budget is normally *predicted* from the seed's age
-and citation count, which works where the pool is all-time-ranked (OpenAlex; the
-offline corpus) — those push a ship count into a sorted query and must know it
-before they hold any citers. Here the pool is already in memory by trim time, so
-the band can be chosen from the real data.
+- **`LandmarkBudgetFn`** (`budget.computed_cite_limit`) — for a **complete**
+  pool: the STOP rule, whose count sizes a citation-ranked prefix. Identical to
+  what the corpus and OpenAlex paths run, because a complete pool is the same
+  kind of object they hold: a whole-history ranking.
+- **`LandmarkSelectFn`** (`budget.select_landmarks`) — for a **truncated**
+  pool: a rule handed the *ranked* pool's citer years, answering with the
+  **indices** to ship; its pick wins over the flat `landmark_limit`.
 
-And it must be, because a count can't express the right answer. Both candidate
-rules rank the citers most-cited first, drop each into a bucket named by its
-publication year, and never let a bucket exceed the per-year cap
+Both rules rank the citers most-cited first, drop each into a bucket named by
+its publication year, and never let a bucket exceed the per-year cap
 (`PER_YEAR_CAP` = 12). They differ in **one word** — what happens on a full bucket:
 
 ```
@@ -151,19 +159,15 @@ STOP   third 2020 overflows  -> quit the walk       => 2, both in 2020
 SKIP   third 2020 is skipped -> carry on walking    => 5, spanning 2017-2020
 ```
 
-**STOP** (`number_of_ranked_citers_before_a_single_year_overflows`) returns a
-*count*, so it can only keep a **prefix** of the ranking — and it is **only ever a
-training label** for the predicting paths' model. **Nothing on this path calls it.**
-**SKIP** (`select_up_to_cap_per_year`, wrapped app-side as `select_landmarks`)
-returns *indices* — the specific citers to ship — and is what this path serves.
-
-DQN shows why the one word matters. STOP quits at rank 29 with the cap on 2020
-exhausted, so 2024–2025 — 2155 citers sitting in the pool — never appear, leaving
-an 18-month hole before the Latest frontier. SKIP skips the full years and walks
-on, shipping 84 (twelve in each of 2019–2025) with no hole and the same "no year
-over the cap" guarantee. It's the local equivalent of the per-year bands OpenAlex
-gets from its query — S2's `/citations` has no year filter, so the banding happens
-over the ranking.
+Why the truncated pool must SKIP: a count can only keep a **prefix**, and a
+truncated ranking has no honest one. DQN shows it. STOP quits at rank 29 with
+the cap on 2020 exhausted, so 2024–2025 — 2155 citers sitting in the pool —
+never appear, leaving an 18-month hole before the Latest frontier. SKIP skips
+the full years and walks on, shipping 84 (twelve in each of 2019–2025) with no
+hole and the same "no year over the cap" guarantee. On a *complete* pool the
+argument flips: the prefix of a whole-history ranking is exactly what a Field
+Landmark is, tau-banded Latest widens back to meet it, and SKIP-banding would
+admit the best of a thin year over the 13th-best of a blockbuster one.
 
 Every term here — landmark, pool, reachable, truncated, label, the two rules — is
 defined once, with this same example, in
@@ -175,8 +179,9 @@ of predicting vs computing is `services/graph/budget.py`'s module docstring.
 S2 lists citers newest-first, and one page is only 1000 citers. For a heavily-
 cited seed that page can span *less than a year*. So the seed build **pages** the
 whole reachable list (offsets 0, 1000, 2000, …), stopping only at the list's end
-or the `_MAX_OFFSET` ceiling. Graph expansion (`citations()`, `deep=False`) stays
-one page — it wants the tip, fast.
+or the `_MAX_OFFSET` ceiling — and reporting **which** of those ended the walk,
+since that's the complete/truncated verdict everything above rides on. Graph
+expansion (`citations()`) stays one page — it wants the tip, fast.
 
 `_MAX_OFFSET` is **8000**, not 9000: verified live 2026-07-15, S2 400s a page whose
 window reaches past ~10k (`offset=9000&limit=1000` fails on two different seeds,
@@ -198,15 +203,17 @@ costs a slower **cold** build, scaling with the citer list: measured authenticat
 QMIX 4 pages / ~8s and DQN 9 pages / ~15s, against ~3 pages before. Snapshots cache
 for a day and the build's progress bar covers the wait.
 
-**Known limit of the *live* S2 path:** the offset ceiling is a hard wall. DQN's
-2013–2018 citers — its actual giants (AlphaGo, A3C, Rainbow) — are unreachable at
-any page count, so the pool is **truncated**: a recency slice holding the newest
-9000 citers, and the landmark relation is the most-cited citers *within that
-slice*, not across the full citation history. SKIP is exact about the slice, which
-is not the same as being right about the paper. Beating that wall was v3.1.0's
-`_mined_landmarks` (harvest citers' reference lists, co-citation rank, verify),
-retired in v4.0.0 when OpenAlex's sorted `cites:` made it redundant; the corpus is
-its replacement.
+**Known limit of the *live* S2 path — hyper-cited seeds only:** the offset
+ceiling is a hard wall. DQN's 2013–2018 citers — its actual giants (AlphaGo,
+A3C, Rainbow) — are unreachable at any page count, so its pool is **truncated**:
+a recency slice holding the newest 9000 citers, and the landmark relation is the
+most-cited citers *within that slice*, not across the full citation history.
+SKIP is exact about the slice, which is not the same as being right about the
+paper. Beating that wall was v3.1.0's `_mined_landmarks` (harvest citers'
+reference lists, co-citation rank, verify), retired in v4.0.0 when OpenAlex's
+sorted `cites:` made it redundant; the corpus is its replacement. A seed *under*
+the ceiling has no wall at all — its pool is complete and ships the corpus
+shape, which is why the wall is a per-seed caveat, not a path-wide one.
 
 **The fix — the offline citations corpus (`corpus/`).** When a corpus release is
 downloaded and ingested (`config.storage.s2_corpus_dir` set, a `CURRENT` release

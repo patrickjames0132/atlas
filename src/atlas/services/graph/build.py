@@ -84,26 +84,6 @@ def resolve_provider(raw: str | None) -> Provider:
     return config.graph.default_provider
 
 
-def _adaptive_cite_limit(seed_paper: dict) -> int | None:
-    """The seed-adapted landmark ship count from the trained cite-budget model.
-
-    A thin wrapper over :func:`budget.adaptive_cite_limit` that pins the
-    reference year to today (age is measured from here). The model, its feature
-    contract, and the fallback rules live in ``budget.py``; the training
-    pipeline that produces it lives in ``src/ml_pipelines/cite_budget``.
-
-    Args:
-        seed_paper: The normalized seed node (``year`` and ``citation_count``
-            drive the model), from whichever provider resolved it.
-
-    Returns:
-        The landmark limit to ship — a model-predicted count, or the configured
-        ``cite_limit`` passed through when the feature is off, the seed lacks a
-        year, or the model isn't loadable (see :func:`budget.adaptive_cite_limit`).
-    """
-    return budget.adaptive_cite_limit(seed_paper, as_of_year=datetime.date.today().year)
-
-
 #: Where an s2 graph's citer relations came from — mirrors ``Graph.citation_source``.
 CitationSource = Literal["corpus", "live"]
 
@@ -147,28 +127,15 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
     # ingested) or when it can't resolve the seed locally, and we fall back to the
     # live path (recency-biased past the offset ceiling — the accepted interim).
     #
-    # Neither s2 path consults the trained model any more — since v5.11.0 both
-    # COMPUTE their landmark budget, and the model serves OpenAlex alone (the only
-    # path whose pool would have to cross a network to be counted).
-    #
-    # The corpus used to predict, on the reasoning that a count must go into its
-    # citation-sorted query before any citer comes back. True, but it was buying
-    # nothing: measured on DQN, warm, the LIMIT saved 0.9% (22.08s for 63 citers vs
-    # 22.28s for all 28,732) because the bucket scan, the row dedupe and the
-    # 200M-row papers join dominate and run either way. The query had already paid
-    # for the pool and was discarding it. So it now measures the pool it fetched:
-    # ``budget.computed_cite_limit`` runs the STOP rule over the real citer years.
-    # Same shape of answer as the model gave (a count, for a citation-ranked prefix
-    # of the giants) — only its provenance changed, from an estimate to a
-    # measurement, which drops ~21 mean absolute error for two tenths of a second.
-    #
-    # The two s2 paths still take DIFFERENT rules, deliberately. The corpus holds a
-    # whole-history ranking, so its band is a prefix — that is what a Field Landmark
-    # is — and Latest widens back to meet the cluster. The live path's pool is a
-    # recency sliver with no all-time ranking to prefix, so a prefix there strands
-    # the recent years (DQN's top 29 are all 2019–2023, an 18-month hole before the
-    # Latest frontier); it bands per year instead. See ``budget.computed_cite_limit``
-    # and ``docs/predict-vs-compute.md``.
+    # No path consults the trained model any more — since v5.13.0 every provider
+    # COMPUTES its landmark budget from the pool it actually holds
+    # (``budget.computed_cite_limit``, the STOP rule): the corpus over its narrow
+    # ranking, OpenAlex over its one-page probe, a complete live pool in memory.
+    # Only a truncated live pool differs — a recency sliver has no all-time
+    # ranking to prefix, so it takes the banded SKIP selector instead (a prefix
+    # there strands the recent years: DQN's top 29 are all 2019–2023, an 18-month
+    # hole before the Latest frontier). See ``budget.py``'s module docstring and
+    # ``docs/predict-vs-compute.md``'s epilogue.
     today = datetime.date.today()
     relations = s2.corpus.citation_relations(
         seed_paper,
@@ -194,11 +161,20 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
             "using the recency-biased live S2 citation endpoint",
             seed_id,
         )
+        # The live path holds two very different pools behind one call. A seed
+        # whose citer list ends before the offset ceiling (most seeds) yields a
+        # COMPLETE history — the STOP budget and tau band-start give it the
+        # corpus shape. A truncated pool falls back to the SKIP selector and
+        # rolling window (see ``s2.citation_relations``).
         relations = s2.citation_relations(
             seed_id,
             landmark_limit=config.graph.cite_limit,
             latest_limit=config.graph.latest_limit,
+            max_landmark_year=openalex.landmark_max_year(today),
+            current_year=today.year,
             landmark_select=budget.select_landmarks,
+            landmark_budget=budget.computed_cite_limit,
+            band_start=bands.earliest_band_year,
         )
     landmark, latest = relations
     return seed_paper, refs, landmark, latest, citation_source
@@ -231,13 +207,16 @@ def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Tr
     refs = openalex.references(work_id, config.graph.ref_limit)
     report(3, "Fetching citations…")
     # Server-sorted ``cites:`` queries return the most-cited landmark citers
-    # directly (no recency bias); the per-seed band-start rule sizes the latest
-    # frontier (see ``bands.earliest_band_year``).
+    # directly (no recency bias); the STOP rule computes the band's length from
+    # a one-page probe of that ranking (see ``openalex._budgeted_landmarks`` —
+    # what retired the trained model from serving), and the per-seed band-start
+    # rule sizes the latest frontier (see ``bands.earliest_band_year``).
     landmark, latest = openalex.citation_relations(
         work_id,
-        landmark_limit=_adaptive_cite_limit(seed_paper),
+        landmark_limit=config.graph.cite_limit,
         latest_limit=config.graph.latest_limit,
         band_start=bands.earliest_band_year,
+        landmark_budget=budget.computed_cite_limit,
     )
     # OpenAlex's own server-sorted cites: queries already return true top-cited
     # landmarks, so the corpus/live distinction doesn't apply — None.

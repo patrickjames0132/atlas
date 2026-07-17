@@ -590,6 +590,55 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **Every landmark budget is computed now — the model retires from serving,
+      and a fully-reachable live pool gets the corpus shape** *(v5.13.0)* — born
+      from Patrick re-deriving the budget design in conversation (2026-07-17)
+      and landing on the destabilizing question: *"do we really need the budget
+      model at all?"* The answer was no — but not for his proposed reason, and
+      the correct reason was better. Pulling OpenAlex's whole pool would cost
+      ~150 requests (~30k citers for DQN — correcting both his "13k", which is
+      S2's count, and the docstrings' "130k", a typo). What kills the model is
+      that **the STOP rule is prefix-local**: it never reads past the first year
+      to overflow, and OpenAlex serves the ranking sorted, so everything the
+      rule will ever read sits in the first 200-row page — the same single
+      request the *predicted* path already made. `predict-vs-compute.md`'s
+      "predict" regime rested on an unexamined premise ("computing needs the
+      whole pool"), and checking what the rule actually *reads* emptied it.
+      **What shipped:**
+      **(1) OpenAlex computes** (`openalex._budgeted_landmarks`): probe one
+      ranked page, run `budget.computed_cite_limit` over its years, trim to the
+      count; a seed whose top-200 never overflows pays one ceiling-sized refetch
+      and re-measures. Deletes the model's ~21-citer per-seed error and — a
+      bonus — restores the `PER_YEAR_CAP` invariant on this path, which a
+      size-only prediction never could enforce (a blockbuster year could exceed
+      12; a STOP prefix cannot).
+      **(2) A complete live S2 pool ships the corpus shape** — Patrick's other
+      catch: the live path treated *every* pool as a recency sliver, but a seed
+      whose citer list ends before the ~9k offset ceiling (most seeds) is a
+      *whole history*, and the sliver arguments evaporate. `_fetch_reachable_pool`
+      now reports completeness (S2's own `next` flag — a page can run short
+      mid-list when S2 fails to resolve papers, so page length can't be the
+      signal; a full raw page is belt-and-suspenders continuation), and a
+      complete pool gets STOP-prefix landmarks + tau-banded per-year Latest
+      (`_complete_pool_relations`, mirroring the corpus source
+      decision-for-decision). STOP alone would have recreated the 18-month hole
+      against the rolling window — the tau bands are what close it. Truncated
+      pools keep SKIP + the window; the offset-ceiling wall is now a per-seed
+      caveat, not a path-wide one.
+      **(3) The model is retired from serving, not deleted**:
+      `budget.adaptive_cite_limit` and `build._adaptive_cite_limit` are gone;
+      `predicted_budget`/`load_model` and the artifact remain as the
+      `latest_gap` collector's dependency and the label's derivation record (a
+      follow-up ticket weighs folding them into `ml_pipelines`). The STOP rule's
+      "only ever a training label" story — already stale since v5.11.0 —
+      is rewritten everywhere: it is the serving rule for every whole-history
+      pool, and the label second. `predict-vs-compute.md` gains an epilogue
+      ending: *predict only what you can't observe — and check "can't observe"
+      against what the rule reads, not the size of the pool it's defined over.*
+      Also filed: the SKIP-rule spike (is per-year banding what a truncated
+      sliver should even ship, or is honest provenance labelling the real fix?).
+      Suite 499 → 510; browser-verified on OpenAlex, a parked-corpus live build
+      (QMIX showing per-year bands), and a corpus sanity build.
 - [x] **Cold corpus builds take ~47s — the `papers` dataset is unsorted, so
       nothing prunes** *(v5.12.0; diagnosed 2026-07-17, the original prime suspect
       **refuted** — see below)* — a cache-miss graph on the s2 provider takes ~47s

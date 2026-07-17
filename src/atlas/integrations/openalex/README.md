@@ -46,7 +46,15 @@ So the two citer relations are:
 
 - **Field Landmarks** (`citation`) — the **all-time most-cited** citers:
   `to_publication_date:<end of last landmark year>`, `sort=cited_by_count:desc`.
-  The historic giants; naturally old.
+  The historic giants; naturally old. The band's *length* is **computed, not
+  predicted** (since v5.13.0): `citation_relations` takes a `landmark_budget`
+  callable (`services/graph` wires `budget.computed_cite_limit`, the STOP rule),
+  and `_budgeted_landmarks` runs it over a **one-page probe** of the ranking —
+  the rule never reads past the first year to overflow, and the server sort puts
+  that prefix on page one, so the exact number costs the same single request the
+  retired `cite_budget` model's prediction did. A seed whose top-200 never
+  overflows pays one ceiling-sized refetch. This also guarantees no landmark
+  year exceeds `PER_YEAR_CAP`, which a predicted count never could.
 - **Latest Publications** (`latest`) — **recent** citers as **uniform per-year
   bands**: one `publication_year:<Y>` query per year (each top `latest_per_year`
   (config; default 50) by citations), from the band start **up to the current

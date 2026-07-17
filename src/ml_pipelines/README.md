@@ -13,7 +13,10 @@ puts `src/` on the path.
 
 ```
 src/ml_pipelines/
-  cite_budget/   — the adaptive landmark-budget model (graph.adaptive_cite_limit)
+  cite_budget/   — the landmark-budget model (retired from serving in v5.13.0 —
+                   every path now computes its STOP-rule label directly; the
+                   artifact remains the label's derivation record and a
+                   latest_gap-collector dependency)
   latest_gap/    — the adaptive latest-band boundary (graph.adaptive_latest_band)
   live_pool_validation/ — validation only: both models measured against the live
                    S2 path's truncated pools, simulated from the offline corpus

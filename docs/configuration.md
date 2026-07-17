@@ -75,22 +75,23 @@ special case for it. A typical split:
   same-era pile-on (DQN reads better at ~60, "Attention Is All You Need" at
   ~30). When on, the landmark ship count is sized per seed — by one of two
   routes to the same criterion, both in `services/graph/budget.py`:
-  - **Predicted** from the seed's age and citation count by a **scikit-learn
-    model trained on real data** (not hand-tuned numbers), clamped to
-    `[floor, cite_limit]`. Used wherever the citers come back all-time-ranked —
-    the OpenAlex provider and the offline S2 citations corpus. The app loads the
-    model (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()`;
-    it's fit by `src/ml_pipelines/cite_budget/train.py` (see that package's
-    README, and `research/cite_budget/` for the exploratory study).
-  - **Selected** from the citer pool directly — up to `PER_YEAR_CAP` (12) landmarks
+  - **Computed** — the **STOP rule** (`computed_cite_limit`): walk the seed's
+    citers most-cited first, bucketing by publication year, and stop where a
+    year first overflows `PER_YEAR_CAP` (12); ship that many, a prefix of the
+    all-time ranking. Used by every path holding a whole-history ranking: the
+    **offline corpus**, **OpenAlex** (the rule only ever reads the top of the
+    ranking, so one server-sorted page suffices), and a **complete live S2
+    pool** (a seed whose citer list ends before the API's offset ceiling). No
+    model artifact involved — the count is measured, not estimated. (A trained
+    model predicted this number for OpenAlex until v5.13.0; see
+    [`predict-vs-compute.md`](predict-vs-compute.md).)
+  - **Selected** from the citer pool directly — up to `PER_YEAR_CAP` landmarks
     **per publication year**, taking the most-cited in each and *skipping* citers
-    whose year is already full (`select_landmarks`, the **SKIP rule**). Used by the
-    **live S2 citation fallback**, which holds its whole pool in memory before
-    trimming, so nothing has to be predicted. It also can't use a count: a count
-    keeps a prefix of the ranking, and DQN's prefix stops at 29 landmarks with
-    **nothing from 2024–2025** — an 18-month hole before the Latest frontier.
-    Skipping full years instead ships 84 landmarks, twelve in each of 2019–2025,
-    with no hole. No model artifact needed.
+    whose year is already full (`select_landmarks`, the **SKIP rule**). Used by
+    the live S2 fallback's **truncated** pools (the offset ceiling cut the list
+    off): a truncated ranking has no honest prefix — DQN's stops at 29 landmarks
+    with **nothing from 2024–2025**, an 18-month hole before the Latest
+    frontier, where skipping full years ships 84, twelve in each of 2019–2025.
 
   Turn off to always ship the flat `cite_limit` on every path. Both routes' terms
   are defined in [`landmark-vocabulary.md`](landmark-vocabulary.md).

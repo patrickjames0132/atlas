@@ -232,11 +232,12 @@ ranking runs **unlimited**, and the rule measures the full pool — the trained
 citer's year (nothing pre-trimmed — the whole v5.11.0 point), and only the
 prefix it keeps is hydrated wide. Unlimited ranking is cheap because the narrow
 projection is the cheap one; the old one-phase query made "unlimited vs 63" a
-0.9% difference only because *both* paid the full 20–40s wide join. The model
-now serves OpenAlex alone, the one path whose data genuinely isn't in hand at
-decision time — see
-[`docs/predict-vs-compute.md`](../../../../../docs/predict-vs-compute.md) and
-`ml_pipelines/live_pool_validation`'s verdict.
+0.9% difference only because *both* paid the full 20–40s wide join. (This was
+the release that left the model serving OpenAlex alone; v5.13.0 finished the
+job — the same rule being prefix-local means OpenAlex can compute it from one
+ranked page, and the model serves no path at all. See
+[`docs/predict-vs-compute.md`](../../../../../docs/predict-vs-compute.md)'s
+epilogue and `ml_pipelines/live_pool_validation`'s verdict.)
 
 **The answer is still a count, and the band still a prefix** — the same shape the
 model predicted, and the same shape OpenAlex ships. Only its provenance changed,

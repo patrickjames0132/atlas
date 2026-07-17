@@ -255,6 +255,21 @@ optional, behind a key.
       argument for surfacing provenance in the UI, since the same seed can
       legitimately show a 14×-different landmark band depending on the data source.
       *(Patrick's design, 2026-07-16; measured and resolved 2026-07-17.)*
+- [ ] **Spike: is the SKIP rule what we actually want?** — Patrick's ask
+      (2026-07-17), from the conversation that retired the budget model. Since
+      v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
+      hyper-cited seed, on a machine with no corpus. Everything else prefixes by
+      the STOP rule. Questions for the spike, against real seeds: (1) SKIP
+      guarantees up to `PER_YEAR_CAP` from *every* reachable year, so a thin year
+      ships its 40-citation best beside a blockbuster year's 13,000-citation
+      13th-best — is that a landmark band or padding? (2) The truncated pool's
+      "landmarks" are already only "most-cited of the newest 9k" —
+      would an honest **UI label** (provenance: "recent most-cited", not "Field
+      Landmarks") matter more than the selection rule? (3) Is there a defensible
+      middle — e.g. SKIP with a citation floor, or a shorter band span — or
+      should the truncated path simply mirror the complete path's shape and
+      accept the hole the 29-vs-84 measurement documented? Analysis only; no
+      code until the spike reports. *(Filed 2026-07-17.)*
 - [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
       (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
@@ -633,10 +648,11 @@ optional, behind a key.
       `graph.latest_limit`, and `graph.similar_limit` from `config.json` /
       `config.example.json` and the Pydantic `graph` config. Resolved plan (per
       Patrick, 2026-07-10):
-  - **`cite_limit` + `adaptive_cite_limit`** → gone: the **landmark-budget model
-    always determines the cite limit** — no toggle, no config ceiling. The budget
-    model owns its own upper bound (`services/graph/budget.py`) rather than
-    clamping to a config `cite_limit`.
+  - **`cite_limit` + `adaptive_cite_limit`** → gone: the **computed STOP rule
+    always determines the cite limit** (since v5.13.0 on every path — the model
+    that used to predict it is retired) — no toggle, no config ceiling. The rule
+    owns its own upper bound (`UNBOUNDED_LANDMARK_CAP` as the payload guard,
+    `services/graph/budget.py`) rather than clamping to a config `cite_limit`.
   - **`ref_limit`** → gone: **show all references** (no cap).
   - **`latest_limit`** → gone: Latest Publications is already **banded by year**
     (`latest_band_years` × `latest_per_year`), so the flat cap is redundant.
@@ -645,6 +661,24 @@ optional, behind a key.
     the flat `similar_limit` with a trained per-seed budget, so remove the config
     key as part of / after it, not before. *(From the `todos.md` inbox,
     2026-07-10.)*
+- [ ] **Fold the retired predictor into `ml_pipelines` (or retire it fully)** —
+      since v5.13.0 `budget.predicted_budget` / `load_model` / `MODEL_PATH` are
+      app-side code (`services/graph/budget.py`) whose only callers are
+      pipelines: `latest_gap/collect.py` (trims citer-year distributions the way
+      v5.12-era builds did, so its committed corpus stays reproducible) and
+      `live_pool_validation/collect.py` (both age-origin columns). That respects
+      the dependency rule (pipelines import the app, never the reverse — the
+      `compute_features` precedent), but "app code with no app callers" is worth
+      resolving deliberately: either move the predictor + artifact loading into
+      `ml_pipelines/cite_budget` (churns the `latest_gap` collector's provenance
+      story; `compute_features`/the STOP label stay app-side — the label is the
+      serving rule now), or decide the `latest_gap` corpus should be re-collected
+      against the *computed* budget and delete the predictor outright. Blocked
+      on neither; just don't do it silently — the model coming back (a future
+      provider that genuinely can't compute) is the one reason to wait. Pairs
+      with the count-caps ticket above (both are "what does the model's absence
+      let us delete?"). *(Patrick, 2026-07-17, spotting the near-dead code in
+      review.)*
 - [ ] **Swap the hand-rolled `urllib` clients for `httpx`** — S2, arXiv
       (`client`/`fulltext`/`figures`), and OpenAlex all hand-roll stdlib
       `urllib` (manual `Request`/`urlencode`/`HTTPError` plumbing); only HF uses

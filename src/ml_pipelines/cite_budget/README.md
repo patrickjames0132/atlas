@@ -1,14 +1,23 @@
-# `cite_budget` — training the adaptive landmark-budget model
+# `cite_budget` — training the (retired) landmark-budget model
+
+> **Retired from serving in v5.13.0.** No graph build calls `.predict()`
+> anymore — every path now computes the model's own training label directly
+> from its real citer pool (the STOP rule turned out to be prefix-local, so
+> even OpenAlex's one ranked page holds everything it reads; see
+> [`docs/predict-vs-compute.md`](../../../docs/predict-vs-compute.md)'s
+> epilogue). The pipeline, corpus, and artifact stay: they are the label's
+> derivation record, and `latest_gap`'s collector still uses
+> `predicted_budget` to trim its distributions the way v5.12-era builds did.
 
 **What it produces.** `model.joblib` (beside this trainer) — the scikit-learn
-model the app loads (`atlas.services.graph.budget`) to decide how many landmark
-citers to ship per seed (`config.graph.cite_limit` becomes the ceiling).
+model that predicted, from a seed's features, how many landmark citers to ship.
 
-**Why.** A flat landmark budget fits no one: an old classic's landmarks span
-decades and read as a map of the field, while a young hot paper's top citers
-pile into one or two years — same count, far more clutter. So the budget is
-*predicted* from two cheap fields already on a seed node — publication age and
-citation count — instead of being a hand-tuned constant.
+**Why it existed.** A flat landmark budget fits no one: an old classic's
+landmarks span decades and read as a map of the field, while a young hot
+paper's top citers pile into one or two years — same count, far more clutter.
+So the budget was *predicted* from two cheap fields already on a seed node —
+publication age and citation count — instead of being a hand-tuned constant,
+for the one path that (then) couldn't measure its pool at decision time.
 
 ## The pipeline
 

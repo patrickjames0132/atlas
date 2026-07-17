@@ -122,37 +122,34 @@ cache hit, a deliberate trade.
 
 3. **Adaptive budgets** (shared by both providers). The **landmark budget adapts
    to the seed** when `config.graph.adaptive_cite_limit` is on — by one of two
-   routes to the same criterion, chosen by *whether the caller already holds the
-   citer pool*:
+   routes to the same criterion, chosen by *what kind of pool the path holds*:
 
-   - **Predicted** — `_adaptive_cite_limit` delegates to `budget.adaptive_cite_limit`,
-     which loads a **scikit-learn model trained offline**
-     (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()` on the
-     seed's age and citation count — an old classic (Hawking) earns a large budget
-     because its top citers span decades; a young hot paper (DQN ~60, Attention
-     ~30) gets a tight one. Clamped to `[floor, cite_limit]`; a seed with no year,
-     the toggle off, or an unloadable model passes the flat `cite_limit` through.
-     Used by **OpenAlex alone** since v5.11.0 — the only path that pushes a ship
-     count into a *remote* server-sorted query and so must know it before any citer
-     is in hand. (The corpus used to be here too. It stopped: measured on DQN, its
-     `LIMIT` saved 0.9% of a 22s query — the scan, dedupe and 200M-row join
-     dominate either way, so the query had already paid for the pool and was
-     discarding it. See `docs/predict-vs-compute.md` and the
-     `live_pool_validation` verdict.)
    - **Computed** — `budget.computed_cite_limit` runs the **STOP** rule over the
-     real citer years and returns a count, for the same citation-ranked prefix the
-     model used to size. Used by the **offline corpus**, injected as its
-     `landmark_budget` callable. Same answer the model was estimating (its training
-     label *is* this rule), minus the ~21 mean absolute error: DQN 63 where the
-     model said 60, Hawking 176 where it said 160.
+     real citer years and returns a count: the length of the citation-ranked
+     prefix to ship. Used by every **whole-history** pool, injected as a
+     `landmark_budget` callable: the **offline corpus** (the rule runs between
+     its query's two phases, on the narrow ranking), **OpenAlex** (the rule is
+     prefix-local, so its one server-sorted 200-row page holds everything the
+     rule reads — `openalex._budgeted_landmarks`), and a **complete live S2
+     pool** (a citer list that ends before the offset ceiling — most seeds —
+     which then ships the whole corpus shape, tau-banded Latest included:
+     `s2.traversal._complete_pool_relations`).
    - **Selected** — `budget.select_landmarks` walks the pool's real ranking and
      admits up to `PER_YEAR_CAP` citers **per year**, skipping years already full
-     (the **SKIP** rule). Used by the **live S2 fallback**, injected as its
-     `landmark_select` callable. That path's deep pager holds the whole pool by
-     trim time, so nothing has to be guessed — and a *count* would be wrong twice
-     over: the model is fit on pools spanning a seed's whole history while that one
-     is truncated at S2's offset ceiling (DQN's reaches 2019, not 2013), and a
-     count can only ever keep a **prefix**.
+     (the **SKIP** rule). Used by the live S2 fallback's **truncated** pools,
+     injected as its `landmark_select` callable. A truncated pool is a recency
+     sliver with no all-history ranking, and a count can only ever keep a
+     **prefix** — which there is all one era (DQN's reachable pool starts 2019,
+     not 2013).
+
+   A third route — **Predicted**, the offline-trained `cite_budget` model
+   (`src/ml_pipelines/cite_budget/model.joblib`) — served OpenAlex until
+   v5.13.0, on the premise that a remote server-sorted query needs its `limit`
+   *before* any citer is in hand. The premise fell to the STOP rule's
+   prefix-locality (it never reads past the first year to overflow, and the
+   sort puts that prefix on page one), so OpenAlex now computes exactly too;
+   `budget.predicted_budget` and the artifact remain for the `ml_pipelines`.
+   See `docs/predict-vs-compute.md`'s epilogue.
 
      The difference between the two rules is one word — what happens when a citer
      lands on a year that's already full:
@@ -164,12 +161,14 @@ cache hit, a deliberate trade.
      SKIP   third 2020 is skipped -> carry on walking    => 5, spanning 2017-2020
      ```
 
-     Measured on DQN: STOP ships 29, all 2019–2023, with nothing from 2024–2025 —
-     an 18-month hole before the Latest frontier. SKIP ships 84, twelve in each of
-     2019–2025, and closes it. Both honour the same "no year over the cap"
-     invariant; only SKIP keeps the sparse years. It's the local equivalent of
-     OpenAlex's per-year query bands. STOP still exists because it's the model's
-     training **label**, and a regression label has to be a scalar — see
+     Measured on truncated DQN: STOP ships 29, all 2019–2023, with nothing from
+     2024–2025 — an 18-month hole before the Latest frontier. SKIP ships 84,
+     twelve in each of 2019–2025, and closes it. Both honour the same "no year
+     over the cap" invariant; which is honest depends on the pool — SKIP keeps a
+     truncated sliver's sparse years, while on a whole-history ranking the STOP
+     prefix *is* the landmark band and tau-banded Latest closes the gap instead.
+     STOP is also the retired model's training **label** (a regression label has
+     to be a scalar) — see
      [`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md).
 
      Undated citers are **dropped**, not banded: a landmark is the claim

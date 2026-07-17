@@ -276,6 +276,93 @@ def test_landmark_limit_caps_all_time_query(monkeypatch):
     assert [entry["node"]["citation_count"] for entry in landmark] == [900, 800]  # top 2 kept
 
 
+def test_landmark_budget_computes_from_a_one_page_probe(monkeypatch):
+    """With a landmark_budget rule, the landmark band is a STOP-prefix computed
+    from ONE ranked page: the rule sees the probe's years most-cited first, and
+    its count trims the band — no model, no second request when the rule stops
+    inside the probe."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 1)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    landmark_queries = []
+    seen: dict[str, object] = {}
+
+    def fake_request(url):
+        params = _query(url)
+        if "publication_year:" in params["filter"]:
+            return {"results": [], "meta": {"next_cursor": None}}
+        landmark_queries.append(params)
+        return {"results": [_work("Wa", doi="10/a", year=1999, cites=900),
+                            _work("Wb", doi="10/b", year=2004, cites=800),
+                            _work("Wc", doi="10/c", year=1999, cites=700)],
+                "meta": {"next_cursor": None}}
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+    def budget(citer_years):
+        seen["years"] = list(citer_years)
+        return 2
+
+    landmark, _ = traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
+                                               landmark_budget=budget)
+    assert seen["years"] == [1999, 2004, 1999]  # the ranked probe, most-cited first
+    assert [entry["node"]["id"] for entry in landmark] == ["DOI:10/a", "DOI:10/b"]  # a prefix
+    assert len(landmark_queries) == 1  # the probe was conclusive — one request
+    assert landmark_queries[0]["per-page"] == "200"  # a full page, not a predicted N
+
+
+def test_landmark_budget_probe_extends_when_nothing_overflows(monkeypatch):
+    """A seed whose top-200 never overflows a year is the one case the probe
+    can't settle — the fetch extends to the ceiling and the rule re-measures
+    over the longer ranking."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 1)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    landmark_calls = []
+
+    def fake_request(url):
+        params = _query(url)
+        if "publication_year:" in params["filter"]:
+            return {"results": [], "meta": {"next_cursor": None}}
+        landmark_calls.append(params)
+        # First (probe) call: exactly 200 works — the ranking may continue.
+        # The extension's call: 250 works, the whole pool.
+        count = 200 if len(landmark_calls) == 1 else 250
+        return {"results": [_work(f"W{index}", doi=f"10/{index}", year=1900 + index, cites=999)
+                            for index in range(count)],
+                "meta": {"next_cursor": None}}
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+    def budget(citer_years):
+        # Spread years never overflow: the rule admits everything it sees.
+        return len(list(citer_years))
+
+    landmark, _ = traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
+                                               landmark_budget=budget)
+    assert len(landmark_calls) == 2  # probe, then the ceiling-sized refetch
+    assert len(landmark) == 250  # measured over the full ranking
+
+
+def test_landmark_budget_declining_keeps_the_flat_cap(monkeypatch):
+    """A budget rule answering None (the adaptive toggle off) leaves the flat
+    landmark_limit in charge — same fallback contract as the corpus source."""
+    monkeypatch.setattr(config.graph, "latest_band_years", 1)
+    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+
+    def fake_request(url):
+        params = _query(url)
+        if "publication_year:" in params["filter"]:
+            return {"results": [], "meta": {"next_cursor": None}}
+        return {"results": [_work("Wa", doi="10/a", cites=900),
+                            _work("Wb", doi="10/b", cites=800),
+                            _work("Wc", doi="10/c", cites=700)],
+                "meta": {"next_cursor": None}}
+
+    monkeypatch.setattr(client, "request", fake_request)
+    landmark, _ = traversal.citation_relations("W5", landmark_limit=2, latest_limit=None,
+                                               landmark_budget=lambda citer_years: None)
+    assert [entry["node"]["id"] for entry in landmark] == ["DOI:10/a", "DOI:10/b"]
+
+
 def test_citations_single_relation_sorted_and_cursor_pages(monkeypatch):
     """The single-relation expansion view is a global sorted cites: query,
     cursor-paged (exercises the cursor loop)."""

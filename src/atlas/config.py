@@ -263,11 +263,11 @@ class GraphConfig(ConfigModel):
         "the Field Landmarks slider's max. null = ship the unbounded cap (500)."
     )
     adaptive_cite_limit: bool = Field(
-        description="Scale the landmark budget to the seed's age and citation count instead "
-        "of always shipping cite_limit: an old classic earns the full budget (its top citers "
-        "span decades), a young hot paper gets a tight one (its top citers are same-era "
-        "pile-on). cite_limit stays the ceiling. See services/graph/build.py "
-        "_adaptive_cite_limit for the curve."
+        description="Size the landmark band to the seed instead of always shipping "
+        "cite_limit: an old classic earns a deep band (its top citers span decades), a "
+        "young hot paper a tight one (its top citers are same-era pile-on). Every path "
+        "measures its real citer pool with the rules in services/graph/budget.py; "
+        "cite_limit stays the ceiling."
     )
     latest_limit: PositiveInt | None = Field(
         description="LATEST citations (the recent frontier — citers from the newest "

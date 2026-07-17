@@ -24,44 +24,49 @@ They differ in **one word** — what happens when a citer lands on a full bucket
           The third 2020 is skipped and the walk carries on. Five landmarks
           ship, spanning 2017-2020.
 
-SKIP is not a more accurate STOP — it's a *better rule*, and only possible with the
-pool in hand. STOP survives for exactly one reason: it returns a scalar, and a
-regression **label** has to be a scalar. Measured on DQN, STOP quits at 29
-landmarks with 2020 full and ships **nothing from 2024–2025**, leaving an 18-month
-hole before the Latest frontier; SKIP ships 84 — twelve in each of 2019–2025 — and
-closes it. SKIP is the local equivalent of the per-year banding OpenAlex gets from
-its query (``openalex.citation_relations``); S2's citations endpoint has no year
-filter, so the banding has to happen over the ranking instead.
+Neither rule is a worse version of the other — **which one is honest depends on
+the pool**. On a *truncated* pool (the live S2 fallback when the offset ceiling
+cuts the list off), SKIP wins: STOP quits at 29 landmarks on truncated DQN with
+2020 full and ships **nothing from 2024–2025**, an 18-month hole before the
+Latest frontier, where SKIP ships 84 — twelve in each of 2019–2025 — and closes
+it. On a *whole-history* pool (the corpus, OpenAlex, a complete live pool),
+STOP's count is the honest answer: the prefix of an all-time ranking *is* the
+landmark band, tau-banded Latest widens back to meet it, and SKIP-banding there
+would admit the best of a thin year over the 13th-best of a blockbuster one.
+STOP's scalar output is also what makes it the trained model's regression
+**label** — the role it was originally kept for.
 
-Which rule a path *can* use is dictated by its provider's API, not by taste:
+Which rule a path *can* use is dictated by what pool it holds, not by taste:
 
-* **Predict a count** (:func:`adaptive_cite_limit`) — **OpenAlex only.** Its
-  ``cites:`` query is *remote* and server-sorted, so the limit goes in before a
-  single citer comes back, and computing instead would mean dragging the whole pool
-  across the network (130k citers for DQN) just to size a trim. A count is all the
-  query can take, and a model trained offline supplies it from two cheap fields
-  already on the seed node (age + citation count).
-* **Compute a count** (:func:`computed_cite_limit`) — the **offline S2 corpus.** It
-  looks like a "predict" path (a limit goes into a ranked DuckDB query) but
-  measured on DQN that limit saved 0.9% of a 22-second query: the bucket scan, the
-  row dedupe and the 200M-row papers join dominate and run regardless, so the pool
-  was already paid for and then discarded. It answers the same *shape* as the model
-  — a count, for a citation-ranked prefix — by running STOP over the real years
-  instead of estimating it.
-* **Select from the pool** (:func:`select_landmarks`) — the **live S2 fallback.**
-  No server-side sort, so its deep pager already holds the whole reachable pool
-  before the trim. It bands rather than prefixing, because that pool is a recency
-  sliver with no all-history ranking to prefix: a prefix strands the recent years.
+* **Compute a count** (:func:`computed_cite_limit`) — every path holding a
+  **whole-history ranking**, which since v5.13.0 is all three:
+  the **offline S2 corpus** (the rule runs between the query's two phases, over
+  the narrow ranking, before the winners are hydrated wide); **OpenAlex** (the
+  STOP rule is *prefix-local* — it never reads past the first year to overflow —
+  so a single server-sorted page holds everything it reads: see
+  ``openalex._budgeted_landmarks``, and the "Predict" bullet below for what this
+  retired); and a **complete live S2 pool** (a seed whose citer list ends before
+  the offset ceiling — most seeds — is a whole history too, and ships the corpus
+  shape: see ``semantic_scholar.traversal._complete_pool_relations``). One rule,
+  three pools, the same count-for-a-ranked-prefix answer.
+* **Select from the pool** (:func:`select_landmarks`) — the live S2 fallback's
+  **truncated** pools only. The deep pager already holds the whole reachable pool
+  before the trim, but when the offset ceiling cut it off, that pool is a recency
+  sliver with no all-history ranking to prefix: a prefix strands the recent years,
+  so it bands (SKIP) instead.
+* **Predict a count** (:func:`predicted_budget`) — **retired from serving
+  (v5.13.0).** The trained model existed for OpenAlex on the premise that
+  computing there would mean dragging the whole pool across the network (~30k
+  citers for DQN) just to size a trim — but STOP's prefix-locality breaks the
+  premise: the number is computable from the one page the predicted path was
+  already fetching, without the model's ~21-citer per-seed error. The predictor
+  and artifact remain for the pipelines (``latest_gap``'s collector trims
+  citer-year distributions with it) and as the label's training-time story.
 
-Why the corpus prefixes where the live path bands is the subtlest thing here —
-:func:`computed_cite_limit` argues it. Short version: a prefix of a *whole-history*
-ranking is exactly what "Field Landmark" means, and Latest widens back to meet it;
-a prefix of a *truncated* one is just the recent past twice over.
-
-Predicting on the live path would be wrong twice over: you'd inherit the model's
-error while saving nothing, *and* the model is fit on pools spanning a seed's whole
-citation history while that path's pool is **truncated** to the newest
-``REACHABLE_CITERS`` (9,000 — DQN's reaches back to 2019, not 2013).
+Why whole-history pools prefix where truncated ones band is the subtlest thing
+here — :func:`computed_cite_limit` argues it. Short version: a prefix of a
+*whole-history* ranking is exactly what "Field Landmark" means, and Latest widens
+back to meet it; a prefix of a *truncated* one is just the recent past twice over.
 
 Serving and training share :func:`compute_features` and :data:`PER_YEAR_CAP`, and
 the label (:func:`number_of_ranked_citers_before_a_single_year_overflows`) is
@@ -71,8 +76,8 @@ skew. The *training* half lives beside the artifact in
 the derivation.
 
 The model artifact is loaded once and memoized (:func:`load_model`); a missing or
-unreadable artifact degrades gracefully to the flat ``cite_limit`` rather than
-failing a graph build. The selection path has no such dependency.
+unreadable artifact degrades gracefully to no prediction. Since v5.13.0 no graph
+build depends on it — only the pipelines do.
 """
 
 from __future__ import annotations
@@ -136,14 +141,17 @@ def number_of_ranked_citers_before_a_single_year_overflows(
     until deep into the list and the number is large. Same top citers, very
     different answer — that gap is the temporal clutter this quantifies.
 
-    **This is the model's training label and nothing else** — what ``.predict()``
-    regresses on. No serving path calls it. It stops (rather than skipping full
-    buckets and walking on, as :func:`select_up_to_cap_per_year` does) purely
-    because a regression label has to be a single number and a selection is a list.
-    Where the pool is in hand, use the SKIP rule; see this module's docstring for
-    the 29-vs-84 measurement on DQN. Defined here beside the model it belongs to
-    rather than in the pipeline (``ml_pipelines.cite_budget`` imports it, as it
-    does :func:`compute_features`).
+    **Two jobs, one function.** It is the trained model's training label — what
+    ``.predict()`` regressed on, kept scalar because a regression label has to
+    be — and, since the compute paths took over (corpus v5.11.0; everywhere
+    v5.13.0), it is also the serving rule :func:`computed_cite_limit` executes
+    over every whole-history pool. It stops rather than skipping full buckets
+    and walking on (as :func:`select_up_to_cap_per_year` does) because a prefix
+    is what a whole-history ranking honestly ships; on a *truncated* pool the
+    stop is the wrong move — see this module's docstring for the 29-vs-84
+    measurement on DQN. Defined here beside the model rather than in the
+    pipeline (``ml_pipelines.cite_budget`` imports it, as it does
+    :func:`compute_features`).
 
     An undated citer is admitted without contributing to any bucket — it can't
     crowd a year it isn't in. Training passes an all-dated list (its collector
@@ -195,23 +203,23 @@ def load_model() -> dict[str, Any] | None:
     """Load and memoize the trained-model bundle, or None when unavailable.
 
     A missing or unreadable artifact is logged and returns None so the caller
-    falls back to the flat ``cite_limit`` — a graph build must never fail just
-    because the model hasn't been trained yet.
+    degrades to no prediction — nothing may fail just because the model hasn't
+    been trained on this machine.
 
     Returns:
         The joblib bundle (``model`` estimator plus ``feature_names``, ``floor``,
         and training metadata), or None when the artifact can't be loaded.
     """
     if not MODEL_PATH.exists():
-        log.warning("cite-budget model missing at %s; using flat cite_limit", MODEL_PATH)
+        log.warning("cite-budget model missing at %s; no prediction available", MODEL_PATH)
         return None
     try:
         bundle: dict[str, Any] = joblib.load(MODEL_PATH)
-    except Exception as error:  # a corrupt/incompatible artifact must not crash a build
-        log.warning("cite-budget model failed to load (%s); using flat cite_limit", error)
+    except Exception as error:  # a corrupt/incompatible artifact must not crash the caller
+        log.warning("cite-budget model failed to load (%s); no prediction available", error)
         return None
     if tuple(bundle.get("feature_names", ())) != FEATURE_NAMES:
-        log.warning("cite-budget model feature mismatch %s; using flat cite_limit",
+        log.warning("cite-budget model feature mismatch %s; no prediction available",
                     bundle.get("feature_names"))
         return None
     return bundle
@@ -232,10 +240,11 @@ def predicted_budget(year: int, citation_count: int, *, as_of_year: int,
                  ceiling: int | None = None) -> int | None:
     """Predict and clamp one seed's landmark budget — the raw model call, config-free.
 
-    The pure predict-and-clamp shared by serving (:func:`adaptive_cite_limit`,
-    which layers the config flag/ceiling on top) and the ``latest_gap`` corpus
-    collector (which must trim citer-year distributions exactly the way a build
-    would, without depending on the local ``config.json``).
+    **No serving path calls this since v5.13.0** (every build-time pool is now
+    in hand enough to compute the label directly — see the module docstring).
+    It remains for the ``latest_gap`` corpus collector, which must trim
+    citer-year distributions exactly the way the v5.12-era builds did, without
+    depending on the local ``config.json``.
 
     Args:
         year: The seed's publication year.
@@ -257,73 +266,34 @@ def predicted_budget(year: int, citation_count: int, *, as_of_year: int,
     return min(max(round(predicted), int(bundle["floor"])), ceiling)
 
 
-def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
-    """The seed-adapted landmark ship count, from the trained model.
-
-    Runs the model's ``predict`` on the seed's features (:func:`predicted_budget`)
-    and clamps the result to ``[floor, ceiling]`` — the ceiling is the
-    configured ``cite_limit`` (its ``null`` unbounded cap when unset), the floor
-    the smallest budget seen in training. The budget only ever shrinks the
-    ceiling; it never ships more than the flat config would.
-
-    Falls back to the flat ``cite_limit`` (passed through unchanged) when the
-    feature is off, the seed has no publication year, or the model isn't loadable.
-
-    Args:
-        seed_paper: The normalized S2 seed node (``year`` and ``citation_count``
-            drive the model).
-        as_of_year: The year to measure the seed's age from (today's year).
-
-    Returns:
-        The landmark limit to ship — a concrete count from the model, otherwise
-        the configured ``cite_limit`` (which may be None, the traversals'
-        unbounded cap).
-    """
-    ceiling = config.graph.cite_limit
-    if not config.graph.adaptive_cite_limit:
-        return ceiling
-    seed_year = seed_paper.get("year")
-    if not isinstance(seed_year, int):
-        return ceiling  # no publication year — the model has no age to run on
-    citation_count = seed_paper.get("citation_count") or 0
-    budget = predicted_budget(seed_year, citation_count, as_of_year=as_of_year, ceiling=ceiling)
-    if budget is None:
-        return ceiling
-    log.info(
-        "adaptive landmark budget %d for seed year=%d citations=%d",
-        budget, seed_year, citation_count,
-    )
-    return budget
-
-
 def computed_cite_limit(citer_years: Sequence[int | None]) -> int | None:
     """The landmark ship count, **computed** from the pool rather than predicted.
 
-    :func:`adaptive_cite_limit`'s twin for a caller that already holds a
-    whole-history ranked pool — today the **offline S2 corpus**. It returns the
-    same *kind* of answer (a count, for a citation-ranked prefix) but arrives at it
-    by running the STOP rule
+    The one serving rule for every path holding a whole-history ranked pool —
+    the **offline S2 corpus**, **OpenAlex** (via the one-page probe), and a
+    **complete live S2 pool**. It runs the STOP rule
     (:func:`number_of_ranked_citers_before_a_single_year_overflows`) over the real
-    years instead of estimating it from two seed features. The model's training
-    label *is* this number, so this is the model's own answer with the estimation
-    error taken out: across the 58-seed ``live_pool_validation`` corpus the two
-    distributions are near-identical (predicted mean 76.5, computed mean 75.9) but
-    the model is ~21 out on any given seed.
+    years instead of estimating it from two seed features. The retired model's
+    training label *is* this number, so this is the model's own answer with the
+    estimation error taken out: across the 58-seed ``live_pool_validation`` corpus
+    the two distributions are near-identical (predicted mean 76.5, computed mean
+    75.9) but the model was ~21 out on any given seed.
 
-    **Why a count here and a selection (:func:`select_landmarks`) on the live
-    path** — the two s2 paths hold different pools, so they want different rules:
+    **Why a count here and a selection (:func:`select_landmarks`) on truncated
+    live pools** — different pools want different rules:
 
-    * The live pool is a **recency sliver** (the newest ~9k citers) with no
-      all-history ranking to prefix, and its Latest window can't reach back past
-      it. A prefix there strands the recent years — DQN's top 29 are 2019–2023 with
-      nothing from 2024–2025, an 18-month hole. So it bands: SKIP.
-    * The corpus holds the **whole history**, and Latest is a separate relation that
-      widens back to meet the cluster (``bands.band_start_rule``). A prefix here is
-      exactly what "Field Landmark" means — the giants — and banding would instead
-      force ``PER_YEAR_CAP`` nodes out of *every* year, admitting the best of a thin
+    * A **truncated** live pool is a recency sliver (the newest ~9k citers) with
+      no all-history ranking to prefix, and its Latest window can't reach back
+      past it. A prefix there strands the recent years — DQN's top 29 are
+      2019–2023 with nothing from 2024–2025, an 18-month hole. So it bands: SKIP.
+    * A **whole-history** pool (corpus, OpenAlex, or a live list that ended
+      before the ceiling) has Latest as a separate relation that widens back to
+      meet the cluster (``bands.earliest_band_year``). A prefix here is exactly
+      what "Field Landmark" means — the giants — and banding would instead force
+      ``PER_YEAR_CAP`` nodes out of *every* year, admitting the best of a thin
       1970 over the 13th-best of a blockbuster year. It would also flatten the
-      year distribution that the tau rule needs to read, breaking the Latest bands
-      on this path. Same shape as OpenAlex, which prefixes for the same reason.
+      year distribution that the tau rule needs to read, breaking the Latest
+      bands on these paths.
 
     Trimmed to the ``cite_limit`` ceiling (unset meaning
     :data:`~atlas.integrations.openalex.UNBOUNDED_LANDMARK_CAP`, as everywhere
@@ -357,8 +327,9 @@ def computed_cite_limit(citer_years: Sequence[int | None]) -> int | None:
 def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
     """The app-facing landmark selection: the SKIP rule, plus this build's config.
 
-    The counterpart to :func:`adaptive_cite_limit` for callers that already hold
-    the pool (the live S2 fallback). The walk itself — admit up to
+    The rule for the one pool that can't honestly prefix: the live S2
+    fallback's **truncated** pools (a complete live pool takes
+    :func:`computed_cite_limit` instead). The walk itself — admit up to
     :data:`PER_YEAR_CAP` per publication year, skipping citers whose year is
     already full — is :func:`select_up_to_cap_per_year`, which has the worked
     example; this wrapper only adds the toggle, the ceiling, and the log line.
@@ -378,10 +349,10 @@ def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
     practice: S2 reports no year mostly for PDF-extraction stubs ("This paper is
     included in the Proceedings of…"), not for papers anyone would call landmarks.
 
-    Gated by the same ``adaptive_cite_limit`` toggle as the predicted path — that
-    flag means "size the landmark band to this seed", and this is how the s2 paths
-    honour it — and trimmed to the ``cite_limit`` ceiling, which (being a prefix of
-    a citation-ranked selection) keeps the most-cited.
+    Gated by the same ``adaptive_cite_limit`` toggle as the computed path — that
+    flag means "size the landmark band to this seed", and this is how every path
+    honours it — and trimmed to the ``cite_limit`` ceiling, which (being a prefix
+    of a citation-ranked selection) keeps the most-cited.
 
     **An unset ``cite_limit`` means the unbounded cap, not infinity** — the same
     default :func:`predicted_budget` and :func:`computed_cite_limit` apply, so no

@@ -167,12 +167,13 @@ The Vite dev server proxies `/api/*` to Flask.
    💗 found-by-search. Citers split into two relations: **Field Landmarks**
    (green) are the most-cited papers citing the seed — the historic giants
    (under **OpenAlex**, the true all-time top-cited, returned directly by a sorted
-   `cites:` query; under **Semantic Scholar**, the top-cited among the recent
-   citer tip — see the "Data source" note), with **how many to show sized per-seed
-   by a small trained model** (an old classic maps out large, a young hot paper
-   stays tight — see `src/ml_pipelines/cite_budget/`); **Latest Publications** (light
-   green) is the recent frontier — recent citers, per-year banded for even
-   coverage, with the band's **start sized per-seed by a second trained model**
+   `cites:` query; under **Semantic Scholar**, the whole citation history when the
+   offline corpus serves it or the seed's citer list is fully reachable live —
+   see the "Data source" note), with **how many to show measured per-seed from
+   the real citer pool** (an old classic maps out large, a young hot paper stays
+   tight — the STOP rule in `services/graph/budget.py`); **Latest Publications**
+   (light green) is the recent frontier — recent citers, per-year banded for even
+   coverage, with the band's **start sized per-seed by a trained model**
    so an old classic's bands widen back to meet its landmark cluster instead of
    leaving a gap (see `src/ml_pipelines/latest_gap/`) — as a filterable relation of
    its own. Node size = citations; thick links = influential citations; a

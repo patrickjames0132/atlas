@@ -24,17 +24,18 @@ The apparent inconsistency between the paths — a trained model here, explicit
 per-year banding there — is that same invariant enforced in two regimes, and which
 regime applies is dictated by the provider's API, not by taste:
 
-- **Predict (OpenAlex).** Landmarks come from a server-side
+- **Predict (OpenAlex — the regime as originally argued; see the epilogue for
+  how it emptied).** Landmarks come from a server-side
   `cites:…&sort=cited_by_count:desc&limit=N` query, so N must be chosen
-  *before any citer is fetched*. Running the rule exactly would mean
-  downloading the seed's whole citer list (130k for DQN) just to throw most of
-  it away. This is the one place a prediction earns its keep: the
-  `cite_budget` model estimates, from two cheap seed features (age,
-  log-citations), where the **STOP rule** *would* stop. Its training label is
-  literally that rule — "how many ranked citers before a single year overflows
-  K=12" — so on a ranked pool, top-N with a well-chosen N **is** the per-year cap,
-  learned rather than enforced. "Don't fetch a pool just to size a trim" is the
-  model's whole rationale.
+  *before any citer is fetched*. Running the rule exactly would mean — the
+  argument went — downloading the seed's whole citer list (~30k for DQN) just
+  to throw most of it away. This looked like the one place a prediction earns
+  its keep: the `cite_budget` model estimates, from two cheap seed features
+  (age, log-citations), where the **STOP rule** *would* stop. Its training
+  label is literally that rule — "how many ranked citers before a single year
+  overflows K=12" — so on a ranked pool, top-N with a well-chosen N **is** the
+  per-year cap, learned rather than enforced. "Don't fetch a pool just to size
+  a trim" was the model's whole rationale.
 - **Compute (live S2).** S2's `/citations` endpoint has no server-side sort,
   so the build must page the entire reachable list regardless (to the list's
   end or the 9,000-citer ceiling). By selection time the full pool is in
@@ -53,11 +54,40 @@ asymmetry in the two APIs — OpenAlex sells sorted queries, live S2 sells an
 unsorted feed — not an inconsistency in the design.
 
 **The corpus is a "compute" path too.** The offline corpus serves ranked
-all-history pools (so the model's premise *holds* there, unlike the truncated
+all-history pools (so the model's premise *held* there, unlike the truncated
 live pool) — but the data is local DuckDB, where a per-year grouped selection
-is as cheap as a top-N. The corpus-models ticket's re-collection may well
-conclude that the corpus should also run the rule exactly, leaving the model
-serving only the one path that genuinely can't compute: OpenAlex.
+is as cheap as a top-N. That speculation resolved as predicted: v5.11.0 made
+the corpus compute exactly, leaving the model serving only the one path that —
+it then seemed — genuinely couldn't compute: OpenAlex.
+
+## Epilogue (v5.13.0): the predict regime emptied
+
+The OpenAlex bullet's premise was quietly load-bearing and wrong: it assumed
+running the rule needs the **whole** pool. It doesn't. The STOP rule is
+**prefix-local** — it walks the ranking from the top and never reads past the
+first year to overflow — and OpenAlex serves the ranking *server-sorted*, so
+everything the rule will ever read sits in the first `per-page=200` response:
+one request, the same one the predicted path was already making (computed
+budgets across the 58-seed validation corpus: mean ~76, max 176; a seed whose
+top-200 doesn't overflow pays for one ceiling-sized refetch). Patrick asked
+the destabilizing question — "do we really need the budget model at all?" —
+and the honest answer was no: OpenAlex now computes the label exactly
+(`openalex._budgeted_landmarks`), which also restores the `PER_YEAR_CAP`
+invariant a size-only prediction never could enforce.
+
+The same release closed the other gap this page's regime table left open: a
+live S2 pool whose citation list ends **before** the offset ceiling (most
+seeds) is not a truncated sliver but the seed's *complete history* — so it now
+ships the corpus shape outright (STOP-prefix landmarks, tau-banded Latest)
+instead of the sliver's SKIP-banding and rolling window
+(`semantic_scholar.traversal._complete_pool_relations`).
+
+The model is retired from serving, not deleted: `predicted_budget` and the
+artifact remain for `ml_pipelines` (the `latest_gap` collector) and as the
+label's derivation record. The principle survives its own example — *predict
+only what you can't observe* — with the amendment that "what you can't
+observe" must be checked against what the rule actually reads, not against the
+size of the pool it's defined over.
 
 ## Why Latest is banded, not predicted
 
@@ -87,8 +117,8 @@ Two reasons, one structural, one measured:
 
 | Situation | What we do |
 |---|---|
-| The decision must be made **before** the data exists (OpenAlex's fetch N) | **Predict it** — a trained model on cheap seed features (`ml_pipelines/`) |
-| The full distribution is **in hand** at serve time (live S2 pool; arguably the corpus) | **Run the rule exactly** — per-year banding, no model |
+| The decision must be made **before** the data the rule reads exists (no current example — see the epilogue: what the rule *reads* is the test, not the pool's size) | **Predict it** — a trained model on cheap seed features (`ml_pipelines/`) |
+| Everything the rule reads is **in hand** at serve time (the corpus; OpenAlex's first ranked page; the live S2 pool, complete or truncated) | **Run the rule exactly** — no model |
 | The rule has tunable constants (`tau`, `max_span`, the cap of 12) | **Fit them offline** from data — never hand-pick |
 
 One sentence: *learn constants offline, execute rules online, predict only

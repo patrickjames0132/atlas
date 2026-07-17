@@ -190,8 +190,52 @@ def _latest_order(entry: dict) -> str:
     return f"{year:04d}-01-01" if year else ""
 
 
+def _fetch_page_with_next(path: str, key: str, limit: int,
+                          offset: int = 0) -> tuple[list[dict], bool]:
+    """Fetch one page of references/citations, and whether the list continues.
+
+    The continuation flag is primarily S2's own ``next`` field, NOT an
+    entry-count check — a page can come back short of ``limit`` mid-list when S2
+    fails to resolve some of its papers (they're skipped here), so a short
+    *entries* list does not mean "end of list". A full *raw* page (before the
+    resolve-skip) also counts as continuation, as a belt-and-suspenders against
+    a response missing ``next`` on a full page — at worst it costs one extra
+    request that comes back empty. The deep pager's completeness verdict rides
+    on this flag being conservative in exactly that direction.
+
+    Args:
+        path: The endpoint path under ``/paper/`` (quoted id + relation).
+        key: The nested paper key — ``"citedPaper"`` or ``"citingPaper"``.
+        limit: Page size to request.
+        offset: Where to start in S2's (newest-first) list.
+
+    Returns:
+        ``([{"node", "influential"}] entries, has_more)`` — entries skip papers
+        S2 couldn't resolve; ``has_more`` is True when the list continues past
+        this page.
+
+    Raises:
+        client.S2Error: When the request fails after retries.
+    """
+    url = (
+        f"{config.providers.s2.graph_url}/paper/{path}"
+        f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}&offset={offset}"
+    )
+    data = client.request(url)
+    raw_items = (data.get("data") or []) if isinstance(data, dict) else []
+    entries: list[dict] = []
+    for item in raw_items:
+        node = nodes.node(item.get(key))
+        if node:
+            entries.append({"node": node, "influential": bool(item.get("isInfluential"))})
+    has_more = isinstance(data, dict) and (
+        data.get("next") is not None or len(raw_items) == limit
+    )
+    return entries, has_more
+
+
 def _fetch_page(path: str, key: str, limit: int, offset: int = 0) -> list[dict]:
-    """Fetch one page of references/citations as normalized entries.
+    """One page of references/citations, entries only (see :func:`_fetch_page_with_next`).
 
     Args:
         path: The endpoint path under ``/paper/`` (quoted id + relation).
@@ -206,16 +250,7 @@ def _fetch_page(path: str, key: str, limit: int, offset: int = 0) -> list[dict]:
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    url = (
-        f"{config.providers.s2.graph_url}/paper/{path}"
-        f"?fields={urllib.parse.quote(nodes.NEIGHBOR_FIELDS)}&limit={limit}&offset={offset}"
-    )
-    data = client.request(url)
-    entries: list[dict] = []
-    for item in (data.get("data") or []) if isinstance(data, dict) else []:
-        node = nodes.node(item.get(key))
-        if node:
-            entries.append({"node": node, "influential": bool(item.get("isInfluential"))})
+    entries, _has_next = _fetch_page_with_next(path, key, limit, offset=offset)
     return entries
 
 
@@ -260,13 +295,13 @@ def references(paper_id: str, limit: int | None) -> list[dict]:
     return _neighbors(f"{client.quote(paper_id)}/references", "citedPaper", limit)
 
 
-def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
-    """Fetch the reachable citer pool, newest-first, deduped.
+def _fetch_reachable_pool(paper_id: str) -> tuple[list[dict], bool]:
+    """Page the seed's whole reachable citer pool, newest-first, deduped —
+    and report whether that pool is the seed's **complete** citation history.
 
-    ``deep=False`` (graph expansion) is a single newest page — the recent tip.
-    ``deep=True`` (the seed build) pages S2's newest-first citation list all the
-    way down: 1000-id pages (offset 0, 1000, 2000, …) until the list runs out or
-    the ``_MAX_OFFSET`` ceiling is hit, giving up to ~9k citers.
+    Pages S2's newest-first citation list all the way down: 1000-id pages
+    (offset 0, 1000, 2000, …) until the list runs out or the ``_MAX_OFFSET``
+    ceiling is hit, giving up to ~9k citers.
 
     **It pages the whole list, not just the ``latest`` window** — and that's the
     whole point, because the *landmarks* are what live down there. Until v5.5.0
@@ -289,12 +324,22 @@ def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
     slower cold build for a landmark relation that isn't noise. Snapshots cache
     for a day, and the build's progress bar covers the wait.
 
+    **Completeness** is S2's own ``next`` flag, not a page-length heuristic (a
+    page can come back short mid-list when S2 fails to resolve some papers): the
+    pool is complete when the walk reached a page with no continuation before
+    hitting the offset ceiling. Most seeds have well under ~9k citers, so
+    complete pools are the *common* case — and a complete pool is a
+    whole-history pool, which the caller may treat exactly as it would the
+    corpus (see :func:`citation_relations`).
+
     Args:
         paper_id: An S2 paperId or prefixed id.
-        deep: Page the whole reachable list (seed build) vs. one page (expansion).
 
     Returns:
-        The deduped ``[{"node", "influential"}]`` pool, newest-first.
+        ``(pool, complete)`` — the deduped ``[{"node", "influential"}]`` pool,
+        newest-first, and whether it's the seed's whole citation history
+        (False when the ceiling cut it off, or a deep page failed and the truth
+        is unknowable).
 
     Raises:
         client.S2Error: When the *newest* page (offset 0) fails — a real
@@ -302,28 +347,27 @@ def _fetch_citers(paper_id: str, *, deep: bool) -> list[dict]:
             range reached), matching the offset-ceiling reality.
     """
     path = f"{client.quote(paper_id)}/citations"
-    if not deep:
-        return _fetch_page(path, "citingPaper", _RANK_POOL)
-
     pool: list[dict] = []
     seen: set[str] = set()
     offset = 0
+    complete = False
     while offset <= _MAX_OFFSET:
         try:
-            page = _fetch_page(path, "citingPaper", _RANK_POOL, offset=offset)
+            page, has_more = _fetch_page_with_next(path, "citingPaper", _RANK_POOL, offset=offset)
         except client.S2Error:
             if offset == 0:
                 raise  # the newest page failing is an outage, not a deep-window skip
-            break  # a page past the ceiling / list end S2 won't serve — take what we have
-        if not page:
-            break  # ran off the end of the citation list
+            break  # a page S2 won't serve — take what we have; completeness unknowable
         for entry in page:
             paper = entry["node"]["id"]
             if paper not in seen:
                 seen.add(paper)
                 pool.append(entry)
+        if not has_more:
+            complete = True  # ran off the end of the citation list
+            break
         offset += _RANK_POOL
-    return pool
+    return pool, complete
 
 
 def citations(paper_id: str, limit: int) -> list[dict]:
@@ -349,7 +393,8 @@ def citations(paper_id: str, limit: int) -> list[dict]:
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    return _select_by_influence(_fetch_citers(paper_id, deep=False), limit)
+    page = _fetch_page(f"{client.quote(paper_id)}/citations", "citingPaper", _RANK_POOL)
+    return _select_by_influence(page, limit)
 
 
 #: Injected landmark selector: ``(ranked citer years) -> indices to ship | None``.
@@ -358,8 +403,99 @@ def citations(paper_id: str, limit: int) -> list[dict]:
 #: returns indices because the rule only reasons about *when* citers were
 #: published — the entries themselves stay here. A parameter, not an import, so
 #: ``integrations`` stays below ``services`` in the dependency order — the same
-#: shape as OpenAlex's ``BandStartFn``.
+#: shape as OpenAlex's ``BandStartFn``. **Truncated pools only** — a complete
+#: pool takes the budget/band-start pair below instead.
 LandmarkSelectFn = Callable[[Sequence[int | None]], list[int] | None]
+
+#: Injected landmark budget for a COMPLETE pool: ``(ranked citer years) -> how
+#: many to ship | None``. ``services/graph`` passes ``budget.computed_cite_limit``
+#: — the STOP rule, identical to the corpus source's ``LandmarkBudgetFn``,
+#: because a complete pool *is* a whole-history pool and gets the same treatment.
+LandmarkBudgetFn = Callable[[Sequence[int | None]], int | None]
+
+#: Injected Latest band-start chooser for a COMPLETE pool: ``(landmark_years,
+#: landmark_max_year) -> first band year | None``. ``services/graph`` passes
+#: ``bands.earliest_band_year`` — the same tau rule the corpus and OpenAlex
+#: paths use; None keeps the fixed ``latest_band_years`` span.
+BandStartFn = Callable[[list[int], int], int | None]
+
+
+def _complete_pool_relations(
+    pool: list[dict],
+    *,
+    landmark_limit: int | None,
+    latest_limit: int | None,
+    max_landmark_year: int,
+    current_year: int,
+    landmark_budget: LandmarkBudgetFn,
+    band_start: BandStartFn | None,
+) -> tuple[list[dict], list[dict]]:
+    """The corpus shape, served from a live pool that is the seed's whole history.
+
+    Mirrors ``corpus.source.citation_relations`` decision-for-decision, in Python
+    over the in-memory pool instead of SQL over Parquet — because the *reason*
+    the live path bands (SKIP) and rolls a 12-month window is that its pool is
+    normally a truncated recency sliver, and for a fully-reachable seed that
+    reason is gone. Concretely:
+
+    * **Landmarks** — the citers up to ``max_landmark_year`` (an undated citer
+      competes here, as in the corpus: it can't be banded, and dropping it could
+      lose a giant), ranked most-cited first, shipped as a **prefix** whose
+      length the STOP rule computes from the real years. Banding here would
+      admit the best of a thin year over the 13th-best of a blockbuster one and
+      flatten the year distribution the tau rule reads next.
+    * **Latest** — per-year bands from the ``band_start`` rule (read off the
+      shipped landmarks' years, which is why it runs second) up to
+      ``current_year``, each year's top ``latest_per_year`` by citations; a
+      giant appearing in both stays a landmark. Newest-first, trimmed to
+      ``latest_limit`` (keeping the newest), then flipped oldest-first for the
+      reveal slider.
+
+    Args:
+        pool: The complete citer pool (see :func:`_fetch_reachable_pool`).
+        landmark_limit: The flat ceiling, used when the budget rule declines.
+        latest_limit: Max latest citers (keeps the newest), or None for all.
+        max_landmark_year: The last landmark-era year (inclusive).
+        current_year: The last year to band, inclusive.
+        landmark_budget: The STOP rule measuring the ranked pool's years.
+        band_start: Optional per-seed band-start chooser; None (or a None
+            answer) keeps the fixed ``latest_band_years`` span.
+
+    Returns:
+        ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
+    """
+    era = [
+        entry for entry in pool
+        if entry["node"].get("year") is None or entry["node"]["year"] <= max_landmark_year
+    ]
+    ranked = _select_by_influence(era, None)
+    budget = landmark_budget([entry["node"].get("year") for entry in ranked])
+    # A None answer means the adaptive toggle is off — honour the flat ceiling.
+    landmark = ranked[:budget] if budget is not None else ranked[:landmark_limit]
+
+    earliest = max_landmark_year - config.graph.latest_band_years + 1
+    if band_start is not None:
+        adaptive = band_start(
+            [year for year in (entry["node"].get("year") for entry in landmark) if year],
+            max_landmark_year,
+        )
+        if adaptive is not None:
+            earliest = adaptive
+    by_year: dict[int, list[dict]] = {}
+    for entry in pool:
+        year = entry["node"].get("year")
+        if year is not None and earliest <= year <= current_year:
+            by_year.setdefault(year, []).append(entry)
+    shipped = {entry["node"]["id"] for entry in landmark}
+    recent: list[dict] = []
+    for year_entries in by_year.values():
+        recent += _select_by_influence(year_entries, config.graph.latest_per_year)
+    latest = [entry for entry in recent if entry["node"]["id"] not in shipped]
+    latest.sort(key=_latest_order, reverse=True)
+    if latest_limit is not None:
+        latest = latest[:latest_limit]
+    latest.reverse()
+    return landmark, latest
 
 
 def citation_relations(
@@ -367,41 +503,52 @@ def citation_relations(
     *,
     landmark_limit: int | None,
     latest_limit: int | None,
+    max_landmark_year: int,
+    current_year: int,
     landmark_select: LandmarkSelectFn | None = None,
+    landmark_budget: LandmarkBudgetFn | None = None,
+    band_start: BandStartFn | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's citers into two relations: landmarks and the latest frontier.
 
     The FALLBACK path (used only when the offline citations corpus can't serve the
-    seed). The whole reachable citer list is paged in (``_fetch_citers`` with
-    ``deep=True`` — up to ~9k) then partitioned by publication date: citers inside
-    the rolling ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier**
-    (``latest``, shipped oldest-first so the reveal slider walks toward the
-    present; a limit keeps the newest), and everything older competes as a
-    historic **landmark** (``citation``, most-cited first). The two are disjoint,
-    so a recent-but-highly-cited paper shows once, as ``latest``.
+    seed). The whole reachable citer list is paged in
+    (:func:`_fetch_reachable_pool` — up to ~9k), and **which shape ships depends
+    on whether that pool is the seed's complete history**:
 
-    Paging the whole list rather than just the window is what gives ``landmark``
-    anything to rank: on DQN it's the difference between a pool covering 2024–2026
-    and one running back to 2019 (see :func:`_fetch_citers`). What's still missing
-    is everything past the offset ceiling — for DQN, its 2013–2018 citers, the
-    real giants — which no amount of paging reaches. That's the corpus's job.
-
-    Having the pool in memory is also why the landmark trim takes a
-    ``landmark_select`` rule rather than a flat count. A count can only ever keep a
-    *prefix* of the ranking, which on a seed like DQN is all one era — the top 29
-    are 2019–2023 and 2024–2025 never appear, leaving a visible hole before the
-    Latest frontier. A selector bands the ranking by year instead, so every year
-    from the ceiling to the window gets its slice. See ``budget.select_landmarks``.
+    * **Complete** (the list ended before the offset ceiling — the common case;
+      most seeds have well under ~9k citers) and a ``landmark_budget`` was
+      supplied: the pool is a *whole-history* pool, exactly what the corpus
+      holds, so it ships the corpus shape — STOP-prefix landmarks plus
+      tau-banded per-year Latest (:func:`_complete_pool_relations`). The
+      truncation caveats below simply don't apply.
+    * **Truncated** (the ceiling cut the list off): the pool is a recency
+      sliver with no all-history ranking to prefix. Citers inside the rolling
+      ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier** (``latest``,
+      shipped oldest-first so the reveal slider walks toward the present; a
+      limit keeps the newest), and everything older competes as a historic
+      **landmark** (most-cited first), banded by the ``landmark_select`` SKIP
+      rule — a *prefix* of a truncated ranking is all one era (DQN's top 29 are
+      2019–2023, an 18-month hole before the frontier), so every year gets its
+      slice instead. What's past the ceiling — DQN's 2013–2018 citers, the real
+      giants — no amount of paging reaches; that's the corpus's job.
 
     Args:
         paper_id: An S2 paperId or prefixed id.
         landmark_limit: Maximum landmark (historic) citers to return, or ``None``
-            for all (the whole deep-paged older pool). Used when no
-            ``landmark_select`` is supplied, or when it declines to pick.
+            for all. Used when no rule is supplied, or when it declines.
         latest_limit: Maximum recent-frontier citers to return, or ``None`` for all.
-        landmark_select: Optional rule choosing which of the *ranked* landmark pool
-            to ship, from its citer years (see :data:`LandmarkSelectFn`); its pick
-            wins over ``landmark_limit``. None (the default) uses the flat limit.
+        max_landmark_year: The last landmark-era year — the complete-pool split
+            boundary (the same one the corpus and OpenAlex split on; passed in so
+            the providers stay independent).
+        current_year: The last year the complete-pool shape bands, inclusive.
+        landmark_select: Optional SKIP rule for the **truncated** pool (see
+            :data:`LandmarkSelectFn`); its pick wins over ``landmark_limit``.
+        landmark_budget: Optional STOP rule for the **complete** pool (see
+            :data:`LandmarkBudgetFn`); required for the corpus shape — without
+            it a complete pool still ships the truncated shape.
+        band_start: Optional Latest band-start chooser for the **complete** pool
+            (see :data:`BandStartFn`).
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -409,7 +556,18 @@ def citation_relations(
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    pool = _fetch_citers(paper_id, deep=True)
+    pool, complete = _fetch_reachable_pool(paper_id)
+    if complete and landmark_budget is not None:
+        log.debug("live s2 pool is the complete history (%d citers) — corpus shape", len(pool))
+        return _complete_pool_relations(
+            pool,
+            landmark_limit=landmark_limit,
+            latest_limit=latest_limit,
+            max_landmark_year=max_landmark_year,
+            current_year=current_year,
+            landmark_budget=landmark_budget,
+            band_start=band_start,
+        )
     cutoff = _latest_cutoff()
     recent = [entry for entry in pool if _is_latest(entry, cutoff)]
     older = [entry for entry in pool if not _is_latest(entry, cutoff)]

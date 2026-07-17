@@ -1,17 +1,21 @@
 """The adaptive landmark-budget serving paths (services/graph/budget.py).
 
-Two ways to size a seed's landmark band, both pinned here (see
+The ways to size a seed's landmark band, all pinned here (see
 ``docs/landmark-vocabulary.md`` for the vocabulary):
 
-* **Predicted** (``adaptive_cite_limit``) — exercises the *trained model* end to
-  end, loading the committed ``src/ml_pipelines/cite_budget/model.joblib`` and
-  asserting the seed → budget mapping, so a retrain that moves the worked-example
-  seeds trips these. The reference year is pinned (not ``today``) so the age-based
-  pins stay stable as the clock advances.
 * **Computed** — the two pure rules, no artifact involved:
-  ``number_of_ranked_citers_before_a_single_year_overflows`` (the STOP rule, the
-  model's training label) and ``select_up_to_cap_per_year`` / ``select_landmarks``
-  (the SKIP rule and the live-fallback trim built on it).
+  ``number_of_ranked_citers_before_a_single_year_overflows`` (the STOP rule —
+  the serving rule for every whole-history pool via ``computed_cite_limit``,
+  and the retired model's training label) and ``select_up_to_cap_per_year`` /
+  ``select_landmarks`` (the SKIP rule and the truncated-live-pool trim built
+  on it).
+* **Predicted** (``predicted_budget``) — the *trained model*, retired from
+  serving in v5.13.0 but still the ``latest_gap`` collector's dependency and
+  the label's derivation record: these load the committed
+  ``src/ml_pipelines/cite_budget/model.joblib`` and assert the seed → budget
+  mapping, so a retrain that moves the worked-example seeds trips them. The
+  reference year is pinned (not ``today``) so the age-based pins stay stable
+  as the clock advances.
 """
 
 from __future__ import annotations
@@ -45,11 +49,9 @@ def _adaptive_unbounded(monkeypatch):
     budget._reset_model_cache()
 
 
-def limit(year: int, citation_count: int) -> int | None:
+def limit(year: int, citation_count: int, ceiling: int | None = None) -> int | None:
     """The model's budget for a seed published in ``year`` with ``citation_count``."""
-    return budget.adaptive_cite_limit(
-        {"year": year, "citation_count": citation_count}, as_of_year=AS_OF
-    )
+    return budget.predicted_budget(year, citation_count, as_of_year=AS_OF, ceiling=ceiling)
 
 
 class TestComputeFeatures:
@@ -77,8 +79,9 @@ class TestLoadModel:
         assert hasattr(bundle["model"], "predict")
 
 
-class TestAdaptiveCiteLimit:
-    """Seed → clamped budget, via the trained model."""
+class TestPredictedBudget:
+    """Seed → clamped budget, via the trained model (retired from serving; the
+    ``latest_gap`` collector still depends on these exact mappings)."""
 
     def test_anchor_seeds_match_the_trained_model(self):
         # The four working anchors — the same predictions the notebook and the
@@ -93,41 +96,29 @@ class TestAdaptiveCiteLimit:
         # Age carries the signal (r≈0.84): hold citations fixed, older wins.
         assert limit(1986, 5_000) > limit(2021, 5_000)
 
-    def test_budget_never_exceeds_the_ceiling(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "cite_limit", 40)
+    def test_budget_never_exceeds_the_ceiling(self):
         # An old, well-cited seed predicts above the ceiling — clamps to it.
-        assert limit(1975, 12_959) == 40
+        assert limit(1975, 12_959, ceiling=40) == 40
 
     def test_budget_never_drops_below_the_floor(self):
         floor = budget.load_model()["floor"]
         # A brand-new, uncited seed floors at the model's floor, not below.
         assert limit(AS_OF, 0) == floor
 
-    def test_toggle_off_passes_cite_limit_through(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "adaptive_cite_limit", False)
-        assert limit(1975, 5_000) is None
-        monkeypatch.setattr(config.graph, "cite_limit", 150)
-        assert limit(1975, 5_000) == 150
-
-    def test_missing_year_passes_cite_limit_through(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "cite_limit", 150)
-        assert budget.adaptive_cite_limit(
-            {"year": None, "citation_count": 5_000}, as_of_year=AS_OF) == 150
-
-    def test_unloadable_model_falls_back_to_cite_limit(self, monkeypatch):
-        # A missing/broken artifact must degrade to the flat limit, not crash.
-        monkeypatch.setattr(config.graph, "cite_limit", 150)
+    def test_unloadable_model_predicts_nothing(self, monkeypatch):
+        # A missing/broken artifact must degrade to None, not crash the caller.
         monkeypatch.setattr(budget, "load_model", lambda: None)
-        assert limit(1975, 5_000) == 150
+        assert limit(1975, 5_000) is None
 
 
 class TestStopRule:
     """The STOP rule — how deep into the ranking you get before a year overflows.
 
-    The model's **training label**, and nothing else: no serving path calls it
+    The serving rule for every whole-history pool (via ``computed_cite_limit``,
+    below) AND the retired model's **training label**
     (``test/ml_pipelines/cite_budget/test_train.py`` pins that training and the
-    app share this one function). What the live S2 fallback actually ships is the
-    SKIP rule below.
+    app share this one function). What a *truncated* live pool ships instead is
+    the SKIP rule below.
     """
 
     def test_stops_when_a_year_exceeds_the_cap(self):
@@ -152,10 +143,34 @@ class TestStopRule:
         assert stop_rule([None] * 50, cap=2) == 50
 
 
+class TestComputedCiteLimit:
+    """The computed budget — the STOP rule as served to whole-history pools
+    (the corpus, OpenAlex's probe, a complete live S2 pool)."""
+
+    def test_returns_the_stop_count(self):
+        # 500 same-year citers overflow immediately: the count is the cap.
+        assert budget.computed_cite_limit([2025] * 500) == budget.PER_YEAR_CAP
+
+    def test_ceiling_clamps_the_count(self, monkeypatch):
+        monkeypatch.setattr(config.graph, "cite_limit", 5)
+        # A spread pool that never overflows would ship whole — the ceiling caps it.
+        assert budget.computed_cite_limit(list(range(1990, 2020))) == 5
+
+    def test_toggle_off_declines_so_the_flat_limit_applies(self, monkeypatch):
+        monkeypatch.setattr(config.graph, "adaptive_cite_limit", False)
+        assert budget.computed_cite_limit([2025] * 500) is None
+
+    def test_needs_no_model_artifact(self, monkeypatch):
+        # Computing must not depend on the trained bundle at all.
+        monkeypatch.setattr(budget, "load_model", lambda: None)
+        assert budget.computed_cite_limit([2025] * 500) == budget.PER_YEAR_CAP
+
+
 class TestSkipRule:
     """The SKIP rule — up to the cap per year, walking on past full years.
 
-    What the live S2 fallback is actually handed, via ``select_landmarks``.
+    What the live S2 fallback's truncated pools are handed, via
+    ``select_landmarks``.
     """
 
     def test_caps_each_year_without_ending_the_walk(self):

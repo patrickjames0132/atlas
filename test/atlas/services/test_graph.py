@@ -41,7 +41,7 @@ def fake_s2(monkeypatch):
         calls["lookup"] = lookup
         return make_node("seed", title="The Seed")
 
-    def citation_relations(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
+    def citation_relations(paper_id, **kwargs):
         landmark = [{"node": make_node("cite1"), "influential": False}]
         latest = [{"node": make_node("latest1", pub_date="2026-06-01"), "influential": False}]
         return landmark, latest
@@ -65,7 +65,7 @@ def fake_openalex(monkeypatch):
         calls["seed_ref"] = seed_ref
         return {"id": "https://openalex.org/W99"}
 
-    def citation_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
+    def citation_relations(work_id, **kwargs):
         calls["work_id"] = work_id
         landmark = [{"node": make_node("DOI:10/oa-cite"), "influential": False}]
         latest = [{"node": make_node("DOI:10/oa-latest", pub_date="2026-06-01"),
@@ -133,7 +133,7 @@ def test_s2_build_falls_back_to_live_when_corpus_declines(fake_s2, monkeypatch):
     def corpus_declines(seed_paper, seed_ref, **kwargs):
         return None
 
-    def live_relations(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
+    def live_relations(paper_id, **kwargs):
         live_calls["n"] += 1
         return [{"node": make_node("cite1"), "influential": False}], []
 
@@ -171,7 +171,7 @@ def test_a_paper_thats_both_a_reference_and_a_citer_merges(fake_s2, monkeypatch)
     monkeypatch.setattr(build.s2, "references",
                         lambda pid, limit: [{"node": make_node("mutual"), "influential": False}])
 
-    def citation_relations(pid, *, landmark_limit, latest_limit, landmark_select=None):
+    def citation_relations(pid, **kwargs):
         return [{"node": make_node("mutual"), "influential": False}], []
 
     monkeypatch.setattr(build.s2, "citation_relations", citation_relations)
@@ -188,7 +188,7 @@ def test_openalex_duplicate_works_merge_via_arxiv_id(fake_openalex, monkeypatch)
     """OpenAlex sometimes holds duplicate works for one paper (the MuZero-twice
     problem). Two citer sightings sharing an arXiv id merge into ONE node, with a
     single citation edge and a compact rank on the next distinct citer."""
-    def citation_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
+    def citation_relations(work_id, **kwargs):
         landmark = [
             {"node": make_node("DOI:10/a", arxiv_id="1909.08593", citation_count=100),
              "influential": False},
@@ -220,7 +220,7 @@ def test_a_citer_that_is_the_seed_never_self_loops(fake_openalex, monkeypatch):
     monkeypatch.setattr(build.openalex, "node",
                         lambda work: make_node("seed", title="The Seed", arxiv_id="1706.03762"))
 
-    def citation_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
+    def citation_relations(work_id, **kwargs):
         return [{"node": make_node("DOI:10/seed-twin", arxiv_id="1706.03762"),
                  "influential": False}], []
 
@@ -305,28 +305,30 @@ def test_unknown_seed_returns_none(fake_s2, fake_openalex, monkeypatch):
     assert build.build_graph("   ", provider="s2") is None
 
 
-def test_predicted_budget_reaches_openalex_alone(fake_openalex, monkeypatch):
-    """OpenAlex is the ONLY path still given the model's predicted budget.
+def test_openalex_computes_its_budget_no_model_involved(fake_openalex, monkeypatch):
+    """OpenAlex gets the computed STOP rule, not a predicted count (v5.13.0).
 
-    It pushes a count into a *remote* server-sorted query, so it must be told the
-    number before it holds any citer — and the pool would have to cross the network
-    (130k citers for DQN) to be counted instead. That is the one situation a
-    prediction earns its keep. Both s2 paths compute the rule locally instead; see
-    ``test_both_s2_paths_select_instead_of_predicting``.
+    The model used to serve this path on the premise that a remote server-sorted
+    query needs its N before any citer is in hand. The STOP rule is prefix-local,
+    so the traversal's one-page probe holds everything it reads — ``build``
+    injects ``budget.computed_cite_limit`` and passes the flat ``cite_limit``
+    only as the ceiling. The call is bound against the real signature so a kwarg
+    rename can't hide behind this fake (the lesson the corpus test below pins).
     """
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
-    monkeypatch.setattr(config.graph, "cite_limit", None)
-    expected = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
-    assert expected not in (None, build.openalex.UNBOUNDED_LANDMARK_CAP)  # genuinely adapted
-    received: dict[str, int | None] = {}
+    monkeypatch.setattr(config.graph, "cite_limit", 200)
+    real = inspect.signature(build.openalex.citation_relations)
+    received: dict[str, object] = {}
 
-    def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
-        received["openalex"] = landmark_limit
+    def openalex_relations(*args, **kwargs):
+        real.bind(*args, **kwargs)  # raises TypeError on any name the real fn lacks
+        received.update(kwargs)
         return [], []
 
     monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
     build.build_graph("1706.03762", provider="openalex")
-    assert received["openalex"] == expected
+    assert received["landmark_budget"] is budget.computed_cite_limit
+    assert received["landmark_limit"] == 200  # the flat ceiling, not a prediction
 
 
 def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
@@ -344,7 +346,6 @@ def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
     """
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
     monkeypatch.setattr(config.graph, "cite_limit", 200)
-    predicted = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
     received: dict[str, object] = {}
 
     def corpus_relations(seed_paper, seed_ref, **kwargs):
@@ -355,9 +356,8 @@ def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
     build.build_graph("1706.03762", provider="s2")
 
     assert received["landmark_budget"] is budget.computed_cite_limit
-    # The flat ceiling, NOT this seed's prediction — the model is off this path.
+    # The flat ceiling, NOT a per-seed prediction — the model is off this path.
     assert received["landmark_limit"] == 200
-    assert received["landmark_limit"] != predicted
     # And it gets the tau rule for its Latest bands — the same one OpenAlex gets,
     # which works here precisely because landmarks are a prefix with a real year
     # distribution to read (see the live_pool_validation verdict).
@@ -389,35 +389,41 @@ def test_build_calls_the_corpus_with_a_signature_it_actually_has(fake_s2, monkey
     assert "landmark_budget" in bound
 
 
-def test_live_s2_fallback_selects_instead_of_predicting(fake_s2, monkeypatch):
-    """The LIVE S2 fallback is handed the banded selector, not a predicted count.
+def test_live_s2_fallback_gets_both_rules_one_per_pool_kind(fake_s2, monkeypatch):
+    """The LIVE S2 fallback is handed BOTH rules — the traversal picks per pool.
 
-    Its pool is truncated at S2's offset ceiling, so a count inferred from the
-    seed's age (which assumes landmarks spanning its whole history) over-ships —
-    and a count could only keep a prefix anyway, which strands the recent years.
-    The pool is in memory by trim time, so ``build`` injects
-    ``budget.select_landmarks`` and passes the flat ``cite_limit`` only as a
-    ceiling.
+    A truncated pool takes the banded SKIP selector (a count could only keep a
+    prefix, which strands the recent years); a complete pool takes the computed
+    STOP budget plus the tau band-start, shipping the corpus shape. ``build``
+    injects all of them and the flat ``cite_limit`` only as a ceiling; the call
+    is bound against the real signature so a kwarg rename can't hide behind
+    this fake.
     """
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
     monkeypatch.setattr(config.graph, "cite_limit", 200)
     monkeypatch.setattr(build.s2.corpus, "citation_relations",
                         lambda seed_paper, seed_ref, **kwargs: None)  # force the live path
+    real = inspect.signature(build.s2.citation_relations)
     received: dict[str, object] = {}
 
-    def live_relations(pid, *, landmark_limit, latest_limit, landmark_select=None):
-        received["landmark_limit"] = landmark_limit
-        received["landmark_select"] = landmark_select
+    def live_relations(*args, **kwargs):
+        real.bind(*args, **kwargs)  # raises TypeError on any name the real fn lacks
+        received.update(kwargs)
         return [], []
 
     monkeypatch.setattr(build.s2, "citation_relations", live_relations)
     build.build_graph("1706.03762", provider="s2")
 
-    # The flat config ceiling, NOT the model's prediction for this seed.
+    # The flat config ceiling, NOT a per-seed prediction.
     assert received["landmark_limit"] == 200
     assert received["landmark_select"] is budget.select_landmarks
-    # And the rule it injected really bands: a flooded year is capped without
-    # stranding a later one — the hole a predicted count leaves on a real seed.
+    assert received["landmark_budget"] is budget.computed_cite_limit
+    assert received["band_start"] is bands.earliest_band_year
+    # Both providers must split a complete pool on the same boundary.
+    assert received["max_landmark_year"] == build.openalex.landmark_max_year(
+        datetime.date.today())
+    # And the truncated-pool rule really bands: a flooded year is capped without
+    # stranding a later one — the hole a bare count leaves on a truncated seed.
     select = received["landmark_select"]
     years = [2020] * 30 + [2025] * 3
     assert [years[index] for index in select(years)] == [2020] * budget.PER_YEAR_CAP + [2025] * 3
