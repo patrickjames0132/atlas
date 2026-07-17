@@ -538,21 +538,6 @@ optional, behind a key.
       edge-less node, plus multi-relation detail badges (the panel already dedupes
       badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
       v5.2.0 edge-less-node filter fix.)*
-- [ ] **Source-scope picker doesn't appear until a page refresh (+ note it above
-      the ask bar)** — uploading sources through the 📚 Sources drawer doesn't make
-      the assistant panel's **source-scope picker** show up until you manually
-      reload the page. Root cause: `Teacher.tsx` fetches the library once, in a
-      mount-only `useEffect(… , [])`, into local `libraryItems` state; an upload
-      elsewhere never refreshes it, so the picker (shown at >1 source) stays
-      hidden. The lecture-scope picker doesn't have this bug because it derives
-      from the store (`transcript.lectures`), which updates live — the fix should
-      make the source list react the same way: lift it into the store (or a shared
-      context) that the Sources drawer updates on upload/delete, or re-fetch when
-      the drawer closes, so the picker appears immediately. **While here:** also
-      surface the selected sources in the **one-line note above the ask bar**
-      (like the lectures note added in v4.12.0) — space is tight, so likely a
-      combined line ("Answers draw on N lectures · M sources") rather than two.
-      *(Patrick's report, 2026-07-11.)*
 - [ ] **Group graph nodes by relation type in the Force layout** — the force
       layout currently mingles every relation into one undifferentiated cloud;
       nodes should **cluster into visual groups by their relation to the seed**

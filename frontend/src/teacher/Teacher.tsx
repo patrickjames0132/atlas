@@ -14,14 +14,9 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
-import {
-  listSources,
-  LECTURE_TITLES,
-  type AnswerFigure,
-  type LectureMode,
-  type Source,
-} from '../api'
-import { useAppSelector } from '../store'
+import { LECTURE_TITLES, type AnswerFigure, type LectureMode } from '../api'
+import { useAppDispatch, useAppSelector } from '../store'
+import { loadLibrary, selectLibrary } from '../store/library'
 import { selectVisibleBeats } from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
 import ScopePicker from './ScopePicker'
@@ -88,11 +83,18 @@ export default function Teacher({
   const activeModeMeta = MODES.find((mode) => mode.key === activeMode) ?? null
 
   const [input, setInput] = useState('')
-  // The uploaded library, powering the source-scope picker. The picker only
-  // appears when there's more than one source to pick between.
-  const [libraryItems, setLibraryItems] = useState<Source[]>([])
-  // Checked = the assistant may search that source. All checked = no scope.
-  const [scopeIds, setScopeIds] = useState<string[]>([])
+  // The uploaded library, powering the source-scope picker (shown at more than
+  // one source). Read LIVE from the library slice — the Sources drawer reloads
+  // the slice on every upload/delete, so the picker appears the moment a
+  // second source lands (it used to sit on a stale mount-time fetch until a
+  // page reload).
+  const dispatch = useAppDispatch()
+  const { sources: libraryItems, loaded: libraryLoaded } = useAppSelector(selectLibrary)
+  // Sources the assistant may NOT search — tracked by EXCLUSION (mirroring
+  // excludedLectures below) so a source uploaded after the user last touched
+  // the picker is searchable by default. Checked = current sources minus
+  // these; a deleted source's lingering id here is inert.
+  const [excludedSources, setExcludedSources] = useState<string[]>([])
   // Lectures the researcher may NOT use as context, tracked by EXCLUSION so a
   // lecture played after the user last touched the picker is fed by default.
   const [excludedLectures, setExcludedLectures] = useState<LectureMode[]>([])
@@ -103,15 +105,17 @@ export default function Teacher({
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
 
+  // First reader fetches; the panel remounts per workspace epoch, and the
+  // loaded flag keeps those remounts (and the drawer) from re-fetching a
+  // library the store already holds.
   useEffect(() => {
-    listSources()
-      .then((res) => {
-        setLibraryItems(res.sources)
-        setScopeIds(res.sources.map((source) => source.id)) // default: every source checked
-      })
-      .catch(() => {})
-  }, [])
+    if (!libraryLoaded) dispatch(loadLibrary())
+  }, [libraryLoaded, dispatch])
 
+  // Checked = the assistant may search that source (everything not excluded).
+  const scopeIds = libraryItems
+    .filter((source) => !excludedSources.includes(source.id))
+    .map((source) => source.id)
   // "No scope" (search the whole library) only when every source is checked;
   // any other state is sent as an explicit id list (empty = search nothing).
   const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
@@ -131,6 +135,20 @@ export default function Teacher({
     if (!question || asking) return
     setInput('')
     ask(question, scopeArg, lectureScope)
+  }
+
+  // The one-line "Answers also draw on …" note above the ask bar: lectures and
+  // sources share it (space is tight), each part naming its picker's icon.
+  // Only what's actually in play appears — no lectures played and no sources
+  // scoped means no note.
+  const askContextParts: string[] = []
+  if (hasGraph && lectureScope.length > 0) {
+    askContextParts.push(
+      `${lectureScope.length} played lecture${lectureScope.length > 1 ? 's' : ''} (🎓)`,
+    )
+  }
+  if (scopeIds.length > 0) {
+    askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
   }
 
   return (
@@ -185,12 +203,12 @@ export default function Teacher({
                 open={openScope === 'sources'}
                 onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
                 onToggle={(id) =>
-                  setScopeIds((prev) =>
+                  setExcludedSources((prev) =>
                     prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
                   )
                 }
-                onSelectAll={() => setScopeIds(libraryItems.map((source) => source.id))}
-                onDeselectAll={() => setScopeIds([])}
+                onSelectAll={() => setExcludedSources([])}
+                onDeselectAll={() => setExcludedSources(libraryItems.map((source) => source.id))}
                 labels={{
                   icon: '📚',
                   unit: 'source',
@@ -343,11 +361,8 @@ export default function Teacher({
           answers focus on your selection (clear it on the graph to widen).
         </p>
       )}
-      {hasGraph && lectureScope.length > 0 && (
-        <p className="ask-context-note">
-          Answers also draw on {lectureScope.length} played lecture
-          {lectureScope.length > 1 ? 's' : ''} (choose with 🎓 above).
-        </p>
+      {askContextParts.length > 0 && (
+        <p className="ask-context-note">Answers also draw on {askContextParts.join(' · ')}.</p>
       )}
       <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
         <input

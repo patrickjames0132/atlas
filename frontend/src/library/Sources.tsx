@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { deleteSource, ingestUrl, listSources, uploadSource, type Source } from '../api'
+import { deleteSource, ingestUrl, uploadSource } from '../api'
+import { useAppDispatch, useAppSelector } from '../store'
+import { loadLibrary, selectLibrary } from '../store/library'
 import './sources.css'
 
 // The Sources drawer: manage the user's local semantic library — upload PDFs /
 // books (several at once, embedded in parallel) or paste a URL, list what's
 // loaded, remove sources. The library is global and persistent; the AI teacher
-// searches it during Q&A (Phase 3d).
+// searches it during Q&A (Phase 3d). The list itself lives in the library
+// slice — every mutation here re-loads it THROUGH the store, so the teacher
+// panel's source-scope picker updates the moment an upload lands (it used to
+// need a page reload).
 
 /** One file in an in-flight upload batch, tracked for per-file progress.
  * `pct` is embedding progress 0–1 (undefined until the first progress frame —
@@ -40,9 +45,8 @@ async function runPool<Item>(
  * @returns The drawer, or null while closed.
  */
 export default function Sources({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [available, setAvailable] = useState(true)
-  const [items, setItems] = useState<Source[]>([])
-  const [loading, setLoading] = useState(false)
+  const dispatch = useAppDispatch()
+  const { available, sources: items, loading } = useAppSelector(selectLibrary)
   const [busy, setBusy] = useState<string | null>(null) // label of the in-flight URL ingest
   const [busyPct, setBusyPct] = useState<number | null>(null) // its embedding progress (0-1)
   // Per-file progress for a multi-file upload batch (parallel, capped).
@@ -56,12 +60,8 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
   const locked = !!busy || uploading || !available
 
   const refresh = useCallback(async () => {
-    setLoading(true)
-    const res = await listSources()
-    setAvailable(res.available)
-    setItems(res.sources)
-    setLoading(false)
-  }, [])
+    await dispatch(loadLibrary())
+  }, [dispatch])
 
   useEffect(() => {
     if (open) refresh()
