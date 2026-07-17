@@ -75,6 +75,9 @@
   width: 240px;
   max-height: 320px;
   overflow-y: auto;
+  /* Never a horizontal scroller: titles ellipsize and the head must fit.
+     (It once didn't — see the All/None comment in ScopePicker.tsx.) */
+  overflow-x: hidden;
   padding: 8px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -91,6 +94,7 @@
   letter-spacing: 0.04em;
   color: var(--muted);
   padding: 2px 4px 6px;
+  white-space: nowrap;
 }
 .scope-pop-actions {
   display: flex;

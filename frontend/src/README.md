@@ -2,8 +2,8 @@
 
 React + TypeScript (strict) + Vite. State follows one rule: **a component's
 state lives where the component lives; only genuinely cross-cutting state
-goes to the Redux store** (`store/` — three slices: workspace, transcript,
-highlight). Structure follows the hybrid rule: feature folders at the root
+goes to the Redux store** (`store/` — four slices: workspace, transcript,
+highlight, library). Structure follows the hybrid rule: feature folders at the root
 for anything with multiple consumers or render sites; single-parent
 components nest inside their parent's folder (e.g. `teacher/transcript/`).
 
@@ -43,7 +43,7 @@ component (promoted from `teacher/figures/` once the detail panel became a
 second caller) — see "the hybrid rule" above.
 
 Non-visual folders: `api/` (the typed backend client — the only layer that
-knows URLs and SSE frames), `store/` (the three slices + typed hooks),
+knows URLs and SSE frames), `store/` (the four slices + typed hooks),
 `notation/` (the cross-cutting math renderer — `<MathText>` for the DOM
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI

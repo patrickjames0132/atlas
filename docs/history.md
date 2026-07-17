@@ -1367,6 +1367,28 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Source-scope picker doesn't appear until a page refresh (+ note it
+      above the ask bar)** *(v5.15.0)* — `Teacher.tsx` fetched the library
+      once, in a mount-only effect, into local state; an upload in the 📚
+      Sources drawer never refreshed it, so the picker (shown at >1 source)
+      stayed hidden until a manual reload. Fixed the way the ticket predicted:
+      the source list moved into a new **`library` store slice** (the store's
+      fourth) that the drawer re-loads through on every upload/URL
+      ingest/delete and the panel reads live — mirroring how the
+      lecture-scope picker reads `transcript.lectures`. The panel's scope
+      choices also flipped to **exclusion-tracking** (`excludedSources`, like
+      `excludedLectures`), so a source uploaded after the user last touched
+      the picker is searchable by default; a `loaded` flag keeps the panel's
+      per-epoch remounts from re-fetching. The ask-bar note is now one
+      combined line — *"Answers also draw on 2 played lectures (🎓) · 3
+      sources (📚)"* — shown whenever either is in play, graph or
+      library-only mode. Browser testing surfaced a latent popover bug the
+      newly-usable picker exposed: with a subset checked, "Select all" +
+      "Deselect all" both render and overflowed the 240px popover (heading
+      wrapped, ✕ off-view, horizontal scrollbar) — bulk actions are now
+      compact **All / None** links, the popover is `overflow-x: hidden`, and
+      the header no-wraps. Suite 116 → 121. *(Patrick's report, 2026-07-11;
+      shipped 2026-07-17.)*
 - [x] **One fast "unhighlight everything" action** *(v5.14.0)* — clearing what's
       lit on the graph was piecemeal: the hand-picked selection had its own
       Clear, and a lit lecture beat / chat answer / inline `[n]` ref cleared by

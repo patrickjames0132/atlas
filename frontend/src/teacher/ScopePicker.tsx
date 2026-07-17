@@ -96,15 +96,27 @@ export default function ScopePicker({
         <div className="scope-pop">
           <div className="scope-pop-head">
             <span>{labels.heading}</span>
+            {/* Compact "All / None" (not "Select all / Deselect all"): with a
+                subset checked BOTH show at once, and the long labels overflowed
+                the 240px popover — heading wrapped, ✕ pushed out of view, a
+                horizontal scrollbar underneath. */}
             <span className="scope-pop-actions">
               {checkedIds.length < items.length && (
-                <button className="link-btn" onClick={onSelectAll}>
-                  Select all
+                <button
+                  className="link-btn"
+                  onClick={onSelectAll}
+                  title={`Check every ${labels.unit}`}
+                >
+                  All
                 </button>
               )}
               {checkedIds.length > 0 && (
-                <button className="link-btn" onClick={onDeselectAll}>
-                  Deselect all
+                <button
+                  className="link-btn"
+                  onClick={onDeselectAll}
+                  title={`Uncheck every ${labels.unit}`}
+                >
+                  None
                 </button>
               )}
               <button

@@ -38,10 +38,15 @@ structure rule's nesting case (the `graph/hooks` precedent).
 - **Panel-local, on purpose:** the input box, the `asking` flag and the
   `loadingModes` set (which lectures are streaming), the
   stream error, activeBeat/activeChat (which entry is lit is panel UI —
-  only the resulting ids are global), the scope picker's library list and
-  checked set plus which picker's popover is open (`openScope`, one shared
-  slot so the two popovers can't overlap), the lightbox, and the
-  abort/session refs.
+  only the resulting ids are global), the scope pickers' exclusion sets
+  (`excludedSources`/`excludedLectures` — exclusion-tracked so a new
+  source/lecture is in scope by default) plus which picker's popover is open
+  (`openScope`, one shared slot so the two popovers can't overlap), the
+  lightbox, and the abort/session refs. The **source list itself** is NOT
+  local anymore: it reads live from the store's `library` slice, which the
+  Sources drawer reloads on every upload/delete — the picker used to sit on
+  a mount-time fetch and not appear until a page reload (Patrick's
+  2026-07-11 report).
 
 ## Design decisions worth knowing
 

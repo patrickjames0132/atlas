@@ -1,7 +1,8 @@
 # `src/store`
 
-The Redux store — exactly three slices, one for each piece of state the
-Phase 6 inventory found to be *genuinely* cross-cutting. Everything else in
+The Redux store — exactly four slices, one for each piece of state found to
+be *genuinely* cross-cutting (three from the Phase 6 inventory, `library`
+added when the source-scope picker went stale). Everything else in
 the app stays component-local, on principle: **a component's state is
 defined where the component lives; only state that must be reached from
 distant parts of the tree earns a slice.**
@@ -12,9 +13,10 @@ store/
   workspace.ts   — the graph, discoveries, layout + load/restore/save thunks
   transcript.ts  — the teacher's conversation (chat + per-mode lecture cache)
   highlight.ts   — the papers the teacher is currently talking about
+  library.ts     — the uploaded sources (drawer writes, scope picker reads)
 ```
 
-## The three slices, and who touches them
+## The four slices, and who touches them
 
 - **`workspace`** — written by the load/restore thunks, the teacher's
   discovery dispatches, and the canvas's view-filter + node-selection
@@ -50,6 +52,15 @@ store/
 - **`highlight`** — the teacher writes (active beat / cited answer), the
   canvas glows. Stored as an id array (serializable); `selectHighlightSet`
   memoizes the Set the canvas wants.
+- **`library`** — the uploaded sources, `loadLibrary`-thunk-fetched: the
+  Sources drawer re-loads it after every upload/URL ingest/delete, and the
+  teacher panel's source-scope picker reads it live (the picker used to sit
+  on its own mount-time fetch, so a new upload didn't surface it until a
+  page reload). The `loaded` flag lets whichever surface mounts first do
+  the one initial fetch. Mirrors how the lecture-scope picker reads
+  `transcript.lectures` — and like it, the *scope choices* stay
+  panel-local (tracked by exclusion, so a new source is searchable by
+  default); only the list itself is shared.
 
 ## Design decisions worth knowing
 
@@ -67,8 +78,9 @@ store/
   action log of every beat, token batch, and discovery: an SSE stream
   debugger for free.
 - **What deliberately stays OUT:** declutter filters, hover, the
-  detail-panel selection, drawer visibility, search state, scope picker,
-  lightbox — each has one render site and lives there. The **hand-picked
+  detail-panel selection, drawer visibility, search state, the scope
+  pickers' exclusion choices, lightbox — each has one render site and lives
+  there. The **hand-picked
   node selection** is the exception that proves the rule: it earns
   `workspace.selectedNodeIds` because it's genuinely cross-cutting — the
   canvas writes it (marquee / shift-click), the teacher reads it (grounding

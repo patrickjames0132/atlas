@@ -82,3 +82,51 @@ describe('ScopePicker', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })
+
+/**
+ * Render an open picker with the given checked subset and bulk-action spies.
+ *
+ * @param checkedIds The ids currently checked.
+ * @returns The bulk-action spies.
+ */
+function renderWithChecked(checkedIds: string[]) {
+  const onSelectAll = vi.fn()
+  const onDeselectAll = vi.fn()
+  render(
+    <ScopePicker
+      items={ITEMS}
+      checkedIds={checkedIds}
+      open={true}
+      onOpenChange={() => {}}
+      onToggle={() => {}}
+      onSelectAll={onSelectAll}
+      onDeselectAll={onDeselectAll}
+      labels={LABELS}
+    />,
+  )
+  return { onSelectAll, onDeselectAll }
+}
+
+describe('ScopePicker bulk actions', () => {
+  // The labels are deliberately the compact "All"/"None", not
+  // "Select all"/"Deselect all": a subset shows BOTH at once, and the long
+  // pair overflowed the 240px popover — heading wrapped, ✕ off-view, a
+  // horizontal scrollbar underneath (Patrick's 2026-07-17 report).
+  it('a subset shows compact All and None, both wired', () => {
+    const { onSelectAll, onDeselectAll } = renderWithChecked(['a'])
+    fireEvent.click(screen.getByText('All'))
+    fireEvent.click(screen.getByText('None'))
+    expect(onSelectAll).toHaveBeenCalledTimes(1)
+    expect(onDeselectAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('everything checked hides All; nothing checked hides None', () => {
+    renderWithChecked(['a', 'b'])
+    expect(screen.queryByText('All')).toBeNull()
+    expect(screen.getByText('None')).toBeTruthy()
+    cleanup()
+    renderWithChecked([])
+    expect(screen.getByText('All')).toBeTruthy()
+    expect(screen.queryByText('None')).toBeNull()
+  })
+})

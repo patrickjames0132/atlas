@@ -22,8 +22,12 @@ list, remove.
   flag — the UI explains a disabled semantic search instead of failing
   mysteriously. (Ingestion genuinely requires embeddings; chat retrieval
   degrades without them.)
-- All state is drawer-local (`useState` where it's used); the drawer
-  refreshes its list on every open.
+- Upload/ingest progress state is drawer-local (`useState` where it's used),
+  but **the source list lives in the store's `library` slice**: every
+  mutation here (upload, URL ingest, delete) re-loads it through
+  `loadLibrary`, and the drawer re-loads on open — so the teacher panel's
+  source-scope picker sees a new source the moment it lands instead of
+  after a page reload.
 
 ## Who uses it / verified
 
