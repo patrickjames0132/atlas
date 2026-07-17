@@ -26,6 +26,13 @@ Ingest is **idempotent and incremental**: a shard whose Parquet output (or
 skipped, so a rerun after an interrupted ingest resumes. Only when a dataset
 finishes does the caller flip ``CURRENT`` to this release (see the CLI), so the
 app never queries a half-built corpus.
+
+Long citations runs **recycle their worker process** every
+:data:`_SHARDS_PER_WORKER` shards: the partitioned write slows down as a
+process ages (~3x across the first full release — per *process*, not per
+connection, tree, or shard size; see the constant's docs and docs/bugs.md),
+so the shard loop runs in a single-worker pool whose child is periodically
+replaced, holding every shard near cold-start speed.
 """
 
 from __future__ import annotations
@@ -34,6 +41,7 @@ import json
 import logging
 import shutil
 import uuid
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -66,6 +74,25 @@ _CITATIONS_COLUMNS = (
 
 #: Progress callback: ``(dataset, shard_filename, shard_index, shard_total)``.
 ProgressFn = Callable[[str, str, int, int], None]
+
+#: How many citations shards one worker process ingests before being replaced.
+#: The partitioned write slows down **per process**, not per connection or per
+#: directory: repeating the same shard-sized COPY in one process degraded
+#: 3.04x over 70 iterations (~0.1s added per COPY — matching the ~0.08s/shard
+#: climb measured across the real 2026-07-07 release), survived a DuckDB
+#: reconnect unchanged, and reset to cold speed the moment the process was
+#: replaced — while single-file COPYs of the same sorted+compressed payload
+#: stayed flat, pointing at allocator/heap wear from the 1024 per-partition
+#: writers rather than anything DuckDB tracks. Recycling every 16 shards
+#: bounds the accumulated slowdown at ~1-2s/shard for ~0.3s of respawn cost
+#: per cycle (measured; spawn re-imports this module, so keep its imports
+#: lean-ish). See docs/bugs.md.
+_SHARDS_PER_WORKER = 16
+
+#: The recycled worker's cached DuckDB connection (one per worker process,
+#: created on its first shard, discarded with the process). Module-level
+#: because the worker function must be importable by the spawned child.
+_worker_connection: duckdb.DuckDBPyConnection | None = None
 
 
 def _connect() -> duckdb.DuckDBPyConnection:
@@ -314,6 +341,75 @@ def _ingest_citations_shard(
     )
 
 
+def _citations_worker(shard: Path, out_dir: Path) -> None:
+    """Ingest one citations shard inside a recycled worker process.
+
+    Runs in the child of the :class:`ProcessPoolExecutor` set up by
+    :func:`_ingest_citations_shards` (see :data:`_SHARDS_PER_WORKER` for why
+    workers are recycled at all). The connection is cached per process — the
+    slowdown being bounded is the process's job, so the connection can live as
+    long as its host does.
+
+    Args:
+        shard: The input ``.gz`` shard.
+        out_dir: ``parquet/citations`` — the partition root.
+    """
+    global _worker_connection
+    if _worker_connection is None:
+        _worker_connection = _connect()
+    _ingest_citations_shard(_worker_connection, shard, out_dir)
+
+
+def _ingest_citations_shards(
+    connection: duckdb.DuckDBPyConnection,
+    shards: list[Path],
+    out_dir: Path,
+    on_progress: ProgressFn | None,
+) -> None:
+    """Ingest every pending citations shard, recycling worker processes.
+
+    A run with more pending shards than one worker's quota routes each shard
+    through a single-worker :class:`ProcessPoolExecutor` whose child is
+    replaced every :data:`_SHARDS_PER_WORKER` shards — the partitioned write
+    degrades per *process* (see that constant), so bounding a process's
+    lifetime bounds the slowdown. A shorter run (a rerun's tail, the test
+    fixtures' two-shard release) can't outlive the same budget in-process, so
+    it skips the spawn overhead and uses the caller's connection directly.
+
+    Markers are written by the parent, after the worker returns — completion
+    must not be recorded ahead of the rows being on disk.
+
+    Args:
+        connection: The parent's DuckDB connection (used only for short runs).
+        shards: All of the dataset's downloaded shards, in ingest order.
+        out_dir: ``parquet/citations`` — the partition root.
+        on_progress: Optional per-shard callback (see :data:`ProgressFn`).
+    """
+    marker_dir = out_dir / "_done"
+    pending_count = sum(
+        1 for shard in shards if not (marker_dir / (shard.stem + ".ok")).exists()
+    )
+    pool: ProcessPoolExecutor | None = None
+    if pending_count > _SHARDS_PER_WORKER:
+        pool = ProcessPoolExecutor(max_workers=1, max_tasks_per_child=_SHARDS_PER_WORKER)
+    try:
+        for index, shard in enumerate(shards, start=1):
+            if on_progress:
+                on_progress("citations", shard.name, index, len(shards))
+            marker = marker_dir / (shard.stem + ".ok")
+            if marker.exists():
+                continue
+            if pool is not None:
+                pool.submit(_citations_worker, shard, out_dir).result()
+            else:
+                _ingest_citations_shard(connection, shard, out_dir)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+    finally:
+        if pool is not None:
+            pool.shutdown()
+
+
 def _build_arxiv_index(connection: duckdb.DuckDBPyConnection, paths: ReleasePaths) -> None:
     """Build the ``arxiv_id → corpusid`` lookup from the ingested papers Parquet.
 
@@ -392,10 +488,9 @@ def ingest_release(
             # nor a per-shard file, and re-ingesting them would duplicate rows
             # the staged generation already carries.
             _finish_papers_swap(out_dir)
-        for index, shard in enumerate(shards, start=1):
-            if on_progress:
-                on_progress(dataset, shard.name, index, len(shards))
-            if dataset == "papers":
+            for index, shard in enumerate(shards, start=1):
+                if on_progress:
+                    on_progress(dataset, shard.name, index, len(shards))
                 # Skip on either record: a per-shard file means ingested but not
                 # yet compacted; a _done marker means folded into the clustered
                 # dataset (the file itself is gone after compaction).
@@ -403,15 +498,11 @@ def ingest_release(
                 if marker.exists() or (out_dir / (shard.stem + ".parquet")).exists():
                     continue
                 _ingest_papers_shard(connection, shard, out_dir)
-            else:
-                # A citations shard's outputs are spread across bucket dirs; a
-                # marker file records completion so a rerun can skip it cleanly.
-                marker = out_dir / "_done" / (shard.stem + ".ok")
-                if marker.exists():
-                    continue
-                _ingest_citations_shard(connection, shard, out_dir)
-                marker.parent.mkdir(parents=True, exist_ok=True)
-                marker.touch()
+        else:
+            # A citations shard's outputs are spread across bucket dirs; a
+            # marker file records completion so a rerun can skip it cleanly.
+            # Long runs recycle worker processes — see _ingest_citations_shards.
+            _ingest_citations_shards(connection, shards, out_dir, on_progress)
         if dataset == "papers":
             compacted = _compact_papers(connection, out_dir)
             if compacted or not (paths.parquet / "arxiv_index").exists():

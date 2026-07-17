@@ -590,6 +590,38 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **Corpus ingest degrades ~3x across a release — the partitioned write
+      re-examines what's already on disk** *(v5.13.1 — patch; the ticket's
+      hypothesis **refuted**, the real cause found and fixed)* — v5.6.0 fixed
+      the *file explosion*, but per-shard cost still climbed across the
+      2026-07-07 ingest: 26.5 s/shard for the first ten, 76.0 for the last
+      (2.9x), ~5.7h actual against the ~2.2h a single-shard benchmark
+      predicted. The suspected mechanism — `OVERWRITE_OR_IGNORE` +
+      `FILENAME_PATTERN '<stem>_{i}'` re-scanning the ~400k accumulated files
+      to resolve `{i}`, with DuckDB's newer `APPEND` mode as the fix — was
+      **benchmarked and refuted**: writing into the *real* end-of-release
+      399,360-file tree costs the same as into an empty directory, in both
+      modes. What the marker-mtime forensics + five benchmarks actually found:
+      (1) the "step" in the curve sits exactly at the export-batch boundary
+      because batch-2 shards carry **39% more edge rows** (83.1 vs 59.7 MB
+      Parquet out) — data mix, not degradation; (2) the remaining climb is the
+      partitioned write slowing down **per process** — reproduced 3.04x in 8
+      minutes with output *deleted* every iteration, surviving a DuckDB
+      reconnect, indifferent to tree state, thermal (perf counters flat) and
+      Defender (0 CPU), sparing single-file COPYs of the identical
+      sorted+zstd payload, and resetting to cold speed with every fresh
+      process — allocator/heap wear from the 1024 per-partition writers.
+      **Shipped:** the citations shard loop routes through a single-worker
+      `ProcessPoolExecutor` recycled every `_SHARDS_PER_WORKER = 16` shards
+      (markers still written by the parent, after the rows are on disk); runs
+      with no more pending shards than one quota stay in-process, keeping
+      tests and resume-tails spawn-free. A/B through the real `ingest_release`:
+      in-process climbs 2.42 → 4.70 s over 20 synthetic shards, recycled saws
+      back to 2.48 s at shard 17 — sub-linear scaling restored, worth roughly
+      5.7h → ~3h on a full release. Full story in **Bugs** (with the "benchmark
+      against a populated tree" lesson upgraded: the tree was never the
+      variable — the *process age* was). Suite 510 → 511. *(Filed 2026-07-15
+      while ingesting the first full release; shipped 2026-07-17.)*
 - [x] **Every landmark budget is computed now — the model retires from serving,
       and a fully-reachable live pool gets the corpus shape** *(v5.13.0)* — born
       from Patrick re-deriving the budget design in conversation (2026-07-17)

@@ -22,7 +22,53 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
-### Two of the three research notebooks had been un-executable for weeks — nothing runs them
+### The citations ingest slowed 3x across a release — and the process itself was the state that grew
+
+*Found on the 2026-07-15 first-full-release ingest (filed as the "O(n²)" Backlog
+ticket); root-caused & fixed on the `ingest-append-mode` branch (2026-07-17) —
+a branch named for the hypothesis that turned out to be wrong.*
+
+- **Symptom.** Per-shard cost climbed steadily across the 390-shard citations
+  ingest: 26.5 s/shard for the first ten, 76.0 for the last (2.9x); ~5.7h total
+  against the ~2.2h a single-shard benchmark predicted. Looked like O(n²) in
+  shards-done.
+- **Root cause.** Two superimposed effects, neither the filed suspect. The filed
+  theory — `OVERWRITE_OR_IGNORE` + `FILENAME_PATTERN '<stem>_{i}'` forcing DuckDB
+  to re-scan the ~400k accumulated partition files per shard, fixable with
+  `APPEND` mode — **benchmarked as false**: a shard-sized write into the *real*
+  399,360-file end-of-release tree costs the same as into an empty dir, both
+  modes (DuckDB 1.5.4). What the `_done` marker mtimes (a complete per-shard
+  timeline the run left behind) plus five benchmarks actually showed:
+  **(1)** the sharp step at shard 241 sits exactly on the export-batch boundary —
+  batch-2 shards carry **39% more edge rows** (83.1 vs 59.7 MB Parquet out), so
+  ~half the "degradation" was just bigger jobs; **(2)** the rest is the
+  partitioned write slowing down **per process**: the same COPY repeated in one
+  process degraded 3.04x in 8 minutes *with its output deleted every iteration*,
+  survived a DuckDB reconnect without a blip (so not connection state), left CPU
+  perf counters flat (not thermal) and Defender at 0 CPU (not AV), spared
+  single-file COPYs of the identical sorted+zstd payload — and reset to cold
+  speed with every fresh process. Fingerprint: allocator/heap wear from cycling
+  1024 per-partition writers, ~0.1s added per COPY, matching the real run's
+  ~0.08 s/shard slope.
+- **Fix.** `ingest.py::_ingest_citations_shards`: shards route through a
+  **single-worker `ProcessPoolExecutor` with `max_tasks_per_child =
+  _SHARDS_PER_WORKER` (16)** — the child is replaced before wear accumulates,
+  holding every shard near cold speed for ~0.3s respawn per cycle. Markers stay
+  parent-written after the worker returns (completion is never recorded ahead of
+  rows on disk); runs with ≤ one quota pending stay in-process, so the test
+  fixtures and a resumed run's tail pay no spawn. A/B through the real
+  `ingest_release`: in-process 2.42 → 4.70 s over 20 shards; recycled saws back
+  to 2.48 s at shard 17. Guard: `test_ingest.py`'s recycled-worker test pins the
+  pool path (markers, rows, layout) with the quota shrunk to 2.
+- **Lesson / guard.** v5.6.0's lesson said *benchmark against a populated tree,
+  not an empty one* — right instinct, wrong variable: the tree was innocent; the
+  **process age** was the state that grew. When a long batch job degrades,
+  reconstruct the real timeline first (marker/file mtimes are a free flight
+  recorder), then bisect the layers — same tree/fresh tree, same
+  connection/fresh connection, same process/fresh process — before trusting any
+  named suspect. And a fix that's mechanism-proof (recycle the process) beats
+  one that needs the mechanism named: whatever inside the CRT heap is actually
+  wearing out, a bounded process lifetime caps it by construction.
 
 *Found & fixed on the `budget-vocabulary` branch (2026-07-16), while re-executing
 the notebooks after a vocabulary rename.*

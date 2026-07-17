@@ -309,30 +309,6 @@ optional, behind a key.
       three), then decide whether the answer is a per-band cap tweak, a
       different within-band ranking, or something like sampling toward
       uniformity. *(From the `todos.md` inbox, 2026-07-17.)*
-- [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
-      re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
-      (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
-      1024 buckets), but the per-shard cost still climbs with accumulated output.
-      Measured live on the 2026-07-07 citations ingest (390 shards, NVMe Parquet
-      root):
-      ```
-      shards   1-41    31.9 s/shard        first 10:  26.5 s/shard
-      shards 201-241   44.6               last 10:   76.0 s/shard  (2.9x)
-      shards 281-321   72.9
-      shards 321-328   89.4
-      ```
-      Roughly linear in shards-done, i.e. **O(n²) over a release**: ~5.7h actual
-      against the ~2.2h a single-shard benchmark predicted. **Suspected cause:**
-      `OVERWRITE_OR_IGNORE` + our `FILENAME_PATTERN '<stem>_{i}'` makes DuckDB scan
-      each of the 1024 partition dirs to find the next free `{i}`, so every shard
-      re-walks the ~400k files already written. **First thing to try:** DuckDB's
-      newer `APPEND` mode, which skips that search — our pattern already embeds the
-      shard stem, so filenames are unique per shard without needing `{i}` resolved
-      against the directory. **Benchmark against a *populated* tree, not an empty
-      one** — timing shard 1 into a fresh dir is exactly what produced the wrong
-      2.2h estimate. Matters because it's paid again on every monthly release; a
-      fresh box or a re-ingest is a whole evening either way. *(Found while
-      ingesting the first full release, 2026-07-15.)*
 - [ ] **`corpus activate` only checks papers — it will happily activate a corpus
       with no citation edges** — the guard is
       `if not paths.parquet_dataset("papers").exists(): raise`. It never looks at

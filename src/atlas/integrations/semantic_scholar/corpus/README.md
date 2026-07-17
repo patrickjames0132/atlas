@@ -139,6 +139,23 @@ bottleneck — 2.8 min/shard, ~18h projected, and merely listing the output dire
 timed out. `_connect()` raises it past `NBUCKETS`, giving one ~61 KB file per bucket
 per shard. **Any change to `NBUCKETS` has to move that limit with it.**
 
+The buckets exact a second, sneakier price: the partitioned write **slows down
+as its host process ages** — ~3x across the first full release (26.5 →
+76 s/shard), which benchmarking pinned to the process itself, not to anything
+you'd guess first. The same shard-sized COPY repeated in one process degraded
+3.04x in 8 minutes with its output *deleted* every iteration; it survived a
+DuckDB reconnect without a blip, wasn't the tree (writes into the real 400k-file
+corpus cost the same as into an empty dir), wasn't thermal (CPU perf counters
+flat), wasn't Defender (0 CPU), and spared single-file COPYs of the identical
+sorted+compressed payload — leaving allocator/heap wear from the 1024
+per-partition writers as the survivor, and a fresh process demonstrably starting
+at cold speed every time. So long citations runs route shards through a
+**single-worker process pool recycled every `_SHARDS_PER_WORKER` shards**
+(sawtooth-verified: each child starts at cold speed for ~0.3s respawn cost);
+runs with no more pending shards than one worker's quota stay in-process, which
+keeps the tests and a resumed run's tail spawn-free. Full story in
+`docs/bugs.md`.
+
 Ingest is **incremental/idempotent**: both datasets record `_done/<shard>.ok`
 markers (a citations shard's output is spread across bucket dirs; a papers
 shard's file folds away into the clustered dataset at compaction — so for both,

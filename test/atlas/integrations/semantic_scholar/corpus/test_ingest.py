@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 
 import duckdb
 
@@ -12,7 +13,7 @@ from atlas.integrations.semantic_scholar.corpus import ingest
 from atlas.integrations.semantic_scholar.corpus.ingest import NBUCKETS
 from atlas.integrations.semantic_scholar.corpus.paths import release_paths
 
-from .conftest import RELEASE_ID
+from .conftest import RELEASE_ID, write_gzip_jsonl
 
 
 def test_ingest_builds_arxiv_index(synthetic_corpus):
@@ -85,6 +86,48 @@ def test_papers_end_up_clustered(synthetic_corpus):
         f"SELECT corpusid FROM read_parquet('{(papers_dir / '*.parquet').as_posix()}')"
     ).fetchall()]
     assert ids == sorted(ids) == [1, 2, 3, 4]
+
+
+def test_long_citations_runs_ingest_through_recycled_workers(synthetic_corpus, monkeypatch):
+    """A run with more pending shards than one worker's quota routes every shard
+    through the recycled-worker pool — same rows, same markers, same layout as
+    the in-process path.
+
+    The quota is shrunk to 2 so a 5-shard release spans three worker processes
+    (the third mid-quota when the run ends) without slowing the suite down. The
+    pool exists because the partitioned write degrades per *process* (~3x over
+    the first full release); correctness through the pickling/spawn boundary is
+    what this test pins.
+    """
+    monkeypatch.setattr(ingest, "_SHARDS_PER_WORKER", 2)
+    paths = release_paths(RELEASE_ID)
+    raw_citations = paths.raw_dataset("citations")
+    for existing in raw_citations.glob("*.gz"):
+        existing.unlink()
+    out_dir = paths.parquet_dataset("citations")
+    shutil.rmtree(out_dir)
+    shard_count = 5
+    for shard_index in range(shard_count):
+        write_gzip_jsonl(
+            raw_citations / f"many{shard_index:03d}.gz",
+            [{"citingcorpusid": 100 + shard_index, "citedcorpusid": 1, "isinfluential": False}],
+        )
+
+    progressed: list[str] = []
+    ingest.ingest_release(
+        RELEASE_ID,
+        datasets_wanted=("citations",),
+        on_progress=lambda dataset, name, index, total: progressed.append(name),
+    )
+
+    assert len(progressed) == shard_count
+    markers = sorted(marker.name for marker in (out_dir / "_done").glob("*.ok"))
+    assert markers == [f"many{shard_index:03d}.ok" for shard_index in range(shard_count)]
+    bucket_glob = (out_dir / "bucket=*" / "*.parquet").as_posix()
+    rows = duckdb.sql(
+        f"SELECT count(*), count(DISTINCT citingcorpusid) FROM read_parquet('{bucket_glob}', hive_partitioning=true)"
+    ).fetchone()
+    assert rows == (shard_count, shard_count)
 
 
 def test_compact_release_migrates_a_legacy_layout(synthetic_corpus):
