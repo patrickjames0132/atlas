@@ -64,8 +64,10 @@ chosen per graph in the header's **"Data source"** dropdown (the v4.x
 S2+OpenAlex hybrid is retired). **OpenAlex** returns true top-cited landmark
 citers via server-sorted `cites:` queries (no offset ceiling); **Semantic
 Scholar** does the whole graph too, but its live citation API is newest-first with
-no citation sort and rejects any page reaching past a ~10k offset, so its Field
-Landmarks can only ever be the best of the citers below that wall. Since **v5.5.0**
+no citation sort and rejects any page past an offset of 8,000 — so the newest
+**9,000** citers (the last page starts at 8,000 and holds 1,000) are all it can
+ever reach, and its Field Landmarks can only be the best of the citers inside that
+window. Since **v5.5.0**
 the live path at least mines that whole reachable window and bands it **twelve
 landmarks per publication year**, so a mega-seed's landmarks span the years the API
 can see (DQN: 2019–2025, led by Conservative Q-Learning and Decision Transformer)

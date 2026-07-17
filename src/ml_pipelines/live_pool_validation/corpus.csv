@@ -1,0 +1,59 @@
+work_id,label,is_worked_example,arxiv_id,doi,corpus_id,s2_year,s2_citation_count,citer_count,pool_size,truncated,oldest_pool_year,newest_pool_year,citers_before_overflow_reachable,selected_up_to_cap_per_year,predicted_budget_age_from_seed,predicted_budget_age_from_oldest_citer,citers_before_overflow_full,corpus_rank_pool,band_start,landmark_max_year
+W2090386790,Hawking Radiation,1,,10.1007/bf02345020,55539246,1975,10825,10724,9000,1,1998,2026,143,348,160,101,175,500,2026,2026
+W2145339207,DQN,1,,10.1038/nature14236,205242740,2015,32216,31878,9000,1,2023,2026,22,48,60,39,44,500,2026,2026
+W2794643322,QMIX,1,1803.11485,10.48550/arxiv.1803.11485,4533648,2018,2046,2008,2008,0,2018,2026,36,108,45,45,36,500,2026,2026
+W2626778328,Attention Is All You Need,1,1706.03762,10.65215/2q58a426,13756489,2017,183110,180215,9000,1,2026,2026,12,12,59,36,46,500,2026,2026
+W2056095744,Photoionization of the Noble Gases: Cross Sections and Angular Distributions,0,,10.1103/physreva.5.227,120884563,1972,303,301,301,0,1972,2024,166,274,158,158,168,301,2022,2024
+W2110479470,Localization of topoisomerase II in mitotic chromosomes.,0,,10.1083/jcb.100.5.1716,609320,1985,465,463,463,0,1985,2025,121,338,126,126,121,463,2025,2025
+W2056239892,"Subunit structure of islet-activating protein, pertussis toxin, in conformity with the A-B model",0,,10.1021/bi00265a021,23133753,1982,452,447,447,0,1981,2026,156,360,134,136,157,447,2026,2026
+W2155175889,Inventory of interpersonal problems: Psychometric properties and clinical applications.,0,,10.1037/0022-006x.56.6.885,36049798,1988,2077,2070,2070,0,1989,2026,151,435,122,120,152,500,2026,2026
+W2095543708,Three-Dimensional Massive Gauge Theories,0,,10.1103/physrevlett.48.975,122537043,1982,1486,1475,1475,0,1982,2026,71,522,137,137,71,500,2026,2026
+W1976982219,Standard methods for the examination of water and waste water.,0,,10.2105/ajph.56.3.387,27971196,1966,9540,9508,9000,1,1964,2026,87,720,182,188,85,500,2026,2026
+W2095299437,Agency Theory: An Assessment and Review,0,,10.5465/amr.1989.4279003,55516669,1989,13601,13515,9000,1,2000,2026,89,315,124,96,138,500,2026,2026
+W2138270253,DNA sequencing with chain-terminating inhibitors,0,,10.1073/pnas.74.12.5463,26460032,1977,59570,58996,9000,1,2004,2026,91,276,159,90,119,500,2026,2026
+W2134856017,The construction and testing of the EORTC colorectal cancer-specific quality of life questionnaire module (QLQ-CR38),0,,10.1016/s0959-8049(98)00357-8,43467139,1999,443,443,443,0,2000,2026,111,277,90,88,111,443,2025,2026
+W2029373784,Absorptance of powder materials suitable for laser sintering,0,,10.1108/13552540010337029,137565877,2000,508,508,508,0,2001,2026,69,239,88,85,69,500,2026,2026
+W1981887226,Determination of minor and trace volatile compounds in wine by solid-phase extraction and gas chromatography with mass spectrometric detection,0,,10.1016/s0021-9673(02)00696-9,25769234,2002,469,468,468,0,2003,2026,126,264,83,80,124,468,2026,2026
+W1669682122,Moving-Particle Semi-Implicit Method for Fragmentation of Incompressible Fluid,0,,10.13182/nse96-a24205,116931142,1996,2006,1997,1997,0,1996,2026,155,327,102,102,154,500,2026,2026
+W1495750374,Talk of the Network: A Complex Systems Look at the Underlying Process of Word-of-Mouth,0,,10.1023/a:1011122126881,61281983,2001,2191,2185,2185,0,2001,2026,54,287,89,89,54,500,2026,2026
+W2097119464,Social Value of Public Information,0,,10.1257/000282802762024610,11156782,2002,2095,2083,2083,0,1978,2026,109,305,86,148,109,500,2026,2026
+W2078146328,Fully optimized contracted Gaussian basis sets for atoms Li to Kr,0,,10.1063/1.463096,55577275,1992,7805,7781,7781,0,1993,2026,189,408,115,113,190,500,2026,2026
+W2162542540,Adolescence-limited and life-course-persistent antisocial behavior: A developmental taxonomy.,0,,10.1037/0033-295x.100.4.674,379007,1993,10134,10097,9000,1,1992,2026,112,404,113,116,122,500,2026,2026
+W2164418313,TCS: a computer program to estimate gene genealogies,0,,10.1046/j.1365-294x.2000.01020.x,27119019,2000,9898,9867,9000,1,2001,2026,110,312,95,93,110,500,2026,2026
+W2029667189,VMD: Visual molecular dynamics,0,,10.1016/0263-7855(96)00018-5,262556586,1996,44879,44216,9000,1,2025,2026,12,24,109,35,166,500,2026,2026
+W2911964244,Random Forests,0,,10.1023/a:1010933404324,89141,2001,118793,117267,9000,1,2025,2026,15,24,99,38,114,500,2026,2026
+W4294216483,KEGG: Kyoto Encyclopedia of Genes and Genomes,0,,10.1093/nar/28.1.27,7449269,2000,26386,25997,9000,1,2023,2026,13,48,98,39,131,500,2026,2026
+W2012795616,The Importance of Being Variable,0,,10.1523/jneurosci.5641-10.2011,5899663,2011,459,454,454,0,2010,2026,82,186,59,62,82,454,2026,2026
+W2075381113,Bauxite residue issues: III. Alkalinity and associated chemistry,0,,10.1016/j.hydromet.2011.02.004,97358745,2011,489,488,488,0,2011,2026,78,182,60,60,80,488,2026,2026
+W2073621318,Effects of the stage of maturation and varieties on the chemical composition of banana and plantain peels,0,,10.1016/j.foodchem.2006.09.006,84915245,2007,534,531,531,0,2007,2026,133,220,70,70,127,500,2026,2026
+W2139836162,Solution-processed PbS quantum dot infrared photodetectors and photovoltaics,0,,10.1038/nmat1299,11957853,2005,1866,1861,1861,0,2005,2026,59,264,78,78,59,500,2026,2026
+W2089083068,Advanced Asymmetric Supercapacitors Based on Ni(OH)<sub>2</sub>/Graphene and Porous Graphene Electrodes with High Energy Density,0,,10.1002/adfm.201102839,97477047,2012,1903,1899,1899,0,2012,2026,45,174,60,60,45,500,2026,2026
+W4295750005,The organization of the human cerebral cortex estimated by intrinsic functional connectivity,0,,10.1152/jn.00338.2011,263439953,2011,3918,3829,3829,0,2009,2026,66,184,65,70,66,500,2026,2026
+W2056370875,Image Denoising by Sparse 3-D Transform-Domain Collaborative Filtering,0,,10.1109/tip.2007.901238,1475121,2007,9036,8971,8971,0,2007,2026,83,239,77,77,83,500,2026,2026
+W2131350133,A short history of<i>SHELX</i>,0,,10.1107/s0108767307043930,16139636,2008,76165,76068,9000,1,2019,2026,21,96,80,52,89,500,2026,2026
+W2102619694,BEDTools: a flexible suite of utilities for comparing genomic features,0,,10.1093/bioinformatics/btq033,288354719,2010,7322,6956,6956,0,2009,2026,47,186,69,72,47,500,2026,2026
+W2075950485,Scoping studies: towards a methodological framework,0,,10.1080/1364557032000119616,12719181,2005,31621,31020,9000,1,2024,2026,22,36,85,37,77,500,2026,2026
+W2201785016,Firearm injuries in the United States,0,,10.1016/j.ypmed.2015.06.002,38362550,2015,467,463,463,0,2015,2026,39,135,49,49,39,463,2026,2026
+W2082051584,Advanced maternal age and pregnancy outcomes: a multicountry assessment,0,,10.1111/1471-0528.12659,1477477,2014,441,440,440,0,2014,2026,74,148,52,52,73,440,2026,2026
+W2050313963,Auranofin: Repurposing an Old Drug for a Golden New Age,0,,10.1007/s40268-015-0083-y,15602679,2015,444,443,443,0,2015,2026,54,137,49,49,53,443,2026,2026
+W2801763724,Molecular subtypes of diffuse large B cell lymphoma are associated with distinct pathogenic mechanisms and outcomes,0,,10.1038/s41591-018-0016-8,13660116,2018,1673,1653,1653,0,2007,2026,41,113,45,73,40,500,2026,2026
+W2948058585,Two-Stream Adaptive Graph Convolutional Networks for Skeleton-Based Action Recognition,0,,10.1109/cvpr.2019.01230,195440283,2018,1837,1815,1815,0,2018,2026,32,97,45,45,32,500,2026,2026
+W2610994034,SMS: Smart Model Selection in PhyML,0,,10.1093/molbev/msx149,205211841,2017,1644,1632,1632,0,2017,2026,43,120,47,47,43,500,2026,2026
+W2751583588,"MAFFT online service: multiple sequence alignment, interactive sequence choice and visualization",0,,10.1093/bib/bbx108,37390292,2017,7590,7476,7476,0,2012,2026,24,122,51,64,24,500,2026,2026
+W2143612262,Speech recognition with deep recurrent neural networks,0,,10.1109/icassp.2013.6638947,206741496,2013,9015,8983,8983,0,2011,2026,54,172,62,67,54,500,2026,2026
+W2559588208,"KEGG: new perspectives on genomes, pathways, diseases and drugs",0,,10.1093/nar/gkw1092,8537106,2016,7759,7676,7676,0,1991,2026,40,125,54,118,40,500,2026,2026
+W2161374186,Preferred reporting items for systematic review and meta-analysis protocols (PRISMA-P) 2015 statement,0,,10.1186/2046-4053-4-1,265869894,2015,18709,18393,9000,1,2022,2026,19,60,59,41,64,500,2026,2026
+W2607031541,"Magnesium Replacement Improves the Metabolic Profile in Obese and Pre-Diabetic Patients with Mild-to-Moderate Chronic Kidney Disease: A 3-Month, Randomised, Double-Blind, Placebo-Controlled Study",0,,10.1159/000468530,3787318,2017,38,38,38,0,2017,2026,38,38,38,38,38,38,2026,2026
+W1951724000,Fitting Linear Mixed-Effects Models Using <b>lme4</b>,0,,10.18637/jss.v067.i01,88513115,2014,84714,83620,9000,1,2025,2026,12,24,65,37,65,500,2026,2026
+W4224266833,"Infectious Diseases Society of America 2022 Guidance on the Treatment of Extended-Spectrum β-lactamase Producing Enterobacterales (ESBL-E), Carbapenem-Resistant Enterobacterales (CRE), and <i>Pseudomonas aeruginosa</i> with Difficult-to-Treat Resistance (DTR-<i>P. aeruginosa</i>)",0,,10.1093/cid/ciac268,248190979,2022,370,361,361,0,2022,2026,21,60,31,31,21,361,2026,2026
+W3093938683,Dasatinib–Blinatumomab for Ph-Positive Acute Lymphoblastic Leukemia in Adults,0,,10.1056/nejmoa2016272,224827745,2020,394,386,386,0,2020,2026,32,75,36,36,31,386,2026,2026
+W3002127300,Nedd4 ubiquitylates VDAC2/3 to suppress erastin-induced ferroptosis in melanoma,0,,10.1038/s41467-020-14324-x,210862766,2020,402,397,397,0,2020,2026,44,84,36,36,44,397,2026,2026
+W3164271582,KOBAS-i: intelligent prioritization and exploratory visualization of biological functions for gene enrichment analysis,0,,10.1093/nar/gkab447,235347158,2021,1548,1524,1524,0,2021,2026,28,72,37,37,28,500,2026,2026
+W3129245057,LIO-SAM: Tightly-coupled Lidar Inertial Odometry via Smoothing and Mapping,0,,10.1109/iros45743.2020.9341176,220280471,2020,1982,1929,1929,0,2020,2026,23,84,40,40,23,500,2026,2026
+W3005690553,Consistent Detection of 2019 Novel Coronavirus in Saliva,0,,10.1093/cid/ciaa149,211087064,2020,1764,1759,1759,0,2019,2026,12,81,40,42,12,500,2026,2026
+W3007643904,Cryo-EM structure of the 2019-nCoV spike in the prefusion conformation,0,,10.1126/science.abb2507,211215068,2020,8333,8281,8281,0,2018,2026,12,90,44,49,12,500,2026,2026
+W4312443924,A ConvNet for the 2020s,0,,10.1109/cvpr52688.2022.01167,245837420,2022,8623,8375,8375,0,1995,2026,21,74,39,108,21,500,2026,2026
+W2791859701,Difference-in-differences with variation in treatment timing,0,,10.1016/j.jeconom.2021.03.014,125274031,2018,6157,5994,5994,0,2007,2026,40,125,48,76,40,500,2026,2026
+W3092849554,"Global burden of 369 diseases and injuries in 204 countries and territories, 1990–2019: a systematic analysis for the Global Burden of Disease Study 2019",0,,10.1016/s0140-6736(20)30925-9,222415072,2020,12620,12417,9000,1,2022,2026,21,60,45,40,32,500,2026,2026
+W3036319615,TBtools: An Integrative Toolkit Developed for Interactive Analyses of Big Biological Data,0,,10.1016/j.molp.2020.06.009,220079092,2020,9827,9721,9000,1,2021,2026,36,72,44,42,37,500,2026,2026
+W3005079553,"Clinical Characteristics of 138 Hospitalized Patients With 2019 Novel Coronavirus–Infected Pneumonia in Wuhan, China",0,,10.1001/jama.2020.1585,211050495,2020,21887,21749,9000,1,2021,2026,22,72,46,44,13,500,2026,2026

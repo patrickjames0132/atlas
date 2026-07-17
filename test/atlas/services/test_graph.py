@@ -336,7 +336,7 @@ def test_live_s2_fallback_selects_instead_of_predicting(fake_s2, monkeypatch):
     seed's age (which assumes landmarks spanning its whole history) over-ships —
     and a count could only keep a prefix anyway, which strands the recent years.
     The pool is in memory by trim time, so ``build`` injects
-    ``budget.density_selection`` and passes the flat ``cite_limit`` only as a
+    ``budget.select_landmarks`` and passes the flat ``cite_limit`` only as a
     ceiling.
     """
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
@@ -355,12 +355,12 @@ def test_live_s2_fallback_selects_instead_of_predicting(fake_s2, monkeypatch):
 
     # The flat config ceiling, NOT the model's prediction for this seed.
     assert received["landmark_limit"] == 200
-    assert received["landmark_select"] is budget.density_selection
+    assert received["landmark_select"] is budget.select_landmarks
     # And the rule it injected really bands: a flooded year is capped without
     # stranding a later one — the hole a predicted count leaves on a real seed.
     select = received["landmark_select"]
     years = [2020] * 30 + [2025] * 3
-    assert [years[index] for index in select(years)] == [2020] * budget.DENSITY_CAP + [2025] * 3
+    assert [years[index] for index in select(years)] == [2020] * budget.PER_YEAR_CAP + [2025] * 3
 
 
 def test_on_progress_fires_on_a_build_but_not_a_cache_hit(fake_s2):

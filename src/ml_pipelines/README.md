@@ -26,6 +26,11 @@ code.) `live_pool_validation/` is the one exception to "produces an artifact":
 it's a **validation** pipeline — collector + committed corpus + a verdict
 notebook in `research/`, no trainer unless its findings demand one.
 
+The vocabulary all three share — landmark, pool, truncated, label, the STOP and
+SKIP rules, **age origin**, **worked example** — is defined once in
+[`docs/landmark-vocabulary.md`](../../docs/landmark-vocabulary.md). Read that
+before a pipeline README.
+
 ## The dependency direction
 
 **Pipelines depend on the app; the app never depends on the pipelines.** A
@@ -58,9 +63,10 @@ Each sub-package is self-contained with its own README:
 
 - `collect.py` — pull a labelled corpus to a committed `corpus.csv`.
 - `features.py` — any training-only label/feature logic, when a pipeline needs it
-  (`cite_budget` has one for its density label; the *serving* contract always
-  lives in `atlas`, imported from there). `latest_gap` needs none — its rule is
-  the app's `tail_edge`.
+  (`cite_budget` has one, but it only *re-exports* the app's features and its
+  **STOP rule** label and adds a training-only cap grid; the *serving* contract
+  always lives in `atlas`, imported from there). `latest_gap` needs none — its
+  rule is the app's `tail_edge`.
 - `train.py` — fit and serialize to `model.joblib` (+ `model.metadata.json`) in
   the same package.
 - `model.joblib` / `model.metadata.json` — the committed artifact + its sidecar.

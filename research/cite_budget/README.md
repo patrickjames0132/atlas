@@ -14,19 +14,26 @@ can we predict it from fields the build already has?
 
 ## What `analyze.ipynb` shows
 
-1. **A data-driven label.** The "density budget" `n*` — the longest **prefix**
-   (the first N, from the top) of a seed's citation-ranked citer list in which no
-   single year exceeds `K = 12` citers — makes "clutter" measurable, so the
-   target isn't eyeballed. (See `ml_pipelines/cite_budget/features.py` for the
-   precise walk and a worked example.)
-2. **The mechanism.** `n*` falls as citers concentrate in time, and age is what
-   spreads them out (Pearson r ≈ 0.84 between `n*` and age). The counter-intuitive
-   part: controlling for age, citation count is a mild *positive* term, not the
-   negative you'd expect.
-3. **Model choice.** A plain-age linear model `n* ~ age + log10(citations)` is
+1. **A data-driven label.** The **STOP rule**
+   (`number_of_ranked_citers_before_a_single_year_overflows`) — walk a seed's
+   citation-ranked citers and count how many are admitted before one publication
+   year overflows `PER_YEAR_CAP` (12) — makes "clutter" measurable, so the target
+   isn't eyeballed. It is *only* a label: it collapses to a scalar, which a
+   regression target must be, and no serving path calls it. (The rule and its
+   worked example live in `atlas/services/graph/budget.py`, which
+   `ml_pipelines/cite_budget/features.py` re-exports for training.)
+2. **The mechanism.** The label falls as citers concentrate in time, and age is
+   what spreads them out (Pearson r ≈ 0.84 between the label and age). The
+   counter-intuitive part: controlling for age, citation count is a mild *positive*
+   term, not the negative you'd expect.
+3. **Model choice.** A plain-age linear model `label ~ age + log10(citations)` is
    chosen over a sqrt-age variant because it survives OpenAlex's dating noise (the
    misdated "Attention" record, age 1, predicts ~30 not ~2) while reproducing the
-   anchors (Hawking 160, DQN 60, QMIX 41, Attention 30).
+   **worked examples** (Hawking 160, DQN 60, QMIX 41, Attention 30).
+
+Every term used here — label, landmark, pool, the STOP rule and the **SKIP** rule
+the live S2 path serves instead — is defined once, with a worked example, in
+[`docs/landmark-vocabulary.md`](../../docs/landmark-vocabulary.md).
 
 The notebook reads the corpus from `ml_pipelines/cite_budget/corpus.csv` (the
 single copy) and reproduces the fit inline for the write-up.

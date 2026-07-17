@@ -22,6 +22,49 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### Two of the three research notebooks had been un-executable for weeks — nothing runs them
+
+*Found & fixed on the `budget-vocabulary` branch (2026-07-16), while re-executing
+the notebooks after a vocabulary rename.*
+
+- **Symptom.** None. That's the entry's whole point. `research/cite_budget/analyze.ipynb`
+  and `research/latest_gap/analyze.ipynb` both looked fine in git — committed
+  outputs, plausible numbers, prose that matched the code. They simply could not
+  run. `jupyter nbconvert --execute` died on the first code cell of each with a
+  `FileNotFoundError`.
+- **Root cause.** Both loaded their corpus from `../../ml_pipelines/<name>/corpus.csv`.
+  The **src-layout migration** moved the pipelines to `src/ml_pipelines/`, and the
+  notebooks' relative paths were never updated — from `research/<name>/`, `../../`
+  is the repo root, so the path resolves to a directory that no longer exists. The
+  third notebook (`live_pool_validation`) was written *after* the migration and
+  correctly says `../../src/ml_pipelines/...`, which is why the breakage looked
+  like a quirk of two files rather than a class of rot.
+  **Why nobody noticed:** the gate has five sessions and none of them execute a
+  notebook. `precommit` lints notebook *identifiers* (`bin/check_identifiers.py`
+  covers `.ipynb`), so notebooks are touched by CI just enough to feel covered
+  while their actual correctness — does this still run? do the numbers still hold?
+  — is checked by nobody. The committed outputs are indistinguishable from fresh
+  ones, so the write-ups silently became historical artifacts of whenever they
+  last ran on someone's machine.
+- **Fix.** Both paths corrected to `../../src/ml_pipelines/...`
+  (`research/cite_budget/analyze.ipynb`, `research/latest_gap/analyze.ipynb`), and
+  both notebooks re-executed. Two further staleness bugs surfaced the moment they
+  actually ran, having been frozen behind the failure: `cite_budget`'s cap-grid
+  discovery used `col.startswith("n_star_k")` against columns that had been
+  renamed, and its final cell pointed at `ml_pipelines/models/cite_budget.joblib`,
+  a path that hasn't existed for several versions.
+- **Lesson / guard.** **A committed notebook output is a claim, and nothing was
+  checking it.** The re-executed `cite_budget` notebook now reproduces
+  `CV R2 = 0.680`, matching the committed `model.metadata.json`'s
+  `cv_r2 = 0.6804741428173474` — that agreement is the real check, and it was
+  unavailable while the notebook couldn't run. No automated guard exists yet: a
+  nox session that executes the three notebooks would catch this class outright,
+  but two of them read committed corpora (cheap, offline) while any future one
+  might not, so it needs a moment's design rather than a reflex. **Filed as a
+  Backlog item.** Until then, the rule of thumb: if you change a path, a column
+  name, or an artifact location, re-execute the notebooks — they will not tell you
+  themselves.
+
 ### The corpus ingest wrote 3.5 KB Parquet files — one DuckDB default against our 1024 buckets
 
 *Found & fixed on the `corpus-ingest-perf` branch (2026-07-15), while the first full release was ingesting.*
@@ -112,7 +155,7 @@ recur with the next data release, and its workaround must survive future cleanup
   config is only the ceiling the model clamps against, so a `null` can only ever
   raise a cap the model is already far under.
 - **Fix.** The live path stops predicting and reads the pool it already holds
-  (`budget.density_selection`) — the model's own rationale (don't fetch a pool just
+  (`budget.select_landmarks`) — the model's own rationale (don't fetch a pool just
   to size a trim) doesn't apply where the pool is in memory. The model still serves
   the ranked paths (OpenAlex, the offline corpus), where its premise holds.
 - **Lesson / guard.** **A model's training distribution is part of its contract, and
@@ -130,7 +173,7 @@ recur with the next data release, and its workaround must survive future cleanup
   skewered through the seed, one at the graph's right edge (visible with the Latest
   chip off).
 - **Root cause.** Two mechanisms, one theme — **papers S2 gave no `publicationDate`**,
-  each handed a full `DENSITY_CAP` bucket by the new per-year landmark band:
+  each handed a full `PER_YEAR_CAP` bucket by the new per-year landmark band:
   1. *At the seed.* Citers with **no year** were given their own bucket, then
      `useTimeline`'s `noDateX` parked every one of them on the seed's exact x. The
      placement was a deliberate old decision (S2 not knowing a date isn't evidence a
@@ -143,7 +186,7 @@ recur with the next data release, and its workaround must survive future cleanup
   In both cases the band's per-year cap didn't cause the bad data, it **guaranteed
   twelve of it**: the buckets were filled by PDF-extraction stubs ("This paper is
   included in the Proceedings of…") that no citation ranking would otherwise reach.
-- **Fix.** `density_selection` drops undated citers rather than bucketing them (a
+- **Fix.** `select_landmarks` drops undated citers rather than bucketing them (a
   landmark is "top-cited citer *of year Y*" — a claim a yearless paper can't make);
   `_is_latest` falls back to `year` when there's no date, so a post-cutoff year is
   frontier, not history (the cutoff's own year stays a landmark — ambiguous, and

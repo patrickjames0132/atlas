@@ -199,7 +199,7 @@ def fit(rows: list[dict], max_span: int = MAX_SPAN) -> dict:
 
 
 def save(bundle: dict) -> None:
-    """Serialize the bundle to ``latest_gap.joblib`` and write ``metadata.json``.
+    """Serialize the bundle to ``model.joblib`` and write ``model.metadata.json``.
 
     The joblib file is what the app loads; the JSON is a human-readable sidecar
     (the fitted params + provenance) that never gets loaded — it's for eyeballing

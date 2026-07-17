@@ -176,7 +176,7 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
             seed_id,
             landmark_limit=config.graph.cite_limit,
             latest_limit=config.graph.latest_limit,
-            landmark_select=budget.density_selection,
+            landmark_select=budget.select_landmarks,
         )
     landmark, latest = relations
     return seed_paper, refs, landmark, latest, citation_source

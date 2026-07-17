@@ -16,28 +16,32 @@ dead stretch between the last landmark and the first band — the gap this close
 ```
 latest_gap/
   collect.py           — pull each seed's shipped-landmark year distribution -> corpus.csv
-  train.py             — fit the density threshold tau, serialize the artifact
+  train.py             — fit the tail-edge threshold tau, serialize the artifact
   corpus.csv           — the committed corpus (year distributions per seed)
   model.joblib         — the fitted artifact the app loads (committed)
   model.metadata.json  — human-readable sidecar (params, metrics, date)
 ```
 
 The seeds are **reused from `cite_budget`** (same 64 stratified seeds incl. the
-four anchors), and each seed's landmark pool is trimmed to the served
-`cite_budget` budget, so the study describes exactly the landmarks a build would
-ship. The *tail-edge rule itself* is not defined here — it's the app's contract,
+four **worked examples** — the `is_worked_example` corpus column), and each seed's
+landmark pool is trimmed to the served `cite_budget` budget, so the study describes
+exactly the landmarks a build would ship. The *tail-edge rule itself* is not
+defined here — it's the app's contract,
 `atlas.services.graph.bands.tail_edge`, imported by `train.py`, so training and
-serving can't disagree on what the boundary means.
+serving can't disagree on what the boundary means. Every term below — **band**,
+**tail edge**, `tau`, `max_span`, **landmark**, **worked example** — is defined
+once in [`docs/landmark-vocabulary.md`](../../../docs/landmark-vocabulary.md).
 
 ## Method
 
 1. **Collect** (`collect.py`). For each `cite_budget` seed, pull the top citers by
    citation count capped at the landmark-era cutoff (`openalex.landmark_max_year`),
-   trim to the served budget (`budget.model_budget`), and record their publication
+   trim to the served budget (`budget.predicted_budget`), and record their publication
    years. Write `corpus.csv`.
-2. **Fit** (`train.py`). The rule starts the bands at the **density tail edge** of a
-   seed's landmark years — the most recent year whose count is still ≥ `tau` of the
-   peak year's count — floored so the start reaches back at most `max_span` years
+2. **Fit** (`train.py`). The rule starts the bands at the **tail edge** of a
+   seed's landmark years — scanning back from the newest, the first year whose
+   count is still ≥ `tau` of the peak year's count — floored so the start reaches
+   back at most `max_span` years
    (bounded query cost). `train.py` fits `tau` on **misdate-robustness** (see
    below) and pins `max_span` (a cost choice), then serializes a joblib bundle
    (params + rule contract + metrics) to `model.joblib` beside the trainer, plus a
@@ -52,10 +56,10 @@ serving can't disagree on what the boundary means.
   (as the sibling `cite_budget` model uses) scores a *negative* CV R² — the
   boundary is a property of each seed's landmark **distribution**, not its
   age/citations. So the model operates on the distribution directly.
-- **A density tail edge, not a quantile.** A quantile is *mass*-based, so a seed's
+- **A tail edge, not a quantile.** A quantile is *mass*-based, so a seed's
   large old bulk drags the boundary years before the cluster's visible edge
   (Hawking stays dense to ~2020 but the 0.85 quantile sits at 2013 — the clamp was
-  quietly doing all the work). The density tail-onset detector tracks where the
+  quietly doing all the work). The tail-edge detector tracks where the
   per-year count actually falls off, and there's **no only-widen clamp**: a young
   seed starts its bands at its own recent edge (a tight frontier).
 - **`tau` is fit on robustness, not gap closure.** Gap closure is *flat* across
@@ -66,8 +70,9 @@ serving can't disagree on what the boundary means.
 
 Current fit: 64 seeds, **tau=0.25, max_span=7** — worst case 9 band queries
 (`max_span + 2`, the two latest-only years always banded up to today), only ~1/64
-seeds movable by a misdate. Anchor edges: Hawking 2020, DQN 2021, Attention 2022,
-QMIX 2024 (a young seed, tight). `metadata.json` records the exact numbers;
+seeds movable by a misdate. Worked-example edges: Hawking 2020, DQN 2021,
+Attention 2022, QMIX 2024 (a young seed, tight). `metadata.json` records the exact
+numbers;
 `test/atlas/services/test_bands.py` pins the served behavior.
 
 ## Running it

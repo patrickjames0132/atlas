@@ -6,9 +6,9 @@
   "floor": 12,
   "cv_r2": 0.6804741428173474,
   "n_seeds": 64,
-  "density_cap": 12,
+  "per_year_cap": 12,
   "as_of_year": 2026,
-  "trained_at": "2026-07-10T19:00:30+00:00",
+  "trained_at": "2026-07-17T01:55:26+00:00",
   "sklearn_version": "1.9.0",
   "coefficients": {
     "age": 2.563,

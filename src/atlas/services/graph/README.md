@@ -135,28 +135,42 @@ cache hit, a deliberate trade.
      Used by the **ranked** citer paths — OpenAlex and the offline S2 corpus —
      which push a ship count into a citation-sorted query and so must know it
      before they have any citers to look at.
-   - **Selected** — `budget.density_selection` walks the pool's real ranking and
-     admits up to `DENSITY_CAP` citers **per year**, skipping years already full.
-     Used by the **live S2 fallback**, injected as its `landmark_select` callable.
-     That path's deep pager holds the whole pool by trim time, so nothing has to
-     be guessed — and a *count* would be wrong twice over: the model is fit on
-     pools spanning a seed's whole history while that one is truncated at S2's
-     offset ceiling (DQN's reaches 2019, not 2013), and a count can only keep a
-     **prefix**. Measured on DQN: the prefix rule ships 29, all 2019–2023, with
-     nothing from 2024–2025 — an 18-month hole before the Latest frontier. The
-     per-year band ships 84, twelve in each of 2019–2025, and closes it. Both
-     honour the same "no year over the cap" invariant; only the band keeps the
-     sparse years. It's the local equivalent of OpenAlex's per-year query bands.
+   - **Selected** — `budget.select_landmarks` walks the pool's real ranking and
+     admits up to `PER_YEAR_CAP` citers **per year**, skipping years already full
+     (the **SKIP** rule). Used by the **live S2 fallback**, injected as its
+     `landmark_select` callable. That path's deep pager holds the whole pool by
+     trim time, so nothing has to be guessed — and a *count* would be wrong twice
+     over: the model is fit on pools spanning a seed's whole history while that one
+     is truncated at S2's offset ceiling (DQN's reaches 2019, not 2013), and a
+     count can only ever keep a **prefix**.
+
+     The difference between the two rules is one word — what happens when a citer
+     lands on a year that's already full:
+
+     ```
+     ranked citer years:  2020  2020  2020  2019  2018  2020  2017   (cap = 2)
+
+     STOP   third 2020 overflows  -> quit the walk       => 2, both in 2020
+     SKIP   third 2020 is skipped -> carry on walking    => 5, spanning 2017-2020
+     ```
+
+     Measured on DQN: STOP ships 29, all 2019–2023, with nothing from 2024–2025 —
+     an 18-month hole before the Latest frontier. SKIP ships 84, twelve in each of
+     2019–2025, and closes it. Both honour the same "no year over the cap"
+     invariant; only SKIP keeps the sparse years. It's the local equivalent of
+     OpenAlex's per-year query bands. STOP still exists because it's the model's
+     training **label**, and a regression label has to be a scalar — see
+     [`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md).
 
      Undated citers are **dropped**, not banded: a landmark is the claim
      "top-cited citer of this seed *in year Y*", which a paper with no year can't
      make — and it has no place on a time axis either. Giving them a bucket (an
-     earlier cut did) ships a guaranteed `DENSITY_CAP` of what are mostly
+     earlier cut did) ships a guaranteed `PER_YEAR_CAP` of what are mostly
      PDF-extraction stubs, all on one x, drawing a vertical bar through the seed.
 
    See `budget.py`'s module docstring and `src/ml_pipelines/cite_budget/README.md`.
-   Both selectors carry a **config-free core** (`density_selection_rule`,
-   `model_budget`) so pipelines can run the exact serving rule without the local
+   Both selectors carry a **config-free core** (`select_up_to_cap_per_year`,
+   `predicted_budget`) so pipelines can run the exact serving rule without the local
    `config.json` — `live_pool_validation` measures both over simulated truncated
    pools.
 

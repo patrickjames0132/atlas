@@ -1,22 +1,25 @@
 """Collect the live-pool validation corpus: simulated truncated pools vs. the models.
 
 The data-collection stage of the live-pool validation study (see this package's
-README). For every seed in the ``cite_budget`` corpus it simulates **the pool the
-live S2 fallback would actually hold** — the newest :data:`REACHABLE_CITERS`
-citers, exactly the deep pager's truncation — by querying the offline citations
-corpus, then records side by side:
+README; ``docs/landmark-vocabulary.md`` defines every term below). For every seed
+in the ``cite_budget`` corpus it simulates **the pool the live S2 fallback would
+actually hold** — the newest :data:`REACHABLE_CITERS` citers, exactly the deep
+pager's truncation — by querying the offline citations corpus, then records side
+by side:
 
-* the **exact density label** on that truncated pool (``budget.density_budget``
-  — computable at serve time, the null hypothesis's champion),
-* the **banded selection size** (``budget.density_selection_rule`` — what v5.5.0
-  actually ships),
-* the **re-anchored model prediction** (age measured from the oldest citer in
-  the pool — Patrick's proposal) and the **seed-anchored** one (the pre-v5.5.0
-  behavior, kept as the broken baseline),
-* the **full-history label** over the corpus's whole ranked pool (the
-  corpus-models ticket's ``n*`` re-collection), and
-* the **latest-gap band start** the tau rule places on the truncated pool's
-  shipped landmarks (``bands.band_start_rule``).
+* ``citers_before_overflow_reachable`` — the **STOP rule run exactly** on that
+  truncated pool. Computable at serve time, so it is the null hypothesis's
+  champion: why predict what you can compute?
+* ``selected_up_to_cap_per_year`` — the size of the **SKIP rule's** selection,
+  i.e. what v5.5.0 actually ships.
+* Both **age origins** for the model's prediction: measured from the oldest citer
+  in the pool (``predicted_budget_age_from_oldest_citer`` — Patrick's proposal)
+  and from the seed (``predicted_budget_age_from_seed`` — the pre-v5.5.0
+  behavior, kept as the broken baseline).
+* ``citers_before_overflow_full`` — the same STOP rule over the corpus's whole
+  ranked pool (the corpus-models ticket's label re-collection).
+* ``band_start`` — the latest-gap boundary the tau rule places on the truncated
+  pool's shipped landmarks (``bands.band_start_rule``).
 
 Runs on the machine that holds the ingested corpus (the parquet root configured
 in ``config.storage.s2.parquet``); everything but one OpenAlex id-mapping fetch
@@ -52,19 +55,19 @@ from ..cite_budget import collect as cite_budget_collect
 log = logging.getLogger("collect")
 
 #: How deep the full-history ranking is labelled — matches ``cite_budget``'s
-#: ``POOL_SIZE`` (and the app's unbounded landmark cap) so ``n_star_corpus`` is
+#: ``POOL_SIZE`` (and the app's unbounded landmark cap) so ``citers_before_overflow_full`` is
 #: comparable with the committed OpenAlex labels.
 RANK_POOL_SIZE = cite_budget_collect.POOL_SIZE
 
 CORPUS_PATH = Path(__file__).with_name("corpus.csv")
 
 FIELDS = [
-    "work_id", "label", "is_anchor", "arxiv_id", "doi", "corpus_id",
+    "work_id", "label", "is_worked_example", "arxiv_id", "doi", "corpus_id",
     "s2_year", "s2_citation_count",
     "citer_count", "pool_size", "truncated", "oldest_pool_year", "newest_pool_year",
-    "n_star_live", "banded_live",
-    "model_seed_anchor", "model_pool_anchor",
-    "n_star_corpus", "corpus_rank_pool",
+    "citers_before_overflow_reachable", "selected_up_to_cap_per_year",
+    "predicted_budget_age_from_seed", "predicted_budget_age_from_oldest_citer",
+    "citers_before_overflow_full", "corpus_rank_pool",
     "band_start", "landmark_max_year",
 ]
 
@@ -208,7 +211,7 @@ def pool_metrics(citers: list[dict[str, Any]], *, seed_year: int | None,
         return [citer["year"] for citer in in_rank]
 
     pool_years = ranked_years(pool)
-    selection = budget.density_selection_rule(pool_years)
+    selection = budget.select_up_to_cap_per_year(pool_years)
     selected_years = [pool_years[index] for index in selection]
     dated_selected = [year for year in selected_years if year]
     landmark_max_year = max(dated_selected) if dated_selected else None
@@ -216,21 +219,26 @@ def pool_metrics(citers: list[dict[str, Any]], *, seed_year: int | None,
     oldest_pool_year = min(dated_pool) if dated_pool else None
 
     full_years = ranked_years(citers)[:RANK_POOL_SIZE]
+    # Bound once — the app's own STOP rule, run over the two pools this study
+    # compares (see docs/landmark-vocabulary.md for STOP vs SKIP).
+    citers_before_overflow = budget.number_of_ranked_citers_before_a_single_year_overflows
     return {
         "citer_count": len(citers),
         "pool_size": len(pool),
         "truncated": int(truncated),
         "oldest_pool_year": oldest_pool_year,
         "newest_pool_year": max(dated_pool) if dated_pool else None,
-        "n_star_live": budget.density_budget(pool_years, budget.DENSITY_CAP),
-        "banded_live": len(selection),
-        "model_seed_anchor": (
-            budget.model_budget(seed_year, seed_citation_count, as_of_year=as_of_year)
+        "citers_before_overflow_reachable": citers_before_overflow(
+            pool_years, budget.PER_YEAR_CAP),
+        "selected_up_to_cap_per_year": len(selection),
+        "predicted_budget_age_from_seed": (
+            budget.predicted_budget(seed_year, seed_citation_count, as_of_year=as_of_year)
             if seed_year else None),
-        "model_pool_anchor": (
-            budget.model_budget(oldest_pool_year, seed_citation_count, as_of_year=as_of_year)
+        "predicted_budget_age_from_oldest_citer": (
+            budget.predicted_budget(oldest_pool_year, seed_citation_count, as_of_year=as_of_year)
             if oldest_pool_year else None),
-        "n_star_corpus": budget.density_budget(full_years, budget.DENSITY_CAP),
+        "citers_before_overflow_full": citers_before_overflow(
+            full_years, budget.PER_YEAR_CAP),
         "corpus_rank_pool": len(full_years),
         "band_start": (bands.band_start_rule(dated_selected, landmark_max_year)
                        if landmark_max_year else None),
@@ -276,7 +284,7 @@ def collect() -> list[dict[str, Any]]:
     with cite_budget_collect.CORPUS_PATH.open(newline="") as handle:
         seeds = [
             {"work_id": row["work_id"], "label": row["label"],
-             "is_anchor": int(row["is_anchor"])}
+             "is_worked_example": int(row["is_worked_example"])}
             for row in csv.DictReader(handle)
         ]
     log.info("mapping %d cite_budget seeds to arXiv/DOI ids via OpenAlex…", len(seeds))
@@ -302,13 +310,15 @@ def collect() -> list[dict[str, Any]]:
         row.update(metrics)
         rows.append(row)
         log.info(
-            "  %s: %d citers (pool %d%s, oldest %s) n*_live=%d banded=%d "
-            "model seed/pool=%s/%s n*_corpus=%d band_start=%s",
+            "  %s: %d citers (pool %d%s, oldest %s) stop/reachable=%d skip=%d "
+            "predicted from seed/oldest=%s/%s stop/full=%d band_start=%s",
             seed["label"], metrics["citer_count"], metrics["pool_size"],
             " TRUNCATED" if metrics["truncated"] else "", metrics["oldest_pool_year"],
-            metrics["n_star_live"], metrics["banded_live"],
-            metrics["model_seed_anchor"], metrics["model_pool_anchor"],
-            metrics["n_star_corpus"], metrics["band_start"],
+            metrics["citers_before_overflow_reachable"],
+            metrics["selected_up_to_cap_per_year"],
+            metrics["predicted_budget_age_from_seed"],
+            metrics["predicted_budget_age_from_oldest_citer"],
+            metrics["citers_before_overflow_full"], metrics["band_start"],
         )
     return rows
 

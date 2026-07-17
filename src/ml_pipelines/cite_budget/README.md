@@ -17,41 +17,60 @@ cite_budget/
   features.py          — re-exports the app's feature + label contracts; the K-grid
   collect.py           — pull the labelled corpus from OpenAlex -> corpus.csv
   train.py             — fit LinearRegression, cross-validate, serialize the artifact
-  corpus.csv           — the committed corpus (features + n* label per seed)
+  corpus.csv           — the committed corpus (features + label per seed)
   model.joblib         — the fitted artifact the app loads (committed)
   model.metadata.json  — human-readable sidecar (params, metrics, date)
 ```
 
-Neither the *features* (age, log-citations) nor the *label* (the density budget
-`n*`) is defined here — both are the app's contract in
-`atlas.services.graph.budget` (`compute_features`, `density_budget`/`DENSITY_CAP`),
+Neither the *features* (age, log-citations) nor the *label* is defined here — both
+are the app's contract in `atlas.services.graph.budget` (`compute_features`,
+`number_of_ranked_citers_before_a_single_year_overflows` / `PER_YEAR_CAP`),
 re-exported through `features.py` for this pipeline's use. Training and serving
-therefore build the feature vector *and* apply the density rule identically;
-there's one place each can change, and it changes both sides at once.
+therefore build the feature vector *and* apply the rule identically; there's one
+place each can change, and it changes both sides at once. Every term below is
+defined in [`docs/landmark-vocabulary.md`](../../../docs/landmark-vocabulary.md).
 
 The label lived here until **v5.5.0**, on the reasoning that the app only ever
-*predicts* `n*` and never computes it. That stopped being true: the **live S2
-fallback** trims its landmark band by measuring the density rule directly on its
-citer pool (which it already holds in memory), because the model — fit on
-all-time-ranked landmarks — doesn't transfer to that path's recency-capped pool.
-So the rule moved into `budget.py` beside the features, and training reads it back.
-See `atlas/services/graph/budget.py`'s module docstring for that split.
+*predicts* it and never computes it. That stopped being true: the **live S2
+fallback** trims its landmark band by running the rule directly on the citer pool
+it already holds in memory, because the model — fit on all-time-ranked landmarks —
+doesn't transfer to that path's recency-capped pool. So the rule moved into
+`budget.py` beside the features, and training reads it back. See
+`atlas/services/graph/budget.py`'s module docstring for that split.
 
 ## Method
 
-1. **Label — the density budget `n*`** (`budget.density_budget`). For a seed,
-   walk its citers ranked by citation count (exactly what the app ships as
-   landmarks), counting per publication year; `n*` is the longest **prefix** —
-   the first N citers from the top of that ranked list — in which no single year
-   exceeds `K = 12` citers. Concretely: admit citers from the top one at a time
-   and stop the instant some year would take its 13th slot; `n*` is how many were
-   admitted before that break. That *is* clutter — it caps how many same-year
-   papers crowd the view — so it's a principled label, not a guess. (The exact
-   walk, with a worked example, is in `density_budget`'s docstring.)
+1. **Label — the STOP rule**
+   (`budget.number_of_ranked_citers_before_a_single_year_overflows`). Rank a
+   seed's citers by *their own* citation count — exactly the order the app ships
+   landmarks in — then walk down, dropping each into a bucket named by its
+   publication year. Stop the instant a bucket would take its 13th citer. The
+   label is how many were admitted before that break:
+
+   ```
+   ranked citer years:  2020  2020  2020  2019  2018  2020  2017   (cap = 2)
+
+   rank 0  2020  ->  bucket 2020 = 1   admit
+   rank 1  2020  ->  bucket 2020 = 2   admit
+   rank 2  2020  ->  bucket 2020 = 3   OVERFLOWS -> STOP
+
+   => 2   (ranks 3-6 never looked at, though their buckets are empty)
+   ```
+
+   That *is* clutter — it caps how many same-year papers crowd the view — so it's
+   a principled label, not a guess. An old classic's citers spread over decades, so
+   nothing overflows until deep in the list and the label is large; a young hot
+   paper's crowd into one or two years, so the label is small.
+
+   Note the rule **stops** rather than skipping the full bucket and walking on.
+   That costs it every sparser year behind the flood, and it's deliberate: a
+   regression target has to be a single number. The app's *serving* rule
+   (`select_up_to_cap_per_year`) skips instead — see the vocabulary page for the
+   side-by-side.
 2. **Collect** (`collect.py`). Sample ~60 seeds stratified across publication-year
-   × citation-count bands from live OpenAlex (plus the four working anchors:
-   Hawking Radiation, DQN, QMIX, Attention Is All You Need), label each with `n*`,
-   and write `corpus.csv`.
+   × citation-count bands from live OpenAlex (plus the four **worked-example**
+   seeds — Hawking Radiation, DQN, QMIX, Attention Is All You Need — flagged
+   `is_worked_example`), label each, and write `corpus.csv`.
 3. **Fit** (`train.py`). Build the feature matrix through the app's
    `compute_features`, fit `LinearRegression`, score with 5-fold cross-validated
    R², and serialize a joblib bundle (estimator + feature contract + clamp floor
@@ -60,7 +79,7 @@ See `atlas/services/graph/budget.py`'s module docstring for that split.
 
 ## What the data said (see `research/cite_budget` for the full write-up)
 
-- **Age carries the signal** (Pearson r ≈ 0.84 with `n*`). The intuition that
+- **Age carries the signal** (Pearson r ≈ 0.84 with the label). The intuition that
   *more citations → a tighter budget* does **not** survive controlling for age —
   the log-citation coefficient comes out mildly **positive** (bigger fields
   spread their citers over more years). What makes a paper like "Attention" feel

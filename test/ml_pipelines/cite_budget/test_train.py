@@ -22,16 +22,17 @@ from ml_pipelines.cite_budget import features, train
 
 
 class TestLabelContract:
-    """The label is the app's density rule, not a training-local reimplementation."""
+    """The label is the app's own STOP rule, not a training-local reimplementation."""
 
-    def test_label_is_the_apps_density_rule(self):
+    def test_label_is_the_apps_stop_rule(self):
         # Identity, not equivalence: a copied implementation could drift, and the
-        # live S2 fallback now trims with this exact function.
-        assert features.density_budget is app_budget.density_budget
-        assert features.DENSITY_CAP is app_budget.DENSITY_CAP
+        # label has to mean exactly what the app means by it.
+        assert (features.number_of_ranked_citers_before_a_single_year_overflows
+                is app_budget.number_of_ranked_citers_before_a_single_year_overflows)
+        assert features.PER_YEAR_CAP is app_budget.PER_YEAR_CAP
 
     def test_grid_includes_the_default_cap(self):
-        assert features.DENSITY_CAP in features.DENSITY_CAP_GRID
+        assert features.PER_YEAR_CAP in features.PER_YEAR_CAP_GRID
 
 
 class TestTrain:
@@ -47,7 +48,7 @@ class TestTrain:
             (36, 9_000, 175), (41, 12_000, 200), (46, 15_000, 220), (51, 18_000, 240),
         ]
         return [
-            {"year": 2026 - age, "cited_by_count": cites, "n_star": budget}
+            {"year": 2026 - age, "cited_by_count": cites, "citers_before_overflow": budget}
             for age, cites, budget in ages_cites_budget
         ]
 
@@ -61,7 +62,7 @@ class TestTrain:
     def test_bundle_is_serializable_and_contract_shaped(self):
         bundle = train.train(self._corpus(), as_of_year=2026)
         assert tuple(bundle["feature_names"]) == FEATURE_NAMES
-        assert bundle["floor"] == 15  # min n_star
+        assert bundle["floor"] == 15  # min citers_before_overflow
         assert bundle["n_seeds"] == 12
         assert math.isfinite(bundle["cv_r2"])  # a real score (folds ≥2 samples)
         # The estimator predicts, and age lifts the budget (positive age coef).

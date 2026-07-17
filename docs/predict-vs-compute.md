@@ -5,38 +5,44 @@ fallback: *why does the live path band landmarks per year while OpenAlex uses
 the cite-budget model — shouldn't we just train an S2-specific model? And why
 band Latest Publications at all instead of predicting its size and density
 too?* Working through it produced a principle the next budgeting decision
-should reuse, so it's written down here. Companion tickets live in
+should reuse, so it's written down here.
+
+This page is the **why**. For the *what* — precise definitions of every term
+below (pool, reachable, label, the two rules, `tau`, the three senses of
+"anchor"), each with a worked example — see
+[`landmark-vocabulary.md`](landmark-vocabulary.md). Companion tickets live in
 [`../OnePager.md`](../OnePager.md) (Backlog → Citations & graph data: the
-corpus-models ticket and the live-path re-anchoring ticket); the history
+corpus-models ticket and the live-path age-origin ticket); the history
 behind the examples is in [`history.md`](history.md) (v4.5.0, v4.6.0, v5.5.0)
 and [`bugs.md`](bugs.md).
 
 ## One rule, two regimes
 
-Everything in the landmark budget is a single density rule: **don't let any
-one publication year flood the graph past a legible cap (~12 landmarks)**.
+Everything in the landmark budget serves one invariant: **don't let any one
+publication year flood the graph past a legible cap (`PER_YEAR_CAP` = 12)**.
 The apparent inconsistency between the paths — a trained model here, explicit
-per-year banding there — is the same rule executed in two regimes, and which
+per-year banding there — is that same invariant enforced in two regimes, and which
 regime applies is dictated by the provider's API, not by taste:
 
 - **Predict (OpenAlex).** Landmarks come from a server-side
   `cites:…&sort=cited_by_count:desc&limit=N` query, so N must be chosen
-  *before any citer is fetched*. Running the density rule exactly would mean
+  *before any citer is fetched*. Running the rule exactly would mean
   downloading the seed's whole citer list (130k for DQN) just to throw most of
   it away. This is the one place a prediction earns its keep: the
   `cite_budget` model estimates, from two cheap seed features (age,
-  log-citations), where the density rule *would* stop. Its training label was
-  literally defined as "the longest citation-ranked prefix before any single
-  year floods past K=12" — so on a ranked pool, top-N with a well-chosen N
-  **is** the density cap, learned rather than enforced. "Don't fetch a pool
-  just to size a trim" is the model's whole rationale.
+  log-citations), where the **STOP rule** *would* stop. Its training label is
+  literally that rule — "how many ranked citers before a single year overflows
+  K=12" — so on a ranked pool, top-N with a well-chosen N **is** the per-year cap,
+  learned rather than enforced. "Don't fetch a pool just to size a trim" is the
+  model's whole rationale.
 - **Compute (live S2).** S2's `/citations` endpoint has no server-side sort,
   so the build must page the entire reachable list regardless (to the list's
-  end or the ~9k offset ceiling). By selection time the full pool is in
+  end or the 9,000-citer ceiling). By selection time the full pool is in
   memory — and once it is, running the rule exactly is free
-  (`budget.density_selection`: admit up to `DENSITY_CAP` per year, most-cited
-  first within each). **Predicting what you can compute exactly is strictly
-  worse**: you inherit the model's error and save nothing. That is why
+  (`budget.select_landmarks`, the **SKIP rule**: admit up to `PER_YEAR_CAP` per
+  year, most-cited first within each, stepping over years already full).
+  **Predicting what you can compute exactly is strictly worse**: you inherit the
+  model's error and save nothing. That is why
   "train a new cite-budget model on S2 API pools" is a non-starter — it would
   be a predictor whose entire training distribution is available, in full, at
   serve time, every time. A model is only worth training when the decision
@@ -101,6 +107,8 @@ data-driven and, where the distribution is local, strictly more accurate.
   (the latest-gap rule and the negative-R² finding), v5.5.0 (the live path
   switched from predicting to computing, and why a count can't express the
   answer).
-- `src/atlas/services/graph/budget.py` (`density_selection`, `DENSITY_CAP`,
+- [`landmark-vocabulary.md`](landmark-vocabulary.md) — every term used above,
+  defined once with worked examples.
+- `src/atlas/services/graph/budget.py` (`select_landmarks`, `PER_YEAR_CAP`,
   `compute_features`) and `bands.py` (`earliest_band_year`) — the two rules
   as shipped.

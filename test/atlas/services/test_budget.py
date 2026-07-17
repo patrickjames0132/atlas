@@ -1,14 +1,17 @@
 """The adaptive landmark-budget serving paths (services/graph/budget.py).
 
-Two ways to size a seed's landmark band, both pinned here:
+Two ways to size a seed's landmark band, both pinned here (see
+``docs/landmark-vocabulary.md`` for the vocabulary):
 
 * **Predicted** (``adaptive_cite_limit``) — exercises the *trained model* end to
   end, loading the committed ``src/ml_pipelines/cite_budget/model.joblib`` and
-  asserting the seed → budget mapping, so a retrain that moves the anchors trips
-  these. The reference year is pinned (not ``today``) so the age-based pins stay
-  stable as the clock advances.
-* **Measured** (``density_budget`` / ``density_cite_limit``) — the pure density
-  rule and the live-fallback trim built on it. No artifact involved.
+  asserting the seed → budget mapping, so a retrain that moves the worked-example
+  seeds trips these. The reference year is pinned (not ``today``) so the age-based
+  pins stay stable as the clock advances.
+* **Computed** — the two pure rules, no artifact involved:
+  ``number_of_ranked_citers_before_a_single_year_overflows`` (the STOP rule, the
+  model's training label) and ``select_up_to_cap_per_year`` / ``select_landmarks``
+  (the SKIP rule and the live-fallback trim built on it).
 """
 
 from __future__ import annotations
@@ -21,9 +24,14 @@ import pytest
 from atlas.config import config
 from atlas.services.graph import budget
 
-# Fix the age reference so pins don't drift with the wall clock; the anchors'
-# real publication years are used against it.
+# Fix the age reference so pins don't drift with the wall clock; the
+# worked-example seeds' real publication years are used against it.
 AS_OF = 2026
+
+# The STOP rule under its documented shorthand — the real name is deliberately
+# long, and spelling it out at every assertion buries what is being asserted.
+# STOP vs SKIP is the distinction docs/landmark-vocabulary.md is built around.
+stop_rule = budget.number_of_ranked_citers_before_a_single_year_overflows
 
 
 @pytest.fixture(autouse=True)
@@ -112,90 +120,95 @@ class TestAdaptiveCiteLimit:
         assert limit(1975, 5_000) == 150
 
 
-class TestDensityBudget:
-    """``n*`` — the longest citation-ranked prefix before a year floods.
+class TestStopRule:
+    """The STOP rule — how deep into the ranking you get before a year overflows.
 
-    The model's training label *and* the live S2 fallback's trim (see
-    ``test/ml_pipelines/cite_budget/test_train.py``, which pins that both sides
-    use this one function).
+    The model's **training label**, and nothing else: no serving path calls it
+    (``test/ml_pipelines/cite_budget/test_train.py`` pins that training and the
+    app share this one function). What the live S2 fallback actually ships is the
+    SKIP rule below.
     """
 
     def test_stops_when_a_year_exceeds_the_cap(self):
-        # Cap 2: the third 2020 (index 4) is the first to break it → prefix 4.
+        # Cap 2: the third 2020 (index 4) is the first to break it → stops at 4.
         years = [2020, 2019, 2020, 2018, 2020, 2017]
-        assert budget.density_budget(years, cap=2) == 4
+        assert stop_rule(years, cap=2) == 4
 
     def test_returns_full_length_when_never_capped(self):
-        assert budget.density_budget([2020, 2019, 2018, 2017], cap=5) == 4
+        assert stop_rule([2020, 2019, 2018, 2017], cap=5) == 4
 
     def test_empty_pool_is_zero(self):
-        assert budget.density_budget([], cap=3) == 0
+        assert stop_rule([], cap=3) == 0
 
     def test_a_single_flooded_year_yields_exactly_the_cap(self):
         # The recency-capped fallback's shape: every citer in one year.
-        assert budget.density_budget([2025] * 500, cap=12) == 12
+        assert stop_rule([2025] * 500, cap=12) == 12
 
     def test_undated_citers_take_a_slot_but_crowd_no_year(self):
         # An undated citer can't pile into a year, so it never trips the cap —
-        # but it still occupies a place in the shipped prefix.
-        assert budget.density_budget([2020, None, 2020, None, 2020], cap=2) == 4
-        assert budget.density_budget([None] * 50, cap=2) == 50
+        # but it still occupies a place in the count.
+        assert stop_rule([2020, None, 2020, None, 2020], cap=2) == 4
+        assert stop_rule([None] * 50, cap=2) == 50
 
 
-class TestDensitySelection:
-    """The per-year banded selection the live S2 fallback is handed."""
+class TestSkipRule:
+    """The SKIP rule — up to the cap per year, walking on past full years.
+
+    What the live S2 fallback is actually handed, via ``select_landmarks``.
+    """
 
     def test_caps_each_year_without_ending_the_walk(self):
-        # THE bug the prefix rule had: 2020 floods, and a prefix would stop dead
-        # there — losing every later year. The selection skips on instead.
+        # THE bug the STOP rule has: 2020 floods, and STOP would quit dead there
+        # — losing every later year. SKIP steps over and carries on.
         years = [2020] * 30 + [2024] * 5
-        keep = budget.density_selection(years)
+        keep = budget.select_landmarks(years)
         picked = [years[index] for index in keep]
-        assert picked == [2020] * budget.DENSITY_CAP + [2024] * 5
-        assert budget.density_budget(years, budget.DENSITY_CAP) == budget.DENSITY_CAP  # the prefix stops
+        assert picked == [2020] * budget.PER_YEAR_CAP + [2024] * 5
+        # ...where the STOP rule quits at exactly the cap, stranding 2024.
+        assert stop_rule(years, budget.PER_YEAR_CAP) == budget.PER_YEAR_CAP
 
     def test_bands_every_year_evenly(self):
         # DQN's real shape: a deep pool spanning several years, each over-full.
         years = [year for year in range(2019, 2026) for _ in range(500)]
-        keep = budget.density_selection(years)
+        keep = budget.select_landmarks(years)
         per_year = Counter(years[index] for index in keep)
         assert set(per_year) == set(range(2019, 2026))
-        assert set(per_year.values()) == {budget.DENSITY_CAP}
+        assert set(per_year.values()) == {budget.PER_YEAR_CAP}
 
     def test_indices_are_ascending_so_the_band_stays_citation_ranked(self):
         # The reveal slider walks by rank, so the shipped order must not be
         # reshuffled into year order.
         years = [2020, 2024, 2020, 2025, 2024]
-        assert budget.density_selection(years) == [0, 1, 2, 3, 4]
+        assert budget.select_landmarks(years) == [0, 1, 2, 3, 4]
 
     def test_a_sparse_pool_ships_whole(self):
         years = [2020, 2021, 2022]
-        assert budget.density_selection(years) == [0, 1, 2]
+        assert budget.select_landmarks(years) == [0, 1, 2]
 
     def test_undated_citers_are_dropped_not_banded(self):
         # A landmark is "top-cited citer OF YEAR Y" — an undated citer can't make
         # that claim, and can't be drawn on a time axis. Bucketing them shipped a
-        # guaranteed DENSITY_CAP of junk onto a single x (a bar through the seed).
-        assert budget.density_selection([None] * 50) == []
+        # guaranteed PER_YEAR_CAP of junk onto a single x (a bar through the seed).
+        assert budget.select_landmarks([None] * 50) == []
 
     def test_undated_citers_dont_consume_a_dated_years_slots(self):
         years = [None, 2020, None, 2021, None]
-        assert budget.density_selection(years) == [1, 3]
+        assert budget.select_landmarks(years) == [1, 3]
 
     def test_ceiling_keeps_the_most_cited(self, monkeypatch):
         monkeypatch.setattr(config.graph, "cite_limit", 5)
         years = [year for year in range(2019, 2026) for _ in range(500)]
-        keep = budget.density_selection(years)
+        keep = budget.select_landmarks(years)
         assert keep == [0, 1, 2, 3, 4]  # a prefix of the citation-ranked selection
 
     def test_toggle_off_declines_so_the_flat_limit_applies(self, monkeypatch):
         monkeypatch.setattr(config.graph, "adaptive_cite_limit", False)
-        assert budget.density_selection([2025] * 400) is None
+        assert budget.select_landmarks([2025] * 400) is None
 
     def test_needs_no_model_artifact(self, monkeypatch):
         # The selection path must not depend on the trained bundle at all.
         monkeypatch.setattr(budget, "load_model", lambda: None)
-        assert len(budget.density_selection([2025] * 400)) == budget.DENSITY_CAP
+        assert len(budget.select_landmarks([2025] * 400)) == budget.PER_YEAR_CAP
 
     def test_empty_pool_ships_nothing(self):
-        assert budget.density_selection([]) == []
+        assert budget.select_landmarks([]) == []

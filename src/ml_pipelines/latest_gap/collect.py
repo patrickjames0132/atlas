@@ -5,7 +5,7 @@ README). The study asks: *where does a seed's landmark cluster tail off?* — so
 what it needs, per seed, is the publication years of exactly the citers the
 build would ship as Field Landmarks: the top citers by citation count, capped at
 the landmark-era cutoff (``openalex.landmark_max_year``), trimmed to the served
-adaptive budget (``budget.model_budget``).
+adaptive budget (``budget.predicted_budget``).
 
 Seeds are **reused from the ``cite_budget`` corpus** (same 64 stratified seeds
 incl. the four anchors) rather than re-sampled: the two studies then describe
@@ -38,8 +38,8 @@ log = logging.getLogger("collect")
 
 CORPUS_PATH = Path(__file__).with_name("corpus.csv")
 
-FIELDS = ["work_id", "label", "year", "cited_by_count", "is_anchor",
-          "as_of_year", "landmark_max_year", "budget", "pool_size", "citer_years"]
+FIELDS = ["work_id", "label", "year", "cited_by_count", "is_worked_example",
+          "as_of_year", "landmark_max_year", "predicted_budget", "pool_size", "citer_years"]
 
 
 def seed_row(source_row: dict, *, as_of: datetime.date) -> dict | None:
@@ -47,7 +47,7 @@ def seed_row(source_row: dict, *, as_of: datetime.date) -> dict | None:
 
     Args:
         source_row: A ``cite_budget`` corpus row (``work_id``, ``label``,
-            ``year``, ``cited_by_count``, ``is_anchor``).
+            ``year``, ``cited_by_count``, ``is_worked_example``).
         as_of: The collection date — fixes the landmark-era cutoff and the age
             the budget model sees, and is recorded in the row so training can
             reproduce the exact same trim later.
@@ -60,7 +60,7 @@ def seed_row(source_row: dict, *, as_of: datetime.date) -> dict | None:
     year = int(source_row["year"])
     cited_by = int(source_row["cited_by_count"])
     landmark_cutoff = openalex.landmark_max_year(as_of)
-    landmark_budget = budget.model_budget(year, cited_by, as_of_year=as_of.year)
+    landmark_budget = budget.predicted_budget(year, cited_by, as_of_year=as_of.year)
     if landmark_budget is None:  # no trained cite_budget artifact — can't mirror a build
         return None
     years = cite_budget_collect.citer_years(source_row["work_id"], to_year=landmark_cutoff)
@@ -72,10 +72,10 @@ def seed_row(source_row: dict, *, as_of: datetime.date) -> dict | None:
         "label": source_row["label"],
         "year": year,
         "cited_by_count": cited_by,
-        "is_anchor": int(source_row["is_anchor"]),
+        "is_worked_example": int(source_row["is_worked_example"]),
         "as_of_year": as_of.year,
         "landmark_max_year": landmark_cutoff,
-        "budget": landmark_budget,
+        "predicted_budget": landmark_budget,
         "pool_size": len(trimmed),
         "citer_years": " ".join(str(citer_year) for citer_year in trimmed),
     }
@@ -100,8 +100,9 @@ def collect() -> list[dict]:
             log.info("  skipped %s (%s)", source_row["work_id"], source_row["label"])
             continue
         rows.append(row)
-        log.info("  seed %s (%s, %s) -> budget %d, %d landmark years",
-                 row["work_id"], row["label"], row["year"], row["budget"], row["pool_size"])
+        log.info("  seed %s (%s, %s) -> predicted budget %d, %d landmark years",
+                 row["work_id"], row["label"], row["year"],
+                 row["predicted_budget"], row["pool_size"])
     return rows
 
 

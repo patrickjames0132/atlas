@@ -15,7 +15,8 @@ heart of why OpenAlex exists — is unchanged.
 ## Why it exists — the recency-bias fix
 
 S2's citation endpoint returns citers **newest-first with no sort control** and
-**stops paging at a ~10k offset**. For an old or heavily-cited seed, a modest
+**stops paging at an offset of 8000**, so only the newest **9000** citers are
+*reachable* at all (`REACHABLE_CITERS`). For an old or heavily-cited seed, a modest
 citer limit fills entirely with this year's obscure papers before a single
 famous historic citer is seen — the "landmark recency bias" (which the S2
 provider still has as its interim limitation; the offline citations corpus is
@@ -70,13 +71,16 @@ accrue citations) dominate — DQN's overlay came back 214/295 for 2020/21 and o
 for 2022–24). The band span's **lower edge** is itself adaptive: `citation_relations`
 takes an optional `band_start` callable — `(landmark_years, landmark_max_year) →
 first band year | None` — that `services/graph` wires to the trained per-seed rule
-(`bands.earliest_band_year`), placing the start at the **density tail edge** of the
-landmark cluster (where the per-year count falls off). Its return is used directly
+(`bands.earliest_band_year`), placing the start at the **tail edge** of the
+landmark cluster (scanning back from the newest landmark year, the first year whose
+count is still ≥ `tau` of the peak year's). Its return is used directly
 (no only-widen clamp), so it can sit earlier than the fixed start for an old seed
 (closing the gap) or later for a young one (a tight recent frontier). It's a
 *parameter*, not an import, so `integrations` stays below `services` in the
 dependency order; `None` (the default) keeps the fixed `latest_band_years` span.
-See `services/graph/bands.py` and `src/ml_pipelines/latest_gap`.
+See `services/graph/bands.py` and `src/ml_pipelines/latest_gap`; **tail edge**,
+**band**, **landmark** and the rest of the vocabulary are defined once in
+[`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md).
 
 ### Why the split is by year, not an exact date
 

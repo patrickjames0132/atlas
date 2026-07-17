@@ -36,7 +36,7 @@ from sklearn.model_selection import KFold, cross_val_score
 from atlas.services.graph.budget import FEATURE_NAMES, compute_features
 
 from . import collect as collect_module
-from .features import DENSITY_CAP
+from .features import PER_YEAR_CAP
 
 log = logging.getLogger("train")
 
@@ -56,7 +56,7 @@ def load_corpus(path: Path = collect_module.CORPUS_PATH) -> list[dict]:
         path: The corpus CSV (defaults to the committed ``corpus.csv``).
 
     Returns:
-        One dict per seed with ``year``, ``cited_by_count``, and ``n_star``
+        One dict per seed with ``year``, ``cited_by_count``, and ``citers_before_overflow``
         coerced to ``int``.
 
     Raises:
@@ -65,7 +65,7 @@ def load_corpus(path: Path = collect_module.CORPUS_PATH) -> list[dict]:
     with path.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
     for row in rows:
-        for key in ("year", "cited_by_count", "n_star"):
+        for key in ("year", "cited_by_count", "citers_before_overflow"):
             row[key] = int(row[key])
     return rows
 
@@ -83,13 +83,13 @@ def build_matrix(rows: list[dict], as_of_year: int) -> tuple[np.ndarray, np.ndar
 
     Returns:
         ``(features, labels)`` — features shaped ``(n_seeds, len(FEATURE_NAMES))``,
-        labels the ``n_star`` density budgets.
+        labels the ``citers_before_overflow`` density budgets.
     """
     features = np.array([
         compute_features(row["year"], row["cited_by_count"], as_of_year=as_of_year)
         for row in rows
     ])
-    labels = np.array([row["n_star"] for row in rows])
+    labels = np.array([row["citers_before_overflow"] for row in rows])
     return features, labels
 
 
@@ -115,7 +115,7 @@ def train(rows: list[dict], as_of_year: int) -> dict:
         "floor": int(labels.min()),
         "cv_r2": cv_r2,
         "n_seeds": len(rows),
-        "density_cap": DENSITY_CAP,
+        "per_year_cap": PER_YEAR_CAP,
         "as_of_year": as_of_year,
         "trained_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "sklearn_version": sklearn.__version__,

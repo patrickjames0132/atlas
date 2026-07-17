@@ -242,37 +242,40 @@ optional, behind a key.
       `band_start=` appears exactly once in the app (`build.py`, the OpenAlex call);
       `corpus.citation_relations` doesn't take one, so its Latest Publications is
       the **flat rolling 12-month window** inherited from the live fallback
-      (`_latest_cutoff()`), not per-seed density-tail bands. The corpus has every
+      (`_latest_cutoff()`), not per-seed tail-edge bands. The corpus has every
       edge with dates, so it *could* band per year exactly like OpenAlex — it's the
       one provider with no excuse. **And `cite_budget`** is fit on OpenAlex-collected
       labels; the corpus's pools are all-time-ranked like OpenAlex's, so the premise
       *holds* here (unlike the live fallback, which is why v5.5.0 gave that path a
       measured rule instead) — but "holds in principle" isn't measured. Re-collect
-      `n*` against corpus pools for the anchors and compare: if DQN's 63 is right,
-      that's a real finding; if it isn't, the same `density_selection` shape the
-      live path uses may fit here too — likely, per the predict-vs-compute lens
-      ([docs/predict-vs-compute.md](docs/predict-vs-compute.md)): the corpus
+      the label against corpus pools for the worked examples and compare: if DQN's
+      63 is right, that's a real finding; if it isn't, the same `select_landmarks`
+      shape the live path uses may fit here too — likely, per the predict-vs-compute
+      lens ([docs/predict-vs-compute.md](docs/predict-vs-compute.md)): the corpus
       pool is local, so it can *compute* the rule rather than predict it.
       Both are now testable **offline and for free**
       — the corpus is local, so the training collector no longer needs to page a
       live API. *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the
-      latest-gap gap.)* **Related:** the live-path counterpart — re-anchoring
-      `cite_budget` at the oldest reachable citer + latest-gap banding — is its
-      own ticket just below; the offline re-collection study should serve both.
-- [ ] **Live-path landmarks & Latest: re-anchor the cite-budget model at the
-      oldest reachable citer, band Latest with the latest-gap model** — the
+      latest-gap gap.)* **Related:** the live-path counterpart — moving
+      `cite_budget`'s **age origin** to the oldest reachable citer + latest-gap
+      banding — is its own ticket just below; the offline re-collection study should
+      serve both. **Measured 2026-07-16** by `live_pool_validation` (58 seeds); the
+      verdict is not yet written up — see `research/live_pool_validation/`.
+- [ ] **Live-path landmarks & Latest: move the cite-budget model's age origin to
+      the oldest reachable citer, band Latest with the latest-gap model** — the
       sibling of the corpus-models ticket above, for the live s2 fallback.
+      (Vocabulary: [docs/landmark-vocabulary.md](docs/landmark-vocabulary.md).)
       v5.5.0 took the `cite_budget` model *off* the live path (its
-      OpenAlex-trained age feature described a seed→now span the ~9k-ceiling
-      pool doesn't cover) and left `density_selection`'s flat 12/year cap plus
-      a flat rolling 12-month Latest window (`_latest_cutoff`) — so neither
+      OpenAlex-trained age feature described a seed→now span the 9,000-citer
+      reachable pool doesn't cover) and left `select_landmarks`'s flat 12/year cap
+      plus a flat rolling 12-month Latest window (`_latest_cutoff`) — so neither
       trained model serves the fallback. Patrick's design to bring both back
       honestly (from the DQN screenshot: the reachable citer list stops at
       2019 against a 2013 seed):
       1. Keep paging the whole reachable list (v5.5.0 behavior — to the list's
-         end or the ~9k ceiling, whichever the seed hits first).
-      2. Run the cite-budget model with its **age feature anchored at the
-         oldest citer actually in the pool**, not the seed's publication date
+         end or the 9,000-citer ceiling, whichever the seed hits first).
+      2. Run the cite-budget model with its **age origin at the oldest citer
+         actually in the pool**, not the seed's publication date
          — the features then describe the pool being sized (DQN reads as a
          dense 7-year history, not a 13-year classic), which is exactly the
          training-distribution repair the "sizing a pool it was never trained
@@ -281,7 +284,7 @@ optional, behind a key.
          young-age/mega-citations corner is anchored by the OpenAlex-misdated
          Attention test).
       3. The model's output is the **total** landmark budget only — the
-         per-year banding (`density_selection`'s cap mechanics) still decides
+         per-year banding (`select_landmarks`'s cap mechanics) still decides
          *which* papers. A top-N prefix over a truncated pool re-crowds into
          the densest years and strands the recent ones — v5.5.0's "a count
          can't express the answer" hole comes straight back. Size from the
@@ -294,15 +297,19 @@ optional, behind a key.
          reachable citer), same shape as the OpenAlex path (`build.py`'s
          `band_start=`).
       **Validate offline before wiring:** the corpus can simulate the live
-      pool exactly (a seed's newest ~9k citers), so run the density-label rule
-      against simulated truncated pools and check the re-anchored predictions
-      track it — one study with the corpus ticket's `n*` re-collection.
+      pool exactly (a seed's newest 9,000 citers), so run the STOP rule against
+      simulated truncated pools and check the oldest-citer-origin predictions
+      track it — one study with the corpus ticket's label re-collection.
+      **This has now been run** (`live_pool_validation`, 2026-07-16, 58 of 64
+      seeds; 18 truncated) but the **verdict is not yet written up** — the
+      measurements are in `research/live_pool_validation/analyze.ipynb`, whose
+      Verdict cell is still the placeholder framing.
       **Null hypothesis, stated up front:** on the live path the full pool is
-      already in memory, so the exact density rule is *computable* directly —
-      the re-anchored model may validate as **redundant** there (its
-      prediction just tracking a label we can compute). If so, drop the model
-      from the live path and keep the exact selection; the re-anchoring then
-      only matters wherever a pre-fetch estimate is ever needed. See
+      already in memory, so the rule is *computable* directly — the model may
+      validate as **redundant** there (its prediction just tracking a number we
+      can compute). If so, drop the model from the live path and keep the exact
+      selection; moving the age origin then only matters wherever a pre-fetch
+      estimate is ever needed. See
       [docs/predict-vs-compute.md](docs/predict-vs-compute.md) for the
       predict-vs-compute principle this falls out of. **Why no Latest model
       either:** a scalar can't say *where in time* nodes go (recency ×
@@ -395,7 +402,7 @@ optional, behind a key.
       **`_velocity` helper — `citation_count / (age + 1)`** (`stash@{0}`, see
       the mega-papers phase notes in `docs/history.md`) is the starting formula; may need tuning so
       the balance point lands where the spread looks even. **Related:** the
-      live-path re-anchoring ticket above bands Latest per year — velocity
+      live-path age-origin ticket above bands Latest per year — velocity
       would slot in as the *within-band* ranking. *(Patrick's brainstorm,
       2026-07-10.)*
 - [ ] **Latest Publications is thin on arXiv-only seeds — OpenAlex data
@@ -663,6 +670,24 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Gate the research notebooks — nothing executes them, so they rot
+      silently** — two of the three (`research/cite_budget`, `research/latest_gap`)
+      had been un-executable since the src-layout migration and nobody noticed,
+      because no nox session runs a notebook (see `docs/bugs.md` → "Two of the
+      three research notebooks had been un-executable for weeks"). `precommit`
+      lints notebook *identifiers*, which makes them feel covered while their
+      actual correctness is checked by no one; a committed output is a claim, and
+      claims were going stale invisibly. **Proposal:** a `notebooks` nox session
+      running `jupyter nbconvert --execute` over `research/*/analyze.ipynb`.
+      **The design question that stops this being a one-liner:** all three
+      currently read *committed* corpora and are offline and cheap (~seconds), so
+      today it's free — but the gate must never become a thing that hits a live
+      API or needs the corpus machine, and a future notebook might want either.
+      So the session needs a rule for what's includable (offline, committed inputs
+      only) and a way for a notebook to opt out, rather than globbing everything.
+      Worth pairing with the fact that the pipelines' **collectors** have no test
+      coverage at all for the same reason — they call live APIs. *(Found while
+      renaming the budget vocabulary, 2026-07-16.)*
 - [ ] **Drop the `recs_pool` config knob (hardcode `all-cs`)** — the S2
       *Similar* recommendations pool is a `Literal["all-cs", "recent"]` config
       option (`config.providers.s2.recs_pool`), but `config.py` and

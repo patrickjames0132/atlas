@@ -1,16 +1,19 @@
 """Pull a stratified corpus of seed papers + their citer-year distributions.
 
 The data-collection stage of the adaptive-``cite_limit`` pipeline (see this
-package's README). For each sampled seed it records the two *cheap* features the
-graph build already has on a seed node — publication age and citation count —
-plus the **density label** ``n_star`` (see ``features.density_budget``): the
-largest prefix of the seed's citation-ranked citer list in which no single year
-holds more than ``DENSITY_CAP`` citers. A model fit against that label learns
-how big the landmark window should be *without any hand-tuned constants*.
+package's README, and ``docs/landmark-vocabulary.md`` for every term below). For
+each sampled seed it records the two *cheap* features the graph build already has
+on a seed node — publication age and citation count — plus the model's **label**,
+the ``citers_before_overflow`` column: how deep into the seed's citation-ranked
+citer list you get before a single publication year overflows ``PER_YEAR_CAP``
+(the STOP rule, ``features.number_of_ranked_citers_before_a_single_year_overflows``).
+A model fit against that label learns how big the landmark window should be
+*without any hand-tuned constants*.
 
 Seeds are sampled across a grid of publication-year × citation-count strata so
-the fit sees the whole spectrum, not just mega-papers. The four working anchors
-(Hawking / DQN / QMIX / AIAYN) are always included for eyeballing.
+the fit sees the whole spectrum, not just mega-papers. The four **worked-example**
+seeds (Hawking / DQN / QMIX / AIAYN) are always included for eyeballing — the
+``is_worked_example`` column.
 
 Run from the repo root (reuses the app's throttled OpenAlex client):
 
@@ -31,7 +34,11 @@ from pathlib import Path
 
 from atlas.integrations.openalex import client
 
-from .features import DENSITY_CAP, DENSITY_CAP_GRID, density_budget
+from .features import (
+    PER_YEAR_CAP,
+    PER_YEAR_CAP_GRID,
+    number_of_ranked_citers_before_a_single_year_overflows,
+)
 
 log = logging.getLogger("collect")
 
@@ -61,8 +68,9 @@ ANCHORS = [
 CORPUS_PATH = Path(__file__).with_name("corpus.csv")
 
 FIELDS = (["work_id", "label", "year", "cited_by_count", "pool_size",
-           "densest_year_count", "n_star"]
-          + [f"n_star_k{cap}" for cap in DENSITY_CAP_GRID] + ["is_anchor"])
+           "densest_year_count", "citers_before_overflow"]
+          + [f"citers_before_overflow_cap{cap}" for cap in PER_YEAR_CAP_GRID]
+          + ["is_worked_example"])
 
 
 def citer_years(work_id: str, *, to_year: int | None = None) -> list[int]:
@@ -123,7 +131,7 @@ def seed_row(label: str, work: dict) -> dict | None:
     if not work_id or not year or not cited_by:
         return None
     years = citer_years(work_id)
-    if len(years) < DENSITY_CAP:  # too few citers to form a meaningful label
+    if len(years) < PER_YEAR_CAP:  # too few citers to form a meaningful label
         return None
     densest = max(Counter(years).values())
     row = {
@@ -133,11 +141,14 @@ def seed_row(label: str, work: dict) -> dict | None:
         "cited_by_count": cited_by,
         "pool_size": len(years),
         "densest_year_count": densest,
-        "n_star": density_budget(years, DENSITY_CAP),
+        "citers_before_overflow": number_of_ranked_citers_before_a_single_year_overflows(
+            years, PER_YEAR_CAP),
     }
-    # The K-grid, for the notebook's sweep — n_star_k{DENSITY_CAP} == n_star.
-    for cap in DENSITY_CAP_GRID:
-        row[f"n_star_k{cap}"] = density_budget(years, cap)
+    # The K-grid, for the notebook's sweep — the cap12 column equals the label
+    # column, since PER_YEAR_CAP is 12.
+    for cap in PER_YEAR_CAP_GRID:
+        row[f"citers_before_overflow_cap{cap}"] = (
+            number_of_ranked_citers_before_a_single_year_overflows(years, cap))
     return row
 
 
@@ -179,8 +190,9 @@ def sample_stratum(year_band: tuple[int, int], cite_band: tuple[int, int],
         row = seed_row(work.get("display_name") or "?", work)
         if row:
             rows.append(row)
-            log.info("  seed %s (%d, %d cites) -> n*=%d",
-                     row["work_id"], row["year"], row["cited_by_count"], row["n_star"])
+            log.info("  seed %s (%d, %d cites) -> label=%d",
+                     row["work_id"], row["year"], row["cited_by_count"],
+                     row["citers_before_overflow"])
     return rows
 
 
@@ -200,11 +212,11 @@ def collect() -> list[dict]:
             work_id, {"select": "id,display_name,publication_year,cited_by_count"}))
         row = seed_row(label, work)
         if row and row["work_id"] not in seen:
-            row["is_anchor"] = 1
+            row["is_worked_example"] = 1
             rows.append(row)
             seen.add(row["work_id"])
             log.info("  %s (%d, %d cites) -> n*=%d",
-                     label, row["year"], row["cited_by_count"], row["n_star"])
+                     label, row["year"], row["cited_by_count"], row["citers_before_overflow"])
 
     for year_band in YEAR_BANDS:
         for cite_band in CITATION_BANDS:
@@ -212,7 +224,7 @@ def collect() -> list[dict]:
             for row in sample_stratum(year_band, cite_band, rng):
                 if row["work_id"] in seen:
                     continue
-                row.setdefault("is_anchor", 0)
+                row.setdefault("is_worked_example", 0)
                 rows.append(row)
                 seen.add(row["work_id"])
     return rows

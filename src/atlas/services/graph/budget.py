@@ -1,52 +1,60 @@
 """Serving the adaptive landmark budget — how many landmark citers a seed ships.
 
-The graph build ships up to ``cite_limit`` landmark citers per seed, but the
-right number depends on the seed: an old classic's landmarks span decades and
-read as a map of the field, while a young hot paper's top citers pile into one
-or two years — same count, far more clutter. The criterion that makes "clutter"
-concrete is the **density budget** ``n*`` (:func:`density_budget`): walking a
-seed's citation-ranked citers from the top, the longest prefix in which no single
-publication year holds more than :data:`DENSITY_CAP` of them.
+Every term used here — landmark, pool, reachable, truncated, label, age origin,
+and the two rules below — is defined once, with this same worked example, in
+``docs/landmark-vocabulary.md``. The *why* (when to predict, when to compute) is
+``docs/predict-vs-compute.md``. This module is the rules as shipped.
 
-How that criterion is applied splits on **whether the caller already holds the
-citer pool** — and the two answers are shaped differently, a count versus a
-selection:
+The graph build ships up to ``cite_limit`` landmark citers per seed, but the right
+number depends on the seed: an old classic's landmarks span decades and read as a
+map of the field, while a young hot paper's top citers pile into one or two years
+— same count, far more clutter. Both rules here make "clutter" concrete the same
+way: rank a seed's citers most-cited first, drop each into a bucket named by its
+publication year, and never let a bucket exceed :data:`PER_YEAR_CAP`.
 
-* **Predict a count** (:func:`adaptive_cite_limit`) — a scikit-learn model
-  **trained offline** infers ``n*`` from two cheap fields already on the seed node
-  (publication age + citation count), so no pool has to be fetched to size the
-  trim. This is what the *ranked* citer paths use: OpenAlex and the offline S2
-  citations corpus both push a limit down into a citation-sorted query, so they
-  must know the number *before* they have any citers to look at. A count is all a
-  query can take.
-* **Select from the pool** (:func:`density_selection`) — walk the ranked citers
-  and admit up to :data:`DENSITY_CAP` **per year**, skipping years already full.
-  This is what the **live S2 fallback** uses: its deep pager has the whole
-  reachable pool in memory before the trim, so nothing has to be guessed.
+They differ in **one word** — what happens when a citer lands on a full bucket::
 
-The second isn't just a more accurate version of the first — it's a *better rule*,
-and only possible with the pool in hand. Both enforce the same invariant (no year
-over the cap), but :func:`density_budget` is a **prefix**: it stops the entire
-walk the moment one year floods, so a single dense year truncates the band and
-every sparser year after it is lost. Measured on DQN: the prefix stops at 29
-landmarks with 2020 full and **nothing at all from 2024–2025**, leaving an 18-month
-hole between the landmarks and the Latest frontier; the per-year quota ships 84,
-twelve in each of 2019–2025, and closes it. The prefix rule survives because a
-*label* has to be a scalar the model can regress on — not because it's the best way
-to pick landmarks. It's the local equivalent of the per-year banding OpenAlex gets
-from its query (``openalex.citation_relations``); S2's citations endpoint has no
-year filter, so the banding has to happen over the ranking instead.
+    ranked citer years:  2020  2020  2020  2019  2018  2020  2017    (cap=2)
 
-Predicting on the live path would be wrong for a second reason too: the model is
-fit on landmark pools spanning a seed's whole citation history, while that path's
-pool is **truncated** at S2's ~10k offset ceiling (DQN's reaches back to 2019, not
-2013).
+    STOP  number_of_ranked_citers_before_a_single_year_overflows -> 2
+          The third 2020 overflows, so the walk ends there. Ranks 3-6 are
+          never reached, though buckets 2019, 2018 and 2017 are empty.
 
-Serving and training share :func:`compute_features` and :data:`DENSITY_CAP`, and
-the label :func:`density_budget` is defined here beside the model it belongs to —
-so there's one definition of each and no train/serve skew. The *training* half
-lives beside the artifact in ``src/ml_pipelines/cite_budget``, which imports them
-from here; see its README for the derivation.
+    SKIP  select_up_to_cap_per_year -> [0, 1, 3, 4, 6]
+          The third 2020 is skipped and the walk carries on. Five landmarks
+          ship, spanning 2017-2020.
+
+SKIP is not a more accurate STOP — it's a *better rule*, and only possible with the
+pool in hand. STOP survives for exactly one reason: it returns a scalar, and a
+regression **label** has to be a scalar. Measured on DQN, STOP quits at 29
+landmarks with 2020 full and ships **nothing from 2024–2025**, leaving an 18-month
+hole before the Latest frontier; SKIP ships 84 — twelve in each of 2019–2025 — and
+closes it. SKIP is the local equivalent of the per-year banding OpenAlex gets from
+its query (``openalex.citation_relations``); S2's citations endpoint has no year
+filter, so the banding has to happen over the ranking instead.
+
+Which rule a path *can* use is dictated by its provider's API, not by taste:
+
+* **Predict a count** (:func:`adaptive_cite_limit`) — OpenAlex and the offline S2
+  citations corpus push a limit down into a citation-sorted query, so they must
+  know the number *before* they hold a single citer. A count is all a query can
+  take, and a model trained offline supplies it from two cheap fields already on
+  the seed node (age + citation count). No pool is fetched just to size the trim.
+* **Select from the pool** (:func:`select_landmarks`) — the **live S2 fallback**
+  gets no server-side sort, so its deep pager already holds the whole reachable
+  pool before the trim. Nothing has to be guessed, so nothing is: it runs SKIP.
+
+Predicting on the live path would be wrong twice over: you'd inherit the model's
+error while saving nothing, *and* the model is fit on pools spanning a seed's whole
+citation history while that path's pool is **truncated** to the newest
+``REACHABLE_CITERS`` (9,000 — DQN's reaches back to 2019, not 2013).
+
+Serving and training share :func:`compute_features` and :data:`PER_YEAR_CAP`, and
+the label (:func:`number_of_ranked_citers_before_a_single_year_overflows`) is
+defined here beside the model it belongs to — one definition each, no train/serve
+skew. The *training* half lives beside the artifact in
+``src/ml_pipelines/cite_budget``, which imports both from here; see its README for
+the derivation.
 
 The model artifact is loaded once and memoized (:func:`load_model`); a missing or
 unreadable artifact degrades gracefully to the flat ``cite_limit`` rather than
@@ -81,48 +89,61 @@ FEATURE_NAMES = ("age", "log_cites")
 #: The per-year density cap ``K``: how many same-year papers a landmark view
 #: tolerates before that year reads as a pile-up. The research notebook swept K
 #: and settled on 12. Training labels the corpus with it and records it in the
-#: artifact's ``density_cap``; the live-fallback trim applies it directly — one
+#: artifact's ``per_year_cap``; the live-fallback trim applies it directly — one
 #: constant behind both, like :data:`FEATURE_NAMES`.
-DENSITY_CAP = 12
+PER_YEAR_CAP = 12
 
 
-def density_budget(citer_years: Sequence[int | None], cap: int) -> int:
-    """Longest prefix of ``citer_years`` (its first N, from the top) whose densest single year holds ``≤ cap``.
+def number_of_ranked_citers_before_a_single_year_overflows(
+    citer_years: Sequence[int | None], cap: int
+) -> int:
+    """How deep into the ranked citers you get before one publication year overflows ``cap``.
 
-    Walks the citation-ranked citer years from the top, accumulating a per-year
-    count; the budget is the position just before some year's running count first
-    exceeds ``cap`` (i.e. the length of the prefix admitted so far). A pool that
-    never trips the cap yields its full length.
+    **The STOP rule.** Walk the citation-ranked citer years from the top, dropping
+    each into a bucket named by its year. The instant a bucket would exceed
+    ``cap``, stop the whole walk and return how many were admitted before it. A
+    pool that never trips the cap yields its full length::
 
-    *What it means.* ``cap`` is how many same-year papers a landmark view
+        years = [2020, 2020, 2020, 2019, 2018, 2020, 2017]
+
+        rank 0  2020  ->  bucket 2020 = 1   admit
+        rank 1  2020  ->  bucket 2020 = 2   admit
+        rank 2  2020  ->  bucket 2020 = 3   OVERFLOWS cap=2 -> STOP
+
+        => 2
+
+    Note what it cost: ranks 3-6 are never looked at, though buckets 2019, 2018
+    and 2017 are empty. That loss is the rule's defining property, not a bug.
+
+    *What it measures.* ``cap`` is how many same-year papers a landmark view
     tolerates before that year reads as a pile-up. A young, hot paper's top citers
-    cram into one or two years, so a single year floods almost immediately and the
-    budget is small; an old classic's spread across decades, so no year floods
-    until deep into the list and the budget is large. Same top citers, very
-    different ``n*`` — that gap is the temporal clutter this quantifies.
+    cram into one or two years, so a bucket floods almost immediately and the
+    number is small; an old classic's spread across decades, so nothing floods
+    until deep into the list and the number is large. Same top citers, very
+    different answer — that gap is the temporal clutter this quantifies.
 
-    The model's training **label** — what ``.predict()`` is regressing on — so
-    it's defined here beside the model rather than in the pipeline
-    (``ml_pipelines.cite_budget`` imports it, as it does :func:`compute_features`).
+    **This is the model's training label and nothing else** — what ``.predict()``
+    regresses on. No serving path calls it. It stops (rather than skipping full
+    buckets and walking on, as :func:`select_up_to_cap_per_year` does) purely
+    because a regression label has to be a single number and a selection is a list.
+    Where the pool is in hand, use the SKIP rule; see this module's docstring for
+    the 29-vs-84 measurement on DQN. Defined here beside the model it belongs to
+    rather than in the pipeline (``ml_pipelines.cite_budget`` imports it, as it
+    does :func:`compute_features`).
 
-    *Not* how landmarks get picked when the pool is in hand: being a prefix, one
-    dense year ends the walk and costs every sparser year behind it. See
-    :func:`density_selection`, which enforces the same cap per year instead. This
-    stays a prefix because a regression label has to be a single number.
-
-    An undated citer is admitted without contributing to any year's count — it
-    can't crowd a year it isn't in. Training passes an all-dated list (its
-    collector drops undated citers before labelling).
+    An undated citer is admitted without contributing to any bucket — it can't
+    crowd a year it isn't in. Training passes an all-dated list (its collector
+    drops undated citers before labelling).
 
     Args:
         citer_years: Citer publication years in citation rank (most-cited first),
             ``None`` for a citer the provider gave no year.
-        cap: The per-year density cap ``K`` (see :data:`DENSITY_CAP`).
+        cap: The per-year cap ``K`` (see :data:`PER_YEAR_CAP`).
 
     Returns:
-        The density-criterion landmark budget ``n*`` — e.g.
-        ``density_budget([2018, 2019, 2018, 2020, 2018], cap=2) == 4`` (the third
-        2018 trips ``cap=2`` at index 4).
+        How many ranked citers were admitted before a year first overflowed — e.g.
+        ``([2018, 2019, 2018, 2020, 2018], cap=2)`` returns ``4``, the third 2018
+        tripping the cap at index 4.
     """
     per_year: Counter[int] = Counter()
     for index, year in enumerate(citer_years):
@@ -193,7 +214,7 @@ def _reset_model_cache() -> None:
         cache_clear()
 
 
-def model_budget(year: int, citation_count: int, *, as_of_year: int,
+def predicted_budget(year: int, citation_count: int, *, as_of_year: int,
                  ceiling: int | None = None) -> int | None:
     """Predict and clamp one seed's landmark budget — the raw model call, config-free.
 
@@ -225,7 +246,7 @@ def model_budget(year: int, citation_count: int, *, as_of_year: int,
 def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
     """The seed-adapted landmark ship count, from the trained model.
 
-    Runs the model's ``predict`` on the seed's features (:func:`model_budget`)
+    Runs the model's ``predict`` on the seed's features (:func:`predicted_budget`)
     and clamps the result to ``[floor, ceiling]`` — the ceiling is the
     configured ``cite_limit`` (its ``null`` unbounded cap when unset), the floor
     the smallest budget seen in training. The budget only ever shrinks the
@@ -251,7 +272,7 @@ def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
     if not isinstance(seed_year, int):
         return ceiling  # no publication year — the model has no age to run on
     citation_count = seed_paper.get("citation_count") or 0
-    budget = model_budget(seed_year, citation_count, as_of_year=as_of_year, ceiling=ceiling)
+    budget = predicted_budget(seed_year, citation_count, as_of_year=as_of_year, ceiling=ceiling)
     if budget is None:
         return ceiling
     log.info(
@@ -261,15 +282,14 @@ def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
     return budget
 
 
-def density_selection(citer_years: Sequence[int | None]) -> list[int] | None:
-    """Which of a ranked citer pool to ship as landmarks: up to ``DENSITY_CAP`` per year.
+def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
+    """The app-facing landmark selection: the SKIP rule, plus this build's config.
 
     The counterpart to :func:`adaptive_cite_limit` for callers that already hold
-    the pool (the live S2 fallback). Walks the citation-ranked citers from the top
-    and admits each one whose publication year isn't yet full, **skipping** the
-    ones whose year is — so a dense year is capped without costing the sparse years
-    behind it, which is exactly what :func:`density_budget`'s prefix walk gets
-    wrong (see this module's docstring, and the 18-month hole it left on DQN).
+    the pool (the live S2 fallback). The walk itself — admit up to
+    :data:`PER_YEAR_CAP` per publication year, skipping citers whose year is
+    already full — is :func:`select_up_to_cap_per_year`, which has the worked
+    example; this wrapper only adds the toggle, the ceiling, and the log line.
 
     Returns *indices* rather than entries because ``integrations`` owns the citer
     dicts and this layer only ever sees their years; ``build.py`` injects this into
@@ -281,7 +301,7 @@ def density_selection(citer_years: Sequence[int | None]) -> list[int] | None:
     "one of the most-cited papers to cite this seed *in year Y*" — a citer with no
     year can't make it, and can't be drawn on a time axis either. Giving them a
     bucket of their own (an earlier cut of this did) ships a guaranteed
-    ``DENSITY_CAP`` of them, and since they all land on one x, they surface as a
+    ``PER_YEAR_CAP`` of them, and since they all land on one x, they surface as a
     bare vertical line through the seed's column. They're also the dregs in
     practice: S2 reports no year mostly for PDF-extraction stubs ("This paper is
     included in the Proceedings of…"), not for papers anyone would call landmarks.
@@ -302,31 +322,55 @@ def density_selection(citer_years: Sequence[int | None]) -> list[int] | None:
     """
     if not config.graph.adaptive_cite_limit:
         return None
-    keep = density_selection_rule(citer_years)
+    keep = select_up_to_cap_per_year(citer_years)
     ceiling = config.graph.cite_limit
     if ceiling is not None:
         keep = keep[:ceiling]
     log.info(
         "landmark selection: %d of %d ranked citers (cap %d/year)",
-        len(keep), len(citer_years), DENSITY_CAP,
+        len(keep), len(citer_years), PER_YEAR_CAP,
     )
     return keep
 
 
-def density_selection_rule(citer_years: Sequence[int | None],
-                           cap: int = DENSITY_CAP) -> list[int]:
-    """The per-year selection walk itself, config-free — shared by serving and pipelines.
+def select_up_to_cap_per_year(citer_years: Sequence[int | None],
+                              cap: int = PER_YEAR_CAP) -> list[int]:
+    """Pick up to ``cap`` citers from each publication year, walking the ranking top-down.
 
-    The pure rule :func:`density_selection` gates and trims for the app: admit
-    each ranked citer whose publication year isn't full yet, skip citers whose
-    year is, drop the undated. Factored out (the :func:`model_budget` precedent)
-    so the ``live_pool_validation`` study can run the exact serving rule over
-    simulated pools without depending on the local ``config.json``.
+    **The SKIP rule** — the pure, config-free walk, and the one the app actually
+    serves. Same bucketing as
+    :func:`number_of_ranked_citers_before_a_single_year_overflows`, but a full
+    bucket means *skip this citer and keep going*, never *stop*::
+
+        years = [2020, 2020, 2020, 2019, 2018, 2020, 2017]
+
+        rank 0  2020  ->  bucket 2020 = 1   admit
+        rank 1  2020  ->  bucket 2020 = 2   admit
+        rank 2  2020  ->  bucket FULL       SKIP, keep walking
+        rank 3  2019  ->  bucket 2019 = 1   admit
+        rank 4  2018  ->  bucket 2018 = 1   admit
+        rank 5  2020  ->  bucket FULL       SKIP, keep walking
+        rank 6  2017  ->  bucket 2017 = 1   admit
+
+        => [0, 1, 3, 4, 6]
+
+    Five landmarks spanning 2017-2020, where the STOP rule got two, both crammed
+    into 2020. A dense year is capped without costing the sparse years behind it.
+
+    Because it walks to the end, it returns a **selection**, not a count — you
+    cannot reproduce it by taking the top N of the ranking, since it steps over
+    citers sitting in already-full years. That's the "a count can't express the
+    answer" lesson (see this module's docstring, and the 18-month hole the STOP
+    rule left on DQN).
+
+    Factored out of :func:`select_landmarks` (the :func:`predicted_budget`
+    precedent) so the ``live_pool_validation`` study can run the exact serving rule
+    over simulated pools without depending on the local ``config.json``.
 
     Args:
         citer_years: The ranked landmark pool's publication years, most-cited
             first, ``None`` where the provider gave no year.
-        cap: The per-year density cap (see :data:`DENSITY_CAP`).
+        cap: The per-year cap (see :data:`PER_YEAR_CAP`).
 
     Returns:
         The indices of ``citer_years`` to ship, ascending (most-cited-first

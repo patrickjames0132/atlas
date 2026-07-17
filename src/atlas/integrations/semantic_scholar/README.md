@@ -93,7 +93,7 @@ package needs to know it's a package internally.
 > **Since v5.0.0 a graph is built from one provider.** When the user picks
 > **Semantic Scholar** in the header dropdown, `citation_relations()` is the
 > **primary** citation path (not a fallback). It carries a known interim
-> limitation — the ~10k offset recency bias below — that OpenAlex avoids with
+> limitation — the reachable-pool recency bias below — that OpenAlex avoids with
 > server-sorted `cites:` queries and that the offline S2 **citations corpus**
 > will eventually fix. (In v4.x this path was the OpenAlex-can't-resolve
 > fallback; the v5.0.0 provider split promoted it back to a first-class path.)
@@ -127,7 +127,7 @@ on-screen order agree.
 `citation_relations` takes an optional **`LandmarkSelectFn`** — a rule handed the
 *ranked* landmark pool's citer years, answering with the **indices** to ship; its
 pick wins over the flat `landmark_limit`. `services/graph`'s `build.py` passes
-`budget.density_selection`. A parameter rather than an import, so `integrations`
+`budget.select_landmarks`. A parameter rather than an import, so `integrations`
 stays below `services` in the dependency order (the same shape as OpenAlex's
 `BandStartFn`); years in, indices out, because the rule only reasons about *when*
 citers were published — the entries stay here.
@@ -139,15 +139,36 @@ offline corpus) — those push a ship count into a sorted query and must know it
 before they hold any citers. Here the pool is already in memory by trim time, so
 the band can be chosen from the real data.
 
-And it must be, because a count can't express the right answer. A count keeps a
-**prefix** of the ranking, and DQN's prefix is all one era: rank 29 exhausts the
-per-year cap on 2020, and 2024–2025 — 2155 citers sitting in the pool — never
-appear, leaving an 18-month hole before the Latest frontier. `density_selection`
-bands the ranking by year instead (twelve per year, skip the full ones), shipping
-84 across 2019–2025 with no hole and the same "no year over the cap" guarantee.
-It's the local equivalent of the per-year bands OpenAlex gets from its query —
-S2's `/citations` has no year filter, so the banding happens over the ranking.
-See `services/graph/budget.py`'s module docstring.
+And it must be, because a count can't express the right answer. Both candidate
+rules rank the citers most-cited first, drop each into a bucket named by its
+publication year, and never let a bucket exceed the per-year cap
+(`PER_YEAR_CAP` = 12). They differ in **one word** — what happens on a full bucket:
+
+```
+ranked citer years:  2020  2020  2020  2019  2018  2020  2017   (cap = 2)
+
+STOP   third 2020 overflows  -> quit the walk       => 2, both in 2020
+SKIP   third 2020 is skipped -> carry on walking    => 5, spanning 2017-2020
+```
+
+**STOP** (`number_of_ranked_citers_before_a_single_year_overflows`) returns a
+*count*, so it can only keep a **prefix** of the ranking — and it is **only ever a
+training label** for the predicting paths' model. **Nothing on this path calls it.**
+**SKIP** (`select_up_to_cap_per_year`, wrapped app-side as `select_landmarks`)
+returns *indices* — the specific citers to ship — and is what this path serves.
+
+DQN shows why the one word matters. STOP quits at rank 29 with the cap on 2020
+exhausted, so 2024–2025 — 2155 citers sitting in the pool — never appear, leaving
+an 18-month hole before the Latest frontier. SKIP skips the full years and walks
+on, shipping 84 (twelve in each of 2019–2025) with no hole and the same "no year
+over the cap" guarantee. It's the local equivalent of the per-year bands OpenAlex
+gets from its query — S2's `/citations` has no year filter, so the banding happens
+over the ranking.
+
+Every term here — landmark, pool, reachable, truncated, label, the two rules — is
+defined once, with this same example, in
+[`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md); the *why*
+of predicting vs computing is `services/graph/budget.py`'s module docstring.
 
 ### Deep paging
 
@@ -158,8 +179,10 @@ or the `_MAX_OFFSET` ceiling. Graph expansion (`citations()`, `deep=False`) stay
 one page — it wants the tip, fast.
 
 `_MAX_OFFSET` is **8000**, not 9000: verified live 2026-07-15, S2 400s a page whose
-window reaches ~10k (`offset=9000&limit=1000` fails on two different seeds, while
-`offset=8000` serves), so the reachable pool tops out at ~9k citers.
+window reaches past ~10k (`offset=9000&limit=1000` fails on two different seeds,
+while `offset=8000` serves). So the last servable page starts at 8000 and holds
+1000, and the **reachable** pool is exactly 8000 + 1000 = **9000** citers
+(`REACHABLE_CITERS`) — everything this path can ever see, however many exist.
 
 **Why it pages the whole list, not just the `latest` window** (v5.5.0). It used to
 stop at the first page holding no in-window citer — the window was covered, and the
@@ -177,8 +200,10 @@ for a day and the build's progress bar covers the wait.
 
 **Known limit of the *live* S2 path:** the offset ceiling is a hard wall. DQN's
 2013–2018 citers — its actual giants (AlphaGo, A3C, Rainbow) — are unreachable at
-any page count, so the landmark relation is the most-cited citers *within the
-reachable ~9k*, not the full citation history. Beating that wall was v3.1.0's
+any page count, so the pool is **truncated**: a recency slice holding the newest
+9000 citers, and the landmark relation is the most-cited citers *within that
+slice*, not across the full citation history. SKIP is exact about the slice, which
+is not the same as being right about the paper. Beating that wall was v3.1.0's
 `_mined_landmarks` (harvest citers' reference lists, co-citation rank, verify),
 retired in v4.0.0 when OpenAlex's sorted `cites:` made it redundant; the corpus is
 its replacement.

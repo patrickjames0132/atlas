@@ -1,4 +1,4 @@
-work_id,label,year,cited_by_count,pool_size,densest_year_count,n_star,n_star_k4,n_star_k8,n_star_k12,n_star_k16,n_star_k20,is_anchor
+work_id,label,year,cited_by_count,pool_size,densest_year_count,citers_before_overflow,citers_before_overflow_cap4,citers_before_overflow_cap8,citers_before_overflow_cap12,citers_before_overflow_cap16,citers_before_overflow_cap20,is_worked_example
 W2090386790,Hawking Radiation,1975,12959,500,24,217,41,117,217,295,403,1
 W2145339207,DQN,2015,30115,500,104,63,11,40,63,80,108,1
 W2794643322,QMIX,2018,352,352,74,46,16,26,46,70,95,1

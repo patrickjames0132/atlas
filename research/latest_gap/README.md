@@ -15,20 +15,35 @@ Where should the bands *start*, per seed, so that gap closes?
 
 ## What `analyze.ipynb` shows
 
-1. **The gap is real, and old-seed-specific.** ~10 of 64 seeds show a ≥ 3-year
+1. **The gap is real, and old-seed-specific.** 10 of 64 seeds show a ≥ 3-year
    visible gap under the fixed span — all old papers whose landmark cluster ends
    well before the fixed window.
 2. **Seed features can't predict the fix.** Reusing the `cite_budget` recipe
-   (regress on age + log-citations) scores a *negative* CV R²: the boundary
-   depends on the *shape* of each seed's landmark distribution, not its
-   age/citations. So the model operates on the distribution directly — which the
-   build already has in hand (landmarks are fetched before the bands).
-3. **A robust quantile, clamped and capped.** Start the bands at the `q`-quantile
-   of the landmark years, clamped to only widen (young seeds unchanged) and
-   capped at `max_span` years (bounded query cost). The knee lands at
-   **q=0.85, max_span=9**; the anchors behave sensibly (Hawking/DQN widen back to
-   meet their clusters, QMIX/Attention unchanged), and two misdated-future citers
-   don't move the boundary.
+   (regress on age + log-citations) scores a CV R² of **−0.15** — negative, i.e.
+   worse than predicting the mean. The boundary depends on the *shape* of each
+   seed's landmark distribution, not its age/citations. So the model operates on
+   the distribution directly — which the build already has in hand (landmarks are
+   fetched before the bands).
+3. **A quantile is the wrong detector — the old bulk drags it.** The obvious
+   "recent edge" statistic is a high quantile of the landmark years, and it was
+   the first cut. It *undershoots*: a quantile is **mass**-based, so a seed's
+   large old bulk pulls the boundary years before the cluster's visible edge.
+   Hawking's landmarks stay dense to **2020** (the cliff you can see on the
+   timeline), but its 0.85 quantile sits at **2013** — seven years early, because
+   160 landmarks pile up in 2000–2019. What ships instead is the **tail edge**:
+   the most recent year whose landmark count is still at least `tau` of the *peak*
+   year's count. Being count-based rather than mass-based, it tracks where the
+   cluster actually thins rather than where its bulk sits — on Hawking it lands on
+   2020, matching the eye.
+4. **`tau` is fit on robustness, not gap closure.** Sweeping `tau` barely moves
+   gap closure (the `max_span` cap dominates), so it isn't a gap knob — its real
+   job is surviving OpenAlex's misdated years. Appending two citers dated two
+   years past the newest moves 58/64 seeds' edges at `tau=0.10`, but only **1/64
+   at `tau=0.25`** — the cheapest robust choice, and what ships. `max_span=7` is
+   a separate cost cap (Patrick's pick): worst case `7 + 2 = 9` per-year band
+   queries. There is **no "only widen" clamp** — a young seed starts its bands at
+   its own recent edge (QMIX → 2024, three bands); an old one widens back to meet
+   its cluster (Hawking → 2020, seven bands).
 
 The notebook reads the corpus from `ml_pipelines/latest_gap/corpus.csv` (the
 single copy) and reproduces the analysis inline for the write-up.
@@ -40,7 +55,13 @@ uv run --group research jupyter nbconvert --execute --to notebook \
     --inplace research/latest_gap/analyze.ipynb
 ```
 
-To refresh the underlying data or the shipped model, use the pipeline
-(`python -m ml_pipelines.latest_gap.train --refresh`), then re-execute this
-notebook so the write-up matches. The productionized method, parameters, and
-tests are documented in `ml_pipelines/latest_gap/README.md`.
+To re-fit the shipped model from the committed corpus (offline, no API traffic):
+
+```bash
+uv run python -m ml_pipelines.latest_gap.train
+```
+
+Add `--refresh` to re-pull the corpus from OpenAlex first — that one *does* hit
+the live API. Either way, re-execute this notebook afterwards so the write-up
+matches. The productionized method, parameters, and tests are documented in
+`ml_pipelines/latest_gap/README.md`.

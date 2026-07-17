@@ -51,11 +51,13 @@ class TestPoolMetrics:
         assert metrics["oldest_pool_year"] == 2019
         # One citer per dated year, cap 12 -> nothing floods: the label is the
         # whole pool and the banded selection keeps every dated citer.
-        assert metrics["n_star_live"] == 6
-        assert metrics["banded_live"] == 5  # the undated citer is dropped, not banded
-        assert metrics["n_star_live"] == metrics["n_star_corpus"]
+        assert metrics["citers_before_overflow_reachable"] == 6
+        # The undated citer is dropped by SKIP, not given a bucket of its own.
+        assert metrics["selected_up_to_cap_per_year"] == 5
+        assert (metrics["citers_before_overflow_reachable"]
+                == metrics["citers_before_overflow_full"])
 
-    def test_truncation_moves_the_anchor_not_the_seed(self, synthetic_corpus):
+    def test_truncation_moves_the_age_origin_not_the_seed(self, synthetic_corpus):
         citers = collect.CorpusReader().citers(1)
         metrics = collect.pool_metrics(
             citers, seed_year=2013, seed_citation_count=900, as_of_year=2026,
@@ -67,11 +69,12 @@ class TestPoolMetrics:
         assert metrics["pool_size"] == 2
         assert metrics["oldest_pool_year"] == 2023
         # The full-history label still sees all six citers.
-        assert metrics["n_star_corpus"] == 6
-        # The re-anchored prediction reads age from the pool (2026-2023), the
-        # seed-anchored one from the seed (2026-2013) — both through the real
-        # committed model artifact, so they must differ for this old seed.
-        assert metrics["model_pool_anchor"] != metrics["model_seed_anchor"]
+        assert metrics["citers_before_overflow_full"] == 6
+        # The two age origins: one reads age from the pool (2026-2023), the
+        # other from the seed (2026-2013) — both through the real committed
+        # model artifact, so they must differ for this old seed.
+        assert (metrics["predicted_budget_age_from_oldest_citer"]
+                != metrics["predicted_budget_age_from_seed"])
 
     def test_band_start_needs_enough_dated_landmarks(self, synthetic_corpus):
         # MIN_LANDMARK_YEARS (10) dated landmark years don't exist here, so the
@@ -86,8 +89,9 @@ class TestRuleContracts:
     """The study runs the app's rules, not private copies that could drift."""
 
     def test_measures_use_the_apps_functions(self):
-        assert collect.budget.density_budget is app_budget.density_budget
-        assert collect.budget.density_selection_rule is app_budget.density_selection_rule
+        assert (collect.budget.number_of_ranked_citers_before_a_single_year_overflows
+                is app_budget.number_of_ranked_citers_before_a_single_year_overflows)
+        assert collect.budget.select_up_to_cap_per_year is app_budget.select_up_to_cap_per_year
 
     def test_truncation_is_the_pagers_own_constant(self):
         from atlas.integrations.semantic_scholar import traversal

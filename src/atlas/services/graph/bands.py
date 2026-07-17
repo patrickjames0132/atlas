@@ -1,5 +1,9 @@
 """Serving the adaptive latest-band boundary — closing the landmark→latest gap.
 
+Every term here — landmark, band, tail edge, ``tau``, ``max_span`` — is defined
+once, with worked examples, in ``docs/landmark-vocabulary.md``; the sibling
+``budget`` module sizes the landmark band, this one places the Latest boundary.
+
 Field Landmarks are a seed's all-time most-cited citers (any year); Latest
 Publications fills recent years evenly with one ``cited_by_count`` query *per
 year*, up to the current year. Those bands used to start at a **fixed** lower
@@ -71,16 +75,32 @@ MIN_LANDMARK_YEARS = 10
 def tail_edge(landmark_years: list[int], tau: float) -> int:
     """The recent edge of a landmark cluster: the last still-dense year.
 
-    Scanning from the most recent landmark year backward, the first year whose
-    count is at least ``tau`` of the peak year's count — where the per-year
-    density drops out of the cluster. The rule shared by serving (here) and
-    training (``src/ml_pipelines/latest_gap``) so the two can't disagree on what the
+    Count the landmarks per publication year, take ``tau`` of the **peak** year's
+    count as a threshold, then scan back from the newest year and return the first
+    year that still clears it — i.e. where the cluster stops being a cluster::
+
+        landmarks counted by year        tau = 0.25
+            2015:  10  <- peak          threshold = 0.25 * 10 = 2.5
+            2016:   8
+            2017:   3
+            2018:   1
+            2019:   1
+
+        scan back from the newest year:
+            2019:  1  <  2.5   too thin, keep scanning back
+            2018:  1  <  2.5   too thin, keep scanning back
+            2017:  3 >= 2.5   still dense -> this is the edge
+
+        => 2017
+
+    The rule is shared by serving (here) and training
+    (``src/ml_pipelines/latest_gap``), so the two can't disagree on what the
     boundary means.
 
-    Scale-free (the threshold is relative to this seed's own peak, so it works
-    for a 30-landmark seed and a 160-landmark one alike) and robust to a handful
-    of misdated citers — an outlier year can't clear the count threshold, where a
-    min/max would jump straight to it.
+    Scale-free — the threshold is relative to this seed's *own* peak, so it works
+    for a 30-landmark seed and a 160-landmark one alike — and robust to a handful
+    of misdated citers: two outliers can't clear the count threshold, where a
+    plain min/max would jump straight to them.
 
     Args:
         landmark_years: The shipped landmarks' publication years (unsorted OK).
@@ -168,7 +188,7 @@ def band_start_rule(landmark_years: list[int], landmark_max_year: int) -> int | 
     """The fitted tail-edge rule itself, config-free — shared by serving and pipelines.
 
     :func:`earliest_band_year` gates this on ``config.graph.adaptive_latest_band``
-    for the app; the rule is factored out (the ``budget.model_budget`` precedent)
+    for the app; the rule is factored out (the ``budget.predicted_budget`` precedent)
     so the ``live_pool_validation`` study can place band starts over simulated
     pools without depending on the local ``config.json``. Still returns None when
     the artifact isn't loadable or the seed has too few dated landmark years.

@@ -353,7 +353,7 @@ def citations(paper_id: str, limit: int) -> list[dict]:
 
 
 #: Injected landmark selector: ``(ranked citer years) -> indices to ship | None``.
-#: ``services/graph`` passes ``budget.density_selection``, which bands the ranking
+#: ``services/graph`` passes ``budget.select_landmarks``, which bands the ranking
 #: by year; None falls back to the flat ``landmark_limit``. It takes years and
 #: returns indices because the rule only reasons about *when* citers were
 #: published — the entries themselves stay here. A parameter, not an import, so
@@ -391,7 +391,7 @@ def citation_relations(
     *prefix* of the ranking, which on a seed like DQN is all one era — the top 29
     are 2019–2023 and 2024–2025 never appear, leaving a visible hole before the
     Latest frontier. A selector bands the ranking by year instead, so every year
-    from the ceiling to the window gets its slice. See ``budget.density_selection``.
+    from the ceiling to the window gets its slice. See ``budget.select_landmarks``.
 
     Args:
         paper_id: An S2 paperId or prefixed id.

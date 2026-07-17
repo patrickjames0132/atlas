@@ -170,10 +170,11 @@ is extraction-driven, so a preprint-dedup heuristic would **not** recover it.
 S2's `citation_relations` runs *only* as a fallback, when OA can't resolve the
 seed. The reason is an S2 **API limitation, not a data one**: S2's citation
 endpoint is **newest-first with no citation-count sort**, and paging caps at
-`_MAX_OFFSET` (~10k, in `_fetch_citers`). So S2 cannot hand you the
-*most-cited* citers of a heavily-cited paper — the landmarks are older, buried
-past the offset ceiling, and there's no `sort=citations` to reach them; all S2
-can do is mine the newest ~10k and guess (recency-biased). OpenAlex supports
+`_MAX_OFFSET` (8,000, in `_fetch_citers`) — that last page holds 1,000, so
+`REACHABLE_CITERS` is exactly **9,000**. So S2 cannot hand you the *most-cited*
+citers of a heavily-cited paper — the landmarks are older, buried past the offset
+ceiling, and there's no `sort=citations` to reach them; all S2 can do is mine the
+newest 9,000 and guess (recency-biased). OpenAlex supports
 `sort=cited_by_count:desc` server-side, returning the landmark citers directly
 in a couple of cheap calls.
 

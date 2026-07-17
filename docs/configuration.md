@@ -82,22 +82,26 @@ special case for it. A typical split:
     model (`src/ml_pipelines/cite_budget/model.joblib`) and calls `.predict()`;
     it's fit by `src/ml_pipelines/cite_budget/train.py` (see that package's
     README, and `research/cite_budget/` for the exploratory study).
-  - **Selected** from the citer pool directly — up to `DENSITY_CAP` (12) landmarks
-    **per publication year**, taking the most-cited in each. Used by the **live S2
-    citation fallback**, which holds its whole pool in memory before trimming, so
-    nothing has to be predicted. It also can't use a count: a count keeps a prefix
-    of the ranking, and DQN's prefix is entirely 2019–2023 — leaving an 18-month
-    hole before the Latest frontier. Per-year banding ships 84 landmarks evenly
-    across 2019–2025 instead, with no hole. No model artifact needed.
+  - **Selected** from the citer pool directly — up to `PER_YEAR_CAP` (12) landmarks
+    **per publication year**, taking the most-cited in each and *skipping* citers
+    whose year is already full (`select_landmarks`, the **SKIP rule**). Used by the
+    **live S2 citation fallback**, which holds its whole pool in memory before
+    trimming, so nothing has to be predicted. It also can't use a count: a count
+    keeps a prefix of the ranking, and DQN's prefix stops at 29 landmarks with
+    **nothing from 2024–2025** — an 18-month hole before the Latest frontier.
+    Skipping full years instead ships 84 landmarks, twelve in each of 2019–2025,
+    with no hole. No model artifact needed.
 
-  Turn off to always ship the flat `cite_limit` on every path.
+  Turn off to always ship the flat `cite_limit` on every path. Both routes' terms
+  are defined in [`landmark-vocabulary.md`](landmark-vocabulary.md).
 - **`adaptive_latest_band: true`** — the *Latest Publications* relation fills
   recent years evenly, one query per year up to the current year; the lower edge
   defaults to a fixed `latest_band_years` offset (5). For an old seed whose
   landmarks tail off years before that, the timeline shows a dead stretch between
   the last landmark and the first band. When on, the band start is chosen **per
-  seed** at the **density tail edge** of the seed's landmark cluster — the most
-  recent year still holding ≥ `tau` of its peak year's landmark count (a second
+  seed** at the **tail edge** of the seed's landmark cluster — scanning back from
+  the newest landmark year, the first year still holding ≥ `tau` of the peak
+  year's landmark count (a second
   model trained on real data, `src/ml_pipelines/latest_gap/model.joblib`, served in
   `services/graph/bands.py`) — so an old classic's bands widen back to meet its
   cluster while a young paper starts at its own recent edge (a tight frontier). A
