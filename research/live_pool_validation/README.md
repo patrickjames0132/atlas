@@ -34,12 +34,28 @@ uv run --group research jupyter nbconvert --execute --to notebook \
 The notebook fails loudly with instructions when `corpus.csv` hasn't been
 collected yet.
 
-## Status
+## The verdict (2026-07-17)
 
-The corpus was collected on the corpus machine **2026-07-16** — 58 of 64 seeds
-resolved, 18 of them truncated — and the notebook has been executed against it.
-The **Verdict section is still the placeholder framing**: the measured answers are
-in the notebook's outputs but the conclusion has not been written, and nothing has
-been carried back into the two Backlog tickets. That is the next step, and it's a
-judgement call rather than a mechanical one — see the notebook's own Verdict cell
-for the outcomes each ticket enumerated.
+Collected 2026-07-16 (58 of 64 seeds; 18 truncated), executed, and answered. The
+full argument is the notebook's Verdict section; the conclusion is **the model
+comes off the live path — and off the corpus path too**, leaving it serving
+OpenAlex alone:
+
+- **Q1/Q2.** Moving the age origin to the oldest reachable citer is a **real
+  repair** — the seed origin scores **−0.707** on truncated pools (worse than
+  guessing the mean), the oldest-citer origin **+0.446**. But the repaired model
+  is still **41% off** a number the live path computes exactly, for free, from
+  memory. Validated, and unneeded.
+- **Q3.** The premise **holds** — R² **0.644** on corpus pools against the model's
+  own **0.680** on its training pools. It still shouldn't be used there: timed on
+  DQN, the corpus's `LIMIT` saves **0.9%** of a 22-second query (22.08s for 63
+  citers vs 22.28s for all 28,732). The pool is already paid for and thrown away.
+- **Band starts.** The tau rule is **structurally incompatible** with a
+  quota-selected band — 56/58 seeds collapse to a one-year band, and 23/23 of the
+  exactly-flat ones do. It belongs on the corpus path instead.
+- **Unasked-for.** "Exact" is about arithmetic, not the pool: VMD's live label is
+  **12** against a full-history **166**.
+
+Both tickets are updated: the live-path one is resolved in
+[`docs/history.md`](../../docs/history.md), and the corpus one is re-scoped around
+the measurement in [`OnePager.md`](../../OnePager.md).

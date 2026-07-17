@@ -590,6 +590,56 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **Live-path landmarks & Latest: the age-origin study — validated, and
+      unneeded** *(v5.10.0's study; verdict 2026-07-17, no code change)* — Patrick's
+      design to bring both trained models back to the live S2 fallback: (1) keep
+      paging the reachable list, (2) run `cite_budget` with its **age origin at the
+      oldest citer in the pool** rather than the seed (the truncated pool doesn't
+      span the seed→now gap the seed-origin feature describes — DQN reads as a dense
+      7-year history, not a 13-year classic), (3) let the model set the *total* only,
+      with per-year banding still choosing *which* papers, (4) place the Latest band
+      start with the `latest_gap` tau rule instead of a flat 12-month window. The
+      ticket demanded it be **validated offline before wiring**, and stated its own
+      null hypothesis up front: the live path already holds the pool, so the rule is
+      computable, so the model may prove redundant. `ml_pipelines/live_pool_validation`
+      simulated the exact reachable pool (newest 9,000 citers) for 58 seeds — 18 of
+      them truncated — and ran both age origins against the rule computed exactly.
+      **The verdict, in `research/live_pool_validation/analyze.ipynb`:**
+      **Step 2 was right about the disease and wrong about the cure.** The seed
+      origin *is* broken on truncated pools — **R² −0.707**, worse than predicting
+      the mean — and moving the origin to the oldest reachable citer really does
+      repair it, to **+0.446**. The diagnosis was correct. But the repaired model
+      still misses by **41%** (MAE 25.5 against a label averaging 62.7) on a number
+      the serve path can compute *exactly, for free, from memory*. So the null
+      hypothesis held — not by the route it predicted (the model tracking the label
+      so closely as to be redundant) but by a blunter one: predicting a computable
+      quantity inherits error and saves nothing
+      ([predict-vs-compute.md](predict-vs-compute.md), *a fortiori*). The sharpest
+      form: **the age-origin repair fixes a distortion that only exists on truncated
+      pools, and the only path with truncated pools is the one path that needs no
+      model.** Correct, and nowhere to live.
+      **Step 4 turned out unbuildable** — a finding the ticket's "eyeball the
+      transfer rather than trusting it" caution earned. **56 of 58 seeds collapsed
+      to a single-year Latest band**, and structurally so, twice over. First, step 3
+      destroys what step 4 needs: `tail_edge` thresholds at `tau × the peak year's
+      count`, but `select_up_to_cap_per_year` caps *every* year at 12 — so the peak
+      **is** the cap, the threshold collapses to `0.25 × 12 = 3`, and any full year
+      clears it instantly. Hawking's pool spans 1998–2026 and its selection is
+      **exactly 348 = 29 × 12**; of the 23 seeds whose selection is exactly
+      `12 × span`, **23 of 23** got a one-year band. Fed the app's own `tail_edge`, a
+      flat 12/year shape returns 2026 where a top-N shape (what tau was *fit* on)
+      returns 2020. Second and deeper: **a truncated pool has no recent tail to
+      find** — it *is* the recent end, by definition. Steps 1 and 3 were already
+      v5.5.0's shipped behavior, so the whole ticket resolved to **change nothing**.
+      **Two things it left behind.** The tau rule *does* belong somewhere — the
+      corpus path, which has real full-history distributions and still serves a flat
+      12-month window (folded into the corpus-models ticket). And a finding neither
+      ticket asked for: "exact" is a claim about arithmetic, not about the pool. The
+      live path's computable label is exact about a sliver — VMD **12 against a
+      full-history 166** (13.8×), median **1.8×** across the truncated seeds, and
+      *Attention Is All You Need*'s newest 9,000 citers all sit in **one year**. The
+      live path's real fix was never a better estimator; it's the offline corpus.
+
 A reframe of the mega-paper citation story, decided with Patrick after we shelved
 the stratified-sampling + velocity WIP. **Drop stratified offset windows
 entirely.** One newest-≤1000 citation fetch does double duty, splitting citations

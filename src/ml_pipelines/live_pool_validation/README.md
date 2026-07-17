@@ -12,10 +12,19 @@ two ways.
 Unlike its siblings this is a **validation pipeline, not a trainer** — it produces
 `corpus.csv` and a verdict (the notebook in `research/live_pool_validation/`), not
 a model artifact. Its null hypothesis, stated in the ticket and argued in
-[`docs/predict-vs-compute.md`](../../../docs/predict-vs-compute.md), is that the
+[`docs/predict-vs-compute.md`](../../../docs/predict-vs-compute.md), was that the
 model is *redundant* on the live path — the pool is already in memory there, so
-running the rule exactly beats predicting it. If the verdict instead demands a
-retrain, a `train.py` joins this package then.
+running the rule exactly beats predicting it.
+
+**Answered 2026-07-17: the null hypothesis stands, and no `train.py` is needed
+here.** Moving the age origin to the oldest reachable citer is a genuine repair
+(−0.707 → +0.446 on truncated pools) to a model that is still 41% off a number the
+serve path computes exactly for free — so it comes off the live path. The
+measurements went further than the tickets asked: the corpus path's `LIMIT` saves
+only 0.9% of its query, so it should compute too, leaving the model serving
+OpenAlex alone; and the tau rule turns out structurally unable to read a
+quota-selected band. The full argument is in `research/live_pool_validation/`; the
+resolved ticket is in `docs/history.md`.
 
 ## Why three columns of the "same" number disagree
 

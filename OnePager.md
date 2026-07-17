@@ -244,87 +244,60 @@ optional, behind a key.
       the **flat rolling 12-month window** inherited from the live fallback
       (`_latest_cutoff()`), not per-seed tail-edge bands. The corpus has every
       edge with dates, so it *could* band per year exactly like OpenAlex — it's the
-      one provider with no excuse. **And `cite_budget`** is fit on OpenAlex-collected
-      labels; the corpus's pools are all-time-ranked like OpenAlex's, so the premise
-      *holds* here (unlike the live fallback, which is why v5.5.0 gave that path a
-      measured rule instead) — but "holds in principle" isn't measured. Re-collect
-      the label against corpus pools for the worked examples and compare: if DQN's
-      63 is right, that's a real finding; if it isn't, the same `select_landmarks`
-      shape the live path uses may fit here too — likely, per the predict-vs-compute
-      lens ([docs/predict-vs-compute.md](docs/predict-vs-compute.md)): the corpus
-      pool is local, so it can *compute* the rule rather than predict it.
-      Both are now testable **offline and for free**
-      — the corpus is local, so the training collector no longer needs to page a
-      live API. *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the
-      latest-gap gap.)* **Related:** the live-path counterpart — moving
-      `cite_budget`'s **age origin** to the oldest reachable citer + latest-gap
-      banding — is its own ticket just below; the offline re-collection study should
-      serve both. **Measured 2026-07-16** by `live_pool_validation` (58 seeds); the
-      verdict is not yet written up — see `research/live_pool_validation/`.
-- [ ] **Live-path landmarks & Latest: move the cite-budget model's age origin to
-      the oldest reachable citer, band Latest with the latest-gap model** — the
-      sibling of the corpus-models ticket above, for the live s2 fallback.
-      (Vocabulary: [docs/landmark-vocabulary.md](docs/landmark-vocabulary.md).)
-      v5.5.0 took the `cite_budget` model *off* the live path (its
-      OpenAlex-trained age feature described a seed→now span the 9,000-citer
-      reachable pool doesn't cover) and left `select_landmarks`'s flat 12/year cap
-      plus a flat rolling 12-month Latest window (`_latest_cutoff`) — so neither
-      trained model serves the fallback. Patrick's design to bring both back
-      honestly (from the DQN screenshot: the reachable citer list stops at
-      2019 against a 2013 seed):
-      1. Keep paging the whole reachable list (v5.5.0 behavior — to the list's
-         end or the 9,000-citer ceiling, whichever the seed hits first).
-      2. Run the cite-budget model with its **age origin at the oldest citer
-         actually in the pool**, not the seed's publication date
-         — the features then describe the pool being sized (DQN reads as a
-         dense 7-year history, not a 13-year classic), which is exactly the
-         training-distribution repair the "sizing a pool it was never trained
-         on" entry in `docs/bugs.md` left open. The seed's **total** citation
-         count stays the second feature (the citation term is weak, and the
-         young-age/mega-citations corner is anchored by the OpenAlex-misdated
-         Attention test).
-      3. The model's output is the **total** landmark budget only — the
-         per-year banding (`select_landmarks`'s cap mechanics) still decides
-         *which* papers. A top-N prefix over a truncated pool re-crowds into
-         the densest years and strands the recent ones — v5.5.0's "a count
-         can't express the answer" hole comes straight back. Size from the
-         model, spread from the banding.
-      4. Latest stops being a fixed 12-month window: feed the shipped
-         landmarks' years to `bands.earliest_band_year` (the latest-gap tau
-         model) for the band start, then fill per-year Latest bands from the
-         **in-memory pool** (bucket by year, top-cited per year) — zero extra
-         API calls (S2 has no year filter anyway; we already hold every
-         reachable citer), same shape as the OpenAlex path (`build.py`'s
-         `band_start=`).
-      **Validate offline before wiring:** the corpus can simulate the live
-      pool exactly (a seed's newest 9,000 citers), so run the STOP rule against
-      simulated truncated pools and check the oldest-citer-origin predictions
-      track it — one study with the corpus ticket's label re-collection.
-      **This has now been run** (`live_pool_validation`, 2026-07-16, 58 of 64
-      seeds; 18 truncated) but the **verdict is not yet written up** — the
-      measurements are in `research/live_pool_validation/analyze.ipynb`, whose
-      Verdict cell is still the placeholder framing.
-      **Null hypothesis, stated up front:** on the live path the full pool is
-      already in memory, so the rule is *computable* directly — the model may
-      validate as **redundant** there (its prediction just tracking a number we
-      can compute). If so, drop the model from the live path and keep the exact
-      selection; moving the age origin then only matters wherever a pre-fetch
-      estimate is ever needed. See
-      [docs/predict-vs-compute.md](docs/predict-vs-compute.md) for the
-      predict-vs-compute principle this falls out of. **Why no Latest model
-      either:** a scalar can't say *where in time* nodes go (recency ×
-      citation-count anticorrelation collapses any single ranking to one end
-      of the window), and the `latest_gap` study already measured a
-      seed-feature regression for the boundary at **negative CV R²** — learn
-      the constants (`tau`, `max_span`) offline, run the rule exactly online.
-      Watch two edges: the truncation-edge year is *partial* in the pool (an
-      under-filled band there is honest — but don't let counts imply
-      completeness), and the latest-gap model was fit on whole-history
-      landmark distributions, so eyeball the anchors (DQN, QMIX, Hawking)
-      rather than trusting the transfer. Related: "Even Latest-Publications
-      spread via citation velocity" below — velocity could serve as the
-      within-band ranking. *(Patrick's design, 2026-07-16; predict-vs-compute
-      framing settled same day.)*
+      one provider with no excuse.
+
+      **Now measured** (`live_pool_validation`, 58 seeds; verdict 2026-07-17 in
+      `research/live_pool_validation/analyze.ipynb`), and the answer is *compute,
+      on both counts*:
+
+      - **The model's premise holds here — and that turns out not to matter.**
+        Seed-origin predictions score **R² 0.644** against the label computed on
+        the corpus's full-history pools, versus the model's own cross-validated
+        **0.680** on its OpenAlex training pools: a transfer gap of just −0.037.
+        The ticket's expectation was right; nothing is wrong with the model.
+        But the reason to predict was cost, and **the cost isn't there**. Timed on
+        DQN, warm: `landmark_citers(limit=63)` takes **22.08s** and
+        `landmark_citers(limit=None)` — the whole 28,732-citer pool — takes
+        **22.28s**. The `LIMIT` saves **0.9%**: the bucket scan, the row dedupe and
+        the join against the 200M-row papers table dominate and happen regardless.
+        **The corpus already pays for the pool and then throws it away.** So for
+        two tenths of a second it can have the exact answer *and* the better rule.
+      - **The tau rule belongs here, and only here.** The live path can't use it —
+        `select_up_to_cap_per_year` flattens every year to the cap, so `tail_edge`'s
+        `tau × peak` threshold collapses to 3 and any full year clears it (56/58
+        seeds collapsed to a one-year band; 23/23 of the exactly-flat ones did).
+        The corpus has real full-history distributions with a real thinning tail —
+        exactly what tau was fit on.
+
+      **The work, then:** (1) drop `adaptive_cite_limit` from the corpus path, call
+      `landmark_citers` unlimited, and run `select_up_to_cap_per_year` over the
+      result; (2) wire `bands.band_start_rule` into `corpus.citation_relations` and
+      fill per-year Latest bands, retiring `_latest_cutoff()`'s flat window there.
+      Both are local, offline, and free. **Watch the interaction** with the "cold
+      corpus builds take ~54s" ticket below: the unlimited fetch materializes ~29k
+      rows instead of 63, which is 0.2s today but shares a root cause with that
+      ticket — fix the query, not the limit.
+      *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the latest-gap gap;
+      measured and re-scoped 2026-07-17.)*
+- [ ] **The live path can only see the recent sliver — the fix is the corpus, not
+      a better estimator** — *(the residue of the live-path age-origin ticket,
+      which `live_pool_validation` answered on 2026-07-17: see
+      [docs/history.md](docs/history.md). The design's steps 2 and 4 are dead; this
+      is what its measurements left behind.)* The study put a number on how little
+      the live S2 fallback can see: across 18 truncated seeds the full-history
+      landmark budget is a median **1.8×** the one computable from the reachable
+      pool, and the tail is savage — VMD **12 vs 166** (13.8×), KEGG 13 vs 131,
+      Random Forests 15 vs 114. *Attention Is All You Need*'s newest 9,000 citers
+      **all fall in one year**, so the live path can see no history of it at all.
+      Nothing on the live path fixes this: it isn't an estimation error, it's
+      missing data, and the exactly-computed answer is exact about a sliver. The
+      `select_up_to_cap_per_year` band is the honest response (it ships what the
+      window holds without implying the window is the history), and the real repair
+      is the **offline corpus**, already built. So this is less a ticket than a
+      standing reason not to invest further in live-path landmark sizing — and an
+      argument for surfacing provenance in the UI, since the same seed can
+      legitimately show a 14×-different landmark band depending on the data source.
+      *(Patrick's design, 2026-07-16; measured and resolved 2026-07-17.)*
 - [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
       — a cache-miss graph on the s2 provider now takes ~54s against the live
       path's ~15s, all of it in the citer query. That's the wrong shape: the whole
