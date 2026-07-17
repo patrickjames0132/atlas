@@ -63,7 +63,8 @@ directory if a single drive holds everything):
 <storage.s2.parquet>/                  what gets queried
   CURRENT                              <- text file: the active release_id
   releases/<release_id>/
-    parquet/papers/*.parquet           <- projected paper rows, one file per shard
+    parquet/papers/clustered_*.parquet <- projected paper rows, globally SORTED by corpusid
+    parquet/papers/_done/<shard>.ok    <- per-shard markers (shard files fold away on compaction)
     parquet/arxiv_index/*.parquet      <- arxiv_id → corpusid (small, sorted)
     parquet/citations/bucket=<N>/…     <- edges, hash-partitioned on citedcorpusid
 ```
@@ -98,7 +99,7 @@ root you forget stays None and raises only when something touches it.
 
 ### Ingest layout, chosen for the one query (`ingest.py`)
 
-The app runs exactly one shape of query: *a single seed's citers, ranked*. Two
+The app runs exactly one shape of query: *a single seed's citers, ranked*. Three
 choices make that cheap against billions of rows:
 
 - **citations are hash-partitioned on `citedcorpusid`** (`citedcorpusid % NBUCKETS`,
@@ -106,6 +107,24 @@ choices make that cheap against billions of rows:
   ~1/1024 of the edge list. Within a bucket, rows are sorted by `citedcorpusid`,
   so Parquet row-group zone maps skip most of the bucket too. **The query side
   imports `NBUCKETS` — the modulus must never be re-hardcoded.**
+- **papers are clustered — globally sorted by `corpusid`** (since v5.12.0).
+  Shards land one file each (the incremental resume unit), then a **compaction
+  pass** rewrites the whole dataset in one `ORDER BY corpusid` sort
+  (`clustered_*` files replace the shard files; `_done/` markers keep the rerun
+  skip working). Global matters: every shard spans the whole 0–290M id range, so
+  per-shard sorting leaves every row group covering everything and *nothing
+  prunes* — measured before the fix, hydrating 63 citers cost the same 33s as
+  hydrating all 31,878, because every one of the dataset's 1,946 row groups said
+  "maybe". Clustered, row groups own contiguous id slices and a small `IN`
+  lookup reads a handful of them (subset-measured 1.65s → 0.65s, and the subset
+  understates the full-scale win ~30x). The one-time sort is paid once per
+  release and took **~10–15 minutes** on the real 24.8 GB — the 1.8 GB subset
+  extrapolated to ~3, but it sorted in RAM, and the full dataset spills
+  (`_spill/`) into an external merge sort, so DuckDB's progress bar is enabled
+  to show movement. The swap is
+  staged in `_compacting/` and committed by its `MANIFEST.json`, so a crash at
+  any point resumes cleanly. Athena prunes on the same statistics, so the
+  endgame layout is unchanged.
 - **an arXiv index** (`arxiv_id → corpusid`, only rows that have an arXiv id)
   makes resolving a seed — nearly always an arXiv paper — a small sorted lookup
   instead of a 200M-row scan.
@@ -120,10 +139,12 @@ bottleneck — 2.8 min/shard, ~18h projected, and merely listing the output dire
 timed out. `_connect()` raises it past `NBUCKETS`, giving one ~61 KB file per bucket
 per shard. **Any change to `NBUCKETS` has to move that limit with it.**
 
-Ingest is **incremental/idempotent**: a papers shard whose `.parquet` exists is
-skipped; a citations shard records a `_done/<shard>.ok` marker (its output is
-spread across bucket dirs, so existence alone can't tell). A rerun after an
-interrupted ingest resumes.
+Ingest is **incremental/idempotent**: both datasets record `_done/<shard>.ok`
+markers (a citations shard's output is spread across bucket dirs; a papers
+shard's file folds away into the clustered dataset at compaction — so for both,
+file existence alone can't tell). A papers shard is also skipped while its
+pre-compaction `.parquet` still sits there. A rerun after an interrupted ingest
+resumes, and an already-clustered rerun skips the sort too.
 
 ### S2 ships every edge twice (their bug, our GROUP BY)
 
@@ -149,12 +170,32 @@ landmark tests fail if you do. See **Upstream** in `docs/bugs.md`.
 ### The query seam (`source.py`)
 
 `CitationSource` is a tiny `Protocol` — `landmark_citers(corpus_id, limit, *,
-max_landmark_year)` and `latest_bands(corpus_id, *, band_start, current_year,
-per_year)` — so the DuckDB-over-Parquet impl now and the **Athena-over-S3** impl
-later (same SQL, same schema) are interchangeable and the app never learns which
-it's using. `latest_bands` does in **one** windowed query (`ROW_NUMBER() OVER
-(PARTITION BY year …)`) what the OpenAlex path needs one HTTP call per year for —
-the one place being local is an outright advantage rather than a workaround.
+max_landmark_year, landmark_budget=None)` and `latest_bands(corpus_id, *,
+band_start, current_year, per_year)` — so the DuckDB-over-Parquet impl now and
+the **Athena-over-S3** impl later (same SQL, same schema) are interchangeable and
+the app never learns which it's using. `latest_bands` does in **one** windowed
+query (`ROW_NUMBER() OVER (PARTITION BY year …)`) what the OpenAlex path needs
+one HTTP call per year for — the one place being local is an outright advantage
+rather than a workaround.
+
+**Both queries are two-phase since v5.12.0** — rank narrow, hydrate winners:
+
+1. **Rank** joins the seed's (deduped) citer edges to `papers` projecting only
+   `(corpusid, year, isinfluential)`, ordered by the citers' citation counts.
+   The ranking genuinely must touch every citer, so what it *projects* is the
+   whole cost — and the old one-phase query projected all nine display columns
+   for every one of them. Measured on DQN (31,878 citers to ship 63): 39.24s,
+   of which the `authors` JSON blob alone was +18.6s; the same join projected
+   narrow is **1.09s**.
+2. **Hydrate** fetches the wide columns (`title`, `authors`, …) for the winners
+   only — after the landmark budget has trimmed the ranking, so tens of rows —
+   via an `IN` lookup that the clustered layout makes zone-map-prunable. (This
+   is the phase that was pointless before clustering: on the arrival-ordered
+   layout, 63 ids cost the same full scan as 31,878.)
+
+The edge's `isinfluential` rides through phase 1 and is stitched back on in
+Python; `latest_bands` re-sorts its hydrated winners by date in Python to keep
+the one-phase query's `publicationdate DESC NULLS LAST` order.
 
 `citation_relations(seed_paper, seed_ref, …)` is the module-level entry point
 `services/graph/build.py` calls. It:
@@ -185,15 +226,16 @@ where the flat span would have said 2020).
 
 **Since v5.11.0 this path computes its landmark budget rather than predicting it.**
 `build.py` injects `budget.computed_cite_limit` as a `landmark_budget` rule, the
-query runs **unlimited**, and the rule measures the full ranking — the trained
-`cite_budget` model is not consulted here at all. That sounds like it should cost
-more and doesn't: measured on DQN, warm, `landmark_citers(limit=63)` took
-**22.08s** and `landmark_citers(limit=None)` — all **28,732** citers — took
-**22.28s**, a **0.9%** difference. The bucket scan, the row dedupe and the join
-against the 200M-row papers table dominate and happen either way, so the `LIMIT`
-was only ever discarding rows this query had already paid for. The model now serves
-OpenAlex alone, the one path whose data genuinely isn't in hand at decision time —
-see [`docs/predict-vs-compute.md`](../../../../../docs/predict-vs-compute.md) and
+ranking runs **unlimited**, and the rule measures the full pool — the trained
+`cite_budget` model is not consulted here at all. The rule now travels *into*
+`landmark_citers` so it runs between the two phases: it reads every ranked
+citer's year (nothing pre-trimmed — the whole v5.11.0 point), and only the
+prefix it keeps is hydrated wide. Unlimited ranking is cheap because the narrow
+projection is the cheap one; the old one-phase query made "unlimited vs 63" a
+0.9% difference only because *both* paid the full 20–40s wide join. The model
+now serves OpenAlex alone, the one path whose data genuinely isn't in hand at
+decision time — see
+[`docs/predict-vs-compute.md`](../../../../../docs/predict-vs-compute.md) and
 `ml_pipelines/live_pool_validation`'s verdict.
 
 **The answer is still a count, and the band still a prefix** — the same shape the
@@ -229,9 +271,16 @@ resumable) — not something on any request path:
 atlas corpus status                       # where the corpus is, what's downloaded/active
 atlas corpus download --shards 1          # a ~1 GB/dataset sample to prove the pipeline
 atlas corpus download                     # the full ~300 GB (resumes if interrupted)
-atlas corpus ingest                       # JSONL.gz → Parquet, then flip CURRENT
+atlas corpus ingest                       # JSONL.gz → Parquet (incl. clustering), flip CURRENT
+atlas corpus compact                      # cluster a release ingested before v5.12.0
 atlas corpus activate                     # (re)point CURRENT at a finished release
 ```
+
+`compact` is the **migration** for a corpus ingested before clustering existed
+(new ingests compact automatically): a one-time in-place sort of the active
+release's papers — ~10–15 minutes; watch DuckDB's progress bar — needing only
+the parquet root, so the raw shards can be long gone. Rerunning it on a
+clustered release is a fast no-op.
 
 Point `config.storage.s2.raw` and `.parquet` at drives **outside the repo** first
 (e.g. `{"raw": "E:\\s2corpus", "parquet": "D:\\s2corpus"}`, or the same directory
@@ -271,4 +320,9 @@ offline: tiny synthetic `.gz` shards are ingested to a temp corpus dir (the
 autouse temp-DB isolation already redirects storage), then queried — asserting
 landmark citation-sort, the latest window's oldest-first reveal, seed resolution,
 graceful fallback (`citation_relations` → None) when the corpus is absent, and
-that emitted nodes satisfy the `Node` model. No network, no real Datasets pull.
+that emitted nodes satisfy the `Node` model. The clustering gets its own
+coverage: the compacted layout and its global sort, an idempotent rerun (same
+generation files — no re-sort), the legacy-layout migration through
+`compact_release`, and an interrupted swap landing *before* the shard loop can
+re-ingest rows the staged generation already carries. No network, no real
+Datasets pull.

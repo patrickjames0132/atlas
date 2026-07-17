@@ -92,7 +92,8 @@ optional, behind a key.
   [docs/citation-coverage.md](docs/citation-coverage.md) for each one's honest
   limits.
 - **Offline S2 citations corpus (optional):** the bulk Datasets releases
-  (papers + 2.4B citation edges) ingested via DuckDB → Parquet
+  (papers + 2.4B citation edges) ingested via DuckDB → Parquet — citations
+  hash-partitioned, papers clustered by `corpusid`, citer queries two-phase
   (`integrations/semantic_scholar/corpus/`, `atlas corpus` CLI; hundreds of GB,
   on its own drive outside the repo). Serves the all-history landmark rankings
   the live S2 endpoint can't; builds fall back to the live path automatically.
@@ -254,90 +255,6 @@ optional, behind a key.
       argument for surfacing provenance in the UI, since the same seed can
       legitimately show a 14×-different landmark band depending on the data source.
       *(Patrick's design, 2026-07-16; measured and resolved 2026-07-17.)*
-- [ ] **Cold corpus builds take ~47s — the `papers` dataset is unsorted, so
-      nothing prunes** *(diagnosed 2026-07-17; the original prime suspect is
-      **refuted** — see below)* — a cache-miss graph on the s2 provider takes ~47s
-      against the live path's ~15s. **It is not the citations bucket.** Measured on
-      DQN (bucket 372, 390 files, 29 MB):
-
-      ```
-      scan the bucket (390 files), filter, group by      0.07s   -> 31,902 rows
-      open all 390 parquet footers                       0.01s
-      the same query + JOIN papers                       2.03s   -> 96% of the cost
-      ```
-
-      Hash-partitioning + `ORDER BY citedcorpusid` are doing exactly their job; the
-      390 files are free. **Compacting buckets would buy nothing** — the old ticket
-      spent its whole argument on a suspect that costs 0.07s. (The small-files point
-      may still matter for the *ingest* scaling ticket below, and for Athena. Just
-      not for this.)
-
-      **The real cause is projection width against an unsorted `papers`.** Parquet
-      is columnar, so every column projected is more bytes off the disk, and the
-      same join at four widths:
-
-      ```
-      1 column   (corpusid)                              0.73s
-      3 columns  (+ year, citationcount)                 1.09s
-      8 narrow   (everything but authors)               20.64s
-      9 columns  (what the app selects, incl. authors)  39.24s
-      ```
-
-      `authors` alone — a JSON blob per paper — costs **+18.6s**. And the app reads
-      all nine columns for **31,878** citers to ship **63**.
-
-      **But fetching fewer rows doesn't help, and that's the finding.** Hydrating
-      those 9 columns for just the 63 winners still took **33.28s** — the same as
-      for all 31,878. Why: **every one of `papers`' 1,946 row groups spans 100% of
-      the corpusid range** (728 … 289,920,059 out of 0 … 289,923,617). The rows
-      landed in arrival order, so every zone map says "maybe" and **nothing prunes**.
-      Any corpusid lookup is a full scan of 24.8 GB, whether it wants 63 rows or 31k.
-
-      **The ingest asymmetry that caused it** (`corpus/ingest.py`): the citations
-      COPY ends `ORDER BY citedcorpusid` and partitions by bucket. The papers COPY
-      does **neither** — no ordering, no partitioning. One missing `ORDER BY` is the
-      whole 20–40s.
-
-      **The fix is two changes that only work together** — each is useless alone,
-      which is why the obvious single fixes were measured and rejected:
-
-      **(a) Cluster `papers` by `corpusid`** — **and it must be *global*, not
-      per-shard.** Adding `ORDER BY corpusid` to the existing per-shard papers COPY
-      would NOT work: every shard holds ids spanning the whole 0–290M range, so
-      sorting inside one still leaves each of its row groups covering ~1/32 of the
-      range, and scattered ids hit them all. It needs either a post-ingest
-      compaction pass over the whole dataset (`COPY (SELECT * FROM
-      read_parquet(papers/*) ORDER BY corpusid) TO …`, so each output row group owns
-      a contiguous slice) or `PARTITION_BY (corpusid % NBUCKETS)` + sort within,
-      mirroring what citations already does. **Tested on a 4-file, 1.8 GB subset**
-      (written as one globally-sorted output): row groups' average id-range width
-      collapsed from
-      **289,918,845 (the whole range) to 2,027,421**, and a 63-id lookup went
-      1.65s → 0.65s. The subset *understates* it — 63 ids hit ~44% of that
-      subset's 143 row groups, but only ~3% of the full dataset's 1,946, so the
-      full-scale win should be ~30x. **One-time cost is cheap:** the 1.8 GB sort
-      took 13.3s, so 24.8 GB ≈ 3 minutes. Keeps the Parquet/Athena endgame — Athena
-      prunes on the same stats. **Alone it is not enough:** the *ranking* query
-      genuinely needs all ~31k citers, so it touches every row group regardless.
-
-      **(b) Two-phase fetch** — rank on `(corpusid, year, citationcount)` (the
-      budget rule only reads years), trim to the budget, then hydrate the wide
-      columns for the ~63 winners. **Alone it does nothing:** measured, hydrating 63
-      ids took **33.28s**, the same as all 31,878, because on an unsorted layout
-      DuckDB must scan to find them. It only pays off once (a) makes small lookups
-      cheap.
-
-      **Together:** rank narrow (~1.1s) + hydrate 63 from a clustered `papers`
-      (~1s) ≈ **2s against today's 39s**.
-
-      **(c) If (a) disappoints**, the honest fallback is that **Parquet has no index
-      and point lookups want one**: a DuckDB *native* table with an index on
-      `corpusid` would make this milliseconds — but it abandons the Athena-over-S3
-      story, so it's an architectural fork, not a tune-up. *(Patrick noticed
-      fetching citations is slow, 2026-07-16; re-diagnosed and the fix tested
-      2026-07-17, after he asked the obvious question — "I thought DuckDB was
-      supposed to be fast? Do we need to index the db or something?" — which was
-      closer to right than the ticket's own prime suspect.)*
 - [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
       (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our

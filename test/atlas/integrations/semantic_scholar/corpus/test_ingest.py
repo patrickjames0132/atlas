@@ -1,6 +1,10 @@
-"""Ingest: the arXiv index, the citation hash-partitioning, and idempotent reruns."""
+"""Ingest: the arXiv index, the citation hash-partitioning, papers clustering
+(compaction, its crash-safe swap, the legacy migration), and idempotent reruns.
+"""
 
 from __future__ import annotations
+
+import json
 
 import duckdb
 
@@ -46,13 +50,99 @@ def test_citations_partitioned_on_cited_bucket(synthetic_corpus):
 
 
 def test_ingest_is_idempotent(synthetic_corpus):
-    """A rerun over already-ingested shards is a no-op (skips via existing output
-    and the citations _done marker) rather than duplicating rows."""
+    """A rerun over already-ingested shards is a no-op (skips via the _done
+    markers both datasets now use) rather than duplicating rows — and it does
+    not re-sort the already-clustered papers either (same generation files)."""
     paths = release_paths(RELEASE_ID)
-    papers_glob = (paths.parquet_dataset("papers") / "*.parquet").as_posix()
+    papers_dir = paths.parquet_dataset("papers")
+    papers_glob = (papers_dir / "*.parquet").as_posix()
     before = duckdb.sql(f"SELECT count(*) FROM read_parquet('{papers_glob}')").fetchone()[0]
+    files_before = sorted(file.name for file in papers_dir.glob("*.parquet"))
 
     ingest.ingest_release(RELEASE_ID)  # rerun
 
     after = duckdb.sql(f"SELECT count(*) FROM read_parquet('{papers_glob}')").fetchone()[0]
     assert after == before == 4  # 4 papers, not 8 (no re-ingest)
+    # The clustered files carry their compaction's generation in their names, so
+    # identical names mean the rerun didn't pay for another global sort.
+    assert sorted(file.name for file in papers_dir.glob("*.parquet")) == files_before
+
+
+def test_papers_end_up_clustered(synthetic_corpus):
+    """After ingest the papers dataset is the compacted, corpusid-sorted layout:
+    only ``clustered_*`` files (the per-shard file is gone, folded in), a _done
+    marker standing in for the shard, no staging left behind — and the rows
+    globally ordered by corpusid, which is what lets zone maps prune lookups."""
+    paths = release_paths(RELEASE_ID)
+    papers_dir = paths.parquet_dataset("papers")
+    parquet_names = sorted(file.name for file in papers_dir.glob("*.parquet"))
+    assert parquet_names, "no papers parquet at all"
+    assert all(name.startswith("clustered_") for name in parquet_names)
+    assert (papers_dir / "_done" / "papers000.ok").exists()
+    assert not (papers_dir / "_compacting").exists()
+    assert not (papers_dir / "_spill").exists()
+    ids = [row[0] for row in duckdb.sql(
+        f"SELECT corpusid FROM read_parquet('{(papers_dir / '*.parquet').as_posix()}')"
+    ).fetchall()]
+    assert ids == sorted(ids) == [1, 2, 3, 4]
+
+
+def test_compact_release_migrates_a_legacy_layout(synthetic_corpus):
+    """`atlas corpus compact` clusters a release ingested before compaction
+    existed — per-shard files, no markers — in place, without the raw shards.
+
+    Simulated by devolving the fixture's release back to the legacy shape:
+    the clustered file renamed to its per-shard name, markers removed.
+    """
+    paths = release_paths(RELEASE_ID)
+    papers_dir = paths.parquet_dataset("papers")
+    clustered = sorted(papers_dir.glob("*.parquet"))
+    assert len(clustered) == 1
+    clustered[0].replace(papers_dir / "papers000.parquet")
+    (papers_dir / "_done" / "papers000.ok").unlink()
+
+    assert ingest.compact_release(RELEASE_ID) is True
+
+    names = sorted(file.name for file in papers_dir.glob("*.parquet"))
+    assert names and all(name.startswith("clustered_") for name in names)
+    assert (papers_dir / "_done" / "papers000.ok").exists()
+    count = duckdb.sql(
+        f"SELECT count(*) FROM read_parquet('{(papers_dir / '*.parquet').as_posix()}')"
+    ).fetchone()[0]
+    assert count == 4  # migrated, not duplicated
+    # A second pass finds nothing pending.
+    assert ingest.compact_release(RELEASE_ID) is False
+
+
+def test_an_interrupted_swap_resumes_before_anything_reingests(synthetic_corpus):
+    """A compaction that crashed mid-swap (staged files + manifest present, the
+    live dir partially emptied, markers not yet written) is landed by the next
+    ingest run *before* the shard loop — so the shard is NOT re-ingested into
+    rows the staged generation already carries.
+
+    Simulated by rewinding the fixture's finished swap to its commit point:
+    the clustered output moved back into ``_compacting/`` under a fresh
+    generation name, its manifest restored, the live dir emptied, markers gone.
+    """
+    paths = release_paths(RELEASE_ID)
+    papers_dir = paths.parquet_dataset("papers")
+    clustered = sorted(papers_dir.glob("*.parquet"))
+    assert len(clustered) == 1
+    compacting_dir = papers_dir / "_compacting"
+    compacting_dir.mkdir()
+    clustered[0].replace(compacting_dir / "clustered_deadbeef_0.parquet")
+    (compacting_dir / "MANIFEST.json").write_text(
+        json.dumps({"generation": "deadbeef", "shards": ["papers000"]}), encoding="utf-8"
+    )
+    (papers_dir / "_done" / "papers000.ok").unlink()
+
+    ingest.ingest_release(RELEASE_ID)  # would re-ingest papers000 if the swap didn't land first
+
+    names = sorted(file.name for file in papers_dir.glob("*.parquet"))
+    assert names == ["clustered_deadbeef_0.parquet"]  # the staged generation, no re-sort
+    assert (papers_dir / "_done" / "papers000.ok").exists()
+    assert not compacting_dir.exists()
+    count = duckdb.sql(
+        f"SELECT count(*) FROM read_parquet('{(papers_dir / '*.parquet').as_posix()}')"
+    ).fetchone()[0]
+    assert count == 4  # not 8 — the shard wasn't ingested a second time

@@ -305,6 +305,49 @@ def corpus_ingest(release_id: str | None, datasets_opt: tuple[str, ...], activat
                    "(`atlas corpus activate`).")
 
 
+@corpus.command("compact", help="Cluster an ingested release's papers by corpusid.")
+@click.option("--release", "release_id", default=None,
+              help="Release id (default: the active CURRENT release).")
+def corpus_compact(release_id: str | None) -> None:
+    """Compact a release's papers dataset into the clustered (sorted) layout.
+
+    The migration path for a release ingested before v5.12.0 (whose papers are
+    one file per shard, so nothing prunes and citer hydration is a full scan),
+    and the recovery path after an interrupted compaction. New ingests compact
+    automatically — this exists for corpora that predate that. Needs only the
+    parquet root; the raw shards can be long gone. Safe to rerun: an
+    already-clustered release is a fast no-op.
+
+    Args:
+        release_id: The release to compact; defaults to the active ``CURRENT``
+            release (this is a maintenance pass over what's being served, so it
+            defaults to what's on disk — not to the network's latest release).
+
+    Raises:
+        click.ClickException: When the parquet root is unset, no release is
+            named or active, or the compaction fails.
+    """
+    parquet_root = _require_corpus_root("parquet")
+    from atlas.integrations.semantic_scholar.corpus import ingest
+    from atlas.integrations.semantic_scholar.corpus import paths as corpus_paths
+    from atlas.integrations.semantic_scholar.corpus.datasets import CorpusError
+
+    release_id = release_id or corpus_paths.read_current_release(parquet_root)
+    if not release_id:
+        raise click.ClickException(
+            "no release named and none active — pass --release or activate one first"
+        )
+    click.echo(f"Compacting release {release_id} (papers → clustered by corpusid)…")
+    try:
+        compacted = ingest.compact_release(release_id)
+    except CorpusError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if compacted:
+        click.echo("Compacted (papers clustered; arXiv index rebuilt).")
+    else:
+        click.echo("Already clustered — nothing to do.")
+
+
 @corpus.command("activate", help="Point CURRENT at a release so the app queries it.")
 @click.option("--release", "release_id", default=None, help="Release id (default: latest).")
 def corpus_activate(release_id: str | None) -> None:
