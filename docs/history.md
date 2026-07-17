@@ -1292,6 +1292,50 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Infrastructure, quality & tooling
 
+- [x] **Budget vocabulary — name the two rules, define every term once**
+      *(v5.10.0)* — the landmark-sizing code had accumulated a vocabulary nobody
+      could read: five functions whose names described a *criterion* ("density")
+      rather than a *mechanic*, a label written `n*` that most prose quietly
+      confused with the rule the app actually serves, and the word **"anchor"**
+      meaning three unrelated things (the four worked-example papers; where the
+      model's age feature is measured from; force-graph node pinning on the
+      frontend). Patrick's diagnosis: *"it's just too confusing to follow without
+      precise examples."*
+      **The distinction everything turns on**, now carried by the names: both
+      rules bucket a seed's citation-ranked citers by publication year and cap
+      every bucket at 12; they differ in **one word** — on a full bucket, one
+      **STOPS** the walk (`number_of_ranked_citers_before_a_single_year_overflows`,
+      the model's training label, and *only* that — no serving path calls it),
+      the other **SKIPS** that citer and keeps walking
+      (`select_up_to_cap_per_year`, what the live S2 fallback ships). Also
+      `density_selection`→`select_landmarks`, `model_budget`→`predicted_budget`,
+      `DENSITY_CAP`→`PER_YEAR_CAP`, `is_anchor`→`is_worked_example`, and
+      "re-anchoring"→choosing the **age origin**. Config keys deliberately
+      untouched (`config.json` is gitignored — renaming them would mean a hand
+      migration on every machine).
+      **[docs/landmark-vocabulary.md](landmark-vocabulary.md) is new and
+      canonical** — every term with a worked example, the three senses of
+      "anchor" named apart, and an old→new table so this file's older entries
+      stay readable (they keep the pre-v5.10.0 names on purpose: they are
+      records of what shipped then). Everything else links there instead of
+      restating, per the repo's one-definition rule. Every toy example in it was
+      executed against the real functions rather than asserted.
+      **Data contracts moved too** (CSV headers; the artifact's `density_cap` key
+      → `per_year_cap`) — safe because retraining `cite_budget` from the
+      committed corpus reproduced `cv_r2 = 0.6804741428173474` to all sixteen
+      digits with identical coefficients, proving a header rewrite is equivalent
+      to re-collecting, so no live API traffic was needed. `latest_gap`
+      reproduced `tau=0.25`/`max_span=7` likewise and its artifact was left
+      untouched.
+      **Six bugs surfaced on the way**, the notable one written up in
+      [bugs.md](bugs.md): two of the three research notebooks had been
+      **un-executable since the src-layout migration** and nobody knew, because
+      nothing in the gate runs a notebook; `research/latest_gap/README.md`
+      documented the **rejected** quantile design (`q=0.85, max_span=9`) as if it
+      were shipped, contradicting its own notebook *and* `bands.py`; and two test
+      docstrings claimed the STOP rule was the live fallback's trim — backwards
+      since v5.5.0, i.e. the exact confusion this whole change set out to kill,
+      sitting in the tests.
 - [x] **Phase 2.3 — Legacy teardown** *(v1.4.0)* — retired the digest-era backend
       now that Atlas stands on its own: deleted `store.py`, `pipeline.py`,
       `summarizer.py`, `embeddings.py`; slimmed `search.py`/`arxiv_client.py` to
