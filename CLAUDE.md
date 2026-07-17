@@ -8,8 +8,8 @@ it captures how we collaborate so you don't have to re-derive it each session.
 **arXiv Atlas** — a Connected-Papers-style interactive citation/similarity graph
 with (on the roadmap) an AI teacher that narrates the history and intuition of a
 field. It connects to **Semantic Scholar** dynamically instead of storing a paper
-corpus locally. The repo is still named `arxiv-digest` (it began as a daily
-digest app; that era is being retired).
+corpus locally. The repo is named `atlas` on GitHub (renamed 2026-07-17 from
+`arxiv-digest`, its daily-digest-era name; old remote URLs redirect).
 
 - **Vision, feature stack, and the open Backlog live in [OnePager.md](OnePager.md).**
   Keep it current. Read it to understand where we are and what's next. The
@@ -122,7 +122,7 @@ authoritative.
   `pyproject.toml` version, on the merge commit.
 - **Push:** `git push origin main --follow-tags`.
 
-The repo is **private** (`github.com/patrickjames0132/arxiv-digest`), default
+The repo is **private** (`github.com/patrickjames0132/atlas`), default
 branch `main`.
 
 ## Code conventions
