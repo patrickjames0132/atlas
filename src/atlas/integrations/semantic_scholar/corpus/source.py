@@ -85,7 +85,8 @@ class CitationSource(Protocol):
     """
 
     def landmark_citers(self, corpus_id: int, limit: int | None, *,
-                        max_landmark_year: int) -> list[dict]:
+                        max_landmark_year: int,
+                        landmark_budget: LandmarkBudgetFn | None = None) -> list[dict]:
         """The seed's landmark-era citers, most-cited first (its Field Landmarks)."""
         ...
 
@@ -134,7 +135,11 @@ def _month_of(pub_date: str | None) -> int | None:
 
 
 def _row_to_entry(row: tuple) -> dict:
-    """Turn one query row into a ``{"node", "influential"}`` entry.
+    """Turn one citer row (hydrated paper + edge flag) into a ``{"node", "influential"}`` entry.
+
+    Since the two-phase split the row is assembled in Python (``_entries_for``):
+    the paper columns come from the hydration query, the trailing
+    ``isinfluential`` from the ranking phase's edge.
 
     The node dict matches ``semantic_scholar.nodes.node()`` exactly (the
     ``Graph`` model forbids extra keys), so a corpus citer is indistinguishable
@@ -172,19 +177,15 @@ def _row_to_entry(row: tuple) -> dict:
     return {"node": node, "influential": bool(influential)}
 
 
-#: The citer columns every query selects, in the order :func:`_row_to_entry`
-#: unpacks — the join of a citer's edge (``isinfluential``) to its paper row.
-_CITER_SELECT = (
-    "p.corpusid, p.arxiv_id, p.doi, p.title, p.year, p.publicationdate, "
-    "p.citationcount, p.authors, c.isinfluential"
-)
-
-#: The same columns, unqualified — for selecting back out of a subquery, where the
-#: ``p.``/``c.`` aliases are no longer in scope. Same order, so ``_row_to_entry``
-#: unpacks either identically.
-_CITER_SELECT_UNQUALIFIED = (
-    "corpusid, arxiv_id, doi, title, year, publicationdate, "
-    "citationcount, authors, isinfluential"
+#: The wide display columns the **hydration phase** selects from ``papers`` —
+#: everything :func:`_row_to_entry` unpacks except the edge's ``isinfluential``,
+#: which rides in from the ranking phase and is appended in Python. Kept out of
+#: the ranking deliberately: projecting these for all ~30k citers of a busy seed
+#: is what used to cost 39s (``authors``, a JSON blob per paper, was +18.6s by
+#: itself); hydrating them for only the ~63 winners against the clustered
+#: ``papers`` is ~1s.
+_HYDRATE_SELECT = (
+    "corpusid, arxiv_id, doi, title, year, publicationdate, citationcount, authors"
 )
 
 
@@ -260,9 +261,10 @@ class DuckDBCitationSource:
         **two different shards**, so a per-shard ``SELECT DISTINCT`` would never
         see both copies. The grouping is bucket-local and runs on a few thousand
         rows, so it costs nothing measurable — the whole bucket scan is ~0.07s
-        (measured 2026-07-17; what a citer query actually pays for is the join
-        against the unsorted 200M-row papers table — see the OnePager's cold-build
-        ticket).
+        (measured 2026-07-17; what a citer query used to pay for was projecting
+        the wide display columns through the join against an *unsorted* 200M-row
+        papers table — fixed by clustering ``papers`` at ingest and fetching
+        two-phase, see :meth:`landmark_citers`).
 
         ``isinfluential`` is OR'd across the copies: the flag is a claim that *some*
         edge record marks this citation influential, and the batches needn't agree.
@@ -299,13 +301,95 @@ class DuckDBCitationSource:
             except duckdb.IOException:
                 return []
 
+    def _ranked_landmark_citers(self, corpus_id: int, limit: int | None, *,
+                                max_landmark_year: int) -> list[tuple]:
+        """The ranking phase: landmark-era citer ids, most-cited first, **narrow**.
+
+        Projects only ``(corpusid, year, isinfluential)`` — the id to hydrate
+        later, the year the budget rule reads, and the edge flag that has no
+        paper row to come from. The ranking genuinely has to touch every citer
+        of the seed, so what it *projects* is the whole cost: the narrow form is
+        ~1s where ranking on the display columns was 20–39s.
+
+        Args:
+            corpus_id: The seed's ``corpusid``.
+            limit: Max citers to rank, or None for all.
+            max_landmark_year: The last landmark-era year (inclusive).
+
+        Returns:
+            ``(citing corpusid, year, isinfluential)`` rows, most-cited first.
+        """
+        query = (
+            "SELECT p.corpusid, p.year, c.isinfluential "
+            f"FROM {self._deduped_edges(corpus_id)} c "
+            f"JOIN read_parquet('{self._papers_glob}') p ON p.corpusid = c.citingcorpusid "
+            "WHERE (p.year IS NULL OR p.year <= ?) "
+            "ORDER BY p.citationcount DESC NULLS LAST "
+            + (f"LIMIT {int(limit)}" if limit is not None else "")
+        )
+        return self._run(query, [corpus_id, max_landmark_year])
+
+    def _hydrate_citers(self, corpus_ids: Sequence[int]) -> dict[int, tuple]:
+        """The hydration phase: the wide display columns for the chosen citers.
+
+        Runs *after* the budget has trimmed the ranking, so it fetches tens of
+        rows, not tens of thousands. Cheap only because ingest clusters
+        ``papers`` by ``corpusid``: each row group owns a contiguous id slice,
+        so the ``IN`` filter prunes on zone maps and reads a handful of row
+        groups. (On the old arrival-ordered layout this exact lookup cost the
+        same as fetching every citer — 33s for 63 ids — because every row group
+        spanned the whole id range and nothing pruned.)
+
+        Args:
+            corpus_ids: The winners' ``corpusid``s, any order.
+
+        Returns:
+            ``corpusid → (corpusid, arxiv_id, doi, title, year, publicationdate,
+            citationcount, authors)`` for every id found.
+        """
+        if not corpus_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in corpus_ids)
+        query = (
+            f"SELECT {_HYDRATE_SELECT} FROM read_parquet('{self._papers_glob}') "
+            f"WHERE corpusid IN ({placeholders})"
+        )
+        return {int(row[0]): row for row in self._run(query, list(corpus_ids))}
+
+    def _entries_for(self, ranked: list[tuple[int, bool]]) -> list[dict]:
+        """Hydrate ranked ``(corpusid, isinfluential)`` winners into entries.
+
+        Args:
+            ranked: The winners in presentation order, each with its edge flag.
+
+        Returns:
+            ``{"node", "influential"}`` entries in the same order. A winner
+            missing from ``papers`` is skipped — it can't happen for ids that
+            came out of the ranking join, which is the only caller.
+        """
+        hydrated = self._hydrate_citers([citer_id for citer_id, _influential in ranked])
+        entries = []
+        for citer_id, influential in ranked:
+            paper_row = hydrated.get(int(citer_id))
+            if paper_row is not None:
+                entries.append(_row_to_entry((*paper_row, influential)))
+        return entries
+
     def landmark_citers(self, corpus_id: int, limit: int | None, *,
-                        max_landmark_year: int) -> list[dict]:
+                        max_landmark_year: int,
+                        landmark_budget: LandmarkBudgetFn | None = None) -> list[dict]:
         """The seed's landmark-era citers, most-cited first (its Field Landmarks).
 
         Everything published up to ``max_landmark_year``, ranked by the citers' own
         citation counts — the all-history ranking that is the whole point of the
         corpus, and the one S2's live endpoint can't serve.
+
+        **Two phases** (see :meth:`_ranked_landmark_citers` and
+        :meth:`_hydrate_citers`): rank every citer narrow, trim to the budget,
+        hydrate only the winners wide. With a ``landmark_budget`` the ranking
+        runs unlimited and the rule measures the full pool's years *before*
+        hydration — so the rule still sees everything, but the display columns
+        are fetched for the ~63 winners alone, never the ~30k pool.
 
         An **undated** citer competes here rather than in ``latest``: it can't be
         placed in a band, and dropping it entirely would lose a genuine giant to a
@@ -314,24 +398,29 @@ class DuckDBCitationSource:
 
         Args:
             corpus_id: The seed's ``corpusid``.
-            limit: Max citers to return, or None for all — pass None when a
-                ``landmark_budget`` rule will measure the ranking instead.
+            limit: Max citers to return — the fallback ceiling when
+                ``landmark_budget`` is absent or declines; None for all.
             max_landmark_year: The last year that still counts as landmark-era;
                 anything newer belongs to the Latest bands.
+            landmark_budget: Optional rule measuring how many of the ranked pool
+                to ship, from its citer years (see :data:`LandmarkBudgetFn`).
+                Its count wins over ``limit``; a None answer falls back to it.
 
         Returns:
             ``{"node", "influential"}`` entries, most-cited first.
         """
-        query = (
-            f"SELECT {_CITER_SELECT} "
-            f"FROM {self._deduped_edges(corpus_id)} c "
-            f"JOIN read_parquet('{self._papers_glob}') p ON p.corpusid = c.citingcorpusid "
-            "WHERE (p.year IS NULL OR p.year <= ?) "
-            "ORDER BY p.citationcount DESC NULLS LAST "
-            + (f"LIMIT {int(limit)}" if limit is not None else "")
+        if landmark_budget is None:
+            ranked = self._ranked_landmark_citers(corpus_id, limit,
+                                                  max_landmark_year=max_landmark_year)
+        else:
+            ranked = self._ranked_landmark_citers(corpus_id, None,
+                                                  max_landmark_year=max_landmark_year)
+            budget = landmark_budget([year for _citer_id, year, _influential in ranked])
+            # A None answer means the adaptive toggle is off — honour the ceiling.
+            ranked = ranked[:budget] if budget is not None else ranked[:limit]
+        return self._entries_for(
+            [(citer_id, influential) for citer_id, _year, influential in ranked]
         )
-        return [_row_to_entry(row)
-                for row in self._run(query, [corpus_id, max_landmark_year])]
 
     def latest_bands(self, corpus_id: int, *, band_start: int, current_year: int,
                      per_year: int) -> list[dict]:
@@ -342,7 +431,10 @@ class DuckDBCitationSource:
         busy year drowns the frontier, and every recent year gets its own fair
         slice. The same shape ``openalex.citation_relations`` builds, except it
         needs one HTTP call per year and this needs **one query**: a window function
-        ranks within each year in a single pass.
+        ranks within each year in a single pass. Two-phase like the landmarks —
+        the window function ranks narrow, then only the per-year winners are
+        hydrated wide and sorted by date in Python (the same
+        ``publicationdate DESC NULLS LAST`` order the one-phase query produced).
 
         Args:
             corpus_id: The seed's ``corpusid``.
@@ -356,19 +448,25 @@ class DuckDBCitationSource:
             order.
         """
         query = (
-            f"SELECT {_CITER_SELECT_UNQUALIFIED} FROM ("
-            f"  SELECT {_CITER_SELECT}, ROW_NUMBER() OVER ("
+            "SELECT corpusid, isinfluential FROM ("
+            "  SELECT p.corpusid AS corpusid, c.isinfluential AS isinfluential, "
+            "  ROW_NUMBER() OVER ("
             "     PARTITION BY p.year ORDER BY p.citationcount DESC NULLS LAST"
             "  ) AS rank_in_year "
             f"  FROM {self._deduped_edges(corpus_id)} c "
             f"  JOIN read_parquet('{self._papers_glob}') p "
             "     ON p.corpusid = c.citingcorpusid "
             "  WHERE p.year >= ? AND p.year <= ?"
-            ") WHERE rank_in_year <= ? "
-            "ORDER BY publicationdate DESC NULLS LAST"
+            ") WHERE rank_in_year <= ?"
         )
-        rows = self._run(query, [corpus_id, band_start, current_year, per_year])
-        return [_row_to_entry(row) for row in rows]
+        winners = self._run(query, [corpus_id, band_start, current_year, per_year])
+        entries = self._entries_for(
+            [(citer_id, influential) for citer_id, influential in winners]
+        )
+        # None → "" sorts after every real date under reverse=True, matching the
+        # SQL's NULLS LAST.
+        entries.sort(key=lambda entry: entry["node"]["pub_date"] or "", reverse=True)
+        return entries
 
 
 def active_source() -> DuckDBCitationSource | None:
@@ -423,12 +521,12 @@ def citation_relations(
 
     * **Landmarks** — the all-time giants up to ``max_landmark_year``, a
       citation-ranked **prefix** whose length is *computed* rather than predicted.
-      With a ``landmark_budget`` rule the query runs unlimited and the rule measures
-      the real pool; the trained ``cite_budget`` model isn't consulted. That sounds
-      expensive and isn't — measured on DQN, warm, ``limit=63`` took 22.08s and
-      ``limit=None`` (all 28,732 citers) took 22.28s, a 0.9% difference, because the
-      scan, dedupe and 200M-row papers join dominate either way. The ``LIMIT`` was
-      only ever discarding rows already paid for.
+      With a ``landmark_budget`` rule the ranking runs unlimited and the rule
+      measures the real pool; the trained ``cite_budget`` model isn't consulted.
+      The unlimited rank is cheap because the query is **two-phase** (see
+      :meth:`DuckDBCitationSource.landmark_citers`): the full pool is ranked on
+      narrow columns, and the wide display columns are hydrated only for the
+      winners the rule keeps.
     * **Latest** — **per-year bands** from ``band_start`` to ``current_year``,
       replacing the flat rolling window this path inherited from the live fallback.
       The band start comes from the fitted tau rule reading the *shipped landmarks'*
@@ -471,18 +569,12 @@ def citation_relations(
     if corpus_id is None:
         return None
 
-    # FIELD LANDMARKS. With a budget rule, rank the whole pool and let the rule
-    # measure its years — it can only run after the sort, and there is nothing to
-    # trim to beforehand. Without one, the flat limit goes into the query.
-    if landmark_budget is None:
-        landmark = source.landmark_citers(corpus_id, landmark_limit,
-                                          max_landmark_year=max_landmark_year)
-    else:
-        ranked = source.landmark_citers(corpus_id, None,
-                                        max_landmark_year=max_landmark_year)
-        budget = landmark_budget([entry["node"].get("year") for entry in ranked])
-        # A None answer means the adaptive toggle is off — honour the flat limit.
-        landmark = ranked[:budget] if budget is not None else ranked[:landmark_limit]
+    # FIELD LANDMARKS. The budget rule travels into the source so the trim can
+    # happen between its two phases: the rule measures the full *ranked* pool's
+    # years, and only the winners it keeps are hydrated wide.
+    landmark = source.landmark_citers(corpus_id, landmark_limit,
+                                      max_landmark_year=max_landmark_year,
+                                      landmark_budget=landmark_budget)
 
     # LATEST PUBLICATIONS: per-year bands. The start defaults to the fixed span and
     # may widen per seed, read off the landmarks we just chose — which is why this

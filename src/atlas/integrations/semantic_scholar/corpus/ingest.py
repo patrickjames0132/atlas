@@ -4,26 +4,36 @@ DuckDB does the whole transform — it reads gzipped JSONL and writes Parquet
 natively, so there's no pandas/pyarrow step. Two datasets, two layouts, each
 chosen for the one query the app runs (a single seed's citers):
 
-* **papers** → ``parquet/papers/*.parquet``, one file per input shard, projected
-  down to the columns the graph needs (``corpusid``, the external ids, title,
-  year, date, citation count, authors-as-JSON). Plus an **arXiv index**
-  (``parquet/arxiv_index/*.parquet`` — just ``arxiv_id → corpusid`` for rows that
-  have an arXiv id) so resolving a seed's corpus id is a small sorted lookup, not
-  a 200M-row scan.
+* **papers** → ``parquet/papers/clustered_*.parquet``, the whole dataset
+  **globally sorted by ``corpusid``**, projected down to the columns the graph
+  needs (``corpusid``, the external ids, title, year, date, citation count,
+  authors-as-JSON). Shards are first ingested one file each (the incremental
+  unit), then a **compaction pass** rewrites them as one clustered dataset —
+  global, not per-shard, because every shard spans the whole id range, so
+  per-shard sorting leaves every row group covering everything and nothing
+  prunes (measured: any corpusid lookup was a full 24.8 GB scan, ~33s; clustered,
+  row groups own contiguous id slices and zone maps skip all but a few).
+  Plus an **arXiv index** (``parquet/arxiv_index/*.parquet`` — just
+  ``arxiv_id → corpusid`` for rows that have an arXiv id) so resolving a seed's
+  corpus id is a small sorted lookup, not a 200M-row scan.
 * **citations** → ``parquet/citations/bucket=<N>/…``, **hash-partitioned on
   ``citedcorpusid``** (``citedcorpusid % NBUCKETS``). A citer lookup filters to
   one bucket, so it reads ~1/N of the 2.4B-row edge list instead of all of it —
   the local equivalent of the citation-count sort the live API never offered.
 
-Ingest is **idempotent and incremental**: a shard whose Parquet output already
-exists is skipped, so a rerun after an interrupted ingest resumes. Only when a
-dataset finishes does the caller flip ``CURRENT`` to this release (see the CLI),
-so the app never queries a half-built corpus.
+Ingest is **idempotent and incremental**: a shard whose Parquet output (or
+``_done`` marker, once compaction has folded its file away) already exists is
+skipped, so a rerun after an interrupted ingest resumes. Only when a dataset
+finishes does the caller flip ``CURRENT`` to this release (see the CLI), so the
+app never queries a half-built corpus.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import shutil
+import uuid
 from pathlib import Path
 from typing import Callable
 
@@ -127,6 +137,150 @@ def _ingest_papers_shard(
     )
 
 
+#: Filename prefix distinguishing the compacted, globally-sorted papers files
+#: from freshly ingested per-shard ones sitting in the same directory. The two
+#: kinds share ``parquet/papers`` so the serving glob never has to know whether
+#: a release has been compacted yet — but compaction has to tell them apart:
+#: everything *without* this prefix is pending input, everything with it is a
+#: previous compaction's output (also an input — a re-compaction folds it in).
+_CLUSTERED_PREFIX = "clustered_"
+
+#: The staging directory a compaction writes into before swapping its output
+#: live, and the manifest that makes the swap resumable. The manifest is written
+#: only after the sorted COPY completes, so its existence *is* the commit point:
+#: no manifest → any staging content is garbage from an interrupted sort, start
+#: over; manifest present → the sorted data is complete and only the swap
+#: remains, finish it before touching the shards it replaces.
+_COMPACTING_DIR = "_compacting"
+_MANIFEST_NAME = "MANIFEST.json"
+
+
+def _pending_papers_files(papers_dir: Path) -> list[Path]:
+    """The per-shard papers files not yet folded into the clustered dataset.
+
+    Args:
+        papers_dir: The release's ``parquet/papers`` directory.
+
+    Returns:
+        The non-``clustered_*`` Parquet files at the top level, sorted — a
+        release ingested before compaction existed is all-pending, which is
+        exactly what lets ``compact_release`` migrate it in place.
+    """
+    if not papers_dir.exists():
+        return []
+    return sorted(
+        candidate
+        for candidate in papers_dir.glob("*.parquet")
+        if not candidate.name.startswith(_CLUSTERED_PREFIX)
+    )
+
+
+def _finish_papers_swap(papers_dir: Path) -> None:
+    """Complete a compaction's swap: staged clustered files replace shard files.
+
+    Idempotent, and the crash-recovery path as much as the happy one — it runs
+    off the staging manifest alone, so a swap interrupted at any point resumes
+    by rerunning it. The order is what makes that safe: everything deleted here
+    is already carried by the staged generation (it was the sort's input), and
+    the shard markers are written only once the staged files are in place, so no
+    state ever claims rows that aren't on disk.
+
+    Args:
+        papers_dir: The release's ``parquet/papers`` directory.
+    """
+    compacting_dir = papers_dir / _COMPACTING_DIR
+    manifest_path = compacting_dir / _MANIFEST_NAME
+    if not manifest_path.exists():
+        return
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    generation_prefix = f"{_CLUSTERED_PREFIX}{manifest['generation']}_"
+    # Everything predating this generation — shard files and older clustered
+    # files alike — went into the sort, so it's all superseded.
+    for stale in papers_dir.glob("*.parquet"):
+        if not stale.name.startswith(generation_prefix):
+            stale.unlink()
+    for staged in sorted(compacting_dir.glob("*.parquet")):
+        staged.replace(papers_dir / staged.name)
+    marker_dir = papers_dir / "_done"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    for shard_stem in manifest["shards"]:
+        (marker_dir / (shard_stem + ".ok")).touch()
+    shutil.rmtree(compacting_dir)
+
+
+def _compact_papers(connection: duckdb.DuckDBPyConnection, papers_dir: Path) -> bool:
+    """Rewrite the papers dataset globally sorted by ``corpusid`` (clustered).
+
+    The sort must be **global, not per-shard**: every shard spans the whole
+    0–290M corpusid range, so sorting within one still leaves each of its row
+    groups covering everything, and a scattered-id lookup hits them all.
+    Sorted globally, each output row group owns a contiguous id slice and
+    Parquet zone maps skip the rest — measured on a 4-file 1.8 GB subset, the
+    row groups' average id-range width collapsed from the entire range to
+    ~2M ids and a 63-id lookup went 1.65s → 0.65s; at full scale nothing pruned
+    at all and every lookup was a 24.8 GB scan. The one-time cost is paid once
+    per release: the 1.8 GB subset sorted in ~13s, but that ran in RAM — the
+    full dataset exceeds the memory limit and spills, making it an external
+    merge sort that measured ~10–15 minutes, not the extrapolated ~3. It keeps
+    the Parquet/Athena endgame — Athena prunes on the same statistics.
+
+    Reads *everything* at the top level — pending shard files and any previous
+    generation's clustered files — sorts once, stages the output beside the
+    data, then swaps it live (see :func:`_finish_papers_swap` for why the swap
+    survives a crash at any point).
+
+    Args:
+        connection: The DuckDB connection.
+        papers_dir: The release's ``parquet/papers`` directory.
+
+    Returns:
+        Whether anything was compacted — False when the dataset is already
+        fully clustered, so callers can skip the arXiv-index rebuild too.
+    """
+    _finish_papers_swap(papers_dir)
+    pending = _pending_papers_files(papers_dir)
+    if not pending:
+        return False
+    log.info("compacting %d papers file(s) into a clustered dataset", len(pending))
+    compacting_dir = papers_dir / _COMPACTING_DIR
+    shutil.rmtree(compacting_dir, ignore_errors=True)
+    compacting_dir.mkdir(parents=True)
+    # The sort is bigger than the memory limit at full scale (tens of GB
+    # uncompressed against DuckDB's default cap), and an in-memory database has
+    # nowhere to spill unless told — so give it scratch space on the same drive
+    # as the output. Cleaned up with the rest of the staging on success, or by
+    # the next compaction's rmtree after a crash.
+    spill_dir = papers_dir / "_spill"
+    shutil.rmtree(spill_dir, ignore_errors=True)
+    spill_dir.mkdir(parents=True)
+    connection.execute(f"SET temp_directory='{spill_dir.as_posix()}'")
+    # The sort is one long blocking statement — ~10-15 minutes at full scale,
+    # not the subset-extrapolated ~3 (the spill makes it an *external* merge
+    # sort, slower per GB than the in-RAM subset measurement). Let DuckDB paint
+    # its own progress bar so the operator sees movement; it only appears on
+    # statements outlasting its threshold, so shard COPYs and the tests stay
+    # quiet.
+    connection.execute("SET enable_progress_bar=true")
+    generation = uuid.uuid4().hex[:8]
+    connection.execute(
+        f"""
+        COPY (
+            SELECT * FROM read_parquet('{(papers_dir / "*.parquet").as_posix()}')
+            ORDER BY corpusid
+        ) TO '{compacting_dir.as_posix()}'
+        (FORMAT parquet, COMPRESSION zstd, FILE_SIZE_BYTES '2GB',
+         FILENAME_PATTERN '{_CLUSTERED_PREFIX}{generation}_{{i}}')
+        """
+    )
+    connection.execute("SET enable_progress_bar=false")
+    shutil.rmtree(spill_dir, ignore_errors=True)
+    # The commit point: from here the swap is obligatory and resumable.
+    manifest = {"generation": generation, "shards": [pending_file.stem for pending_file in pending]}
+    (compacting_dir / _MANIFEST_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+    _finish_papers_swap(papers_dir)
+    return True
+
+
 def _ingest_citations_shard(
     connection: duckdb.DuckDBPyConnection, shard: Path, out_dir: Path
 ) -> None:
@@ -196,10 +350,12 @@ def ingest_release(
 ) -> None:
     """Ingest a downloaded release's shards into queryable Parquet.
 
-    Incremental: a shard whose output already exists is skipped, so a rerun
-    resumes after an interruption. When ``papers`` is (re)ingested, its arXiv
-    index is rebuilt. Does **not** flip ``CURRENT`` — the CLI does that only once
-    a full ingest succeeds, so the app never reads a half-built release.
+    Incremental: a shard whose output (or ``_done`` marker) already exists is
+    skipped, so a rerun resumes after an interruption. Once every papers shard
+    is in, the dataset is **compacted** — rewritten globally sorted by
+    ``corpusid`` (see :func:`_compact_papers`) — and the arXiv index rebuilt.
+    Does **not** flip ``CURRENT`` — the CLI does that only once a full ingest
+    succeeds, so the app never reads a half-built release.
 
     Args:
         release_id: The release to ingest (must already be downloaded).
@@ -230,11 +386,21 @@ def ingest_release(
         if not shards:
             raise CorpusError(f"no downloaded {dataset} shards under {raw_dir}")
         out_dir = paths.parquet_dataset(dataset)
+        if dataset == "papers":
+            # Land any compaction interrupted mid-swap BEFORE the skip checks
+            # below: until the swap completes, its shards have neither a marker
+            # nor a per-shard file, and re-ingesting them would duplicate rows
+            # the staged generation already carries.
+            _finish_papers_swap(out_dir)
         for index, shard in enumerate(shards, start=1):
             if on_progress:
                 on_progress(dataset, shard.name, index, len(shards))
             if dataset == "papers":
-                if (out_dir / (shard.stem + ".parquet")).exists():
+                # Skip on either record: a per-shard file means ingested but not
+                # yet compacted; a _done marker means folded into the clustered
+                # dataset (the file itself is gone after compaction).
+                marker = out_dir / "_done" / (shard.stem + ".ok")
+                if marker.exists() or (out_dir / (shard.stem + ".parquet")).exists():
                     continue
                 _ingest_papers_shard(connection, shard, out_dir)
             else:
@@ -247,7 +413,49 @@ def ingest_release(
                 marker.parent.mkdir(parents=True, exist_ok=True)
                 marker.touch()
         if dataset == "papers":
-            log.info("building arXiv index for %s", release_id)
-            _build_arxiv_index(connection, paths)
+            compacted = _compact_papers(connection, out_dir)
+            if compacted or not (paths.parquet / "arxiv_index").exists():
+                log.info("building arXiv index for %s", release_id)
+                _build_arxiv_index(connection, paths)
 
     connection.close()
+
+
+def compact_release(release_id: str) -> bool:
+    """Cluster an already-ingested release's papers dataset, in place.
+
+    The migration path for a release ingested before compaction existed (its
+    papers are still one file per shard, nothing prunes, and every citer
+    hydration is a full scan) — and the recovery path after an interrupted
+    compaction. Needs only the parquet root: unlike a re-ingest, the raw shards
+    can be long gone. Safe to rerun; an already-clustered release is a no-op.
+
+    Args:
+        release_id: The ingested release to compact.
+
+    Returns:
+        Whether anything was compacted (False when already fully clustered).
+
+    Raises:
+        CorpusError: When the parquet root is unset or the release has no
+            ingested papers Parquet.
+    """
+    from .paths import parquet_root, release_paths
+
+    if parquet_root() is None:
+        raise CorpusError("config.storage.s2.parquet is not set — no corpus to compact")
+    paths = release_paths(release_id)
+    papers_dir = paths.parquet_dataset("papers")
+    if not papers_dir.exists():
+        raise CorpusError(
+            f"release {release_id} has no ingested papers Parquet under {papers_dir}"
+        )
+    connection = _connect()
+    try:
+        compacted = _compact_papers(connection, papers_dir)
+        if compacted:
+            log.info("rebuilding arXiv index for %s", release_id)
+            _build_arxiv_index(connection, paths)
+    finally:
+        connection.close()
+    return compacted
