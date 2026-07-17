@@ -95,3 +95,12 @@ button.brand {
   color: inherit;
   cursor: pointer;
 }
+
+/* The guided-tour launcher — same chrome as the drawer toggles, squared down
+   to a compact "?" (see tour/README.md). */
+.tour-launch {
+  padding: 8px 0;
+  width: 34px;
+  text-align: center;
+  font-weight: 700;
+}

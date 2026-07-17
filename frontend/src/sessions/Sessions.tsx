@@ -111,7 +111,12 @@ export default function Sessions({
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
-      <aside className="sources-drawer" role="dialog" aria-label="Saved sessions">
+      <aside
+        className="sources-drawer"
+        data-tour="sessions-panel"
+        role="dialog"
+        aria-label="Saved sessions"
+      >
         <header className="sources-head">
           <span>Saved sessions</span>
           <button className="link-btn" onClick={onClose} aria-label="Close">

@@ -51,6 +51,8 @@ export interface ScopeLabels {
  * @param onDeselectAll Uncheck every item.
  * @param labels The display copy (icon, noun, heading, hints) — what makes one
  *               component serve both the sources and lectures scopes.
+ * @param dataTour Optional `data-tour` anchor for the guided tour, so its
+ *                 steps can tell the two picker instances apart.
  * @returns The collapsible checkbox list.
  */
 export default function ScopePicker({
@@ -62,6 +64,7 @@ export default function ScopePicker({
   onSelectAll,
   onDeselectAll,
   labels,
+  dataTour,
 }: {
   items: ScopeItem[]
   checkedIds: string[]
@@ -71,6 +74,7 @@ export default function ScopePicker({
   onSelectAll: () => void
   onDeselectAll: () => void
   labels: ScopeLabels
+  dataTour?: string
 }) {
   const all = checkedIds.length === items.length
   const buttonLabel = all
@@ -79,7 +83,7 @@ export default function ScopePicker({
       ? `No ${labels.unit}s`
       : `${checkedIds.length} ${labels.unit}${checkedIds.length > 1 ? 's' : ''}`
   return (
-    <div className="scope-wrap">
+    <div className="scope-wrap" data-tour={dataTour}>
       <button
         type="button"
         className={`scope-btn ${all ? '' : 'on'}`}

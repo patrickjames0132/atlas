@@ -117,7 +117,7 @@ export default function GraphControls({
 
   return (
     <div className="controls">
-      <div className="layout-toggle">
+      <div className="layout-toggle" data-tour="layout">
         <button className={layout === 'force' ? 'on' : ''} onClick={() => onLayout('force')}>
           Force
         </button>
@@ -125,7 +125,7 @@ export default function GraphControls({
           Timeline
         </button>
       </div>
-      <div className="ctrl-rels">
+      <div className="ctrl-rels" data-tour="relations">
         {REL_TYPES.map((type) => {
           const on = enabled.has(type)
           return (
@@ -144,7 +144,7 @@ export default function GraphControls({
       </div>
 
       {showYears && (
-        <div className="years">
+        <div className="years" data-tour="years">
           <div className="years-label">
             Years <b>{yearLo}</b> – <b>{yearHi}</b>
           </div>
@@ -178,7 +178,7 @@ export default function GraphControls({
       )}
 
       {showCitations && (
-        <div className="cites">
+        <div className="cites" data-tour="citations">
           <div className="cites-label">
             Citations <b>{loCitations.toLocaleString()}</b> – <b>{hiCitations.toLocaleString()}</b>
           </div>
@@ -215,7 +215,7 @@ export default function GraphControls({
         <span className="count-readout">
           {visibleCount} / {totalCount} papers
         </span>
-        <div className="ctrl-btns">
+        <div className="ctrl-btns" data-tour="actions">
           <button
             className="mini-btn"
             onClick={onReleaseAll}
@@ -237,7 +237,7 @@ export default function GraphControls({
           </button>
         </div>
       </div>
-      <div className="ctrl-select">
+      <div className="ctrl-select" data-tour="selector">
         <span
           className="select-hint"
           title="Hand-pick papers to scope the AI teacher's lectures and answers to them"
@@ -259,7 +259,7 @@ export default function GraphControls({
         )}
       </div>
 
-      <div className="ctrl-hint">
+      <div className="ctrl-hint" data-tour="hint">
         {layout === 'timeline'
           ? 'papers placed left→right by year · double-click to re-seed'
           : 'drag to pin · double-click a node to re-seed'}

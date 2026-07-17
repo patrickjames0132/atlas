@@ -297,3 +297,22 @@
 .hit-date {
   color: var(--text);
 }
+
+/* The popover's ✕ — closes without re-clicking the Filters toggle. Floated
+   over the top-right corner, with the first row keeping a matching right
+   gutter so the ✕ never crowds the year slider's end. */
+.filter-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 0;
+  line-height: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.filter-close:hover {
+  color: var(--text-strong);
+}
+.filter-pop .year-row {
+  padding-right: 28px;
+}

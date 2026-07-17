@@ -596,21 +596,6 @@ optional, behind a key.
       edge-less node, plus multi-relation detail badges (the panel already dedupes
       badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
       v5.2.0 edge-less-node filter fix.)*
-- [ ] **Guided help tour (coach-mark modal) for the graph tools** — a stepped,
-      spotlight-style onboarding overlay launched from a **"?" button**, walking
-      the user through the graph's tools one at a time: an anchored tooltip
-      bubble dims the rest of the screen, points at the relevant control
-      (relation chips, year/citation sliders, layout toggle, the node-selector
-      gestures, lecture buttons), and shows a step counter with **Next / Back**,
-      a **Skip** (hide these tips) and a **Quit** (✕) — the Yotpo-style product
-      tour Patrick mocked up. Should be a reusable, data-driven component (a
-      `steps` array of `{ target selector, title, body }`), positioning each
-      bubble off the target's bounding rect and skipping steps whose target is
-      absent; remember "seen" in `localStorage` so it auto-runs once but stays
-      re-launchable from "?". First motivation: teaching the node-selector's
-      alt-drag / shift-click / alt-click gestures, which are otherwise only
-      discoverable via the controls hint line. *(From the node-selector session,
-      2026-07-12.)*
 - [ ] **Source-scope picker doesn't appear until a page refresh (+ note it above
       the ask bar)** — uploading sources through the 📚 Sources drawer doesn't make
       the assistant panel's **source-scope picker** show up until you manually

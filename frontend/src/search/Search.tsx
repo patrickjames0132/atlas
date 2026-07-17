@@ -179,6 +179,7 @@ export default function Search({
     <div className="search-box">
       <form
         className="seed-search"
+        data-tour="search"
         onSubmit={(event) => {
           setOpen(false) // collapse the filter popover once a search is fired
           onSubmit(event)
@@ -193,6 +194,7 @@ export default function Search({
         <button
           type="button"
           className={`filter-toggle ${activeCount ? 'on' : ''}`}
+          data-tour="filters"
           onClick={() => setOpen((prev) => !prev)}
           title="Optional filters: publication year and field of study"
         >
@@ -205,6 +207,14 @@ export default function Search({
 
       {open && (
         <div className="filter-pop">
+          <button
+            type="button"
+            className="link-btn filter-close"
+            onClick={() => setOpen(false)}
+            aria-label="Close the filters"
+          >
+            ✕
+          </button>
           <YearRange filters={filters} onFilters={onFilters} />
           <div className="filter-row">
             <span className="filter-label">Field</span>

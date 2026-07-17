@@ -43,6 +43,9 @@ export interface AtlasHeaderProps {
   assistantOpen: boolean
   onToggleAssistant: () => void
   onOpenSessions: () => void
+  /** Start (or restart) the guided tour for the current phase — the search
+   *  surface before a graph is up, the graph tools once one is. */
+  onStartTour: () => void
 }
 
 /**
@@ -67,6 +70,7 @@ export default function AtlasHeader({
   assistantOpen,
   onToggleAssistant,
   onOpenSessions,
+  onStartTour,
 }: AtlasHeaderProps) {
   return (
     <header className="atlas-top">
@@ -95,6 +99,7 @@ export default function AtlasHeader({
       )}
       <label
         className="provider-select top-right-start"
+        data-tour="provider"
         title="Which academic database the graph is built from — references, citations, and the seed all come from this one source"
       >
         <span>Data source</span>
@@ -112,6 +117,7 @@ export default function AtlasHeader({
       </label>
       <button
         className="sources-toggle"
+        data-tour="library-btn"
         onClick={onOpenSources}
         title="Your library — books, PDFs, and pages the teacher can search"
       >
@@ -120,6 +126,7 @@ export default function AtlasHeader({
       {assistantAvailable && (
         <button
           className={`sources-toggle ${assistantOpen ? 'on' : ''}`}
+          data-tour="assistant-btn"
           onClick={onToggleAssistant}
           title="The AI assistant — a lecture and Q&A over the graph, or a chat straight over your uploaded library"
         >
@@ -128,10 +135,19 @@ export default function AtlasHeader({
       )}
       <button
         className="sources-toggle"
+        data-tour="sessions-btn"
         onClick={onOpenSessions}
         title="Save the current graph + chat, or reopen a saved one"
       >
         🗂 Sessions
+      </button>
+      <button
+        className="sources-toggle tour-launch"
+        onClick={onStartTour}
+        title="A quick guided tour of the tools on screen"
+        aria-label="Start the guided tour"
+      >
+        ?
       </button>
     </header>
   )

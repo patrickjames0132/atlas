@@ -47,7 +47,10 @@ import { CITE_SLIDER_STEPS, citationThreshold, type Base, type VLink, type VNode
 
 /**
  * Render the graph area: canvas + controls + legend + detail panel, plus the
- * shell's overlays as `children`.
+ * shell's overlays as `children`. `tourStage` is the guided tour's staging
+ * signal: when it asks for `'details'` and nothing is selected, the seed is
+ * selected so the detail-panel stops have a panel to walk (the selection
+ * stays after — a tour that tidies up behind itself would be jarring).
  *
  * @returns The graph exploration area.
  */
@@ -72,7 +75,13 @@ function landmarkNote(
   return 'Semantic Scholar: Field Landmarks are the top-cited among the ~10k most recent citers (live-API limit), not the full citation history — the citations corpus will lift this.'
 }
 
-export default function GraphExplorer({ children }: { children?: ReactNode }) {
+export default function GraphExplorer({
+  children,
+  tourStage,
+}: {
+  children?: ReactNode
+  tourStage?: string
+}) {
   const dispatch = useAppDispatch()
   const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef, provider } =
     useAppSelector(selectWorkspace)
@@ -217,6 +226,13 @@ export default function GraphExplorer({ children }: { children?: ReactNode }) {
     categories,
     onNodeClick,
   } = useSelection({ base, graph, provider, loadGraph: doLoadGraph })
+
+  // The guided tour's detail-panel stops: when the tour stages 'details' and
+  // nothing is selected (the user ✕'d the panel), select the seed so the
+  // walk has a panel to spotlight.
+  useEffect(() => {
+    if (tourStage === 'details' && !selectedId && graph) setSelectedId(graph.seed.id)
+  }, [tourStage, selectedId, graph, setSelectedId])
 
   /**
    * Canvas click, split by modifier: a shift-click toggles the node in the

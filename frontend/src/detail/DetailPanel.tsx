@@ -100,7 +100,7 @@ function CategoryTags({
   const arxivCats = categories?.available ? categories.categories : []
   if (arxivCats.length === 0 && fieldsOfStudy.length === 0) return null
   return (
-    <div className="detail-cat-groups">
+    <div className="detail-cat-groups" data-tour="detail-tags">
       {arxivCats.length > 0 && (
         <div className="detail-cat-group">
           <div className="detail-cat-head">arXiv tags</div>
@@ -142,7 +142,7 @@ function CodeSection({ code }: { code: CodeLinksResponse }) {
     totals.spaces > 0 && `${fmtCount(totals.spaces)} Spaces`,
   ].filter(Boolean)
   return (
-    <div className="detail-code">
+    <div className="detail-code" data-tour="detail-code">
       <div className="detail-code-head">Code &amp; artifacts</div>
       {code.github && (
         <CodeRow
@@ -213,7 +213,7 @@ export default function DetailPanel({
     if (!badges.has(label)) badges.set(label, rel)
   }
   return (
-    <aside className="detail" style={{ width }}>
+    <aside className="detail" data-tour="details" style={{ width }}>
       <div
         className={`panel-resize-handle${dragging ? ' dragging' : ''}`}
         onPointerDown={onHandlePointerDown}
@@ -247,14 +247,14 @@ export default function DetailPanel({
         fieldsLabel={fieldsLabel}
       />
       {(node.tldr || node.abstract) && (
-        <div className="detail-summary-group">
+        <div className="detail-summary-group" data-tour="detail-summary">
           <div className="detail-summary-head">{node.tldr ? 'TL;DR' : 'Abstract'}</div>
           <p className="detail-summary">
             <MathText>{node.tldr || node.abstract || ''}</MathText>
           </p>
         </div>
       )}
-      <div className="detail-actions">
+      <div className="detail-actions" data-tour="detail-actions">
         {node.url && (
           <a href={node.url} target="_blank" rel="noreferrer">
             Abstract ↗
@@ -279,7 +279,7 @@ export default function DetailPanel({
         <div className="detail-figs-hint">Loading figures…</div>
       )}
       {figures && figures.available && figures.figures.length > 0 && (
-        <div className="detail-figs">
+        <div className="detail-figs" data-tour="detail-figures">
           <div className="detail-figs-head">Figures</div>
           {figures.figures.map((figure, index) => (
             <figure key={index} className="detail-fig">

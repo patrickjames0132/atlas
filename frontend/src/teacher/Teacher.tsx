@@ -134,7 +134,11 @@ export default function Teacher({
   }
 
   return (
-    <section className={`teacher ${collapsed ? 'collapsed' : ''}`} style={{ width }}>
+    <section
+      className={`teacher ${collapsed ? 'collapsed' : ''}`}
+      data-tour="assistant-panel"
+      style={{ width }}
+    >
       <div
         className={`panel-resize-handle${dragging ? ' dragging' : ''}`}
         onPointerDown={onHandlePointerDown}
@@ -150,6 +154,7 @@ export default function Teacher({
               <ScopePicker
                 items={lectureItems}
                 checkedIds={lectureScope}
+                dataTour="lecture-scope"
                 open={openScope === 'lectures'}
                 onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
                 onToggle={(id) =>
@@ -176,6 +181,7 @@ export default function Teacher({
               <ScopePicker
                 items={libraryItems}
                 checkedIds={scopeIds}
+                dataTour="source-scope"
                 open={openScope === 'sources'}
                 onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
                 onToggle={(id) =>
@@ -210,7 +216,7 @@ export default function Teacher({
               papers currently shown on the graph — filter it, or alt-drag on the canvas to
               hand-pick a cluster, to narrow what it covers.
             </p>
-            <div className="lecture-grid">
+            <div className="lecture-grid" data-tour="lectures">
               {MODES.map((mode) => {
                 const active = activeMode === mode.key
                 const loading = loadingModes.includes(mode.key)
@@ -343,7 +349,7 @@ export default function Teacher({
           {lectureScope.length > 1 ? 's' : ''} (choose with 🎓 above).
         </p>
       )}
-      <form className="teacher-ask" onSubmit={onAsk}>
+      <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
         <input
           value={input}
           onChange={(event) => setInput(event.target.value)}

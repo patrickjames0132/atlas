@@ -1087,6 +1087,36 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Guided help tour (coach-mark modal) for the graph tools** *(v5.9.0)* — a
+      stepped, spotlight-style onboarding overlay launched from an
+      always-present header **"?" button**, walking the user through the app's
+      controls one at a time: an anchored bubble dims the rest of the screen
+      (the dimming is the spotlight's 200vmax box-shadow, so there's exactly
+      one hole), rings the relevant control, and shows **Back / Next**, a step
+      counter, a **jump select** (every stop's title, numbered — skip straight
+      to any tip instead of Next-ing through the walk), **Skip tips**, and a
+      **✕** — the Yotpo-style product tour Patrick mocked up. Shipped as the
+      reusable, data-driven component the ticket asked for (`tour/Tour.tsx`
+      over a `steps.ts` array of `{ target selector, title, body }`,
+      positioning each bubble off the target's bounding rect, clamped into the
+      viewport, and skipping steps whose target is absent or hidden — so one
+      list describes the maximal tour), plus what the build grew: **two
+      phases** with their own localStorage seen-flags (**HOME_TOUR** auto-runs
+      once on first launch over the search surface; **GRAPH_TOUR** once on the
+      first graph over the graph tools — the "?" re-runs whichever fits what's
+      on screen), **staged steps** (`stage:` — the tour opens the
+      Library/Assistant/Sessions drawers and the detail panel itself, polling
+      briefly for the just-mounted target; `presentIf` proxies gate stops
+      whose own target only exists after staging), targets marked by greppable
+      `data-tour="…"` attributes planted where the controls render, arrow-key
+      / Esc navigation (arrows defer to the jump select while it has focus),
+      and re-measuring on resize and capture-phase scroll. The first
+      motivation is honored — the node-selector's alt-drag / shift-click /
+      alt-click gestures get their own stop — and the researcher stop
+      re-states the grounding contract (the papers you've selected, else every
+      visible one) for emphasis. 10 jsdom/RTL tests (`test/tour/Tour.test.tsx`)
+      pin the walking, absent-target skipping, staging, jump select, and all
+      three quit paths. *(From the node-selector session, 2026-07-12.)*
 - [x] **Rename the "Sources" button to "Library"** *(v5.3.1)* — the top-bar
       toggle reads **📚 Library**, and the drawer's own heading/aria-label
       followed ("Your sources" → "Your library") so the button and what it

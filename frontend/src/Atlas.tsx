@@ -32,6 +32,8 @@ import HitList from './search/HitList'
 import Teacher from './teacher/Teacher'
 import Sources from './library/Sources'
 import Sessions from './sessions/Sessions'
+import Tour from './tour/Tour'
+import { GRAPH_TOUR, HOME_TOUR, TOUR_KEYS } from './tour/steps'
 import './atlas.css'
 
 /**
@@ -66,6 +68,40 @@ export default function Atlas() {
     if (epoch > 0 && graph) setAssistantOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [epoch])
+
+  // The guided tour, in two phases keyed by whether a graph is up: the HOME
+  // tour (the search surface) auto-runs once on first launch, the GRAPH tour
+  // (the graph tools) once on the first graph. Each phase auto-runs once ever
+  // (its own localStorage flag); the header's "?" re-runs the current phase
+  // any time.
+  const hasGraph = !!graph && graph.nodes.length > 0
+  const [tourOpen, setTourOpen] = useState(false)
+  const [tourStage, setTourStage] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    const seenKey = graph ? TOUR_KEYS.graph : TOUR_KEYS.home
+    if (!localStorage.getItem(seenKey)) setTourOpen(true)
+  }, [graph])
+  const closeTour = useCallback(() => {
+    // Done, Skip, ✕, and Esc all count as "seen" — the auto-run never nags
+    // twice; a re-run is a deliberate "?" click. Drawers a step staged open
+    // are put away (the assistant panel stays — it invites use).
+    localStorage.setItem(hasGraph ? TOUR_KEYS.graph : TOUR_KEYS.home, '1')
+    setShowSources(false)
+    setShowSessions(false)
+    setTourStage(undefined)
+    setTourOpen(false)
+  }, [hasGraph])
+  /** Stage what a tour step asks for: open the named drawer/panel; a step
+   *  wanting nothing (undefined) puts the drawers away as the walk moves on.
+   *  The assistant only ever opens — collapsing it mid-walk would hide the
+   *  graph tour's own lecture and ask stops. 'details' passes through to
+   *  GraphExplorer (via tourStage), which selects the seed when nothing is. */
+  const onTourStage = useCallback((stage?: string) => {
+    setTourStage(stage)
+    setShowSources(stage === 'library')
+    setShowSessions(stage === 'sessions')
+    if (stage === 'assistant') setAssistantOpen(true)
+  }, [])
 
   // Seed search: query + optional filters, cache-first local / live S2 hits.
   // Search errors share the workspace error overlay with graph-load errors.
@@ -118,8 +154,6 @@ export default function Atlas() {
     setAssistantOpen(false)
   }, [dispatch, clearHits, setQuery])
 
-  const hasGraph = !!graph && graph.nodes.length > 0
-
   return (
     <div className="atlas">
       <AtlasHeader
@@ -139,7 +173,12 @@ export default function Atlas() {
         assistantOpen={assistantOpen}
         onToggleAssistant={() => setAssistantOpen((prev) => !prev)}
         onOpenSessions={() => setShowSessions(true)}
+        onStartTour={() => setTourOpen(true)}
       />
+
+      {tourOpen && (
+        <Tour steps={hasGraph ? GRAPH_TOUR : HOME_TOUR} onClose={closeTour} onStage={onTourStage} />
+      )}
 
       <Sources
         open={showSources}
@@ -162,7 +201,7 @@ export default function Atlas() {
       />
 
       <div className="atlas-body">
-        <GraphExplorer>
+        <GraphExplorer tourStage={tourOpen ? tourStage : undefined}>
           <HitList
             hits={hits}
             localHits={localHits}
