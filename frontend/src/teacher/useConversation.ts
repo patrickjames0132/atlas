@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { LECTURE_TITLES, streamAsk, streamAskSources, streamLecture } from '../api'
 import type { Beat, GraphNode, LectureMode, PlayedLecture } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
-import { highlightSet } from '../store/highlight'
+import { highlightSet, selectHighlightSet } from '../store/highlight'
 import {
   beatAdded,
   chatCleared,
@@ -139,6 +139,19 @@ export function useConversation() {
   const askIdxRef = useRef(0)
 
   const highlight = useCallback((ids: string[]) => dispatch(highlightSet(ids)), [dispatch])
+
+  // The active beat/answer/ref marks are UI echoes of the GLOBAL highlight —
+  // so when that highlight empties from anywhere else (the graph's Esc /
+  // clear-all, a graph reload, a session restore), un-mark here too. Without
+  // this, the glow died but the panel kept a beat looking lit.
+  const highlightIds = useAppSelector(selectHighlightSet)
+  useEffect(() => {
+    if (highlightIds.size === 0) {
+      setActiveBeat(null)
+      setActiveChat(null)
+      setActiveRef(null)
+    }
+  }, [highlightIds])
 
   /** Click a beat: light its papers; click the active one again to clear. */
   const onBeatClick = useCallback(

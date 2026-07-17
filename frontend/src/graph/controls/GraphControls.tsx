@@ -44,11 +44,15 @@ export interface GraphControlsProps {
   totalCount: number
   /** How many nodes are hand-picked into the teacher's scope (0 = none). */
   selectedCount: number
-  /** Clear the hand-picked selection. */
-  onClearSelection: () => void
-  /** How many nodes the user has pinned (0 disables Release). */
+  /** How many nodes the teacher currently lights up (0 = none). */
+  litCount: number
+  /** Drop every highlight at once — hand-picked selection and teacher glow
+   *  alike (the same reset Esc runs). */
+  onClearAll: () => void
+  /** How many nodes the user has pinned (shown in the Release label). */
   pinnedCount: number
-  /** Unpin every node. */
+  /** Unpin every node and reheat the simulation so the layout re-settles —
+   *  useful bare (nothing pinned) to re-condense a drifted force graph. */
   onReleaseAll: () => void
   /** Re-center the graph (zoomToFit). */
   onFit: () => void
@@ -86,7 +90,8 @@ export default function GraphControls({
   visibleCount,
   totalCount,
   selectedCount,
-  onClearSelection,
+  litCount,
+  onClearAll,
   pinnedCount,
   onReleaseAll,
   onFit,
@@ -219,8 +224,7 @@ export default function GraphControls({
           <button
             className="mini-btn"
             onClick={onReleaseAll}
-            disabled={pinnedCount === 0}
-            title="Unpin every node"
+            title="Unpin every node and re-settle the layout"
           >
             Release {pinnedCount || ''}
           </button>
@@ -242,16 +246,24 @@ export default function GraphControls({
           className="select-hint"
           title="Hand-pick papers to scope the AI teacher's lectures and answers to them"
         >
-          ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · alt-click empty to
-          clear
+          ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · esc clears all
+          highlights
         </span>
-        {selectedCount > 0 && (
+        {(selectedCount > 0 || litCount > 0) && (
           <span className="select-status">
-            <b>{selectedCount}</b> picked
+            {selectedCount > 0 ? (
+              <>
+                <b>{selectedCount}</b> picked
+              </>
+            ) : (
+              <>
+                <b>{litCount}</b> lit
+              </>
+            )}
             <button
               className="link-btn"
-              onClick={onClearSelection}
-              title="Clear the hand-picked selection — the teacher grounds in every visible paper again"
+              onClick={onClearAll}
+              title="Clear every highlight and hand-picked selection (Esc does the same)"
             >
               clear
             </button>

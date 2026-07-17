@@ -516,19 +516,6 @@ optional, behind a key.
       "AI on/off"). Decide the name against the mock, not in the ticket. *(From
       the `todos.md` inbox, 2026-07-17.)*
 
-- [ ] **One fast "unhighlight everything" action** — clearing what's lit on the
-      graph is currently piecemeal: the hand-picked selection has its own Clear,
-      and a lit lecture beat / chat answer / inline `[n]` ref clears by clicking
-      it again. Add a single fast gesture (an **Esc** key and/or one visible
-      Clear) that drops **any** active highlight or selection at once — regardless
-      of whether it came from a marquee/drag pick or from clicking a
-      bubble/chapter/ref in the lecturer/researcher. Unifies `highlightSet` +
-      `nodeSelectionCleared` + the panel's active-beat/chat/ref state behind one
-      reset. *(From the `todos.md` inbox, 2026-07-14.)*
-- [ ] **Thicker dashed ring for "Discovered by teacher" nodes** — the dashed
-      "discovered" ring on agent-pulled nodes is hard to see; thicken it (and/or
-      up the contrast) so a discovery reads at a glance. *(From the `todos.md`
-      inbox, 2026-07-14.)*
 - [ ] **Cleaner layout for expanded nodes** — nodes/edges the researcher pulls in
       via `expand_node` land right on top of the seed's own edges and nodes, so a
       dense neighborhood turns to spaghetti around the seed. Give discoveries more
@@ -566,28 +553,6 @@ optional, behind a key.
       (like the lectures note added in v4.12.0) — space is tight, so likely a
       combined line ("Answers draw on N lectures · M sources") rather than two.
       *(Patrick's report, 2026-07-11.)*
-- [ ] **Hide dateless papers in Timeline, keep them in Force** — a paper with no
-      publication date has no honest position on a time axis. Today the Timeline
-      layout parks a dateless node at the **seed's own x** (`nodeTimelineX` in
-      `useTimeline.ts`, the v2.3.1 fix) so it doesn't fly to the far edge — but
-      it still shows, misleadingly sitting at the seed's year. Instead: **omit
-      dateless nodes from the Timeline view entirely** (and their edges), while
-      **keeping them in the Force view**, where position is force-driven, not
-      time-driven, so they belong. A layout-scoped visibility filter (Timeline
-      drops `year == null && pub_date == null` nodes; Force shows everything),
-      kept in step with the paper-count readout so it reflects what's shown.
-      *(From the `todos.md` inbox, 2026-07-11.)*
-- [ ] **Release should re-condense a scattered force layout on demand** — on a
-      big graph the force nodes drift apart and there's no way to pull them back
-      together without changing the view. The **Release** button (graph controls)
-      only un-pins pinned nodes and is **disabled when nothing is pinned**
-      (`pinnedCount === 0`), so it can't help. Today's only workaround is toggling
-      a relation filter chip, which reheats the simulation as a side effect and
-      condenses the layout. Give the user a real control: either make **Release**
-      also **reheat the simulation** (`d3ReheatSimulation` on the ForceGraph2D
-      ref) so it re-settles the nodes even with none pinned, or add a dedicated
-      **"Re-layout"/"Recenter"** action beside Release/Fit. *(From the `todos.md`
-      inbox, 2026-07-11.)*
 - [ ] **Group graph nodes by relation type in the Force layout** — the force
       layout currently mingles every relation into one undifferentiated cloud;
       nodes should **cluster into visual groups by their relation to the seed**

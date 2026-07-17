@@ -129,12 +129,21 @@ export default function GraphCanvas({
         ctx.fillStyle = dim ? DIM_NODE : REL_COLOR[primaryRel(node)]
         ctx.fill()
         if (node.discovered && !dim) {
-          // Dashed ring marks a paper the AI teacher pulled in mid-chat.
-          ctx.lineWidth = 1.2 / globalScale
-          ctx.strokeStyle = 'rgba(242,244,248,0.6)'
-          ctx.setLineDash([2 / globalScale, 2 / globalScale])
+          // Dashed ring marks a paper the AI teacher pulled in mid-chat. Its
+          // own path, just outside the fill: stroking the fill's arc buried
+          // half the line under the disc, which is why the old 1.2-width ring
+          // was so easy to miss.
+          ctx.beginPath()
+          ctx.arc(node.x, node.y, radius + 1.5, 0, 2 * Math.PI)
+          ctx.lineWidth = 2 / globalScale
+          ctx.strokeStyle = 'rgba(242,244,248,0.9)'
+          ctx.setLineDash([3 / globalScale, 2 / globalScale])
           ctx.stroke()
           ctx.setLineDash([])
+          // Restore the fill's arc as the current path — the lit/pinned/
+          // selected rings below stroke it.
+          ctx.beginPath()
+          ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI)
         }
         if (isLit && !dim) {
           ctx.lineWidth = 2 / globalScale

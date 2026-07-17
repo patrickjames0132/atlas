@@ -1,8 +1,8 @@
 # `src/graph/hooks`
 
-The three hooks that manage a live force simulation without fighting it.
+The hooks that manage a live force simulation without fighting it.
 They cluster here purely to keep `graph/` scannable (the original nesting
-precedent the hybrid structure rule cites); all three are consumed only by
+precedent the hybrid structure rule cites); all are consumed only by
 `graph/GraphExplorer.tsx`. Everything below is shaped by the core
 constraint documented in `../README.md`: react-force-graph MUTATES the
 node objects, so these hooks mutate in place and signal by version, never
@@ -10,10 +10,11 @@ by identity.
 
 ```
 hooks/
-  useDiscovery.ts — the sim-side discovery merge, in place
-  useMarquee.ts   — alt-drag node selection (the teacher's scope)
-  usePinning.ts   — user pins (drag / toggle / release), timeline-aware
-  useTimeline.ts  — the Timeline layout: year pinning, collide, axis painting
+  useDiscovery.ts   — the sim-side discovery merge, in place
+  useEscapeClear.ts — Esc = one "unhighlight everything" gesture
+  useMarquee.ts     — alt-drag node selection (the teacher's scope)
+  usePinning.ts     — user pins (drag / toggle / release), timeline-aware
+  useTimeline.ts    — the Timeline layout: year pinning, collide, axis painting
 ```
 
 ## `useDiscovery` — the graph grows mid-conversation
@@ -65,8 +66,9 @@ make it coexist with the sim's own drag-to-pan:
   `selected ∩ visible` grounding rule.
 - **The marquee is additive.** Each alt-drag **unions** the enclosed nodes onto
   the pick, so several sweeps build one scope; a negligible drag (below a few
-  pixels) is an alt-click on empty space that **clears** it, as does the
-  controls' Clear button. We deliberately **don't** use Alt+Shift for a
+  pixels) is an alt-click on empty space that **clears** it, as do the
+  controls' clear link and **Esc** (both of which also drop the teacher's
+  highlight — see `useEscapeClear` below). We deliberately **don't** use Alt+Shift for a
   "replace vs. add" split — that combo is the OS keyboard-layout switch on
   Windows, which steals the modifier and the window focus mid-drag. Single-node
   **shift-click** add/remove lives in GraphExplorer's click handler, not here.
@@ -75,6 +77,20 @@ The selected ids live in the **workspace slice** (`selectedNodeIds`) — the one
 piece of this hook's state that's genuinely cross-cutting, since
 `selectGroundingNodes` reads it to scope the teacher. The rectangle and the
 `armed` flag stay local (only the canvas paints them).
+
+## `useEscapeClear` — one key drops every highlight
+
+Highlights arrive from four owners (the teacher's beat/answer/ref glow in the
+highlight slice, the hand-picked scope in the workspace slice, and their two
+panel-side echoes), and each historically cleared only its own way. Esc now
+runs GraphExplorer's `onClearAll` — `nodeSelectionCleared()` +
+`highlightSet([])` — and the teacher panel's active beat/answer/ref marks
+follow the emptied highlight on their own (`useConversation` watches the
+global set, which also un-sticks the marks after a graph reload). The hook
+itself is deliberately dumb: a window keydown listener that skips form
+controls (Esc in the search box means "leave the box" — the Tour's
+precedent); GraphExplorer additionally skips it while the lightbox or tour
+own the key, since both bind their own Esc-to-close.
 
 ## `usePinning` + `useTimeline` — two layouts, one pin vocabulary
 

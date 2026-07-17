@@ -143,6 +143,15 @@ branch `main`.
   fails the gate on any single-letter *binding* in `.py` files and `.ipynb`
   code cells alike (`_` as a pure discard is the one allowed single character;
   attribute reads are out of scope).
+- **The in-app help tracks the UI.** The frontend teaches itself in three
+  places: the guided tour's step text (`frontend/src/tour/steps.ts`), the
+  one-line gesture/hint lines inside components (e.g. GraphControls'
+  `select-hint` and `ctrl-hint`), and control tooltips (`title=`). When a
+  change alters what a component *does* — a new gesture, a button's behavior,
+  a control appearing/disappearing — **update every help surface that
+  describes it in the same change**, or the tour confidently teaches the old
+  UI. (Rule born 2026-07-17: the Esc clear-all shipped while the tour still
+  taught alt-click-empty as the only clear.)
 - **Every package has a README, kept current.** A new package — backend or
   frontend, nested sub-packages included (e.g. `graph/canvas/`,
   `teacher/transcript/`) — ships **with its own `README.md`** telling that

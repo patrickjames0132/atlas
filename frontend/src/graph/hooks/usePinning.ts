@@ -22,8 +22,6 @@ export interface UsePinningArgs {
   /** The ForceGraph2D ref, to reheat the sim after releasing pins. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fgRef: { current: any }
-  /** Shared "zoomToFit already ran" latch (reset by releaseAll). */
-  fitDone: { current: boolean }
 }
 
 /** What {@link usePinning} returns for GraphExplorer to wire up. */
@@ -48,13 +46,7 @@ export interface PinningApi {
  *
  * @returns The pinned-id set + the pin/unpin/release handlers.
  */
-export function usePinning({
-  base,
-  layout,
-  nodeTimelineX,
-  fgRef,
-  fitDone,
-}: UsePinningArgs): PinningApi {
+export function usePinning({ base, layout, nodeTimelineX, fgRef }: UsePinningArgs): PinningApi {
   const [pinned, setPinned] = useState<Set<string>>(new Set())
 
   // A new graph starts unpinned.
@@ -110,9 +102,12 @@ export function usePinning({
       node.fy = undefined
     })
     setPinned(new Set())
-    fitDone.current = false
+    // Deliberately NOT resetting the fitDone latch: Release re-settles the
+    // layout under the user's current camera. Re-arming it made the engine
+    // stop re-run zoomToFit, yanking the zoom out to the whole graph —
+    // exactly the "reheat without camera yank" rule discoveries follow.
     fgRef.current?.d3ReheatSimulation?.()
-  }, [base, layout, nodeTimelineX, fgRef, fitDone])
+  }, [base, layout, nodeTimelineX, fgRef])
 
   return { pinned, clearPins, onNodeDragEnd, togglePin, releaseAll }
 }

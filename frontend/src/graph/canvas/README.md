@@ -23,7 +23,9 @@ paints, the shell decides.
   everything outside it **dims** like a focus set, so the picked cluster
   stands out; the ring is cyan to stay distinct from the gold, pale-white,
   and bright-white rings it can coexist with.
-- **Dashed ring** — agent-discovered mid-chat (`node.discovered`).
+- **Dashed ring** — agent-discovered mid-chat (`node.discovered`). Drawn on
+  its own path just outside the fill: stroking the fill's arc buries half the
+  line width under the disc, which made the original ring easy to miss.
 - **Pale ring** — user-pinned.
 - **Bright ring** — the open detail-panel node (`selectedId`).
 

@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { AnswerFigure } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
-import { selectHighlightSet } from '../store/highlight'
+import { highlightSet, selectHighlightSet } from '../store/highlight'
 import {
   layoutSet,
   loadGraph,
@@ -40,6 +40,7 @@ import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
 import { REL_TYPES } from './theme'
 import { useDiscovery } from './hooks/useDiscovery'
+import { useEscapeClear } from './hooks/useEscapeClear'
 import { useMarquee } from './hooks/useMarquee'
 import { usePinning } from './hooks/usePinning'
 import { useTimeline } from './hooks/useTimeline'
@@ -195,7 +196,6 @@ export default function GraphExplorer({
     layout,
     nodeTimelineX,
     fgRef,
-    fitDone,
   })
 
   const doLoadGraph = useCallback(
@@ -338,7 +338,24 @@ export default function GraphExplorer({
   // Alt-drag marquee selection: arms while Alt is held, captures the drag on an
   // overlay so RFG never pans, and commits the enclosed nodes to the selection.
   const marquee = useMarquee({ view, fgRef, wrapRef })
-  const onClearSelection = useCallback(() => dispatch(nodeSelectionCleared()), [dispatch])
+
+  /** Drop every active highlight at once — the hand-picked selection AND the
+   * teacher's lit papers (whose beat/answer/ref marks follow the emptied
+   * highlight; see useConversation). One gesture, wherever the light came
+   * from. */
+  const onClearAll = useCallback(() => {
+    dispatch(nodeSelectionCleared())
+    dispatch(highlightSet([]))
+  }, [dispatch])
+  // Esc = the same reset, unless an overlay owns the key right now: the
+  // lightbox and the tour both close on their own Esc, and clearing the graph
+  // underneath them would be a surprise.
+  useEscapeClear(
+    useCallback(() => {
+      if (lightbox || tourStage) return
+      onClearAll()
+    }, [lightbox, tourStage, onClearAll]),
+  )
 
   /** Neighbors of the hovered node (for focus-on-hover dimming). */
   const hoverSet = useMemo(() => {
@@ -427,7 +444,8 @@ export default function GraphExplorer({
             visibleCount={view.nodes.length}
             totalCount={base!.nodes.length}
             selectedCount={selectedIds.size}
-            onClearSelection={onClearSelection}
+            litCount={highlightIds.size}
+            onClearAll={onClearAll}
             pinnedCount={pinned.size}
             onReleaseAll={releaseAll}
             onFit={() => fgRef.current?.zoomToFit(400, 60)}

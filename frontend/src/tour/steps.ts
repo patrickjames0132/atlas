@@ -140,17 +140,18 @@ export const GRAPH_TOUR: TourStep[] = [
     target: '[data-tour="actions"]',
     title: 'Release · Fit · Refresh',
     body:
-      'Release unpins every node you dragged, Fit re-centers the whole graph, and Refresh ' +
-      'rebuilds this paper’s neighborhood fresh from the data provider.',
+      'Release unpins every node you dragged and re-settles a drifted layout — without ' +
+      'moving your zoom. Fit re-centers the whole graph, and Refresh rebuilds this ' +
+      'paper’s neighborhood fresh from the data provider.',
   },
   {
     target: '[data-tour="selector"]',
     title: 'Hand-pick the teacher’s scope',
     body:
       'Hold ⌥ Alt and drag a box around papers to add them to the AI teacher’s scope — ' +
-      'sweep several clusters to build one. ⇧ Shift-click toggles a single paper; ' +
-      '⌥ alt-click empty canvas clears the pick. Lectures and answers then ground in ' +
-      'exactly those papers.',
+      'sweep several clusters to build one. ⇧ Shift-click toggles a single paper. ' +
+      'Lectures and answers then ground in exactly those papers — and Esc clears ' +
+      'every highlight at once, the pick and the teacher’s glow alike.',
   },
   {
     target: '[data-tour="hint"]',

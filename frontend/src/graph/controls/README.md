@@ -47,12 +47,22 @@ canvas about what "a reference" looks like, and both style via
 - **The node-selector row teaches the marquee gestures and reports the
   pick.** An always-on hint line (`alt-drag to pick nodes for the teacher ·
   shift-click to add/remove`) makes the modifier-drag discoverable — the
-  gesture itself lives in `hooks/useMarquee.ts` — and once a selection exists
-  the row also shows the picked count and a `clear` link. The pick scopes the
+  gesture itself lives in `hooks/useMarquee.ts` — and once a selection OR a
+  teacher highlight exists the row shows its count (`N picked`, else `N lit`)
+  and a `clear` link. That link (and **Esc**, same reset — see
+  `hooks/useEscapeClear.ts`) drops *everything* lit at once: the pick and the
+  teacher's glow, wherever it came from. The pick scopes the
   teacher via `selectGroundingNodes` (`selected ∩ visible`), so it reads as a
   filter alongside the chips/sliders.
 - **The hint line teaches per-layout gestures** — drag-to-pin in Force,
   left→right-by-year in Timeline; double-click-to-reseed in both.
+- **Release** unpins every node AND reheats the simulation — it stays enabled
+  with nothing pinned, because "re-settle a drifted force layout" is a want of
+  its own (it used to require abusing a filter chip's reheat side effect).
+  Timeline keeps its date columns through a release; only heights re-relax.
+  The camera stays put: releasing no longer re-arms the one-shot zoomToFit
+  latch, so the graph re-settles under the user's current zoom (Patrick's
+  call — the yank out to fit-everything read as losing your place).
 - **Refresh** busts the seed's day-cached snapshot server-side; the button
   disables while a load is in flight.
 - **The `providerNote` line** surfaces a provider-specific caveat under the

@@ -1367,6 +1367,48 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **One fast "unhighlight everything" action** *(v5.14.0)* — clearing what's
+      lit on the graph was piecemeal: the hand-picked selection had its own
+      Clear, and a lit lecture beat / chat answer / inline `[n]` ref cleared by
+      clicking it again. Now **Esc** (new `useEscapeClear` hook — skips form
+      controls, and defers to the lightbox's and tour's own Esc-to-close) and
+      the controls' `clear` link both run one `onClearAll`:
+      `nodeSelectionCleared()` + `highlightSet([])`. The teacher panel's
+      active beat/answer/ref marks follow the emptied global highlight on
+      their own (`useConversation` watches the set — which also fixes a latent
+      staleness where a graph reload killed the glow but left a beat looking
+      lit). The controls row now shows "**N lit** · clear" when only the
+      teacher's glow is active, the gesture hint teaches `esc clears all
+      highlights`, and the tour's scope stop teaches Esc too. *(From the
+      `todos.md` inbox, 2026-07-14; shipped 2026-07-17.)*
+- [x] **Thicker dashed ring for "Discovered by teacher" nodes** *(v5.14.0)* —
+      the ring was hard to see for a *painting* reason, not just a width one:
+      it stroked the node fill's own arc, burying half its 1.2px line under
+      the disc. It now draws on its own path just outside the fill
+      (radius + 1.5) at width 2, brighter (alpha 0.6 → 0.9), dash 3/2 — and
+      restores the fill's arc as the current path so the lit/pinned/selected
+      rings after it are untouched. *(From the `todos.md` inbox, 2026-07-14;
+      shipped 2026-07-17.)*
+- [x] **Release re-condenses a scattered force layout on demand — and keeps
+      your zoom** *(v5.14.0)* — Release was disabled with nothing pinned, so
+      the only way to pull a drifted force graph back together was abusing a
+      filter chip's reheat side effect. Now always enabled: unpins everything
+      (Timeline keeps its date columns) and `d3ReheatSimulation`s. Patrick's
+      browser pass added the second half: releasing used to re-arm the
+      one-shot `fitDone` latch, so the engine-stop re-ran `zoomToFit` and
+      yanked the camera out to the whole graph — it no longer does, matching
+      the discovery merge's "reheat without camera yank" rule. The tour's
+      actions stop now says so. *(From the `todos.md` inbox, 2026-07-11;
+      shipped 2026-07-17.)*
+- [x] **Hide dateless papers in Timeline, keep them in Force** *(shipped
+      inside v5.5.0; ticket retired 2026-07-17)* — filed 2026-07-11, then
+      solved en passant by v5.5.0's landmark work: `GraphExplorer.nodeOk`
+      drops `year == null` nodes (and, via the visible-set intersection,
+      their edges) from the Timeline view only, Force still shows them, and
+      the count readout reads the filtered view — everything the ticket
+      asked for. Sat unnoticed in the Backlog until the v5.14.0 quick-wins
+      batch went looking and found the work already done (with its own test
+      pinning the behavior). *(From the `todos.md` inbox, 2026-07-11.)*
 - [x] **Guided help tour (coach-mark modal) for the graph tools** *(v5.9.0)* — a
       stepped, spotlight-style onboarding overlay launched from an
       always-present header **"?" button**, walking the user through the app's
