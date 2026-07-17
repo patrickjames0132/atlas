@@ -10,10 +10,13 @@ its own fixture.
 
 from __future__ import annotations
 
+import datetime
+import inspect
+
 import pytest
 
 from atlas.config import config
-from atlas.services.graph import budget, build
+from atlas.services.graph import bands, budget, build
 from atlas.services.graph.model import Counts, Edge, Graph, Seed
 
 
@@ -104,7 +107,7 @@ def test_build_graph_shape_s2(fake_s2):
 def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
     """When the offline corpus can serve the seed, its citers are used and the
     recency-biased live citation endpoint is never called."""
-    def corpus_relations(seed_paper, seed_ref, *, landmark_limit, latest_limit):
+    def corpus_relations(seed_paper, seed_ref, **kwargs):
         landmark = [{"node": make_node("CorpusId:2", title="BERT"), "influential": True}]
         latest = [{"node": make_node("CorpusId:3", pub_date="2026-07-01"), "influential": False}]
         return landmark, latest
@@ -127,7 +130,7 @@ def test_s2_build_falls_back_to_live_when_corpus_declines(fake_s2, monkeypatch):
     falls back to the live citation path."""
     live_calls = {"n": 0}
 
-    def corpus_declines(seed_paper, seed_ref, *, landmark_limit, latest_limit):
+    def corpus_declines(seed_paper, seed_ref, **kwargs):
         return None
 
     def live_relations(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
@@ -302,23 +305,20 @@ def test_unknown_seed_returns_none(fake_s2, fake_openalex, monkeypatch):
     assert build.build_graph("   ", provider="s2") is None
 
 
-def test_predicted_budget_reaches_the_ranked_traversals(fake_s2, fake_openalex, monkeypatch):
-    """The RANKED citer paths (OpenAlex, and the offline S2 corpus) get the
-    model's *predicted* budget: they push a count into a citation-sorted query, so
-    they must be told it before they hold any citers to measure."""
+def test_predicted_budget_reaches_openalex_alone(fake_openalex, monkeypatch):
+    """OpenAlex is the ONLY path still given the model's predicted budget.
+
+    It pushes a count into a *remote* server-sorted query, so it must be told the
+    number before it holds any citer — and the pool would have to cross the network
+    (130k citers for DQN) to be counted instead. That is the one situation a
+    prediction earns its keep. Both s2 paths compute the rule locally instead; see
+    ``test_both_s2_paths_select_instead_of_predicting``.
+    """
     monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
     monkeypatch.setattr(config.graph, "cite_limit", None)
     expected = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
     assert expected not in (None, build.openalex.UNBOUNDED_LANDMARK_CAP)  # genuinely adapted
     received: dict[str, int | None] = {}
-
-    def corpus_relations(seed_paper, seed_ref, *, landmark_limit, latest_limit):
-        received["corpus"] = landmark_limit
-        return [], []
-
-    monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_relations)
-    build.build_graph("1706.03762", provider="s2")
-    assert received["corpus"] == expected
 
     def openalex_relations(work_id, *, landmark_limit, latest_limit, band_start=None):
         received["openalex"] = landmark_limit
@@ -327,6 +327,66 @@ def test_predicted_budget_reaches_the_ranked_traversals(fake_s2, fake_openalex, 
     monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
     build.build_graph("1706.03762", provider="openalex")
     assert received["openalex"] == expected
+
+
+def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
+    """The corpus measures its landmark band; it does not consult the model.
+
+    It used to predict, on the reasoning that a count must go into its
+    citation-sorted query up front. Measured (``ml_pipelines/live_pool_validation``),
+    that LIMIT bought 0.9% — 22.08s for 63 citers vs 22.28s for all 28,732 of DQN's
+    — because the scan, dedupe and 200M-row join dominate either way. So it gets
+    ``computed_cite_limit``, and the flat ``cite_limit`` only as a ceiling for when
+    the rule declines.
+
+    Note it still receives a *count* rule, not the live path's selector: this pool
+    is a whole-history ranking, so its band is a prefix of the giants.
+    """
+    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
+    monkeypatch.setattr(config.graph, "cite_limit", 200)
+    predicted = build._adaptive_cite_limit(make_node("seed", title="The Seed"))
+    received: dict[str, object] = {}
+
+    def corpus_relations(seed_paper, seed_ref, **kwargs):
+        received.update(kwargs)
+        return [], []
+
+    monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_relations)
+    build.build_graph("1706.03762", provider="s2")
+
+    assert received["landmark_budget"] is budget.computed_cite_limit
+    # The flat ceiling, NOT this seed's prediction — the model is off this path.
+    assert received["landmark_limit"] == 200
+    assert received["landmark_limit"] != predicted
+    # And it gets the tau rule for its Latest bands — the same one OpenAlex gets,
+    # which works here precisely because landmarks are a prefix with a real year
+    # distribution to read (see the live_pool_validation verdict).
+    assert received["band_start"] is bands.earliest_band_year
+    # Both providers must split on the same boundary.
+    assert received["max_landmark_year"] == build.openalex.landmark_max_year(
+        datetime.date.today())
+
+
+def test_build_calls_the_corpus_with_a_signature_it_actually_has(fake_s2, monkeypatch):
+    """build.py's corpus call must match the real ``citation_relations`` signature.
+
+    Every other corpus test here monkeypatches ``citation_relations`` with a fake,
+    so a kwarg rename in the real function sails through green and only explodes in
+    the browser — which is exactly what happened when ``landmark_select`` became
+    ``landmark_budget``. Bind the build's call against the REAL signature so the
+    mismatch fails here instead.
+    """
+    real = inspect.signature(build.s2.corpus.citation_relations)
+    bound: dict[str, object] = {}
+
+    def recording_relations(*args, **kwargs):
+        real.bind(*args, **kwargs)  # raises TypeError on any name the real fn lacks
+        bound.update(kwargs)
+        return [], []
+
+    monkeypatch.setattr(build.s2.corpus, "citation_relations", recording_relations)
+    build.build_graph("1706.03762", provider="s2")
+    assert "landmark_budget" in bound
 
 
 def test_live_s2_fallback_selects_instead_of_predicting(fake_s2, monkeypatch):

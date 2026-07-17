@@ -3,11 +3,11 @@
 This is the payoff of the whole pipeline: because the corpus holds *every*
 citation edge with the citers' own citation counts, a seed's landmark citers can
 finally be returned **citation-sorted across all history** — the ranking S2's
-live endpoint never offered (newest-first, capped at a ~10k offset, so a
-hyper-cited seed's most-cited citers were simply unreachable).
+live endpoint never offered (newest-first, and reachable only to the newest 9,000,
+so a hyper-cited seed's most-cited citers were simply unreachable).
 
 The seam is :class:`CitationSource`: two methods, ``landmark_citers`` and
-``latest_citers``, over an S2 ``corpusid``. The concrete
+``latest_bands``, over an S2 ``corpusid``. The concrete
 :class:`DuckDBCitationSource` runs them as DuckDB SQL over the local Parquet; the
 long-term Athena-over-S3 implementation is the same SQL against the same schema,
 so it drops in behind this Protocol untouched.
@@ -16,33 +16,62 @@ so it drops in behind this Protocol untouched.
 drop-in for the live ``s2.citation_relations`` that returns the same
 ``(landmark, latest)`` shape, or **None** when the corpus can't serve this seed
 (unconfigured, no ingested release, or an unresolvable seed) so the caller falls
-back to the live path. The landmark/latest split mirrors the live path's rolling
-12-month window, so switching a graph to the corpus changes *which* citers appear
-(now the true top-cited), not the relations' meaning.
+back to the live path.
+
+**Since v5.11.0 this path is shaped like the OpenAlex one, not the live one** — a
+citation-ranked landmark prefix up to ``landmark_max_year``, then per-year Latest
+bands whose start the fitted tau rule places against those landmarks. It used to
+mirror the live fallback's rolling 12-month window, on the reasoning that the s2
+provider's split should mean the same thing whichever source answered. That
+symmetry was the wrong one to keep: the live path is a **recency sliver** and bands
+its landmarks because it has no all-history ranking to prefix; the corpus and
+OpenAlex both hold whole histories and can place an honest frontier. Two of three
+paths now agree, and the odd one out is the one that structurally cannot join them
+(``ml_pipelines/live_pool_validation``'s verdict measured why: banded landmarks
+flatten the year distribution the tau rule reads, pinning 56 of 58 seeds to a
+one-year band). So switching a graph to the corpus changes *which* citers appear —
+now the true top-cited across all history — and now also *where the frontier
+starts*: per-seed, rather than a flat twelve months.
 """
 
 from __future__ import annotations
 
-import datetime
 import json
 import logging
 import threading
-from typing import Protocol
+from collections.abc import Sequence
+from typing import Callable, Protocol
 
 import duckdb
 
+from ....config import config
 from . import paths as corpus_paths
 from .ingest import NBUCKETS
 from .paths import ReleasePaths, read_current_release
 
 log = logging.getLogger(__name__)
 
-#: The recent-frontier window, in months — a citer published within this many
-#: months of today is ``latest`` (its own relation), everything older competes as
-#: a historic ``landmark``. Mirrors ``traversal._LATEST_WINDOW_MONTHS`` so the s2
-#: provider's split means the same thing whether it's served live or from the
-#: corpus; kept a local constant rather than importing a private name.
-_LATEST_WINDOW_MONTHS = 12
+#: Injected landmark budget: ``(ranked citer years) -> how many to ship | None``.
+#: ``services/graph`` passes ``budget.computed_cite_limit``, which runs the STOP
+#: rule over the real pool; None falls back to the flat ``landmark_limit``. It
+#: takes years and returns a count because the rule only reasons about *when*
+#: citers were published — the entries themselves stay here. A parameter, not an
+#: import, so ``integrations`` stays below ``services`` in the dependency order —
+#: the same shape as the live path's ``LandmarkSelectFn`` and OpenAlex's
+#: ``BandStartFn``.
+#:
+#: A **count**, not a selection: this pool is a whole-history ranking, so the band
+#: is its prefix — the giants. (The live path's truncated pool has no such ranking
+#: to prefix, which is why it gets a selector instead. See
+#: ``budget.computed_cite_limit``.)
+LandmarkBudgetFn = Callable[[Sequence[int | None]], int | None]
+
+#: Injected boundary chooser: ``(landmark_years, landmark_max_year) -> first band
+#: year | None``. ``services/graph`` passes ``bands.earliest_band_year``; None keeps
+#: the fixed ``latest_band_years`` span. Identical to OpenAlex's ``BandStartFn`` —
+#: the same rule, reading the same kind of distribution, because this path now ships
+#: the same kind of landmark band.
+BandStartFn = Callable[[list[int], int], int | None]
 
 
 class CitationSource(Protocol):
@@ -55,28 +84,15 @@ class CitationSource(Protocol):
     :meth:`DuckDBCitationSource.resolve_corpus_id`).
     """
 
-    def landmark_citers(self, corpus_id: int, limit: int | None) -> list[dict]:
-        """The seed's historic citers, most-cited first (its Field Landmarks)."""
+    def landmark_citers(self, corpus_id: int, limit: int | None, *,
+                        max_landmark_year: int) -> list[dict]:
+        """The seed's landmark-era citers, most-cited first (its Field Landmarks)."""
         ...
 
-    def latest_citers(self, corpus_id: int, limit: int | None) -> list[dict]:
-        """The seed's recent-frontier citers, oldest-first within the window."""
+    def latest_bands(self, corpus_id: int, *, band_start: int, current_year: int,
+                     per_year: int) -> list[dict]:
+        """The seed's recent citers as per-year bands, newest-first."""
         ...
-
-
-def _latest_cutoff() -> str:
-    """Today minus :data:`_LATEST_WINDOW_MONTHS`, as an ISO ``YYYY-MM-DD`` string.
-
-    A string bound because S2 publication dates are ``YYYY-MM-DD`` text compared
-    lexicographically (ISO text sorts chronologically), which also sidesteps
-    month-arithmetic edge cases. Mirrors ``traversal._latest_cutoff``.
-
-    Returns:
-        The cutoff date as ``YYYY-MM-DD``.
-    """
-    today = datetime.date.today()
-    months = today.year * 12 + (today.month - 1) - _LATEST_WINDOW_MONTHS
-    return f"{months // 12:04d}-{months % 12 + 1:02d}-{today.day:02d}"
 
 
 def _format_authors(authors_json: str | None) -> str | None:
@@ -163,6 +179,14 @@ _CITER_SELECT = (
     "p.citationcount, p.authors, c.isinfluential"
 )
 
+#: The same columns, unqualified — for selecting back out of a subquery, where the
+#: ``p.``/``c.`` aliases are no longer in scope. Same order, so ``_row_to_entry``
+#: unpacks either identically.
+_CITER_SELECT_UNQUALIFIED = (
+    "corpusid, arxiv_id, doi, title, year, publicationdate, "
+    "citationcount, authors, isinfluential"
+)
+
 
 class DuckDBCitationSource:
     """A :class:`CitationSource` backed by the local DuckDB-over-Parquet corpus.
@@ -218,86 +242,133 @@ class DuckDBCitationSource:
             return int(ref)
         return None
 
-    def _citers(self, corpus_id: int, *, recent: bool, limit: int | None) -> list[dict]:
-        """Query one side of the citer split (landmark or latest), deduped.
+    def _deduped_edges(self, corpus_id: int) -> str:
+        """The SQL for a seed's distinct citing papers — the shared subquery.
 
         **The edge list arrives with duplicates, and they're upstream's, not
         ours.** S2 ships a release's ``citations`` dataset as more than one export
         batch, and the batches *overlap*: the 2026-07-07 release advertises 390
         shards — 240 stamped ``…_00151_3g69z_…`` and 150 stamped
         ``…_00016_bxc9g_…`` — carrying ~5.1B rows for ~2.7B distinct edges. Every
-        edge lands about twice. So this **groups by the citing paper** before
-        joining. Without it a ``limit`` counts *rows*, not papers, and silently
-        halves the relation: DQN's landmark budget of 63 bought ~32 actual
-        landmarks. (``build.py``'s ``add_edge`` dedupes endpoints, so the graph
-        stayed *correct* — just half-empty, which is why this hid for so long.)
+        edge lands about twice. So this **groups by the citing paper** before the
+        join. Without it a ``limit`` counts *rows*, not papers, and silently halves
+        the relation: DQN's landmark budget of 63 bought ~32 actual landmarks.
+        (``build.py``'s ``add_edge`` dedupes endpoints, so the graph stayed
+        *correct* — just half-empty, which is why this hid for so long.)
 
         Deduping here rather than at ingest is deliberate: a duplicate pair spans
         **two different shards**, so a per-shard ``SELECT DISTINCT`` would never
         see both copies. The grouping is bucket-local and runs on a few thousand
-        rows, so it costs nothing measurable.
+        rows, so it costs nothing measurable — the whole bucket scan is ~0.07s
+        (measured 2026-07-17; what a citer query actually pays for is the join
+        against the unsorted 200M-row papers table — see the OnePager's cold-build
+        ticket).
 
         ``isinfluential`` is OR'd across the copies: the flag is a claim that *some*
         edge record marks this citation influential, and the batches needn't agree.
 
         Args:
-            corpus_id: The seed's ``corpusid``.
-            recent: True for the latest window (``publicationdate >= cutoff``,
-                oldest-first), False for historic landmarks (older, most-cited
-                first).
-            limit: Max citers to return, or None for all. Counts distinct citing
-                papers.
+            corpus_id: The seed's ``corpusid``, which also picks the bucket.
 
         Returns:
-            ``{"node", "influential"}`` entries in the relation's reveal order,
-            one per citing paper.
+            A parenthesised SQL subquery aliasable as ``c``, taking ``corpus_id``
+            as its single bind parameter.
         """
         bucket = corpus_id % NBUCKETS
         citations_glob = f"{self._citations_root}/bucket={bucket}/*.parquet"
-        cutoff = _latest_cutoff()
-        if recent:
-            date_clause = "p.publicationdate >= ?"
-            # Newest-first for the LIMIT (keep the most recent), reversed to
-            # oldest-first below so the reveal slider walks toward the present.
-            order = "p.publicationdate DESC"
-        else:
-            # A citer with no date can't be placed in the window, so it competes
-            # as a historic landmark (matches the live path's _is_latest).
-            date_clause = "(p.publicationdate IS NULL OR p.publicationdate < ?)"
-            order = "p.citationcount DESC NULLS LAST"
-        limit_clause = f"LIMIT {int(limit)}" if limit is not None else ""
-        # One row per citing paper, BEFORE the join and the limit — see above.
-        deduped_edges = (
+        return (
             "(SELECT citingcorpusid, bool_or(isinfluential) AS isinfluential "
             f"FROM read_parquet('{citations_glob}', hive_partitioning=false) "
             "WHERE citedcorpusid = ? GROUP BY citingcorpusid)"
         )
-        query = (
-            f"SELECT {_CITER_SELECT} "
-            f"FROM {deduped_edges} c "
-            f"JOIN read_parquet('{self._papers_glob}') p ON p.corpusid = c.citingcorpusid "
-            f"WHERE {date_clause} "
-            f"ORDER BY {order} {limit_clause}"
-        )
+
+    def _run(self, query: str, params: list) -> list[tuple]:
+        """Execute one citer query, treating an absent bucket as "no citers".
+
+        Args:
+            query: The SQL to run.
+            params: Its bind parameters.
+
+        Returns:
+            The result rows, or ``[]`` when this seed's bucket holds no Parquet
+            (a partial or sample ingest with no edges for it — not an error).
+        """
         with self._lock:
             try:
-                rows = self._connection.execute(query, [corpus_id, cutoff]).fetchall()
+                return self._connection.execute(query, params).fetchall()
             except duckdb.IOException:
-                # No parquet in this bucket dir (e.g. a partial/sample ingest with
-                # no edges for this seed) — treat as no citers, not an error.
                 return []
-        entries = [_row_to_entry(row) for row in rows]
-        if recent:
-            entries.reverse()  # newest-first LIMIT -> oldest-first reveal
-        return entries
 
-    def landmark_citers(self, corpus_id: int, limit: int | None) -> list[dict]:
-        """The seed's historic citers, most-cited first (its Field Landmarks)."""
-        return self._citers(corpus_id, recent=False, limit=limit)
+    def landmark_citers(self, corpus_id: int, limit: int | None, *,
+                        max_landmark_year: int) -> list[dict]:
+        """The seed's landmark-era citers, most-cited first (its Field Landmarks).
 
-    def latest_citers(self, corpus_id: int, limit: int | None) -> list[dict]:
-        """The seed's recent-frontier citers, oldest-first within the window."""
-        return self._citers(corpus_id, recent=True, limit=limit)
+        Everything published up to ``max_landmark_year``, ranked by the citers' own
+        citation counts — the all-history ranking that is the whole point of the
+        corpus, and the one S2's live endpoint can't serve.
+
+        An **undated** citer competes here rather than in ``latest``: it can't be
+        placed in a band, and dropping it entirely would lose a genuine giant to a
+        missing field. (It can't *win* a landmark slot either — the budget rule
+        drops undated citers when it counts. See ``budget.py``.)
+
+        Args:
+            corpus_id: The seed's ``corpusid``.
+            limit: Max citers to return, or None for all — pass None when a
+                ``landmark_budget`` rule will measure the ranking instead.
+            max_landmark_year: The last year that still counts as landmark-era;
+                anything newer belongs to the Latest bands.
+
+        Returns:
+            ``{"node", "influential"}`` entries, most-cited first.
+        """
+        query = (
+            f"SELECT {_CITER_SELECT} "
+            f"FROM {self._deduped_edges(corpus_id)} c "
+            f"JOIN read_parquet('{self._papers_glob}') p ON p.corpusid = c.citingcorpusid "
+            "WHERE (p.year IS NULL OR p.year <= ?) "
+            "ORDER BY p.citationcount DESC NULLS LAST "
+            + (f"LIMIT {int(limit)}" if limit is not None else "")
+        )
+        return [_row_to_entry(row)
+                for row in self._run(query, [corpus_id, max_landmark_year])]
+
+    def latest_bands(self, corpus_id: int, *, band_start: int, current_year: int,
+                     per_year: int) -> list[dict]:
+        """The seed's recent citers as **per-year bands**, newest-first.
+
+        One band per calendar year from ``band_start`` to ``current_year``, each
+        holding that year's top ``per_year`` citers by citation count — so no single
+        busy year drowns the frontier, and every recent year gets its own fair
+        slice. The same shape ``openalex.citation_relations`` builds, except it
+        needs one HTTP call per year and this needs **one query**: a window function
+        ranks within each year in a single pass.
+
+        Args:
+            corpus_id: The seed's ``corpusid``.
+            band_start: First year to band (from ``bands.band_start_rule``).
+            current_year: Last year to band, inclusive.
+            per_year: Max citers per year band.
+
+        Returns:
+            ``{"node", "influential"}`` entries, newest-first — the caller excludes
+            anything already shipped as a landmark, then reverses for the reveal
+            order.
+        """
+        query = (
+            f"SELECT {_CITER_SELECT_UNQUALIFIED} FROM ("
+            f"  SELECT {_CITER_SELECT}, ROW_NUMBER() OVER ("
+            "     PARTITION BY p.year ORDER BY p.citationcount DESC NULLS LAST"
+            "  ) AS rank_in_year "
+            f"  FROM {self._deduped_edges(corpus_id)} c "
+            f"  JOIN read_parquet('{self._papers_glob}') p "
+            "     ON p.corpusid = c.citingcorpusid "
+            "  WHERE p.year >= ? AND p.year <= ?"
+            ") WHERE rank_in_year <= ? "
+            "ORDER BY publicationdate DESC NULLS LAST"
+        )
+        rows = self._run(query, [corpus_id, band_start, current_year, per_year])
+        return [_row_to_entry(row) for row in rows]
 
 
 def active_source() -> DuckDBCitationSource | None:
@@ -333,6 +404,10 @@ def citation_relations(
     *,
     landmark_limit: int | None,
     latest_limit: int | None,
+    max_landmark_year: int,
+    current_year: int,
+    landmark_budget: LandmarkBudgetFn | None = None,
+    band_start: BandStartFn | None = None,
 ) -> tuple[list[dict], list[dict]] | None:
     """Split a seed's corpus citers into (landmarks, latest) — or None to fall back.
 
@@ -342,12 +417,49 @@ def citation_relations(
     is unavailable or can't resolve this seed, signalling the caller to use the
     live path.
 
+    Since **v5.11.0 this path is shaped like the OpenAlex one**, which it always
+    should have been: it is the only other provider holding a seed's whole citation
+    history, and the only one besides OpenAlex that can honestly place a frontier.
+
+    * **Landmarks** — the all-time giants up to ``max_landmark_year``, a
+      citation-ranked **prefix** whose length is *computed* rather than predicted.
+      With a ``landmark_budget`` rule the query runs unlimited and the rule measures
+      the real pool; the trained ``cite_budget`` model isn't consulted. That sounds
+      expensive and isn't — measured on DQN, warm, ``limit=63`` took 22.08s and
+      ``limit=None`` (all 28,732 citers) took 22.28s, a 0.9% difference, because the
+      scan, dedupe and 200M-row papers join dominate either way. The ``LIMIT`` was
+      only ever discarding rows already paid for.
+    * **Latest** — **per-year bands** from ``band_start`` to ``current_year``,
+      replacing the flat rolling window this path inherited from the live fallback.
+      The band start comes from the fitted tau rule reading the *shipped landmarks'*
+      year distribution, so an old seed's frontier widens back to meet its cluster
+      instead of stranding a decade of empty timeline.
+
+    **Why the tau rule works here and not on the live path** — it needs a real
+    distribution to read, and it gets one precisely *because* landmarks are a
+    prefix. The live fallback bands its landmarks (a truncated pool has no
+    all-history ranking to prefix), which flattens every year to the cap, which
+    collapses tau's ``tau × peak`` threshold and pins the boundary to the newest
+    year on 56 of 58 seeds. Measured in ``ml_pipelines/live_pool_validation``; the
+    argument is that study's verdict.
+
     Args:
         seed_paper: The normalized seed node (its ``arxiv_id`` drives resolution).
         seed_ref: The raw reference the graph was seeded on (a ``CorpusId:`` /
             arXiv id fallback for resolution).
-        landmark_limit: Max historic landmark citers, or None for all.
-        latest_limit: Max recent-frontier citers, or None for all.
+        landmark_limit: Max landmark citers, used only when no ``landmark_budget``
+            is supplied (or it declines); None for all.
+        latest_limit: Max latest citers (keeps the newest), or None for all.
+        max_landmark_year: The last landmark-era year — anything newer is banded as
+            latest. Passed in rather than computed so both providers split on the
+            same boundary (``openalex.landmark_max_year``).
+        current_year: The last year to band, inclusive.
+        landmark_budget: Optional rule measuring how many of the *ranked* landmark
+            pool to ship, from its citer years (see :data:`LandmarkBudgetFn`). Its
+            count wins over ``landmark_limit``, and its presence makes the query
+            unlimited.
+        band_start: Optional per-seed band-start chooser (see :data:`BandStartFn`).
+            None, or a None answer, keeps the fixed ``latest_band_years`` span.
 
     Returns:
         ``(landmark_entries, latest_entries)``, or None to fall back to live S2.
@@ -358,6 +470,43 @@ def citation_relations(
     corpus_id = source.resolve_corpus_id(seed_paper.get("arxiv_id"), seed_ref)
     if corpus_id is None:
         return None
-    landmark = source.landmark_citers(corpus_id, landmark_limit)
-    latest = source.latest_citers(corpus_id, latest_limit)
+
+    # FIELD LANDMARKS. With a budget rule, rank the whole pool and let the rule
+    # measure its years — it can only run after the sort, and there is nothing to
+    # trim to beforehand. Without one, the flat limit goes into the query.
+    if landmark_budget is None:
+        landmark = source.landmark_citers(corpus_id, landmark_limit,
+                                          max_landmark_year=max_landmark_year)
+    else:
+        ranked = source.landmark_citers(corpus_id, None,
+                                        max_landmark_year=max_landmark_year)
+        budget = landmark_budget([entry["node"].get("year") for entry in ranked])
+        # A None answer means the adaptive toggle is off — honour the flat limit.
+        landmark = ranked[:budget] if budget is not None else ranked[:landmark_limit]
+
+    # LATEST PUBLICATIONS: per-year bands. The start defaults to the fixed span and
+    # may widen per seed, read off the landmarks we just chose — which is why this
+    # runs second.
+    earliest = max_landmark_year - config.graph.latest_band_years + 1
+    if band_start is not None:
+        adaptive = band_start(
+            [year for year in (entry["node"].get("year") for entry in landmark) if year],
+            max_landmark_year,
+        )
+        if adaptive is not None:
+            earliest = adaptive
+    recent = source.latest_bands(corpus_id, band_start=earliest,
+                                 current_year=current_year,
+                                 per_year=config.graph.latest_per_year)
+
+    # The bands reach below max_landmark_year, so a giant can appear in both —
+    # keep it a landmark rather than double-showing it (as the OpenAlex path does).
+    shipped = {entry["node"]["id"] for entry in landmark}
+    latest = [entry for entry in recent if entry["node"]["id"] not in shipped]
+    # Newest-first already (the query orders by date), so a limit keeps the newest;
+    # then flip so rank 0 is the OLDEST banded year and the reveal slider walks
+    # forward through time toward the present.
+    if latest_limit is not None:
+        latest = latest[:latest_limit]
+    latest.reverse()
     return landmark, latest

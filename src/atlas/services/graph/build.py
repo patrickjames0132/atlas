@@ -147,19 +147,41 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
     # ingested) or when it can't resolve the seed locally, and we fall back to the
     # live path (recency-biased past the offset ceiling — the accepted interim).
     #
-    # The two paths pick their landmarks DIFFERENTLY, and deliberately. The corpus
-    # pushes a count into a citation-sorted query, so it must know the budget up
-    # front and takes the model's *prediction* (fit on exactly this kind of
-    # all-time-ranked pool). The live path holds its whole pool in memory by trim
-    # time, so it gets a *selector* instead — one that bands the ranking by year,
-    # which no count could do: a count keeps a prefix, and DQN's prefix is all
-    # 2019–2023, leaving a hole before the Latest frontier. See ``budget.py``'s
-    # module docstring.
+    # Neither s2 path consults the trained model any more — since v5.11.0 both
+    # COMPUTE their landmark budget, and the model serves OpenAlex alone (the only
+    # path whose pool would have to cross a network to be counted).
+    #
+    # The corpus used to predict, on the reasoning that a count must go into its
+    # citation-sorted query before any citer comes back. True, but it was buying
+    # nothing: measured on DQN, warm, the LIMIT saved 0.9% (22.08s for 63 citers vs
+    # 22.28s for all 28,732) because the bucket scan, the row dedupe and the
+    # 200M-row papers join dominate and run either way. The query had already paid
+    # for the pool and was discarding it. So it now measures the pool it fetched:
+    # ``budget.computed_cite_limit`` runs the STOP rule over the real citer years.
+    # Same shape of answer as the model gave (a count, for a citation-ranked prefix
+    # of the giants) — only its provenance changed, from an estimate to a
+    # measurement, which drops ~21 mean absolute error for two tenths of a second.
+    #
+    # The two s2 paths still take DIFFERENT rules, deliberately. The corpus holds a
+    # whole-history ranking, so its band is a prefix — that is what a Field Landmark
+    # is — and Latest widens back to meet the cluster. The live path's pool is a
+    # recency sliver with no all-time ranking to prefix, so a prefix there strands
+    # the recent years (DQN's top 29 are all 2019–2023, an 18-month hole before the
+    # Latest frontier); it bands per year instead. See ``budget.computed_cite_limit``
+    # and ``docs/predict-vs-compute.md``.
+    today = datetime.date.today()
     relations = s2.corpus.citation_relations(
         seed_paper,
         seed_ref,
-        landmark_limit=_adaptive_cite_limit(seed_paper),
+        landmark_limit=config.graph.cite_limit,
         latest_limit=config.graph.latest_limit,
+        # Both providers split on the same boundary — passed in rather than
+        # imported so ``integrations``' two providers stay independent of each
+        # other, and computed here where the clock already lives.
+        max_landmark_year=openalex.landmark_max_year(today),
+        current_year=today.year,
+        landmark_budget=budget.computed_cite_limit,
+        band_start=bands.earliest_band_year,
     )
     citation_source: CitationSource
     if relations is not None:

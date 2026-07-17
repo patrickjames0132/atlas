@@ -235,50 +235,6 @@ optional, behind a key.
       of similarity scores? a drop-off / knee in the ranked similarity? seed
       features?) during the study. Mirrors the `cite_budget` / `latest_gap`
       pattern. *(From the `todos.md` inbox, 2026-07-10.)*
-- [ ] **The corpus path uses neither adaptive model properly — one is untrained
-      for it, the other isn't wired at all** — now that the s2 corpus serves real
-      all-history citers, both trained models want re-examining against it.
-      **Confirmed: `bands.earliest_band_year` is never applied to the corpus.**
-      `band_start=` appears exactly once in the app (`build.py`, the OpenAlex call);
-      `corpus.citation_relations` doesn't take one, so its Latest Publications is
-      the **flat rolling 12-month window** inherited from the live fallback
-      (`_latest_cutoff()`), not per-seed tail-edge bands. The corpus has every
-      edge with dates, so it *could* band per year exactly like OpenAlex — it's the
-      one provider with no excuse.
-
-      **Now measured** (`live_pool_validation`, 58 seeds; verdict 2026-07-17 in
-      `research/live_pool_validation/analyze.ipynb`), and the answer is *compute,
-      on both counts*:
-
-      - **The model's premise holds here — and that turns out not to matter.**
-        Seed-origin predictions score **R² 0.644** against the label computed on
-        the corpus's full-history pools, versus the model's own cross-validated
-        **0.680** on its OpenAlex training pools: a transfer gap of just −0.037.
-        The ticket's expectation was right; nothing is wrong with the model.
-        But the reason to predict was cost, and **the cost isn't there**. Timed on
-        DQN, warm: `landmark_citers(limit=63)` takes **22.08s** and
-        `landmark_citers(limit=None)` — the whole 28,732-citer pool — takes
-        **22.28s**. The `LIMIT` saves **0.9%**: the bucket scan, the row dedupe and
-        the join against the 200M-row papers table dominate and happen regardless.
-        **The corpus already pays for the pool and then throws it away.** So for
-        two tenths of a second it can have the exact answer *and* the better rule.
-      - **The tau rule belongs here, and only here.** The live path can't use it —
-        `select_up_to_cap_per_year` flattens every year to the cap, so `tail_edge`'s
-        `tau × peak` threshold collapses to 3 and any full year clears it (56/58
-        seeds collapsed to a one-year band; 23/23 of the exactly-flat ones did).
-        The corpus has real full-history distributions with a real thinning tail —
-        exactly what tau was fit on.
-
-      **The work, then:** (1) drop `adaptive_cite_limit` from the corpus path, call
-      `landmark_citers` unlimited, and run `select_up_to_cap_per_year` over the
-      result; (2) wire `bands.band_start_rule` into `corpus.citation_relations` and
-      fill per-year Latest bands, retiring `_latest_cutoff()`'s flat window there.
-      Both are local, offline, and free. **Watch the interaction** with the "cold
-      corpus builds take ~54s" ticket below: the unlimited fetch materializes ~29k
-      rows instead of 63, which is 0.2s today but shares a root cause with that
-      ticket — fix the query, not the limit.
-      *(From the `todos.md` inbox, 2026-07-16 — Patrick spotted the latest-gap gap;
-      measured and re-scoped 2026-07-17.)*
 - [ ] **The live path can only see the recent sliver — the fix is the corpus, not
       a better estimator** — *(the residue of the live-path age-origin ticket,
       which `live_pool_validation` answered on 2026-07-17: see
@@ -298,27 +254,90 @@ optional, behind a key.
       argument for surfacing provenance in the UI, since the same seed can
       legitimately show a 14×-different landmark band depending on the data source.
       *(Patrick's design, 2026-07-16; measured and resolved 2026-07-17.)*
-- [ ] **Cold corpus builds take ~54s — the bucket's zone maps aren't paying off**
-      — a cache-miss graph on the s2 provider now takes ~54s against the live
-      path's ~15s, all of it in the citer query. That's the wrong shape: the whole
-      point of hash-partitioning on `citedcorpusid` is that a seed lookup touches
-      **one of 1024 buckets** (~1/1024 of 5.1B edges), and sorting by
-      `citedcorpusid` *within* each write gives Parquet row-group zone maps so the
-      query skips most of even that bucket. It should be a few MB read, not 54s.
-      **Prime suspect:** a bucket now holds **390 files** (one per shard, post-v5.6.0),
-      so DuckDB must open 390 Parquet **footers** before any zone map can rule a
-      row group out — the skipping works, but the per-file metadata cost is paid
-      first, 390 times, and it dwarfs the read. Measured: bucket 247 (DQN's) is
-      ~5.2M rows / 390 files. **Things to try, cheapest first:** (a) confirm the
-      diagnosis — time a query against one bucket compacted to a single file vs the
-      390; (b) **compact each bucket after ingest** (one `COPY … ORDER BY
-      citedcorpusid` per bucket → 1024 files total, not ~400k) — this likely also
-      kills the O(n²) ingest scaling below, since a compaction pass replaces the
-      per-shard file accretion; (c) revisit `NBUCKETS` — fewer, bigger buckets mean
-      fewer files but more rows scanned each. Note (b) is the same shape as the
-      classic small-files problem in any Hive-partitioned lake, and the Athena
-      endgame will care about it even more than DuckDB does. *(Patrick noticed
-      fetching citations is slow, 2026-07-16.)*
+- [ ] **Cold corpus builds take ~47s — the `papers` dataset is unsorted, so
+      nothing prunes** *(diagnosed 2026-07-17; the original prime suspect is
+      **refuted** — see below)* — a cache-miss graph on the s2 provider takes ~47s
+      against the live path's ~15s. **It is not the citations bucket.** Measured on
+      DQN (bucket 372, 390 files, 29 MB):
+
+      ```
+      scan the bucket (390 files), filter, group by      0.07s   -> 31,902 rows
+      open all 390 parquet footers                       0.01s
+      the same query + JOIN papers                       2.03s   -> 96% of the cost
+      ```
+
+      Hash-partitioning + `ORDER BY citedcorpusid` are doing exactly their job; the
+      390 files are free. **Compacting buckets would buy nothing** — the old ticket
+      spent its whole argument on a suspect that costs 0.07s. (The small-files point
+      may still matter for the *ingest* scaling ticket below, and for Athena. Just
+      not for this.)
+
+      **The real cause is projection width against an unsorted `papers`.** Parquet
+      is columnar, so every column projected is more bytes off the disk, and the
+      same join at four widths:
+
+      ```
+      1 column   (corpusid)                              0.73s
+      3 columns  (+ year, citationcount)                 1.09s
+      8 narrow   (everything but authors)               20.64s
+      9 columns  (what the app selects, incl. authors)  39.24s
+      ```
+
+      `authors` alone — a JSON blob per paper — costs **+18.6s**. And the app reads
+      all nine columns for **31,878** citers to ship **63**.
+
+      **But fetching fewer rows doesn't help, and that's the finding.** Hydrating
+      those 9 columns for just the 63 winners still took **33.28s** — the same as
+      for all 31,878. Why: **every one of `papers`' 1,946 row groups spans 100% of
+      the corpusid range** (728 … 289,920,059 out of 0 … 289,923,617). The rows
+      landed in arrival order, so every zone map says "maybe" and **nothing prunes**.
+      Any corpusid lookup is a full scan of 24.8 GB, whether it wants 63 rows or 31k.
+
+      **The ingest asymmetry that caused it** (`corpus/ingest.py`): the citations
+      COPY ends `ORDER BY citedcorpusid` and partitions by bucket. The papers COPY
+      does **neither** — no ordering, no partitioning. One missing `ORDER BY` is the
+      whole 20–40s.
+
+      **The fix is two changes that only work together** — each is useless alone,
+      which is why the obvious single fixes were measured and rejected:
+
+      **(a) Cluster `papers` by `corpusid`** — **and it must be *global*, not
+      per-shard.** Adding `ORDER BY corpusid` to the existing per-shard papers COPY
+      would NOT work: every shard holds ids spanning the whole 0–290M range, so
+      sorting inside one still leaves each of its row groups covering ~1/32 of the
+      range, and scattered ids hit them all. It needs either a post-ingest
+      compaction pass over the whole dataset (`COPY (SELECT * FROM
+      read_parquet(papers/*) ORDER BY corpusid) TO …`, so each output row group owns
+      a contiguous slice) or `PARTITION_BY (corpusid % NBUCKETS)` + sort within,
+      mirroring what citations already does. **Tested on a 4-file, 1.8 GB subset**
+      (written as one globally-sorted output): row groups' average id-range width
+      collapsed from
+      **289,918,845 (the whole range) to 2,027,421**, and a 63-id lookup went
+      1.65s → 0.65s. The subset *understates* it — 63 ids hit ~44% of that
+      subset's 143 row groups, but only ~3% of the full dataset's 1,946, so the
+      full-scale win should be ~30x. **One-time cost is cheap:** the 1.8 GB sort
+      took 13.3s, so 24.8 GB ≈ 3 minutes. Keeps the Parquet/Athena endgame — Athena
+      prunes on the same stats. **Alone it is not enough:** the *ranking* query
+      genuinely needs all ~31k citers, so it touches every row group regardless.
+
+      **(b) Two-phase fetch** — rank on `(corpusid, year, citationcount)` (the
+      budget rule only reads years), trim to the budget, then hydrate the wide
+      columns for the ~63 winners. **Alone it does nothing:** measured, hydrating 63
+      ids took **33.28s**, the same as all 31,878, because on an unsorted layout
+      DuckDB must scan to find them. It only pays off once (a) makes small lookups
+      cheap.
+
+      **Together:** rank narrow (~1.1s) + hydrate 63 from a clustered `papers`
+      (~1s) ≈ **2s against today's 39s**.
+
+      **(c) If (a) disappoints**, the honest fallback is that **Parquet has no index
+      and point lookups want one**: a DuckDB *native* table with an index on
+      `corpusid` would make this milliseconds — but it abandons the Athena-over-S3
+      story, so it's an architectural fork, not a tune-up. *(Patrick noticed
+      fetching citations is slow, 2026-07-16; re-diagnosed and the fix tested
+      2026-07-17, after he asked the obvious question — "I thought DuckDB was
+      supposed to be fast? Do we need to index the db or something?" — which was
+      closer to right than the ticket's own prime suspect.)*
 - [ ] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** — v5.6.0 fixed the *file explosion*
       (DuckDB's `partitioned_write_max_open_files` defaulting to 100 against our
@@ -628,6 +647,34 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Delete the four dead per-relation count caps — the app should size itself**
+      — `ref_limit`, `cite_limit`, `latest_limit` and `similar_limit` are all
+      **`null` in the real `config.json`** and have been for a long time: the app
+      already sizes every relation itself (the fitted `PER_YEAR_CAP` of 12 per
+      publication year, `bands`' fitted `tau`/`max_span`, and
+      `UNBOUNDED_LANDMARK_CAP` as the payload ceiling). Like `recs_pool` below,
+      they're knobs nobody turns. Patrick's call (2026-07-17): sizing should be
+      **automatic**, with a user-facing "show me more" setting later if wanted —
+      not a config file nobody edits.
+      **Now unblocked.** The blocker used to be that the two sizings disagreed
+      about what an unset `cite_limit` *meant*: `predicted_budget` read it as
+      `UNBOUNDED_LANDMARK_CAP` (500) while `select_landmarks` read it as infinity.
+      You can't delete a field two code paths interpret differently. v5.11.0 made
+      them agree, so the field can now go without changing behavior.
+      **The work:** drop the four fields from `config.py` and
+      `config.example.json`, delete the ceiling reads in `budget.py` /
+      `build.py` / the traversals, and prune `docs/configuration.md`. **Migration:**
+      `config.py` is `extra="forbid"`, so every existing `config.json` fails at
+      startup until the keys are deleted — a hand-edit on both machines, and
+      `config.json` is gitignored so it can't be done for them. Consider whether
+      the session-start config-drift check in `CLAUDE.md` should also flag keys the
+      template has *dropped*, not just ones it has added.
+      **Worth deciding while in there:** `UNBOUNDED_LANDMARK_CAP = 500` becomes the
+      *only* ceiling once `cite_limit` goes, and unlike `PER_YEAR_CAP = 12` it was
+      never fitted — its docstring frames it as a paging pragmatic ("without paging
+      a mega seed's entire citer list"). That's a defensible payload guard rather
+      than a legibility rule, but it should be *named* as one, since "data-driven
+      over magic numbers" is the house line. *(Patrick, 2026-07-17.)*
 - [ ] **Gate the research notebooks — nothing executes them, so they rot
       silently** — two of the three (`research/cite_budget`, `research/latest_gap`)
       had been un-executable since the src-layout migration and nobody noticed,

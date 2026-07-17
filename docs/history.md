@@ -590,6 +590,51 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **The corpus path stops predicting and starts measuring — and gets a real
+      frontier** *(v5.11.0)* — the corpus served real all-history citers but used
+      neither trained model properly: `cite_budget` was *predicting* a number the
+      local pool could just be asked for, and `bands.earliest_band_year` was never
+      wired in at all, so Latest Publications was the **flat rolling 12-month
+      window** inherited from the live fallback. The one provider with every edge
+      and every date had the least honest frontier.
+      **Both halves are now measured, not argued** (`live_pool_validation`'s
+      verdict — see the entry below):
+      **Landmarks compute.** The model's premise *did* hold here (R² **0.644** on
+      corpus pools against its own cross-validated **0.680** — a −0.037 transfer
+      gap; nothing was wrong with the model). It came off anyway, because the reason
+      to predict was cost and **the cost wasn't there**: timed on DQN, warm,
+      `landmark_citers(limit=63)` took **22.08s** and `limit=None` — all **28,732**
+      citers — took **22.28s**. The `LIMIT` saved **0.9%**; the scan, dedupe and
+      200M-row papers join dominate either way, so the query had already paid for
+      the pool and was discarding it. `budget.computed_cite_limit` now runs the STOP
+      rule over the real years: DQN **63** where the model said 60, Hawking **176**
+      where it said 160 — the model's own answer, minus ~21 mean absolute error.
+      The trained model now serves **OpenAlex alone**, the one path whose pool would
+      have to cross a network to be counted — exactly where
+      [predict-vs-compute.md](predict-vs-compute.md) predicted it would end up.
+      **Latest bands.** `bands.band_start_rule` is wired in, and the flat window is
+      gone. On the real corpus: Hawking's bands start **2020** (7 bands, reaching
+      back to meet a cluster dense to 2024), DQN's start **2023** (a tight 4-year
+      frontier where the fixed span would have said 2020). One windowed DuckDB query
+      (`ROW_NUMBER() OVER (PARTITION BY year …)`) does what OpenAlex needs one HTTP
+      call per year for.
+      **The subtle part, and Patrick's catch.** The first cut gave the corpus the
+      *live* path's banded selector — 12 landmarks per year — on the reasoning that
+      "compute, don't predict" implied "SKIP, not STOP". Two different claims: the
+      0.9% measurement settles where the *number* comes from, not which *rule*
+      applies, and the rule turns on the **pool's shape**. Patrick pushed back that
+      he preferred the model's band, and was right twice over: banding forces
+      `PER_YEAR_CAP` nodes out of *every* year (the best of a thin 1970 over the
+      13th-best of a blockbuster year), and — by the verdict's own finding — it
+      flattens the year distribution the tau rule reads, which would have **broken
+      the Latest bands on this very path**. A prefix of a *whole-history* ranking is
+      what a Field Landmark is; the live path bands only because its pool is a
+      recency sliver with no all-time ranking to prefix. Same cap, same invariant,
+      different pools, different rules.
+      **What it cost to switch:** the s2 provider's landmark/latest split no longer
+      means the same thing live vs corpus — a deliberately abandoned symmetry. The
+      corpus and OpenAlex (both whole-history) now agree, and the live path is the
+      odd one out because it structurally cannot join them.
 - [x] **Live-path landmarks & Latest: the age-origin study — validated, and
       unneeded** *(v5.10.0's study; verdict 2026-07-17, no code change)* — Patrick's
       design to bring both trained models back to the live S2 fallback: (1) keep

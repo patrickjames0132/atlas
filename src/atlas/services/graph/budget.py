@@ -35,14 +35,28 @@ filter, so the banding has to happen over the ranking instead.
 
 Which rule a path *can* use is dictated by its provider's API, not by taste:
 
-* **Predict a count** (:func:`adaptive_cite_limit`) — OpenAlex and the offline S2
-  citations corpus push a limit down into a citation-sorted query, so they must
-  know the number *before* they hold a single citer. A count is all a query can
-  take, and a model trained offline supplies it from two cheap fields already on
-  the seed node (age + citation count). No pool is fetched just to size the trim.
-* **Select from the pool** (:func:`select_landmarks`) — the **live S2 fallback**
-  gets no server-side sort, so its deep pager already holds the whole reachable
-  pool before the trim. Nothing has to be guessed, so nothing is: it runs SKIP.
+* **Predict a count** (:func:`adaptive_cite_limit`) — **OpenAlex only.** Its
+  ``cites:`` query is *remote* and server-sorted, so the limit goes in before a
+  single citer comes back, and computing instead would mean dragging the whole pool
+  across the network (130k citers for DQN) just to size a trim. A count is all the
+  query can take, and a model trained offline supplies it from two cheap fields
+  already on the seed node (age + citation count).
+* **Compute a count** (:func:`computed_cite_limit`) — the **offline S2 corpus.** It
+  looks like a "predict" path (a limit goes into a ranked DuckDB query) but
+  measured on DQN that limit saved 0.9% of a 22-second query: the bucket scan, the
+  row dedupe and the 200M-row papers join dominate and run regardless, so the pool
+  was already paid for and then discarded. It answers the same *shape* as the model
+  — a count, for a citation-ranked prefix — by running STOP over the real years
+  instead of estimating it.
+* **Select from the pool** (:func:`select_landmarks`) — the **live S2 fallback.**
+  No server-side sort, so its deep pager already holds the whole reachable pool
+  before the trim. It bands rather than prefixing, because that pool is a recency
+  sliver with no all-history ranking to prefix: a prefix strands the recent years.
+
+Why the corpus prefixes where the live path bands is the subtlest thing here —
+:func:`computed_cite_limit` argues it. Short version: a prefix of a *whole-history*
+ranking is exactly what "Field Landmark" means, and Latest widens back to meet it;
+a prefix of a *truncated* one is just the recent past twice over.
 
 Predicting on the live path would be wrong twice over: you'd inherit the model's
 error while saving nothing, *and* the model is fit on pools spanning a seed's whole
@@ -282,6 +296,64 @@ def adaptive_cite_limit(seed_paper: dict, *, as_of_year: int) -> int | None:
     return budget
 
 
+def computed_cite_limit(citer_years: Sequence[int | None]) -> int | None:
+    """The landmark ship count, **computed** from the pool rather than predicted.
+
+    :func:`adaptive_cite_limit`'s twin for a caller that already holds a
+    whole-history ranked pool — today the **offline S2 corpus**. It returns the
+    same *kind* of answer (a count, for a citation-ranked prefix) but arrives at it
+    by running the STOP rule
+    (:func:`number_of_ranked_citers_before_a_single_year_overflows`) over the real
+    years instead of estimating it from two seed features. The model's training
+    label *is* this number, so this is the model's own answer with the estimation
+    error taken out: across the 58-seed ``live_pool_validation`` corpus the two
+    distributions are near-identical (predicted mean 76.5, computed mean 75.9) but
+    the model is ~21 out on any given seed.
+
+    **Why a count here and a selection (:func:`select_landmarks`) on the live
+    path** — the two s2 paths hold different pools, so they want different rules:
+
+    * The live pool is a **recency sliver** (the newest ~9k citers) with no
+      all-history ranking to prefix, and its Latest window can't reach back past
+      it. A prefix there strands the recent years — DQN's top 29 are 2019–2023 with
+      nothing from 2024–2025, an 18-month hole. So it bands: SKIP.
+    * The corpus holds the **whole history**, and Latest is a separate relation that
+      widens back to meet the cluster (``bands.band_start_rule``). A prefix here is
+      exactly what "Field Landmark" means — the giants — and banding would instead
+      force ``PER_YEAR_CAP`` nodes out of *every* year, admitting the best of a thin
+      1970 over the 13th-best of a blockbuster year. It would also flatten the
+      year distribution that the tau rule needs to read, breaking the Latest bands
+      on this path. Same shape as OpenAlex, which prefixes for the same reason.
+
+    Trimmed to the ``cite_limit`` ceiling (unset meaning
+    :data:`~atlas.integrations.openalex.UNBOUNDED_LANDMARK_CAP`, as everywhere
+    else). No *floor*, unlike the predicted path: a floor exists to stop a model
+    guessing absurdly low, and a measurement can't — if the rule says 5, 5 is the
+    honest answer.
+
+    Args:
+        citer_years: The whole ranked landmark pool's publication years, most-cited
+            first, ``None`` where the corpus has no year for a citer.
+
+    Returns:
+        The number of ranked citers to ship, or None when the adaptive toggle is
+        off (telling the caller to fall back to the flat ``cite_limit``).
+    """
+    if not config.graph.adaptive_cite_limit:
+        return None
+    ceiling = config.graph.cite_limit
+    if ceiling is None:
+        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
+    computed = number_of_ranked_citers_before_a_single_year_overflows(
+        citer_years, PER_YEAR_CAP)
+    budget = min(computed, ceiling)
+    log.info(
+        "computed landmark budget %d of %d ranked citers (cap %d/year, ceiling %d)",
+        budget, len(citer_years), PER_YEAR_CAP, ceiling,
+    )
+    return budget
+
+
 def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
     """The app-facing landmark selection: the SKIP rule, plus this build's config.
 
@@ -307,9 +379,19 @@ def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
     included in the Proceedings of…"), not for papers anyone would call landmarks.
 
     Gated by the same ``adaptive_cite_limit`` toggle as the predicted path — that
-    flag means "size the landmark band to this seed", and this is how the live
-    fallback honours it — and trimmed to the configured ``cite_limit`` ceiling,
-    which (being a prefix of a citation-ranked selection) keeps the most-cited.
+    flag means "size the landmark band to this seed", and this is how the s2 paths
+    honour it — and trimmed to the ``cite_limit`` ceiling, which (being a prefix of
+    a citation-ranked selection) keeps the most-cited.
+
+    **An unset ``cite_limit`` means the unbounded cap, not infinity** — the same
+    default :func:`predicted_budget` and :func:`computed_cite_limit` apply, so no
+    two sizings can disagree about what "no configured limit" means. In practice it
+    can't bite here: this rule ships ``PER_YEAR_CAP × span`` and the live pool is
+    truncated to a couple of dozen years at most (Hawking's reaches 1998, so 348).
+    It's defensive, and it matters for a reason beyond this function — while the
+    paths read an unset limit *differently*, the config knob can't be deleted, and
+    deleting it is the goal (see the OnePager's "delete the four dead per-relation
+    count caps").
 
     Args:
         citer_years: The ranked landmark pool's publication years, most-cited
@@ -324,8 +406,9 @@ def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
         return None
     keep = select_up_to_cap_per_year(citer_years)
     ceiling = config.graph.cite_limit
-    if ceiling is not None:
-        keep = keep[:ceiling]
+    if ceiling is None:
+        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
+    keep = keep[:ceiling]
     log.info(
         "landmark selection: %d of %d ranked citers (cap %d/year)",
         len(keep), len(citer_years), PER_YEAR_CAP,

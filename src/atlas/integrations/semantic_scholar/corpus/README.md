@@ -148,23 +148,70 @@ landmark tests fail if you do. See **Upstream** in `docs/bugs.md`.
 
 ### The query seam (`source.py`)
 
-`CitationSource` is a tiny `Protocol` — `landmark_citers(corpus_id, limit)` and
-`latest_citers(corpus_id, limit)` — so the DuckDB-over-Parquet impl now and the
-**Athena-over-S3** impl later (same SQL, same schema) are interchangeable and the
-app never learns which it's using.
+`CitationSource` is a tiny `Protocol` — `landmark_citers(corpus_id, limit, *,
+max_landmark_year)` and `latest_bands(corpus_id, *, band_start, current_year,
+per_year)` — so the DuckDB-over-Parquet impl now and the **Athena-over-S3** impl
+later (same SQL, same schema) are interchangeable and the app never learns which
+it's using. `latest_bands` does in **one** windowed query (`ROW_NUMBER() OVER
+(PARTITION BY year …)`) what the OpenAlex path needs one HTTP call per year for —
+the one place being local is an outright advantage rather than a workaround.
 
 `citation_relations(seed_paper, seed_ref, …)` is the module-level entry point
 `services/graph/build.py` calls. It:
 
 1. gets the active source (`active_source()` → None when the corpus is off/absent),
 2. resolves the seed to a `corpusid` (arXiv index, or a `CorpusId:<n>` re-seed),
-3. runs the landmark + latest queries and returns the same
-   `(landmark, latest)` shape as the live `s2.citation_relations`,
+3. **landmarks** — the all-time giants up to `max_landmark_year`, citation-ranked,
+   the prefix's length *computed* by the injected `landmark_budget` rule,
+4. **latest** — per-year bands from the injected `band_start` rule up to the
+   current year, each holding that year's top `latest_per_year`, with anything
+   already shipped as a landmark excluded,
 
-or returns **None** at any miss so the caller falls back to the live path. The
-landmark/latest split mirrors the live path's rolling 12-month window
-(`_LATEST_WINDOW_MONTHS`), so choosing the corpus changes *which* citers appear
-(now the true top-cited across all history), not what the relations mean.
+returning the same `(landmark, latest)` shape as the live `s2.citation_relations`,
+or **None** at any miss so the caller falls back to the live path.
+
+**Since v5.11.0 this path is shaped like the OpenAlex one, not the live one.** It
+used to mirror the live fallback's rolling 12-month window, on the reasoning that
+the s2 provider's split should mean the same thing whichever source answered — but
+that was the wrong symmetry to keep. The live path is a **recency sliver** with no
+all-history ranking, so it bands its landmarks and can't place a frontier; the
+corpus and OpenAlex both hold whole histories and can. Two of three paths now
+agree, and the odd one out is the one that structurally cannot join them. Choosing
+the corpus therefore changes *which* citers appear (the true top-cited across all
+history) **and** *where the frontier starts* — per-seed, rather than a flat twelve
+months. Measured on the real corpus: Hawking's bands start 2020 (7 bands, widened
+back to meet a cluster running to 2024), DQN's start 2023 (a tight 4-year frontier,
+where the flat span would have said 2020).
+
+**Since v5.11.0 this path computes its landmark budget rather than predicting it.**
+`build.py` injects `budget.computed_cite_limit` as a `landmark_budget` rule, the
+query runs **unlimited**, and the rule measures the full ranking — the trained
+`cite_budget` model is not consulted here at all. That sounds like it should cost
+more and doesn't: measured on DQN, warm, `landmark_citers(limit=63)` took
+**22.08s** and `landmark_citers(limit=None)` — all **28,732** citers — took
+**22.28s**, a **0.9%** difference. The bucket scan, the row dedupe and the join
+against the 200M-row papers table dominate and happen either way, so the `LIMIT`
+was only ever discarding rows this query had already paid for. The model now serves
+OpenAlex alone, the one path whose data genuinely isn't in hand at decision time —
+see [`docs/predict-vs-compute.md`](../../../../../docs/predict-vs-compute.md) and
+`ml_pipelines/live_pool_validation`'s verdict.
+
+**The answer is still a count, and the band still a prefix** — the same shape the
+model predicted, and the same shape OpenAlex ships. Only its provenance changed,
+from an estimate to a measurement: DQN gets **63** where the model said 60, Hawking
+**176** where it said 160 (the model's training label *is* this rule, so the two
+agree in distribution — mean 75.9 vs 76.5 across the study's 58 seeds — while
+differing by ~21 on any given seed).
+
+The live fallback's banded *selector* is deliberately **not** used here, and the
+distinction is the subtlest thing in the budget code. A prefix of a **whole-history
+ranking** is precisely what a Field Landmark is — the giants — and Latest widens
+back to meet the cluster. Banding would instead force `PER_YEAR_CAP` nodes out of
+*every* year, admitting the best of a thin 1970 over the 13th-best of a blockbuster
+year, and it would flatten the year distribution the tau rule needs to place the
+Latest band start. The live path bands because its pool is a **recency sliver**
+with no all-time ranking to prefix. Same cap, same invariant, different pools,
+different rules.
 
 Citer nodes are emitted in the exact `nodes.node()` dict shape (the `Graph` model
 forbids extra keys), keyed `id = "CorpusId:<n>"` — which S2 accepts as a

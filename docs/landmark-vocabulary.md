@@ -95,11 +95,23 @@ seed's.
 what to ship. Whether there *is* a pool is the hinge the whole design turns on
 (see [`predict-vs-compute.md`](predict-vs-compute.md)):
 
-| path | has a pool at decision time? | so it must |
-| --- | --- | --- |
-| OpenAlex | **No** — it pushes `limit=N` into a server-sorted query | **predict** N |
-| live S2 | **Yes** — no server-side sort, so it pages everything first | **compute** exactly |
-| offline corpus | **No** — it pushes a limit into a ranked DuckDB query | predict (today) |
+| path | has a pool at decision time? | so it must | and its band is |
+| --- | --- | --- | --- |
+| OpenAlex | **No** — `limit=N` goes into a *remote* server-sorted query, and the pool would have to cross the network to be counted | **predict** N | a prefix |
+| offline corpus | **Effectively yes** — its query already scans, dedupes and joins the whole pool; the `LIMIT` only discards what it just paid for (measured: 0.9% of a 22s query) | **compute** N *(since v5.11.0)* | a prefix |
+| live S2 | **Yes** — no server-side sort, so it pages everything first | **compute** the selection | banded |
+
+So the trained model now serves **OpenAlex alone** — the one path where the data
+genuinely isn't in hand at the moment of decision.
+
+Note the last column moves independently of the middle one. *Predict vs compute* is
+about **where the number comes from**; *prefix vs banded* is about **which rule**,
+and that turns on the **pool's shape**, not on cost. A prefix of a whole-history
+ranking is the giants — what a landmark is — and OpenAlex and the corpus both have
+one. The live pool is a recency sliver with no all-time ranking to prefix, so a
+prefix there strands the recent years (DQN's top 29 are all 2019–2023); it bands
+instead. Conflating those two axes is easy and was the mistake that produced this
+page's first draft.
 
 **landmark** — a citer shipped as a *Field Landmark* node. The claim a landmark
 makes is precise: *"one of the most-cited papers to cite this seed **in year
