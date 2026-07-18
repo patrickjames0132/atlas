@@ -73,6 +73,11 @@
         "extras": {}
       },
       {
+        "id": "summarizer",
+        "model": "anthropic:claude-haiku-4-5",
+        "extras": {}
+      },
+      {
         "id": "librarian",
         "model": "anthropic:claude-sonnet-4-6",
         "extras": {}

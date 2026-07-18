@@ -6,11 +6,15 @@ focused **sub-agents**, every agent defined by Pydantic objects (PydanticAI
 hand-rolled Anthropic SDK loops.
 
 **Status: COMPLETE.** The shared infrastructure (`events.py`,
-`traversal.py`, `factory.py`, `prompts.py`, `skills/`), all four
-model-driven agents (`query_analyst`, `librarian`, `lecturer`, `researcher`),
+`traversal.py`, `factory.py`, `prompts.py`, `skills/`), the
+model-driven agents (`query_analyst`, `summarizer`, `librarian`,
+`lecturer`, `researcher`),
 and the `orchestrator` dispatcher are built and tested; the old
 `teacher/` package is fully retired. What remains is wiring: routes call
-`orchestrator.run(intent, ...)` in Phase 5.
+`orchestrator.run(intent, ...)` in Phase 5. (`summarizer` arrived later,
+v5.17.0: the detail panel's on-demand TL;DR — a micro-agent in the
+query_analyst mold, called from `routes/graph.py`, never the
+orchestrator.)
 
 ## `events.py` — the typed event stream
 
@@ -219,6 +223,7 @@ agents/
   researcher/             ← an agent:    "        "         "          "
   librarian/         ← an agent:    "        "         "          "
   query_analyst/     ← an agent:    "        "         "          "
+  summarizer/        ← an agent: main.py, config.py, README.md (no tools)
 ```
 
 ### Layout rules

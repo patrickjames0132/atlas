@@ -48,11 +48,48 @@
   color: var(--muted);
   margin: 14px 0 6px;
 }
+/* The summary tabs (Abstract | TL;DR): the section head restyled as two
+   switchable labels. Same small-caps voice as the other section heads; the
+   active tab takes the text color, the inactive stays muted. The ✦ on an
+   ungenerated TL;DR marks "clicking this runs Claude once". */
+.detail-summary-tabs {
+  display: flex;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+.detail-summary-tabs button {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.7;
+  cursor: pointer;
+}
+.detail-summary-tabs button:hover {
+  opacity: 1;
+}
+.detail-summary-tabs button.on {
+  color: var(--text-strong);
+  opacity: 1;
+  border-bottom: 1px solid var(--accent);
+}
 .detail-summary {
   margin: 0;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text);
+}
+.detail-summary-muted {
+  color: var(--muted);
+  font-style: italic;
+}
+.detail-summary-error {
+  color: var(--muted);
+  font-style: italic;
+  opacity: 0.9;
 }
 /* Category tags, split into provider-labeled sections (arXiv / S2) so the
    user can tell who tagged what — same head style as "Code & artifacts". */

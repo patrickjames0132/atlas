@@ -4,6 +4,7 @@ detail hydration, and a paper's figures (proxied from ar5iv).
 GET /api/graph?seed=&refresh=      -> neighborhood graph for a seed paper
 GET /api/graph/stream?seed=&refresh= -> same, as SSE with coarse build progress
 GET /api/paper/<arxiv_id>          -> full details for one paper (panel hydrate)
+POST /api/paper/tldr               -> generate (or recall) a paper's TL;DR
 GET /api/paper/<arxiv_id>/figures  -> the paper's figures + captions (ar5iv)
 GET /api/paper/<arxiv_id>/code     -> code & artifact links (Hugging Face Papers)
 GET /api/paper/<arxiv_id>/categories -> the paper's own arXiv category tags
@@ -26,9 +27,11 @@ from typing import Iterator
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
+from ..agents import summarizer
 from ..integrations import arxiv, huggingface, openalex, semantic_scholar
 from ..services import graph as graph_service
 from ..services.graph import Provider
+from ..storage import cache
 from .sse import sse, sse_response
 
 bp = Blueprint("graph", __name__)
@@ -225,7 +228,72 @@ def api_paper(paper_ref: str) -> ResponseReturnValue:
         return jsonify({"error": f"{_provider_name(provider)} is unavailable — try again."}), 502
     if not node:
         return jsonify({"error": f"No paper found for {ref}."}), 404
+    # Back-fill a previously GENERATED TL;DR (the summarizer's, cached
+    # forever) so it rides hydration for free on later opens. Read-only:
+    # hydration must never trigger a generation — see api_paper_tldr.
+    if not node.get("tldr"):
+        node["tldr"] = cache.get(_tldr_cache_key(str(node["id"])))
     return jsonify(node)
+
+
+def _tldr_cache_key(node_id: str) -> str:
+    """The cache key for a paper's generated TL;DR (permanent; ``v1`` is the
+    invalidation lever if the summarizer's prompt materially changes).
+
+    Args:
+        node_id: The paper's provider node id.
+
+    Returns:
+        The cache key.
+    """
+    return f"tldr:v1:{node_id}"
+
+
+@bp.post("/api/paper/tldr")
+def api_paper_tldr() -> ResponseReturnValue:
+    """Generate — or recall — the TL;DR for one paper.
+
+    The detail panel's TL;DR toggle calls this for a paper that has no
+    TL;DR of its own (every OpenAlex paper; the S2 papers S2 never
+    summarized). **This endpoint is the only place a summary is ever
+    generated**, and it runs only on that explicit user gesture — never
+    during builds or hydration — so a paper nobody reads never bills
+    (Patrick's rule). Results cache permanently by node id: each paper
+    costs at most one model call, ever.
+
+    The client sends the abstract it already holds (hydrated moments
+    earlier) rather than this route re-fetching the paper — one fewer
+    provider round trip, and the provider APIs stay off the hot path.
+
+    JSON body:
+        id: The paper's provider node id (the cache key).
+        title: The paper's title.
+        abstract: The abstract to summarize.
+
+    Returns:
+        ``{tldr}`` on success (cached or fresh); ``{error}`` with HTTP 400
+        when the id or abstract is missing, or 502 when generation fails
+        (no key, model unavailable) — the panel keeps the abstract either
+        way.
+    """
+    payload = request.get_json(silent=True) or {}
+    node_id = str(payload.get("id") or "").strip()
+    title = str(payload.get("title") or "").strip()
+    abstract = str(payload.get("abstract") or "").strip()
+    if not node_id:
+        return jsonify({"error": "missing 'id'"}), 400
+    if not abstract:
+        return jsonify({"error": "This paper has no abstract to summarize."}), 400
+    key = _tldr_cache_key(node_id)
+    cached = cache.get(key)
+    if cached:
+        return jsonify({"tldr": cached})
+    tldr = summarizer.summarize(title, abstract)
+    if tldr is None:
+        current_app.logger.warning("TL;DR generation failed for %s", node_id)
+        return jsonify({"error": "Couldn't generate a TL;DR — is the Anthropic key set?"}), 502
+    cache.set(key, tldr)
+    return jsonify({"tldr": tldr})
 
 
 @bp.get("/api/paper/<path:paper_ref>/figures")

@@ -6,6 +6,7 @@
  * explore-from-here).
  */
 
+import { useEffect, useState } from 'react'
 import type { AnswerFigure, CategoriesResponse, CodeLinksResponse, FiguresResponse } from '../api'
 import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
@@ -39,6 +40,86 @@ export interface DetailPanelProps {
   onClose: () => void
   /** Re-seed the whole graph on this paper (hidden for the current seed). */
   onExplore: (id: string) => void
+  /** Generate a TL;DR for a paper that has none (resolves once the node's
+   *  `tldr` is merged in). The ONLY surface allowed to trigger a generation —
+   *  it runs on the explicit TL;DR toggle, never automatically, so unread
+   *  papers never bill. */
+  onGenerateTldr?: () => Promise<void>
+}
+
+/**
+ * The one summary section: the abstract by default, a TL;DR view one click
+ * away. Both providers land here — S2 papers usually bring their own TL;DR,
+ * and a paper without one (every OpenAlex paper, plus S2's gaps) generates
+ * it via `onGenerateTldr` on the FIRST toggle only: the ✦ on the tab marks
+ * that clicking it runs Claude once (then the server's cache serves it
+ * forever). Papers with only one of the two render it plainly, no tabs.
+ *
+ * @returns The summary section, or null when the node has neither text.
+ */
+function SummarySection({
+  node,
+  onGenerateTldr,
+}: {
+  node: VNode
+  onGenerateTldr?: () => Promise<void>
+}) {
+  const [view, setView] = useState<'abstract' | 'tldr'>('abstract')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // A different paper resets the section to its abstract-first default.
+  useEffect(() => {
+    setView('abstract')
+    setPending(false)
+    setError(null)
+  }, [node.id])
+  if (!node.tldr && !node.abstract) return null
+  const canGenerate = !!onGenerateTldr && !!node.abstract
+  const showTabs = !!node.abstract && (!!node.tldr || canGenerate)
+  // No abstract means the TL;DR is all there is to show (and vice versa).
+  const shown = node.abstract ? view : 'tldr'
+  const onTldrTab = () => {
+    setView('tldr')
+    if (node.tldr || pending || !canGenerate) return
+    setPending(true)
+    setError(null)
+    onGenerateTldr!()
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setPending(false))
+  }
+  return (
+    <div className="detail-summary-group" data-tour="detail-summary">
+      {showTabs ? (
+        <div className="detail-summary-tabs">
+          <button className={shown === 'abstract' ? 'on' : ''} onClick={() => setView('abstract')}>
+            Abstract
+          </button>
+          <button
+            className={shown === 'tldr' ? 'on' : ''}
+            onClick={onTldrTab}
+            title={
+              node.tldr
+                ? undefined
+                : 'Generate a one-sentence TL;DR with Claude — runs once, then it’s cached for good'
+            }
+          >
+            TL;DR{node.tldr ? '' : ' ✦'}
+          </button>
+        </div>
+      ) : (
+        <div className="detail-summary-head">{shown === 'tldr' ? 'TL;DR' : 'Abstract'}</div>
+      )}
+      {shown === 'tldr' && !node.tldr ? (
+        <p className={`detail-summary ${error ? 'detail-summary-error' : 'detail-summary-muted'}`}>
+          {pending ? 'Summarizing…' : (error ?? '')}
+        </p>
+      ) : (
+        <p className="detail-summary">
+          <MathText>{(shown === 'tldr' ? node.tldr : node.abstract) || ''}</MathText>
+        </p>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -201,6 +282,7 @@ export default function DetailPanel({
   onTogglePin,
   onClose,
   onExplore,
+  onGenerateTldr,
 }: DetailPanelProps) {
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.detailWidth', 340)
   // Both citing relations show one "citation" badge (BADGE_LABEL), so dedupe by
@@ -246,14 +328,7 @@ export default function DetailPanel({
         fieldsOfStudy={node.fields_of_study ?? []}
         fieldsLabel={fieldsLabel}
       />
-      {(node.tldr || node.abstract) && (
-        <div className="detail-summary-group" data-tour="detail-summary">
-          <div className="detail-summary-head">{node.tldr ? 'TL;DR' : 'Abstract'}</div>
-          <p className="detail-summary">
-            <MathText>{node.tldr || node.abstract || ''}</MathText>
-          </p>
-        </div>
-      )}
+      <SummarySection node={node} onGenerateTldr={onGenerateTldr} />
       <div className="detail-actions" data-tour="detail-actions">
         {node.url && (
           <a href={node.url} target="_blank" rel="noreferrer">

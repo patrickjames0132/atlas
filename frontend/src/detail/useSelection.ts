@@ -48,6 +48,10 @@ export interface SelectionApi {
   categories: Record<string, CategoriesResponse>
   /** Canvas click handler: select on click, re-seed on quick double-click. */
   onNodeClick: (node: VNode) => void
+  /** Overlay extra hydrated fields onto one node — e.g. a TL;DR the panel
+   *  just generated — so `selected` (and the graph's session save, via the
+   *  same detail overlay) reflects them immediately. */
+  mergeDetail: (id: string, fields: Partial<GraphNode>) => void
 }
 
 /**
@@ -158,6 +162,11 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
     [details, provider, loadGraph],
   )
 
+  /** Merge extra fields into a node's hydrated-detail overlay. */
+  const mergeDetail = useCallback((id: string, fields: Partial<GraphNode>) => {
+    setDetails((prev) => ({ ...prev, [id]: { ...prev[id], ...fields } }))
+  }, [])
+
   return {
     selectedId,
     setSelectedId,
@@ -167,5 +176,6 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
     codeLinks,
     categories,
     onNodeClick,
+    mergeDetail,
   }
 }

@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { generateTldr } from '../api'
 import type { AnswerFigure } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { highlightSet, selectHighlightSet } from '../store/highlight'
@@ -236,6 +237,7 @@ export default function GraphExplorer({
     codeLinks,
     categories,
     onNodeClick,
+    mergeDetail,
   } = useSelection({ base, graph, provider, loadGraph: doLoadGraph })
 
   // The guided tour's detail-panel stops: when the tour stages 'details' and
@@ -543,6 +545,11 @@ export default function GraphExplorer({
           onTogglePin={() => togglePin(selected.id)}
           onClose={() => setSelectedId(null)}
           onExplore={doLoadGraph}
+          onGenerateTldr={async () => {
+            // The panel's TL;DR toggle — the one gesture allowed to bill.
+            const tldr = await generateTldr(selected.id, selected.title, selected.abstract ?? '')
+            mergeDetail(selected.id, { tldr })
+          }}
         />
       )}
       {lightbox && <Lightbox figure={lightbox} onClose={() => setLightbox(null)} />}

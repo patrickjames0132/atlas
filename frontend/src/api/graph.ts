@@ -199,6 +199,36 @@ export async function fetchPaperDetail(
 }
 
 /**
+ * Generate — or recall from the server's permanent cache — a TL;DR for a
+ * paper that has none (every OpenAlex paper; the S2 papers S2 never
+ * summarized). Only the detail panel's explicit TL;DR toggle calls this:
+ * it is the one surface allowed to trigger a (Claude-billed) generation,
+ * and the server caches by node id so each paper bills at most once, ever.
+ *
+ * @param nodeId The paper's provider node id (the server's cache key).
+ * @param title The paper's title (anchors the summary).
+ * @param abstract The abstract to summarize — sent from the already-hydrated
+ *                 node so the server needn't re-fetch the paper.
+ * @returns The TL;DR sentence.
+ * @throws With the server's error message when generation fails (the panel
+ *         keeps showing the abstract).
+ */
+export async function generateTldr(
+  nodeId: string,
+  title: string,
+  abstract: string,
+): Promise<string> {
+  const res = await fetch('/api/paper/tldr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: nodeId, title, abstract }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Failed to generate a TL;DR (${res.status})`)
+  return data.tldr
+}
+
+/**
  * A figure pulled from the paper (via ar5iv): a proxied image URL + the
  * paper's own caption.
  */

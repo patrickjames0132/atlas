@@ -183,6 +183,68 @@ def test_figures_rewrites_images_to_the_proxy_and_degrades(client, monkeypatch):
     assert response.json == {"available": False, "figures": []}
 
 
+def test_tldr_generates_once_then_serves_from_cache(client, monkeypatch):
+    """The first toggle generates and caches; every later request — including
+    after a reload — answers from the cache without touching the model. The
+    permanent cache is the whole 'each paper bills at most once' contract."""
+    calls = []
+
+    def fake_summarize(title, abstract):
+        calls.append((title, abstract))
+        return "Introduces DQN, which learns Atari from pixels."
+
+    monkeypatch.setattr(graph_routes.summarizer, "summarize", fake_summarize)
+    body = {"id": "W123", "title": "Playing Atari", "abstract": "We present DQN."}
+    first = client.post("/api/paper/tldr", json=body)
+    second = client.post("/api/paper/tldr", json=body)
+    assert first.status_code == second.status_code == 200
+    assert first.json == second.json == {"tldr": "Introduces DQN, which learns Atari from pixels."}
+    assert len(calls) == 1  # the second answer came from the cache
+
+
+def test_tldr_validates_its_input(client):
+    assert client.post("/api/paper/tldr", json={"abstract": "text"}).status_code == 400
+    response = client.post("/api/paper/tldr", json={"id": "W123", "abstract": "  "})
+    assert response.status_code == 400
+    assert "no abstract" in response.json["error"]
+
+
+def test_tldr_generation_failure_maps_to_502(client, monkeypatch):
+    monkeypatch.setattr(graph_routes.summarizer, "summarize", lambda title, abstract: None)
+    response = client.post(
+        "/api/paper/tldr", json={"id": "W123", "title": "T", "abstract": "A."}
+    )
+    assert response.status_code == 502
+    assert "Anthropic" in response.json["error"]
+
+
+def test_paper_backfills_a_generated_tldr_but_never_overwrites_a_native_one(
+    client, monkeypatch
+):
+    """Hydration reads the TL;DR cache (a generated summary rides along free on
+    later opens) but only fills a HOLE — a provider's own TL;DR wins, and
+    hydration never generates (that would bill on every open)."""
+    from atlas.storage import cache
+
+    cache.set("tldr:v1:W123", "Cached summary.")
+    monkeypatch.setattr(
+        graph_routes.openalex,
+        "get_paper",
+        lambda ref: {"id": "W123", "title": "From OpenAlex", "tldr": None},
+    )
+    response = client.get("/api/paper/W123?provider=openalex")
+    assert response.json["tldr"] == "Cached summary."
+
+    cache.set("tldr:v1:s2id01", "Must not appear.")
+    monkeypatch.setattr(
+        graph_routes.semantic_scholar,
+        "get_paper",
+        lambda ref: {"id": "s2id01", "title": "From S2", "tldr": "S2's own TLDR."},
+    )
+    response = client.get("/api/paper/1312.5602")
+    assert response.json["tldr"] == "S2's own TLDR."
+
+
 def test_code_links_degrade_to_the_empty_envelope(client, monkeypatch):
     def boom(ref):
         raise TimeoutError("hf slow")

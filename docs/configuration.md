@@ -154,7 +154,9 @@ from `config.json`.
 
 A **list** with one entry per sub-agent package under
 `src/atlas/agents/` — they land one at a time (today:
-`query_analyst`, which expands seed-search queries; the librarian,
+`query_analyst`, which expands seed-search queries; `summarizer`, the
+detail panel's on-demand paper TL;DR (generation only ever fires on the
+panel's explicit TL;DR toggle, cached per paper forever); the librarian,
 lecturer, researcher, and orchestrator follow), potentially on different
 vendors. Each entry:
 

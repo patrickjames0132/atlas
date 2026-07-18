@@ -464,25 +464,6 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **One "Abstract" section in the detail panel, with a TL;DR toggle** — today
-      the panel shows the abstract and S2's `tldr` as *separate sections*, and an
-      OpenAlex paper has no TL;DR at all (its detail hydration returns no `tldr`,
-      so the panel just shows the abstract — see `docs/bugs.md` on OA hydration).
-      Make it **one section titled ABSTRACT**, defaulting to the abstract on both
-      providers, with an in-section toggle to a TL;DR view — **no second section**.
-      - **S2** has `tldr` already (`DETAIL_FIELDS` requests it, `nodes.node` pulls
-        `tldr.text`); the toggle just swaps what the one section renders.
-      - **OpenAlex** has no equivalent, so **we generate one**: a small Claude
-        agent that summarises the paper in a short paragraph — the old "summarize"
-        button from the digest era, now a per-paper TL;DR. That means a new agent
-        package (`agents/<name>/`, its own config entry + README, per the agents
-        convention), an endpoint, and a decision on **caching** (per-paper, in
-        `data/`?) so re-opening a node doesn't re-bill. Note the abstract is
-        already hydrated lazily on node-open, so the summary should ride that same
-        request rather than adding a second round trip.
-      - The toggle's *form* is open — a button, a segmented control, a link. Wants
-        a look at the panel before deciding; the constraint is that it lives inside
-        the section, not beside it. *(From the `todos.md` inbox, 2026-07-16.)*
 - [ ] **A settings modal — and let the user choose corpus vs live citations** —
       there's nowhere in the UI to configure anything; the corpus is a `config.json`
       edit plus a server restart. Add a **settings button (top-right)** opening a

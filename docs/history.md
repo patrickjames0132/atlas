@@ -1367,6 +1367,31 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **One "Abstract" section in the detail panel, with a TL;DR toggle**
+      *(v5.17.0)* — the ticket's premise turned out half-stale (the panel
+      already rendered ONE section showing TL;DR *or* abstract), so what
+      shipped is the real gap: **abstract-first on both providers, with
+      in-section Abstract | TL;DR tabs** — and a TL;DR for papers that have
+      none. A new **`summarizer` micro-agent** (`agents/summarizer/`, the
+      query_analyst mold: Haiku, structured output, None-on-any-failure; own
+      config entry + README) writes one plain-language sentence from
+      title + abstract — the digest era's "summarize" button reborn.
+      **Billing is structural, per Patrick's rule** ("don't bill my Anthropic
+      account for papers I don't read"): generation runs ONLY on the panel's
+      explicit ✦-marked TL;DR tab click (`POST /api/paper/tldr` — the sole
+      code path that can reach the model; builds/traversals/hydration
+      can't), and the result caches **permanently** by node id
+      (`tldr:v1:<id>` in `data/digest.db`), so each paper bills at most one
+      Haiku call ever. Cached summaries ride ordinary hydration for free
+      (`api_paper` back-fills the hole but never overwrites a provider's
+      native TLDR) — and keying by node id makes the path provider-agnostic,
+      so S2 papers S2 never summarized get the ✦ treatment too. Frontend:
+      `SummarySection` in `DetailPanel` (tabs, pending "Summarizing…",
+      in-place error with the abstract a tab away, ✦ tooltip naming the
+      one-time cost), `useSelection.mergeDetail`, `api.generateTldr`. Tour's
+      detail stop rewritten (twice — Patrick smoothing the copy). Suite
+      511 → 521 backend, 131 → 135 frontend. *(From the `todos.md` inbox,
+      2026-07-16; shipped 2026-07-18 — the last of the four-item UI slate.)*
 - [x] **Lexical search over the nodes on screen** *(v5.16.0)* — a keyword find
       for papers **already on the graph** (titles/authors), fully separate from
       the seed search that fetches new ones. Purely lexical and local:

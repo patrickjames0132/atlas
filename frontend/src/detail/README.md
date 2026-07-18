@@ -19,6 +19,16 @@ figures.
 
 ## Design decisions worth knowing
 
+- **One summary section, abstract-first, TL;DR a click away.** The
+  `SummarySection` (in-file, single-parent) shows the abstract by default
+  with a tab to the TL;DR — S2's own when it exists; otherwise the tab
+  wears a ✦ and the first click generates one via the backend's
+  `summarizer` micro-agent (`onGenerateTldr` → `api.generateTldr` →
+  `POST /api/paper/tldr`). **That click is the only surface that can
+  trigger a Claude call** — Patrick's billing rule — and the server caches
+  the result by node id forever, so each paper bills at most once; a
+  cached summary rides ordinary hydration for free afterwards. Failure
+  shows in place and the abstract stays a tab away.
 - **Everything about a paper loads lazily, and each thing exactly once.**
   Graph neighbors arrive summary-light; opening one hydrates its
   abstract/TL;DR on first click (cached per paper). Figures (ar5iv) fetch
