@@ -1367,6 +1367,25 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Reorder the tour steps to match expectation** *(v5.22.0)* — some
+      GRAPH_TOUR stops ran in an order that didn't match how the eye moves
+      through the UI; re-sequenced live with Patrick over three browser
+      rounds (an AskUserQuestion picked the shape, then two corrections
+      from walking it). The walk now: the top-left **controls panel walked
+      top-to-bottom through its last row** ("Open a paper" — it lives in
+      the panel, which round two caught after find was first slotted
+      before it), then the **bottom-right find control** (it used to OPEN
+      the tour — a leftover from its top-right era; starting on a tiny
+      corner button read as a diagonal jump), then a **new whole-panel
+      "The paper detail panel" overview stop** (round three's ask;
+      spotlights the entire `data-tour="details"` aside, staging
+      `'details'` like its section stops) before the five per-section
+      detail stops, then the teacher block reordered to **lecture-scope →
+      source-scope → lectures → ask** (both scope pickers before the
+      lecture grid). HOME_TOUR reviewed and left as-is (header
+      left-to-right already). Pure `steps.ts` array surgery + one new
+      step; no component changes. *(From the `todos.md` inbox, 2026-07-18;
+      shipped 2026-07-18.)*
 - [x] **A loading state over the whole Detail panel while its pieces arrive**
       *(v5.21.0)* — the panel fans out to several services after opening
       (S2/OpenAlex abstract hydration, arXiv category tags, HF code links,

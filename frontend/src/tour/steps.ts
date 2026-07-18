@@ -107,22 +107,21 @@ export const HOME_TOUR: TourStep[] = [
 ]
 
 /**
- * The graph-tools tour, in reading order (controls top-to-bottom, then the
- * teacher). The steps inside the controls panel stage `'controls'` so a
+ * The graph-tools tour, following the eye's path across the screen
+ * (re-sequenced with Patrick, v5.22.0): the top-left controls panel walked
+ * top-to-bottom through its last row ("Open a paper"), then the
+ * bottom-right find control, then the detail panel (a whole-panel overview
+ * stop, then its sections), then the teacher — where the two scope pickers
+ * (lectures, then library sources) come before the lecture grid. (Find
+ * used to open the tour — a leftover from its top-right era; starting on
+ * a tiny corner button read as a diagonal jump.)
+ * The steps inside the controls panel stage `'controls'` so a
  * collapsed panel expands under the walk; the year/citation stops carry their
  * own target as `presentIf` — an existence check, which the collapsed panel's
  * `hidden` (still-in-DOM) body passes whenever the graph's data earns those
  * sliders at all.
  */
 export const GRAPH_TOUR: TourStep[] = [
-  {
-    target: '[data-tour="find"]',
-    title: 'Find a paper on screen',
-    body:
-      'Click the 🔍 and type part of a title or author. The matching papers light up ' +
-      'and everything else dims — all on your screen, nothing is fetched. Esc or ✕ ' +
-      'clears it and tucks it away. To pull new papers in, use the search box up top.',
-  },
   {
     target: '[data-tour="controls-head"]',
     title: 'The controls panel',
@@ -199,6 +198,23 @@ export const GRAPH_TOUR: TourStep[] = [
       'Double-click a paper to re-seed the whole map on it and explore from there.',
   },
   {
+    target: '[data-tour="find"]',
+    title: 'Find a paper on screen',
+    body:
+      'Click the 🔍 and type part of a title or author. The matching papers light up ' +
+      'and everything else dims — all on your screen, nothing is fetched. Esc or ✕ ' +
+      'clears it and tucks it away. To pull new papers in, use the search box up top.',
+  },
+  {
+    target: '[data-tour="details"]',
+    stage: 'details',
+    title: 'The paper detail panel',
+    body:
+      'Everything about the selected paper lives here: how it’s classified, its ' +
+      'abstract and TL;DR, links out, community code, and the paper’s own figures. ' +
+      'Click any paper on the map to open it — the next stops walk each part.',
+  },
+  {
     target: '[data-tour="detail-tags"]',
     stage: 'details',
     title: 'Field tags',
@@ -241,20 +257,6 @@ export const GRAPH_TOUR: TourStep[] = [
       'enlarge). The teacher can pull these same figures into its answers.',
   },
   {
-    target: '[data-tour="lectures"]',
-    stage: 'assistant',
-    presentIf: '[data-tour="assistant-btn"]',
-    title: 'Four lectures',
-    body:
-      'Four stories, each told over one slice of the graph — and each button wears its ' +
-      'slice’s color. Blue walks the references: how the field arrived at this paper. ' +
-      'Green covers the landmark papers that built on it. Light green surveys the ' +
-      'current frontier. Gold teaches the seed paper itself, chapter by chapter. Papers ' +
-      'light up on the map as their part of the story arrives — and once a lecture has ' +
-      'played, a 🎓 scope picker appears in the panel header so the researcher can build ' +
-      'on it in Q&A.',
-  },
-  {
     target: '[data-tour="lecture-scope"]',
     stage: 'assistant',
     presentIf: '[data-tour="lecture-scope"]',
@@ -273,6 +275,20 @@ export const GRAPH_TOUR: TourStep[] = [
       'Scope the researcher’s library reach (shown once you have two or more sources): ' +
       'all of them, a subset, or none at all. Checked means searchable — answers cite ' +
       'whatever passages they use by page.',
+  },
+  {
+    target: '[data-tour="lectures"]',
+    stage: 'assistant',
+    presentIf: '[data-tour="assistant-btn"]',
+    title: 'Four lectures',
+    body:
+      'Four stories, each told over one slice of the graph — and each button wears its ' +
+      'slice’s color. Blue walks the references: how the field arrived at this paper. ' +
+      'Green covers the landmark papers that built on it. Light green surveys the ' +
+      'current frontier. Gold teaches the seed paper itself, chapter by chapter. Papers ' +
+      'light up on the map as their part of the story arrives — and once a lecture has ' +
+      'played, a 🎓 scope picker appears in the panel header so the researcher can build ' +
+      'on it in Q&A.',
   },
   {
     target: '[data-tour="ask"]',

@@ -464,16 +464,6 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **Reorder the tour steps to match expectation** — some guided-tour
-      steps display in an order that doesn't match how the eye actually moves
-      through the UI (not a bug — the steps run in array order in
-      `tour/steps.ts`, "controls top-to-bottom, then the teacher" — just a
-      sequencing preference). Sit down with Patrick and re-sequence
-      `GRAPH_TOUR` (and check `HOME_TOUR` while there) so the walkthrough
-      follows the order a new user would naturally encounter things. Pure
-      array reordering; the find control's move to the bottom-right corner
-      (v5.18.1) may also change where its step best sits. *(From the
-      `todos.md` inbox, 2026-07-18.)*
 - [ ] **A settings modal — and let the user choose corpus vs live citations** —
       there's nowhere in the UI to configure anything; the corpus is a `config.json`
       edit plus a server restart. Add a **settings button (top-right)** opening a
