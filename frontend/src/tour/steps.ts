@@ -106,6 +106,14 @@ export const HOME_TOUR: TourStep[] = [
 /** The graph-tools tour, in reading order (controls top-to-bottom, then the teacher). */
 export const GRAPH_TOUR: TourStep[] = [
   {
+    target: '[data-tour="find"]',
+    title: 'Find a paper on screen',
+    body:
+      'Click the 🔍 and type part of a title or author. The matching papers light up ' +
+      'and everything else dims — all on your screen, nothing is fetched. Esc or ✕ ' +
+      'clears it and tucks it away. To pull new papers in, use the search box up top.',
+  },
+  {
     target: '[data-tour="layout"]',
     title: 'Two layouts',
     body:

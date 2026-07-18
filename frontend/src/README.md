@@ -25,6 +25,7 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  ├─ overlays (from the shell): hit list  search/HitList.tsx
    │  │                             loading / error / hint  (Atlas.tsx)
    │  ├─ controls panel            graph/controls/GraphControls.tsx
+   │  ├─ find control (🔍 → pill)  graph/controls/FindBar.tsx
    │  ├─ the canvas                graph/canvas/GraphCanvas.tsx
    │  ├─ legend                    graph/controls/Legend.tsx
    │  ├─ detail panel (on select)  detail/DetailPanel.tsx

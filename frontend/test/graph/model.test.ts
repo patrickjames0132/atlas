@@ -12,6 +12,7 @@ import {
   citationThreshold,
   cleanNode,
   countRels,
+  findMatches,
   formatPubDate,
   nodeRadius,
   primaryRel,
@@ -32,6 +33,33 @@ function makeNode(overrides: Partial<GraphNode> = {}): GraphNode {
     ...overrides,
   }
 }
+
+describe('findMatches', () => {
+  const NODES = [
+    makeNode({ id: 'attn', title: 'Attention Is All You Need', authors: 'Vaswani, Shazeer' }),
+    makeNode({ id: 'bert', title: 'BERT: Pre-training of Deep Bidirectional Transformers' }),
+    makeNode({ id: 'gpt', title: 'Language Models are Few-Shot Learners', authors: 'Brown' }),
+  ]
+
+  it('matches case-insensitively on title and author substrings', () => {
+    expect(findMatches(NODES, 'attention')).toEqual(new Set(['attn']))
+    expect(findMatches(NODES, 'VASWANI')).toEqual(new Set(['attn']))
+    expect(findMatches(NODES, 'transformers')).toEqual(new Set(['bert']))
+  })
+
+  it('an empty or whitespace query means no find at all (null, not empty)', () => {
+    expect(findMatches(NODES, '')).toBeNull()
+    expect(findMatches(NODES, '   ')).toBeNull()
+  })
+
+  it('a query with no hits returns an EMPTY set — dim everything, honestly', () => {
+    expect(findMatches(NODES, 'quantum gravity')).toEqual(new Set())
+  })
+
+  it('a node without authors still matches by title', () => {
+    expect(findMatches(NODES, 'few-shot')).toEqual(new Set(['gpt']))
+  })
+})
 
 describe('formatPubDate', () => {
   it('renders a full date, parsed by hand (no timezone off-by-one)', () => {

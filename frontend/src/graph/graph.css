@@ -15,6 +15,75 @@
   border-radius: 10px;
   backdrop-filter: blur(4px);
 }
+/* The floating find bar: a rounded pill pinned top-right of the graph area
+ * (the controls panel was getting crowded), spotlighting matches among the
+ * papers on screen — purely lexical, no API call (the header's seed search is
+ * the one that fetches). Same glassy chrome as .controls. */
+/* The collapsed find toggle and its expanded pill share the top-right corner
+   and the same near-opaque chrome (a step lighter than the canvas — the
+   controls panel's 0.92 glass works on a big box, but small chrome over the
+   axis labels blended away; the shadow gives both the lift). */
+.graph-find-toggle {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(31, 35, 44, 0.97);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.graph-find-toggle:hover {
+  border-color: var(--accent);
+}
+.graph-find {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  background: rgba(31, 35, 44, 0.97);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+}
+.graph-find::before {
+  content: '🔍';
+  font-size: 11px;
+  opacity: 0.65;
+}
+.graph-find input {
+  width: 150px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.graph-find input:focus {
+  outline: none;
+}
+.graph-find:focus-within {
+  border-color: var(--accent);
+}
+.find-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 .layout-toggle {
   display: flex;
   gap: 0;

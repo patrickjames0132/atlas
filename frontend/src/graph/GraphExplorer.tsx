@@ -36,6 +36,7 @@ import { useSelection } from '../detail/useSelection'
 import DetailPanel from '../detail/DetailPanel'
 import Lightbox from '../figures/Lightbox'
 import GraphCanvas from './canvas/GraphCanvas'
+import FindBar from './controls/FindBar'
 import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
 import { REL_TYPES } from './theme'
@@ -44,7 +45,14 @@ import { useEscapeClear } from './hooks/useEscapeClear'
 import { useMarquee } from './hooks/useMarquee'
 import { usePinning } from './hooks/usePinning'
 import { useTimeline } from './hooks/useTimeline'
-import { CITE_SLIDER_STEPS, citationThreshold, type Base, type VLink, type VNode } from './model'
+import {
+  CITE_SLIDER_STEPS,
+  citationThreshold,
+  findMatches,
+  type Base,
+  type VLink,
+  type VNode,
+} from './model'
 
 /**
  * Render the graph area: canvas + controls + legend + detail panel, plus the
@@ -103,6 +111,9 @@ export default function GraphExplorer({
   const [citeLo, setCiteLo] = useState(0)
   const [citeHi, setCiteHi] = useState(CITE_SLIDER_STEPS)
   const [hoverId, setHoverId] = useState<string | null>(null)
+  // The local find (the floating top-right FindBar): spotlights on-screen
+  // papers by title/author substring. Purely lexical — no API call.
+  const [findQuery, setFindQuery] = useState('')
   // The detail panel's figures, enlarged full-screen (same lightbox the
   // teacher's answer figures use).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
@@ -339,13 +350,14 @@ export default function GraphExplorer({
   // overlay so RFG never pans, and commits the enclosed nodes to the selection.
   const marquee = useMarquee({ view, fgRef, wrapRef })
 
-  /** Drop every active highlight at once — the hand-picked selection AND the
+  /** Drop every active highlight at once — the hand-picked selection, the
    * teacher's lit papers (whose beat/answer/ref marks follow the emptied
-   * highlight; see useConversation). One gesture, wherever the light came
-   * from. */
+   * highlight; see useConversation), AND the local find. One gesture,
+   * wherever the light came from. */
   const onClearAll = useCallback(() => {
     dispatch(nodeSelectionCleared())
     dispatch(highlightSet([]))
+    setFindQuery('')
   }, [dispatch])
   // Esc = the same reset, unless an overlay owns the key right now: the
   // lightbox and the tour both close on their own Esc, and clearing the graph
@@ -368,11 +380,27 @@ export default function GraphExplorer({
     return neighbors
   }, [base, hoverId])
 
-  /** What to focus the canvas on: hovering wins; otherwise the papers the AI
-   * teacher is currently talking about. */
+  /** The local find's matches over the VISIBLE view (hidden papers can't
+   * match invisibly), or null when the box is empty. */
+  const findSet = useMemo(() => findMatches(view.nodes, findQuery), [view, findQuery])
+
+  // A new graph starts with an empty find box — a query about the old
+  // neighborhood has nothing honest to match against the new one.
+  useEffect(() => {
+    setFindQuery('')
+  }, [base])
+
+  /** What the canvas lights up: an active find takes the highlight machinery
+   * over from the teacher (glow + labels on matches — clearing the box hands
+   * it back). */
+  const litSet = useMemo(() => findSet ?? highlightIds, [findSet, highlightIds])
+
+  /** What to focus the canvas on: hovering wins; then an active find (an
+   * EMPTY match set dims everything — honest "no hits" feedback); then the
+   * papers the AI teacher is currently talking about. */
   const focusSet = useMemo(
-    () => hoverSet ?? (highlightIds.size ? highlightIds : null),
-    [hoverSet, highlightIds],
+    () => hoverSet ?? findSet ?? (highlightIds.size ? highlightIds : null),
+    [hoverSet, findSet, highlightIds],
   )
 
   /** Toggle one relation type's visibility (the filter chips). */
@@ -465,7 +493,7 @@ export default function GraphExplorer({
             pinned={pinned}
             selectedId={selectedId}
             selectedIds={selectedIds}
-            highlightIds={highlightIds}
+            highlightIds={litSet}
             onNodeClick={onCanvasNodeClick}
             onNodeHover={setHoverId}
             onNodeDragEnd={onNodeDragEnd}
@@ -496,6 +524,9 @@ export default function GraphExplorer({
           />
         )}
 
+        {hasGraph && (
+          <FindBar query={findQuery} onQuery={setFindQuery} count={findSet ? findSet.size : null} />
+        )}
         {hasGraph && <Legend hasDiscovered={hasDiscovered} hasSearchHits={hasSearchHits} />}
       </main>
 

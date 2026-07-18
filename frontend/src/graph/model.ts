@@ -132,6 +132,30 @@ export function nodeRadius(node: GraphNode): number {
 }
 
 /**
+ * Ids of the nodes matching a local find query — case-insensitive substring
+ * over the title and the (formatted) author string. Purely lexical and local:
+ * this powers the controls' find box, which spotlights papers already on
+ * screen — the header's seed search is the one that fetches new ones.
+ *
+ * @param nodes The candidate nodes (pass the *visible* view, so hidden papers
+ *              can't match invisibly).
+ * @param query The raw box contents.
+ * @returns The matching ids — possibly empty (dim everything: honest feedback
+ *          for "no hits") — or null when the trimmed query is empty (no find
+ *          active at all).
+ */
+export function findMatches(nodes: GraphNode[], query: string): Set<string> | null {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return null
+  const matches = new Set<string>()
+  nodes.forEach((node) => {
+    const haystack = `${node.title} ${node.authors ?? ''}`.toLowerCase()
+    if (haystack.includes(needle)) matches.add(node.id)
+  })
+  return matches
+}
+
+/**
  * Strip a live VNode back to its persistable GraphNode fields — dropping the
  * sim's x/y and any fx/fy pins (re-derived on restore), and the researcher's
  * `idx` (per-conversation numbering ephemera; the researcher renumbers from node

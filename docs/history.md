@@ -1367,6 +1367,24 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Lexical search over the nodes on screen** *(v5.16.0)* — a keyword find
+      for papers **already on the graph** (titles/authors), fully separate from
+      the seed search that fetches new ones. Purely lexical and local:
+      `model.findMatches` runs a case-insensitive substring match over the
+      *visible* view (a filtered-out paper can't match invisibly), and
+      GraphExplorer routes the matches through the teacher's highlight
+      machinery — matches glow + label, everything else dims, zero hits dims
+      the whole graph (honest no-match feedback), and clearing hands the glow
+      back to the teacher. The surface took three browser iterations to land
+      (each Patrick's call): a box *inside* the graph controls (crowded) → an
+      always-open rounded pill top-right (blended into the Timeline axis, then
+      floated in no-man's land) → the shipped **collapsed round 🔍 button**
+      top-right that expands into a focused pill on click, Google-Maps style.
+      A live query pins the pill open; ✕ / Esc / blur-while-empty tuck it back.
+      Esc-in-box clears the query first (the global Esc-clears-all skips form
+      controls); the clear-all gesture and a new graph reset it too. New tour
+      stop; `FindBar.tsx` + tests, `findMatches` tests. *(From the `todos.md`
+      inbox, 2026-07-13; shipped 2026-07-18.)*
 - [x] **Source-scope picker doesn't appear until a page refresh (+ note it
       above the ask bar)** *(v5.15.0)* — `Teacher.tsx` fetched the library
       once, in a mount-only effect, into local state; an upload in the 📚

@@ -547,14 +547,6 @@ optional, behind a key.
       `link.type`) in the force-graph config; Timeline already separates by date,
       so this is the Force-layout counterpart. *(From the `todos.md` inbox,
       2026-07-10.)*
-- [ ] **Lexical search over the nodes on screen** — a quick keyword box that finds
-      a paper among the ones **currently on the graph** (matching titles/authors),
-      distinct from the seed search that fetches new papers from S2. Purely
-      **lexical and local** — no API call — filtering to or spotlighting the hits
-      (reusing the `highlightIds` glow/dim machinery) so a specific paper is easy
-      to pick out of a busy neighborhood. Separate from the pink `search`-relation
-      researcher hits and from the seed-search surface entirely. *(From the
-      `todos.md` inbox, 2026-07-13.)*
 
 
 
