@@ -247,7 +247,9 @@ deliberate swap, not the default.)
 ## Field lists: three tiers on purpose
 
 `nodes.py` defines what each request asks S2 for: `DETAIL_FIELDS` (one
-paper, hydration — abstract/tldr/authors), `NEIGHBOR_FIELDS` (the many
+paper, hydration — abstract/tldr/authors, plus the venue: the normalized
+`publicationVenue` record with the legacy `venue` string as fallback, see
+`venue_name`), `NEIGHBOR_FIELDS` (the many
 nodes of a traversal — summary-light, hydrated lazily on click), and
 `SEARCH_FIELDS` = neighbors + `authors.name` (search + title-match hits
 render in a pick-a-paper list, where authorship is how humans recognize a

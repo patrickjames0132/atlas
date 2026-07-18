@@ -50,6 +50,10 @@ export interface GraphNode {
    * them on open; a restored pre-v2.6 session may omit it entirely.
    */
   fields_of_study?: string[]
+  /** The publication venue's display name (arXiv, Nature, NeurIPS…) —
+   *  detail-tier like the abstract: null for neighbors until the panel
+   *  hydrates them; absent on pre-v5.26 sessions/snapshots. */
+  venue?: string | null
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean

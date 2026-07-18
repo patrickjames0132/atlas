@@ -6,7 +6,8 @@ behind it.
 ```
 detail/
   useSelection.ts — selection id, lazy hydration/figures/code/categories, click gesture
-  DetailPanel.tsx — the panel (badges, summary, category tags, actions, code links, figures)
+  DetailPanel.tsx — the panel (badges, meta incl. the publication venue,
+                    summary, category tags, actions, code links, figures)
   detail.css      — styles (ported light-touch)
 ```
 

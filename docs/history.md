@@ -1367,6 +1367,25 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Show the publisher/venue in the Detail panel** *(v5.26.0)* — the
+      panel named no venue. Now the meta block reads **`Authors: …`** /
+      **`Publisher: *venue*`** (prefix plain, value italicized — both
+      Patrick's browser-round calls) above the unchanged date · citations
+      line. Full-stack: both providers gained a **`venue`** on the shared
+      node shape — S2 prefers the normalized `publicationVenue` record with
+      the legacy `venue` string as fallback (`venue_name()`), OpenAlex takes
+      `primary_location.source.display_name` — as a **detail-tier** field
+      like the abstract (seed at build via DETAIL_FIELDS/DETAIL_SELECT,
+      neighbors hydrate on first open; arXiv-only papers honestly read
+      "arXiv"). The graph model defaults it None so pre-venue cached
+      snapshots validate, and `cleanNode` persists it (a restored node with
+      an abstract never re-hydrates — dropping it would lose the seed's
+      venue every restore; note the same gap exists for `fields_of_study`,
+      which cleanNode has never persisted). The polish rounds also aired
+      out the panel: meta rows 3→10px apart, tag groups 10→16px. Tests: S2
+      preference/fallback/empty, OpenAlex primary-location/missing/
+      sourceless, a DetailPanel render case; field-tier READMEs updated.
+      *(From the `todos.md` inbox, 2026-07-18; shipped 2026-07-18.)*
 - [x] **Select-all for find-bar matches** *(v5.25.0)* — the lexical find
       spotlighted matches, but scoping the teacher to them meant
       alt-dragging or shift-clicking one by one. The find pill now commits
