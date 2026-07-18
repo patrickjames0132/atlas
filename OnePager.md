@@ -539,6 +539,15 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Revisit the root `README.md` — wording, clutter, formatting** — the
+      repo's front page has grown by accretion (a dozen shipped features each
+      added their paragraph) and reads cluttered. Do an editorial pass:
+      tighten the wording, cut duplication with `OnePager.md` /
+      `docs/`-pages it can link instead, and clean up the formatting so a
+      newcomer gets the what-and-why in one screen. Content changes should
+      stay honest to the current app — check claims against the shipped
+      feature set while in there. *(From the `todos.md` inbox, 2026-07-18.)*
+
 - [ ] **Delete the four dead per-relation count caps — the app should size itself**
       — `ref_limit`, `cite_limit`, `latest_limit` and `similar_limit` are all
       **`null` in the real `config.json`** and have been for a long time: the app
