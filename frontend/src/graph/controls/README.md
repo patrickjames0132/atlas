@@ -63,7 +63,14 @@ canvas about what "a reference" looks like, and both style via
   axis), then collapse-until-wanted pinned top-right, before moving to the
   bottom-right corner (the fallback agreed when top-right shipped).
   A live query pins the pill open; clearing (✕, Esc, blur while empty)
-  tucks it back to the 🔍. Matching lives in `model.findMatches` over the
+  tucks it back to the 🔍. When there are hits, a **"select" link — or
+  Enter in the box — commits the whole match set to the teacher's
+  hand-picked scope** in one press (both affordances on purpose: the link
+  is discoverable, Enter is fast) — additive via `nodeSelectionAdded`,
+  exactly like the marquee — and GraphExplorer clears the find so the
+  cyan selection (not the find spotlight) shows the result: find →
+  select → ask in three gestures.
+  Matching lives in `model.findMatches` over the
   *visible* view (a filtered-out paper can't match invisibly);
   GraphExplorer owns the query state and routes the matches through the
   same highlight machinery the teacher's glow uses (matches glow + label,

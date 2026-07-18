@@ -25,6 +25,7 @@ import { highlightSet, selectHighlightSet } from '../store/highlight'
 import {
   layoutSet,
   loadGraph,
+  nodeSelectionAdded,
   nodeSelectionCleared,
   nodeSelectionToggled,
   selectHasDiscovered,
@@ -404,6 +405,15 @@ export default function GraphExplorer({
    * it back). */
   const litSet = useMemo(() => findSet ?? highlightIds, [findSet, highlightIds])
 
+  /** The find pill's one-press select: commit every current match to the
+   * hand-picked teacher scope (additive, like the marquee) and clear the
+   * find, so the cyan selection — not the find spotlight — shows the result. */
+  const onFindSelectAll = useCallback(() => {
+    if (!findSet || findSet.size === 0) return
+    dispatch(nodeSelectionAdded([...findSet]))
+    setFindQuery('')
+  }, [dispatch, findSet])
+
   /** What to focus the canvas on: hovering wins; then an active find (an
    * EMPTY match set dims everything — honest "no hits" feedback); then the
    * papers the AI teacher is currently talking about. */
@@ -535,7 +545,12 @@ export default function GraphExplorer({
         )}
 
         {hasGraph && (
-          <FindBar query={findQuery} onQuery={setFindQuery} count={findSet ? findSet.size : null} />
+          <FindBar
+            query={findQuery}
+            onQuery={setFindQuery}
+            count={findSet ? findSet.size : null}
+            onSelectAll={onFindSelectAll}
+          />
         )}
         {hasGraph && <Legend hasDiscovered={hasDiscovered} hasSearchHits={hasSearchHits} />}
       </main>

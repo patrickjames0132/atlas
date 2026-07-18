@@ -139,7 +139,7 @@ wheels = [
 
 [[package]]
 name = "atlas"
-version = "5.24.1"
+version = "5.25.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

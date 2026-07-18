@@ -1367,6 +1367,21 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Select-all for find-bar matches** *(v5.25.0)* — the lexical find
+      spotlighted matches, but scoping the teacher to them meant
+      alt-dragging or shift-clicking one by one. The find pill now commits
+      the whole match set to the hand-picked selection in one press — a
+      **"select" link** beside the hit count AND **Enter in the box**
+      (added on Patrick's browser round; both affordances kept on purpose:
+      the link is discoverable, Enter is fast; Enter no-ops on zero hits).
+      Additive via `nodeSelectionAdded`, exactly like the marquee, so
+      repeated finds build a scope; GraphExplorer clears the find on
+      commit so the cyan selection (not the find spotlight) shows the
+      result — find → select → ask in three gestures. Tour's find stop,
+      input/link tooltips, and the controls README teach both paths
+      (final tour phrasing Patrick's own); FindBar suite +2 cases on a new
+      makeProps helper. *(From the `todos.md` inbox, 2026-07-18; shipped
+      2026-07-18.)*
 - [x] **DATA SOURCE dropdown arrow overflows its box** *(v5.24.1)* — the
       header select relied on the native caret, which macOS rendered just
       past the rounded border. Fixed by owning the caret:

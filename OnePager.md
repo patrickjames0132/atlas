@@ -517,14 +517,6 @@ optional, behind a key.
 
 
 
-- [ ] **Select-all for find-bar matches** — the lexical find (🔍, bottom-right)
-      highlights matching papers, but turning that spotlight into a teacher
-      scope means alt-dragging or shift-clicking them one by one. Add a
-      one-press "select all matches" control to the find pill that commits
-      the current match set to the hand-picked selection (the same
-      `nodeSelectionSet` machinery the marquee uses), so find → select →
-      ask becomes three gestures. Update the find tour stop + tooltips in
-      the same change. *(From the `todos.md` inbox, 2026-07-18.)*
 - [ ] **Responsive layout + a collapsible icon side rail (mobile-friendly)** —
       the frontend assumes a wide desktop window; resizing squeezes the
       header until controls collide, and mobile is unusable. Patrick's
