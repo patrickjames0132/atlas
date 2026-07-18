@@ -464,6 +464,37 @@ optional, behind a key.
 
 ### UI & rendering polish
 
+- [ ] **Collapse the graph controls panel to a single bar** — the controls
+      panel (`GraphControls.tsx`, pinned top-left) is a fixed 272px-wide box
+      that sits over the canvas whether or not the user is touching it; on a
+      busy graph it costs real working space. Add a minimize control that
+      collapses the whole panel down to a single slim bar (mirroring the find
+      control's collapse-until-wanted pattern), restoring on click, so the
+      GraphExplorer canvas gets the room back. Remember to update the tour
+      step and any hints that assume the panel is always open. *(From the
+      `todos.md` inbox, 2026-07-18.)*
+- [ ] **Reorder the tour steps to match expectation** — some guided-tour
+      steps display in an order that doesn't match how the eye actually moves
+      through the UI (not a bug — the steps run in array order in
+      `tour/steps.ts`, "controls top-to-bottom, then the teacher" — just a
+      sequencing preference). Sit down with Patrick and re-sequence
+      `GRAPH_TOUR` (and check `HOME_TOUR` while there) so the walkthrough
+      follows the order a new user would naturally encounter things. Pure
+      array reordering; the find control's move to the bottom-right corner
+      (v5.18.1) may also change where its step best sits. *(From the
+      `todos.md` inbox, 2026-07-18.)*
+- [ ] **A loading state over the whole Detail panel while its pieces arrive**
+      — the panel fans out to several services after opening (S2/OpenAlex
+      abstract hydration, the ar5iv figure strip, code links…), and each
+      piece pops in as its call lands, so the panel assembles jankily in
+      front of the user. Put the panel behind a single loading treatment — a
+      spinner (or skeleton) over the whole panel until the pieces are in, or
+      at least until the primary metadata is — so it appears composed rather
+      than piecemeal. Worth deciding the cutoff deliberately: the figure
+      strip can be much slower than the metadata, and blocking the whole
+      panel on the slowest call would trade jank for a long blank — a
+      skeleton with per-section placeholders may be the honest middle.
+      *(From the `todos.md` inbox, 2026-07-18.)*
 - [ ] **A settings modal — and let the user choose corpus vs live citations** —
       there's nowhere in the UI to configure anything; the corpus is a `config.json`
       edit plus a server restart. Add a **settings button (top-right)** opening a
