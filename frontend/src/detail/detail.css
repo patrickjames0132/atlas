@@ -36,9 +36,16 @@
   color: var(--muted);
   margin-bottom: 14px;
 }
+/* Breathing room between the meta rows (Authors / Publisher / date) — the
+   3px they shipped with read as one run-on block once the rows wrapped. */
 .detail-meta div {
-  margin-bottom: 3px;
+  margin-bottom: 10px;
 }
+.detail-meta div:last-child {
+  margin-bottom: 0;
+}
+/* The publication venue (arXiv / Nature / NeurIPS…) — the value is
+   italicized (its <i>), the "Publisher:" prefix stays plain. */
 /* The Abstract / TL;DR block: a muted section header (matching the tag / code
    section heads) over the body text. */
 .detail-summary-head {
@@ -96,8 +103,8 @@
 .detail-cat-groups {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 16px; /* same breathing room as the meta rows above */
+  margin-bottom: 16px;
 }
 .detail-cat-head {
   font-size: 11px;

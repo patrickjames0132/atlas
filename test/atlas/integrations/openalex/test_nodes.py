@@ -158,7 +158,30 @@ def test_node_full_shape_parity_and_month():
         "authors": "S. W. Hawking",
         "url": "https://doi.org/10.1038/248030a0",
         "fields_of_study": [],
+        "venue": None,
     }
+
+
+def test_node_venue_from_primary_location():
+    """The venue is the primary location's source name; absent → None."""
+    work = {
+        "id": "https://openalex.org/W2",
+        "doi": "https://doi.org/10.1038/248030a0",
+        "title": "T",
+        "publication_year": 1974,
+        "publication_date": None,
+        "cited_by_count": 1,
+        "authorships": [],
+        "locations": [],
+        "primary_location": {"source": {"display_name": "Nature"}},
+    }
+    assert nodes.node(work)["venue"] == "Nature"
+    # A neighbor traversal never selects primary_location — venue stays None.
+    work.pop("primary_location")
+    assert nodes.node(work)["venue"] is None
+    # A sourceless primary location (repository oddities) is also None.
+    work["primary_location"] = {"source": None}
+    assert nodes.node(work)["venue"] is None
 
 
 def test_node_arxiv_url_and_id_when_on_arxiv():

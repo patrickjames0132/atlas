@@ -60,6 +60,20 @@ const NO_FIGURES: FiguresResponse = { available: false, figures: [] }
 
 afterEach(cleanup)
 
+describe('the venue line', () => {
+  it('renders the publication venue in the meta block, only when known', () => {
+    const { container, rerender } = render(
+      <DetailPanel {...makeProps({ node: makeNode({ venue: 'Nature' }) })} />,
+    )
+    const venueLine = container.querySelector('.detail-venue')
+    expect(venueLine).not.toBeNull()
+    expect(venueLine!.textContent).toBe('Publisher: Nature')
+
+    rerender(<DetailPanel {...makeProps({ node: makeNode({ venue: null }) })} />)
+    expect(container.querySelector('.detail-venue')).toBeNull()
+  })
+})
+
 describe('the joint loading gate', () => {
   it('gates a non-arXiv paper on summary hydration alone', () => {
     const bare = makeNode({ abstract: null })

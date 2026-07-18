@@ -528,14 +528,6 @@ optional, behind a key.
       wants.** Substantial: touches the header, panel overlays, and the
       canvas-resize plumbing; probably lands in stages (desktop-narrow
       first, true mobile after). *(From the `todos.md` inbox, 2026-07-18.)*
-- [ ] **Show the publisher/venue in the Detail panel** — the panel names no
-      venue: arXiv, Nature, IEEE, wherever — it would be nice to see at a
-      glance. Both providers can serve it: S2 has `venue`/
-      `publicationVenue` (needs adding to the hydration/graph field lists),
-      OpenAlex has `primary_location.source.display_name`. Likely a line in
-      the meta block under the authors; decide how it composes with the
-      arXiv-id line for preprints that are ALSO published (show both?).
-      *(From the `todos.md` inbox, 2026-07-18.)*
 
 ### Enhancements & tech debt
 

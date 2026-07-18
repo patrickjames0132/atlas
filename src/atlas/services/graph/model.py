@@ -39,6 +39,10 @@ class Node(BaseModel):
     authors: str | None
     url: str
     fields_of_study: list[str] = []
+    venue: str | None = None
+    """The publication venue's display name (arXiv, Nature, NeurIPS…) — a
+    detail-tier field like the abstract, so neighbors carry None until the
+    panel hydrates them. Defaults so pre-venue cached snapshots validate."""
     rels: list[str]
     is_seed: bool
 

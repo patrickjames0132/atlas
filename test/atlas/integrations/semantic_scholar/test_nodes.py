@@ -69,6 +69,19 @@ def test_node_month_parsing(pub, month):
     assert node["month"] == month
 
 
+def test_venue_prefers_normalized_record_with_string_fallback():
+    normalized = {
+        "paperId": "a",
+        "venue": "NeurIPS",
+        "publicationVenue": {"name": "Neural Information Processing Systems"},
+    }
+    assert nodes.node(normalized)["venue"] == "Neural Information Processing Systems"
+    # No normalized record: the legacy string fills in; neither → None.
+    assert nodes.node({"paperId": "a", "venue": "NeurIPS"})["venue"] == "NeurIPS"
+    assert nodes.node({"paperId": "a", "venue": ""})["venue"] is None
+    assert nodes.node({"paperId": "a"})["venue"] is None
+
+
 def test_node_none_for_unresolved():
     assert nodes.node(None) is None
     assert nodes.node({}) is None

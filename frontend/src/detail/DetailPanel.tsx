@@ -363,7 +363,12 @@ export default function DetailPanel({
         <MathText>{node.title}</MathText>
       </h2>
       <div className="detail-meta">
-        {node.authors && <div>{node.authors}</div>}
+        {node.authors && <div>Authors: {node.authors}</div>}
+        {node.venue && (
+          <div className="detail-venue" title="Publication venue">
+            Publisher: <i>{node.venue}</i>
+          </div>
+        )}
         <div>
           {formatPubDate(node.pub_date, node.year)} · {(node.citation_count ?? 0).toLocaleString()}{' '}
           citations

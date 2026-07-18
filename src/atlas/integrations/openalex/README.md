@@ -199,9 +199,11 @@ version's canonical record uses the *published* DOI. So `resolve_work` does:
    forced the S2 fallback for "Attention Is All You Need").
 
 It takes a `select` argument so a seed resolve can request the heavier
-`DETAIL_SELECT` (the inverted-index abstract) while a neighbor uses the light
-`NEIGHBOR_SELECT`. Abstracts arrive as an **inverted index**
-(`{word: [positions]}`); `reconstruct_abstract` rebuilds the string.
+`DETAIL_SELECT` (the inverted-index abstract, topics, and the primary
+location — whose source display name becomes the node's `venue`) while a
+neighbor uses the light `NEIGHBOR_SELECT`. Abstracts arrive as an
+**inverted index** (`{word: [positions]}`); `reconstruct_abstract`
+rebuilds the string.
 
 ## Pricing & throttle (verified live 2026-07-09)
 

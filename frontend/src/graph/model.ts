@@ -190,6 +190,7 @@ export function cleanNode(node: VNode): GraphNode {
     citation_count: node.citation_count,
     authors: node.authors,
     url: node.url,
+    venue: node.venue,
     rels: node.rels,
     is_seed: node.is_seed,
     discovered: node.discovered,

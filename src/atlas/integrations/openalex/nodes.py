@@ -32,9 +32,10 @@ NEIGHBOR_SELECT = (
     "id,ids,doi,title,display_name,publication_year,publication_date,"
     "cited_by_count,authorships,locations"
 )
-# Detail adds the inverted-index abstract and the topic classification (both
-# heavy — only for a focused node: the seed or a clicked detail panel).
-DETAIL_SELECT = NEIGHBOR_SELECT + ",abstract_inverted_index,topics"
+# Detail adds the inverted-index abstract, the topic classification (both
+# heavy — only for a focused node: the seed or a clicked detail panel), and
+# the primary location (whose source names the publication venue).
+DETAIL_SELECT = NEIGHBOR_SELECT + ",abstract_inverted_index,topics,primary_location"
 
 # How many topic labels to surface as a paper's field tags (topics come
 # score-ranked, so this keeps the most salient few).
@@ -202,6 +203,24 @@ def _fields_of_study(work: dict) -> list[str]:
     return labels
 
 
+def _venue(work: dict) -> str | None:
+    """The work's publication venue — its primary location's source name.
+
+    OpenAlex's ``primary_location.source.display_name`` names where the work
+    canonically lives ("Nature", "Neural Information Processing Systems" —
+    or "arXiv" for a preprint-only work, which is honest too). Detail-tier
+    (``DETAIL_SELECT``), so neighbor traversals return None until hydration.
+
+    Args:
+        work: A raw OpenAlex work object.
+
+    Returns:
+        The venue display name, or None when unknown/not requested.
+    """
+    source = (work.get("primary_location") or {}).get("source") or {}
+    return source.get("display_name") or None
+
+
 def _authors(work: dict) -> str | None:
     """Comma-joined author display names from ``authorships`` (None when empty)."""
     names = [
@@ -218,7 +237,7 @@ def node(work: dict | None) -> dict | None:
     Produces the identical key set to ``semantic_scholar.nodes.node`` so both
     sources are interchangeable downstream: ``id, arxiv_id, title, abstract,
     tldr, year, month, pub_date, citation_count, authors, url,
-    fields_of_study``. ``tldr`` is always None (OpenAlex has none — the detail
+    fields_of_study, venue``. ``tldr`` is always None (OpenAlex has none — the detail
     panel shows the abstract instead); ``fields_of_study`` carries OpenAlex
     topic labels when ``topics`` was selected (``DETAIL_SELECT`` — the seed or a
     clicked detail node), and is ``[]`` for the light neighbor traversals.
@@ -271,4 +290,5 @@ def node(work: dict | None) -> dict | None:
         "authors": _authors(work),
         "url": url,
         "fields_of_study": _fields_of_study(work),
+        "venue": _venue(work),
     }

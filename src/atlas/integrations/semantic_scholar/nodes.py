@@ -15,7 +15,8 @@ from __future__ import annotations
 # legacy list we fall back to when the classifier field is absent.
 DETAIL_FIELDS = (
     "paperId,externalIds,title,abstract,tldr,year,publicationDate,"
-    "citationCount,referenceCount,authors.name,s2FieldsOfStudy,fieldsOfStudy"
+    "citationCount,referenceCount,authors.name,s2FieldsOfStudy,fieldsOfStudy,"
+    "venue,publicationVenue"
 )
 # Lighter fields for the many neighbors in a traversal — no abstract/tldr,
 # which we hydrate lazily when a node is opened. publicationDate gives month
@@ -60,6 +61,27 @@ def fields_of_study(paper: dict) -> list[str]:
     return names
 
 
+def venue_name(paper: dict) -> str | None:
+    """The paper's publication venue, preferring S2's normalized record.
+
+    ``publicationVenue`` is S2's normalized venue object (proper display
+    names — "Neural Information Processing Systems"); the legacy ``venue``
+    string is the fallback when the normalized record is absent. Both are
+    detail-tier fields (DETAIL_FIELDS), so neighbor nodes return None until
+    the panel hydrates them.
+
+    Args:
+        paper: A raw S2 paper object.
+
+    Returns:
+        The venue's display name, or None when unknown/not requested.
+    """
+    publication_venue = paper.get("publicationVenue")
+    if isinstance(publication_venue, dict) and publication_venue.get("name"):
+        return str(publication_venue["name"])
+    return paper.get("venue") or None
+
+
 def node(paper: dict | None) -> dict | None:
     """Normalize a raw S2 paper object into the app's graph-node dict.
 
@@ -69,12 +91,13 @@ def node(paper: dict | None) -> dict | None:
 
     Returns:
         A node dict with keys ``id, arxiv_id, title, abstract, tldr, year,
-        month, pub_date, citation_count, authors, url, fields_of_study`` — or
-        None when ``paper`` is empty or carries no ``paperId``. ``month``
-        (1–12) is parsed from S2's ``publicationDate`` so the timeline can
-        place papers between year lines; it is None when only the year is
-        known. ``fields_of_study`` is empty for neighbor/search nodes, which
-        don't request it — it hydrates when the node is opened (DETAIL_FIELDS).
+        month, pub_date, citation_count, authors, url, fields_of_study,
+        venue`` — or None when ``paper`` is empty or carries no ``paperId``.
+        ``month`` (1–12) is parsed from S2's ``publicationDate`` so the
+        timeline can place papers between year lines; it is None when only
+        the year is known. ``fields_of_study`` is empty — and ``venue``
+        None — for neighbor/search nodes, which don't request them; both
+        hydrate when the node is opened (DETAIL_FIELDS).
     """
     if not paper or not paper.get("paperId"):
         return None
@@ -110,6 +133,7 @@ def node(paper: dict | None) -> dict | None:
         "authors": authors or None,
         "url": url,
         "fields_of_study": fields_of_study(paper),
+        "venue": venue_name(paper),
     }
 
 
