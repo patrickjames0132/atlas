@@ -8,10 +8,9 @@ parent is `graph/GraphExplorer.tsx`.
 controls/
   GraphControls.tsx — a collapsible header bar over: layout toggle,
                       per-relation filter chips, the dual-knob year slider,
-                      the citation-count threshold slider, count readout,
-                      release/fit/refresh actions, the node-selector row
-                      (gesture hint + picked-count / clear), the gesture
-                      hint line
+                      the citation-count threshold slider, the count
+                      readout + release/fit/refresh/clear action row, the
+                      node-selector gesture hint, the per-layout hint line
   Legend.tsx        — the color legend (agent entries appear on first use)
 ```
 
@@ -27,12 +26,8 @@ canvas about what "a reference" looks like, and both style via
 - **The whole panel collapses to its header bar.** The "Graph controls"
   header is a button: clicking it hides the body and shrinks the panel to a
   slim strip (the find control's collapse-until-wanted idea, panel-sized),
-  giving the canvas the 272px box back; the visible-count readout rides the
-  collapsed bar (`N / total papers shown`) so the panel still reports what
-  the filters let through — and while a hand-picked selection exists it
-  reports that instead (`N / shown papers selected` — out of the shown, not
-  the total, since the pick scopes as `selected ∩ visible`), reverting when
-  the pick clears. The collapsed flag
+  giving the canvas the 272px box back; the count readout rides the
+  collapsed bar so the panel still reports its state while tucked away. The collapsed flag
   is the panel's one piece of local state (like FindBar's own open/closed).
   The body hides via `hidden`, **not** unmounting — the guided tour judges
   its year/citation stops by element *existence* (`presentIf`), and those
@@ -77,16 +72,19 @@ canvas about what "a reference" looks like, and both style via
 - **The year slider only renders when the graph spans more than one
   year** — a single-year graph gets nothing to filter. Its two knobs clamp
   against each other (`lo ≤ hi`).
-- **The node-selector row teaches the marquee gestures and reports the
-  pick.** An always-on hint line (`alt-drag to pick nodes for the teacher ·
-  shift-click to add/remove`) makes the modifier-drag discoverable — the
-  gesture itself lives in `hooks/useMarquee.ts` — and once a selection OR a
-  teacher highlight exists the row shows its count (`N picked`, else `N lit`)
-  and a `clear` link. That link (and **Esc**, same reset — see
-  `hooks/useEscapeClear.ts`) drops *everything* lit at once: the pick and the
-  teacher's glow, wherever it came from. The pick scopes the
-  teacher via `selectGroundingNodes` (`selected ∩ visible`), so it reads as a
-  filter alongside the chips/sliders.
+- **One count readout, shared by the footer and the collapsed bar.** The
+  same string renders in both places: `N / total papers shown` under bare
+  filters, flipping to `N / shown papers selected` while a hand-pick exists —
+  out of the *shown* papers, not the total, since the pick scopes the teacher
+  as `selected ∩ visible` (`selectGroundingNodes`). The old `N picked · clear`
+  status row under the gesture hint retired in favor of this flip.
+- **The node-selector row teaches the marquee gestures.** An always-on hint
+  line (`alt-drag to pick nodes for the teacher · shift-click to add/remove`)
+  makes the modifier-drag discoverable — the gesture itself lives in
+  `hooks/useMarquee.ts`. Clearing the pick moved into the action row: the
+  **Clear** button (disabled until a pick or a teacher highlight exists — and
+  **Esc**, same reset, see `hooks/useEscapeClear.ts`) drops *everything* lit
+  at once: the pick and the teacher's glow, wherever it came from.
 - **The hint line teaches per-layout gestures** — drag-to-pin in Force,
   left→right-by-year in Timeline; double-click-to-reseed in both.
 - **Release** unpins every node AND reheats the simulation — it stays enabled

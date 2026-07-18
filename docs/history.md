@@ -1367,6 +1367,26 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Mirror the collapsed bar's readout in the expanded panel — and fold
+      "clear" into the action row** *(v5.20.0)* — the v5.19.0 collapsed bar
+      got the honest readout but the expanded footer still read the bare
+      `78 / 356 papers`, and the selection status kept its own
+      `2 picked · clear` row. Now **one readout string, computed once,
+      renders in both places**: `N / total papers shown` under bare filters,
+      flipping to `N / shown papers selected` during a hand-pick (same
+      shown-papers denominator, honest to the `selected ∩ visible` teacher
+      scope). The status row retired, and **clear became a proper Clear
+      button** in the action row after Release / Fit / Refresh — always
+      present, disabled until a pick or a teacher highlight exists
+      (Refresh's disabled pattern), firing the same shared reset as Esc.
+      The footer now stacks (readout line above the four-button row):
+      side-by-side already wrapped awkwardly with three buttons in
+      Patrick's screenshot, and the longer wording + fourth button settled
+      it. Tour's actions stop grew into "Release · Fit · Refresh · Clear"
+      with a sentence for the new button; controls README reworked; tests
+      rewritten around the button's disabled/armed states and both readout
+      flips. *(From Patrick's screenshot review, 2026-07-18; shipped
+      2026-07-18.)*
 - [x] **Collapse the graph controls panel to a single bar** *(v5.19.0)* —
       the declutter panel (`GraphControls.tsx`, pinned top-left) was a fixed
       272px box over the canvas whether or not the user was touching it. The

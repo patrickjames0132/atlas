@@ -172,11 +172,13 @@ export const GRAPH_TOUR: TourStep[] = [
   {
     target: '[data-tour="actions"]',
     stage: 'controls',
-    title: 'Release · Fit · Refresh',
+    title: 'Release · Fit · Refresh · Clear',
     body:
       'Release unpins every node you dragged and re-settles a drifted layout — without ' +
-      'moving your zoom. Fit re-centers the whole graph, and Refresh rebuilds this ' +
-      'paper’s neighborhood fresh from the data provider.',
+      'moving your zoom. Fit re-centers the whole graph. Refresh rebuilds this ' +
+      'paper’s neighborhood fresh from the data provider. Clear drops every highlight ' +
+      'at once — your hand-picked papers and the teacher’s glow alike (Esc does the ' +
+      'same).',
   },
   {
     target: '[data-tour="selector"]',

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 /**
- * The controls panel's clear-all status and the Release button: the "clear"
- * link appears for a hand-picked selection OR a teacher highlight (and fires
- * the one shared reset), and Release stays enabled with nothing pinned — it
- * doubles as "re-settle the layout". Plus the header's collapse-to-a-bar:
- * the body hides (but stays in the DOM for the tour's existence checks), the
- * count readout moves into the bar, and the tour's 'controls' staging
- * re-expands a collapsed panel.
+ * The controls panel's action row and count readout: the Clear button arms
+ * for a hand-picked selection OR a teacher highlight (and fires the one
+ * shared reset), the shared readout flips between "papers shown" and
+ * "papers selected" in the footer and collapsed bar alike, and Release
+ * stays enabled with nothing pinned — it doubles as "re-settle the
+ * layout". Plus the header's collapse-to-a-bar: the body hides (but stays
+ * in the DOM for the tour's existence checks) and the tour's 'controls'
+ * staging re-expands a collapsed panel.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -52,24 +53,38 @@ function makeProps(overrides: Partial<GraphControlsProps> = {}): GraphControlsPr
 // unmount between tests explicitly or renders accumulate in the document.
 afterEach(cleanup)
 
-describe('GraphControls clear-all status', () => {
-  it('shows nothing when neither a selection nor a highlight is active', () => {
+describe('GraphControls Clear button', () => {
+  it('sits disabled in the action row until something is lit', () => {
     render(<GraphControls {...makeProps()} />)
-    expect(screen.queryByText('clear')).toBeNull()
+    const clear = screen.getByRole('button', { name: 'Clear' })
+    expect(clear.hasAttribute('disabled')).toBe(true)
   })
 
-  it('shows "lit" with the clear link when only a teacher highlight is active', () => {
+  it('arms for a teacher highlight alone and fires the one shared reset', () => {
     const onClearAll = vi.fn()
     render(<GraphControls {...makeProps({ litCount: 3, onClearAll })} />)
-    expect(screen.getByText('lit', { exact: false })).toBeTruthy()
-    fireEvent.click(screen.getByText('clear'))
+    const clear = screen.getByRole('button', { name: 'Clear' })
+    expect(clear.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(clear)
     expect(onClearAll).toHaveBeenCalledTimes(1)
   })
 
-  it('prefers the picked count when both are active', () => {
-    render(<GraphControls {...makeProps({ selectedCount: 2, litCount: 3 })} />)
-    expect(screen.getByText('picked', { exact: false })).toBeTruthy()
-    expect(screen.queryByText('lit', { exact: false })).toBeNull()
+  it('arms for a hand-picked selection alone', () => {
+    render(<GraphControls {...makeProps({ selectedCount: 2 })} />)
+    expect(screen.getByRole('button', { name: 'Clear' }).hasAttribute('disabled')).toBe(false)
+  })
+})
+
+describe('GraphControls count readout', () => {
+  it('reads "papers shown" in the footer under bare filters', () => {
+    render(<GraphControls {...makeProps()} />)
+    expect(screen.getByText('10 / 12 papers shown')).toBeTruthy()
+  })
+
+  it('flips to the selected count (out of the shown papers) during a hand-pick', () => {
+    render(<GraphControls {...makeProps({ selectedCount: 2 })} />)
+    expect(screen.getByText('2 / 10 papers selected')).toBeTruthy()
+    expect(screen.queryByText('10 / 12 papers shown')).toBeNull()
   })
 })
 
