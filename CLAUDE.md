@@ -85,6 +85,12 @@ Don't skip ahead: no committing before the browser test, no starting the next
 phase without a green light. Patrick is hands-on and likes to eyeball UX before
 it's locked in.
 
+**Browser automation (Claude in Chrome) is ask-first.** Driving Patrick's
+browser is slow, so don't reach for it by default — tests, quick scripts, and
+the Flask test client cover almost everything. When a problem genuinely needs
+the live app (e.g. a bug only reproducible in the real browser), ask Patrick
+before launching it; he'll usually allow it when it's really needed.
+
 ## The `todos.md` inbox
 
 Patrick brainstorms on the fly while I'm building, so `todos.md` at the repo root
