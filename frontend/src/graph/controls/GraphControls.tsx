@@ -138,6 +138,14 @@ export default function GraphControls({
   const hiCitations = citationThreshold(citeHi, minCitations, maxCitations)
   const citePct = (position: number) => (position / CITE_SLIDER_STEPS) * 100
 
+  // One readout string for the expanded footer AND the collapsed bar: a
+  // hand-pick wins over the plain filter count, and its denominator is the
+  // SHOWN papers — honest to the teacher scope (selected ∩ visible).
+  const countReadout =
+    selectedCount > 0
+      ? `${selectedCount} / ${visibleCount} papers selected`
+      : `${visibleCount} / ${totalCount} papers shown`
+
   return (
     <div className={`controls${collapsed ? ' collapsed' : ''}`}>
       <button
@@ -152,13 +160,7 @@ export default function GraphControls({
         }
       >
         <span>Graph controls</span>
-        {collapsed && (
-          <span className="ctrl-head-count">
-            {selectedCount > 0
-              ? `${selectedCount} / ${visibleCount} papers selected`
-              : `${visibleCount} / ${totalCount} papers shown`}
-          </span>
-        )}
+        {collapsed && <span className="ctrl-head-count">{countReadout}</span>}
         <span className="ctrl-head-caret" aria-hidden="true">
           {collapsed ? '▾' : '▴'}
         </span>
@@ -264,9 +266,7 @@ export default function GraphControls({
         )}
 
         <div className="ctrl-foot">
-          <span className="count-readout">
-            {visibleCount} / {totalCount} papers
-          </span>
+          <span className="count-readout">{countReadout}</span>
           <div className="ctrl-btns" data-tour="actions">
             <button
               className="mini-btn"
@@ -286,6 +286,14 @@ export default function GraphControls({
             >
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
+            <button
+              className="mini-btn"
+              onClick={onClearAll}
+              disabled={selectedCount === 0 && litCount === 0}
+              title="Clear every highlight and hand-picked selection (Esc does the same)"
+            >
+              Clear
+            </button>
           </div>
         </div>
         <div className="ctrl-select" data-tour="selector">
@@ -296,26 +304,6 @@ export default function GraphControls({
             ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · esc clears all
             highlights
           </span>
-          {(selectedCount > 0 || litCount > 0) && (
-            <span className="select-status">
-              {selectedCount > 0 ? (
-                <>
-                  <b>{selectedCount}</b> picked
-                </>
-              ) : (
-                <>
-                  <b>{litCount}</b> lit
-                </>
-              )}
-              <button
-                className="link-btn"
-                onClick={onClearAll}
-                title="Clear every highlight and hand-picked selection (Esc does the same)"
-              >
-                clear
-              </button>
-            </span>
-          )}
         </div>
 
         <div className="ctrl-hint" data-tour="hint">
