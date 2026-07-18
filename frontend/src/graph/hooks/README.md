@@ -14,7 +14,9 @@ hooks/
   useEscapeClear.ts — Esc = one "unhighlight everything" gesture
   useMarquee.ts     — alt-drag node selection (the teacher's scope)
   usePinning.ts     — user pins (drag / toggle / release), timeline-aware
-  useTimeline.ts    — the Timeline layout: year pinning, collide, axis painting
+  useTimeline.ts    — BOTH layouts' physics (the one owner of the d3 force
+                      slots): Timeline's year pinning/collide/axis painting,
+                      and Force's relation clustering (../clusterForce.ts)
 ```
 
 ## `useDiscovery` — the graph grows mid-conversation
@@ -122,6 +124,20 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
   heights once the sim settles so dragging one node can't re-relax the
   rest. The axis painter draws year gridlines/labels in graph coordinates,
   thinning labels when zoom would crowd them (≥28px apart on screen).
+- **Force physics (v5.23.0):** the neighborhood clusters by relation —
+  `applyLayoutPhysics`'s force branch registers `../clusterForce.ts`
+  (sector anchors around the seed's live position, orbits growing with
+  √population), a radius collide for in-cluster spacing, and stretches
+  each link to its relation cluster's orbit at low strength (the default
+  distance-30/leaf-strength-1 link force yanked every neighbor into one
+  clump — most of the old clutter). The default link accessors are
+  captured once and restored on the switch to Timeline, and the cluster
+  force is removed there (sector pulls would fight the year columns).
+  `useTimeline` is deliberately the ONE owner of the 'collide'/'link'/
+  'cluster' force slots — a second hook writing them would fight it on
+  every layout switch. A new graph re-applies whichever layout is active
+  (one shared effect); discoveries re-balance the orbits for free via the
+  force's own `initialize`.
 
 ## How it's verified
 

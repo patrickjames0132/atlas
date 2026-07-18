@@ -1,19 +1,25 @@
 /**
- * The Timeline layout machinery, as a hook: pinning each node's x to its
- * publication year, the collide force that spreads a year column out, the
- * year-axis painter, and the effects that keep all of it in sync as graphs
- * load and the year slider moves.
+ * The layout physics hook — the ONE owner of the sim's d3 forces, for both
+ * layouts. Timeline: pinning each node's x to its publication year, the
+ * collide force that spreads a year column out, the year-axis painter, and
+ * the effects that keep all of it in sync as graphs load and the year slider
+ * moves. Force: the relation clustering (see `../clusterForce.ts` — sector
+ * anchors around the seed, per-type link distances) plus its own collide for
+ * in-cluster spacing. Single ownership matters because both layouts write
+ * the same force slots ('collide', 'link', 'cluster') — two hooks doing that
+ * would fight over them on every switch.
  *
  * State (layout mode, pins) stays in GraphExplorer — this hook only mutates
  * the simulation's node objects and d3 forces through the shared `fgRef`,
  * exactly as the inline code it replaced did.
  */
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 // react-force-graph's own force lib (d3-force-3d) ships no types; we only need
-// forceCollide to space timeline nodes out by their radius.
+// forceCollide to space nodes out by their radius.
 // @ts-expect-error - no type declarations
 import { forceCollide } from 'd3-force-3d'
+import { clusterCounts, clusterForce, clusterRadius } from '../clusterForce'
 import { nodeRadius } from '../model'
 import type { Base, VNode } from '../model'
 import { YEAR_SPACING } from '../theme'
@@ -49,8 +55,10 @@ export interface TimelineApi {
   nodeTimelineX: (node: { year: number | null; month?: number | null }) => number
   /**
    * Apply a layout's physics: Timeline pins every node's x to its year column
-   * and adds a radius-sized collide force; Force releases the pins and the
-   * collide. Does NOT touch pin state — the caller clears `pinned` itself.
+   * and adds a radius-sized collide force; Force releases the pins and
+   * registers the relation clustering (sector anchors, orbit-length links,
+   * its own collide — see `../clusterForce.ts`). Does NOT touch pin state —
+   * the caller clears `pinned` itself.
    */
   applyLayoutPhysics: (mode: 'force' | 'timeline') => void
   /**
@@ -68,10 +76,10 @@ export interface TimelineApi {
 }
 
 /**
- * Own the Timeline layout's physics and painting for GraphExplorer.
+ * Own both layouts' physics (and Timeline's painting) for GraphExplorer.
  *
- * Also runs two effects: re-pinning year columns when a new graph loads while
- * Timeline is active, and refitting the camera when the year slider narrows.
+ * Also runs two effects: re-applying the active layout's physics when a new
+ * graph loads, and refitting the camera when the year slider narrows.
  *
  * @returns The x-placement, physics, axis-painting, and settle-freeze handles.
  */
@@ -111,6 +119,11 @@ export function useTimeline({
     [base],
   )
 
+  // The default link force's accessors, captured before the Force branch
+  // overrides them (per-cluster distances) so Timeline can restore them.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const linkDefaults = useRef<{ distance: any; strength: any } | null>(null)
+
   const applyLayoutPhysics = useCallback(
     (mode: 'force' | 'timeline') => {
       if (!base) return
@@ -123,27 +136,58 @@ export function useTimeline({
           node.fy = undefined
         }
       })
-      // Timeline: a collision force sized to each node's radius spreads papers
-      // apart within a year column (no overlap, even spacing) rather than
-      // letting them clump. Force mode keeps the default (no collide).
       const fg = fgRef.current
       const charge = fg?.d3Force?.('charge')
       if (charge) charge.strength(-30)
-      fg?.d3Force?.(
-        'collide',
-        mode === 'timeline' ? forceCollide((node: VNode) => nodeRadius(node) + 6) : null,
-      )
+      const linkForce = fg?.d3Force?.('link')
+      if (linkForce && !linkDefaults.current) {
+        linkDefaults.current = { distance: linkForce.distance(), strength: linkForce.strength() }
+      }
+      if (mode === 'timeline') {
+        // Timeline: a collision force sized to each node's radius spreads
+        // papers apart within a year column (no overlap, even spacing); the
+        // cluster force comes out (x is pinned by year — sector pulls would
+        // only fight the columns) and the link force gets its defaults back.
+        fg?.d3Force?.(
+          'collide',
+          forceCollide((node: VNode) => nodeRadius(node) + 6),
+        )
+        fg?.d3Force?.('cluster', null)
+        if (linkForce && linkDefaults.current) {
+          linkForce.distance(linkDefaults.current.distance)
+          linkForce.strength(linkDefaults.current.strength)
+        }
+      } else {
+        // Force: cluster the neighborhood by relation (see ../clusterForce.ts)
+        // with a collide for in-cluster spacing, and stretch each link to its
+        // relation cluster's orbit at low strength — the default (distance 30,
+        // leaf-strength 1) yanked every neighbor into one clump around the
+        // seed, which was most of the layout's clutter.
+        fg?.d3Force?.(
+          'collide',
+          forceCollide((node: VNode) => nodeRadius(node) + 4),
+        )
+        fg?.d3Force?.('cluster', clusterForce())
+        if (linkForce) {
+          const counts = clusterCounts(base.nodes)
+          linkForce.distance((link: { type?: string }) =>
+            clusterRadius(counts[link.type ?? ''] ?? 0),
+          )
+          linkForce.strength(0.08)
+        }
+      }
       fitDone.current = false
       fg?.d3ReheatSimulation?.()
     },
     [base, nodeTimelineX, fgRef, fitDone],
   )
 
-  // Re-pin x by year when a new graph loads while Timeline is active (a fresh
-  // graph has no user pins yet, so every node gets its year column).
+  // Re-apply the active layout's physics when a new graph loads: Timeline
+  // re-pins its year columns (a fresh graph has no user pins yet), Force
+  // re-registers the relation clustering for the new node set.
   useEffect(() => {
-    if (!base || layout !== 'timeline') return
-    applyLayoutPhysics('timeline')
+    if (!base) return
+    applyLayoutPhysics(layout)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base])
 

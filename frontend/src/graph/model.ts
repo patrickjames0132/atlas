@@ -18,7 +18,14 @@ export const ID_RE =
  * A live simulation node: a GraphNode that react-force-graph has (or will)
  * decorate with position (`x`/`y`) and optional pin coordinates (`fx`/`fy`).
  */
-export type VNode = GraphNode & { x?: number; y?: number; fx?: number; fy?: number }
+export type VNode = GraphNode & {
+  x?: number
+  y?: number
+  fx?: number
+  fy?: number
+  vx?: number
+  vy?: number
+}
 
 /**
  * A live simulation link. RFG mutates `source`/`target` from ids into node

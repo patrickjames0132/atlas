@@ -1367,6 +1367,34 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Group graph nodes by relation type in the Force layout** *(v5.23.0)*
+      — the force layout mingled every relation into one undifferentiated
+      cloud ("way waayyy too much clutter" — Patrick, triggering the
+      immediate build). Now a custom d3 force (`graph/clusterForce.ts`)
+      organizes the neighborhood into **relation clusters around the seed**:
+      fixed compass sectors, stable across graphs — references **west**
+      (past-is-left, echoing Timeline), Field Landmarks up-right, Latest
+      Publications down-right, the researcher's similar/search discoveries
+      on the west diagonals — with anchors computed from the seed's LIVE
+      position each tick (drag the seed, the formation follows) and each
+      cluster's orbit growing with **√population** (area scales with the
+      papers), so big clusters sit farther from the seed and each other.
+      In-cluster spacing from a radius-sized collide (Force mode previously
+      allowed overlap). The real clutter culprit: the **default link force**
+      (distance 30, full strength on leaf nodes) yanked every neighbor into
+      one clump on the seed — links now stretch to their relation cluster's
+      orbit at low strength (0.08), defaults captured once and restored on
+      the switch to Timeline. `useTimeline` became the explicit single
+      owner of the d3 force slots (both layouts write 'collide'/'link'/
+      'cluster' — two owners would fight on every switch), with one shared
+      new-graph effect re-applying whichever layout is active; discoveries
+      re-balance orbits for free via the force's own `initialize`. Vitest
+      +7 (sector directions, √ orbits, live-seed anchoring, seed exemption,
+      discovery re-init). Browser round: approved as-shipped; it also made
+      the expansion-clutter failure legible — sharpening the separate
+      "Cleaner layout for expanded nodes" ticket (satellite mini-clusters
+      around the expansion origin, Timeline y-band treatment). *(From the
+      `todos.md` inbox, 2026-07-10; shipped 2026-07-18.)*
 - [x] **Reorder the tour steps to match expectation** *(v5.22.0)* — some
       GRAPH_TOUR stops ran in an order that didn't match how the eye moves
       through the UI; re-sequenced live with Patrick over three browser

@@ -9,6 +9,9 @@ graph/
   GraphExplorer.tsx — the composition root of the graph area (see below)
   model.ts          — view-model types (VNode/VLink/Base) + pure helpers
   theme.ts          — the relation color scheme + layout geometry constants
+  clusterForce.ts   — the Force layout's relation clustering (custom d3 force:
+                      sector anchors around the seed, √population orbits;
+                      wired by hooks/useTimeline's applyLayoutPhysics)
   graph.css         — styles for the whole graph area (ported light-touch)
   canvas/           ← sub-package: the ForceGraph2D wrapper, every canvas painter
   controls/         ← sub-package: the declutter panel + the color legend

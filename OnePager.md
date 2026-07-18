@@ -489,12 +489,22 @@ optional, behind a key.
       the reorganized shape (which knobs live with the user vs. in the file),
       so doing it first would mean reworking it.
 
-- [ ] **Cleaner layout for expanded nodes** — nodes/edges the researcher pulls in
-      via `expand_node` land right on top of the seed's own edges and nodes, so a
-      dense neighborhood turns to spaghetti around the seed. Give discoveries more
-      breathing room — a wider initial scatter, a local repel/anchor tweak in
-      `useDiscovery`, or a post-merge settle — so the new cluster reads as
-      distinct from the existing graph. *(From the `todos.md` inbox, 2026-07-14.)*
+- [ ] **Cleaner layout for expanded nodes — in BOTH layouts** — nodes/edges the
+      researcher pulls in via `expand_node` land right on top of the seed's own
+      edges and nodes, so a dense neighborhood turns to spaghetti. **Scope
+      sharpened 2026-07-18** (Patrick's screenshot review of the v5.23.0
+      relation clustering, which made the failure legible): an expansion's
+      discoveries belong to *their expansion origin*, not the seed — but the
+      new cluster force absorbs any discovery carrying a graph relation (e.g.
+      a dashed-ring `reference`) into the seed's sector, tearing it away from
+      the node it was expanded from. Sketched fix: **satellite mini-clusters** —
+      anchor each expansion's discoveries around their origin node (tracked
+      through `useDiscovery`'s merge), pushed away from the seed formation;
+      likely a second custom force alongside `clusterForce.ts`, keyed by
+      origin instead of relation. **Timeline needs its own treatment** in the
+      same ticket: x is date-pinned there, so separation must come from y
+      (e.g. biasing an expansion's discoveries into a vertical band). *(From
+      the `todos.md` inbox, 2026-07-14.)*
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;
       add a chip (like the relation chips) to show/hide the whole discovered set
@@ -511,15 +521,6 @@ optional, behind a key.
       edge-less node, plus multi-relation detail badges (the panel already dedupes
       badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
       v5.2.0 edge-less-node filter fix.)*
-- [ ] **Group graph nodes by relation type in the Force layout** — the force
-      layout currently mingles every relation into one undifferentiated cloud;
-      nodes should **cluster into visual groups by their relation to the seed**
-      (references / Field Landmarks / Latest Publications / Similar) so the
-      neighborhood reads at a glance. Likely a per-relation grouping force (a
-      cluster centroid per relation, or a radial/sector layout keyed on
-      `link.type`) in the force-graph config; Timeline already separates by date,
-      so this is the Force-layout counterpart. *(From the `todos.md` inbox,
-      2026-07-10.)*
 
 
 
