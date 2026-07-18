@@ -1432,7 +1432,9 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       Esc-in-box clears the query first (the global Esc-clears-all skips form
       controls); the clear-all gesture and a new graph reset it too. New tour
       stop; `FindBar.tsx` + tests, `findMatches` tests. *(From the `todos.md`
-      inbox, 2026-07-13; shipped 2026-07-18.)*
+      inbox, 2026-07-13; shipped 2026-07-18. Moved to the bottom-right corner,
+      mirroring the legend, in v5.18.1 — the fallback spot agreed when
+      top-right shipped.)*
 - [x] **Source-scope picker doesn't appear until a page refresh (+ note it
       above the ask bar)** *(v5.15.0)* — `Teacher.tsx` fetched the library
       once, in a mount-only effect, into local state; an upload in the 📚

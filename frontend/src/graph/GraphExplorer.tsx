@@ -112,7 +112,7 @@ export default function GraphExplorer({
   const [citeLo, setCiteLo] = useState(0)
   const [citeHi, setCiteHi] = useState(CITE_SLIDER_STEPS)
   const [hoverId, setHoverId] = useState<string | null>(null)
-  // The local find (the floating top-right FindBar): spotlights on-screen
+  // The local find (the floating bottom-right FindBar): spotlights on-screen
   // papers by title/author substring. Purely lexical — no API call.
   const [findQuery, setFindQuery] = useState('')
   // The detail panel's figures, enlarged full-screen (same lightbox the

@@ -41,14 +41,14 @@ canvas about what "a reference" looks like, and both style via
   Full-open (min…max) shows everything; it only renders when the neighbors
   span a citation range to filter against. Reuses the `.range-dual`
   track/fill/thumb CSS.
-- **The find control** (`FindBar.tsx` — a round 🔍 button pinned top-right
-  of the graph area, opposite this panel, expanding into a rounded input
+- **The find control** (`FindBar.tsx` — a round 🔍 button pinned bottom-right
+  of the graph area, mirroring the legend, expanding into a rounded input
   pill on click) spotlights on-screen papers by title/author substring —
   purely lexical and local, no API call; the header's seed search is the
   one that fetches. It started life inside this panel (crowded), then as an
   always-open pill (read as floating in no-man's land over the Timeline
-  axis) before landing on collapse-until-wanted; the bottom-right corner
-  (mirroring the legend) is the agreed fallback if this doesn't stick.
+  axis), then collapse-until-wanted pinned top-right, before moving to the
+  bottom-right corner (the fallback agreed when top-right shipped).
   A live query pins the pill open; clearing (✕, Esc, blur while empty)
   tucks it back to the 🔍. Matching lives in `model.findMatches` over the
   *visible* view (a filtered-out paper can't match invisibly);

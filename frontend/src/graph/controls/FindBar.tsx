@@ -1,5 +1,5 @@
 /**
- * The find control — a round 🔍 button pinned to the graph area's top-right
+ * The find control — a round 🔍 button pinned to the graph area's bottom-right
  * corner that expands into a rounded input pill on click (Google-Maps style,
  * Patrick's pick after the always-open pill read as floating in no-man's
  * land). Zero chrome until wanted; collapses again when the box empties.
