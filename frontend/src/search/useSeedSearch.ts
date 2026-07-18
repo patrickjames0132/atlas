@@ -1,7 +1,8 @@
 /**
- * Seed-search state for the explorer: the query box, the optional
- * date/field filters, cache-first local hits, live Semantic Scholar hits,
- * and the in-flight / failure flags HitList renders.
+ * Seed-search state for the explorer: the query box, the optional search
+ * options (date/field filters + the query-analyst switch), cache-first local
+ * hits, live Semantic Scholar hits, and the in-flight / failure flags HitList
+ * renders.
  *
  * The two searches race deliberately: local hits resolve near-instantly and
  * render while the live search is still in flight (or failing, when we're
@@ -9,8 +10,8 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { EMPTY_FILTERS, searchLive, searchLocal } from '../api'
-import type { GraphNode, LocalHit, SearchFilters } from '../api'
+import { DEFAULT_SEARCH_OPTIONS, searchLive, searchLocal } from '../api'
+import type { GraphNode, LocalHit, SearchOptions } from '../api'
 import { useAppSelector } from '../store'
 
 /** What {@link useSeedSearch} returns for Atlas to wire up. */
@@ -18,9 +19,9 @@ export interface SeedSearchApi {
   /** The controlled value of the search box. */
   query: string
   setQuery: (query: string) => void
-  /** The active (pre-submit, always optional) date/field filters. */
-  filters: SearchFilters
-  setFilters: (next: SearchFilters) => void
+  /** The active (pre-submit, always optional) search options. */
+  options: SearchOptions
+  setOptions: (next: SearchOptions) => void
   /** Live S2 results (null until a search lands / after clearHits). */
   hits: GraphNode[] | null
   /** Cache-first results from previously seen graphs (null when none). */
@@ -47,18 +48,18 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
   // "instant" badge is truthful for the backend that would actually build it.
   const provider = useAppSelector((state) => state.workspace.provider)
   const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState<SearchFilters>(EMPTY_FILTERS)
+  const [options, setOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS)
   const [hits, setHits] = useState<GraphNode[] | null>(null)
   const [localHits, setLocalHits] = useState<LocalHit[] | null>(null)
   const [liveFailed, setLiveFailed] = useState(false)
   const [searching, setSearching] = useState(false)
 
   // The field filter's values are provider-specific (S2 field names vs OpenAlex
-  // field ids), so drop them when the provider changes — keep the year window,
-  // which is provider-agnostic. A stale S2 field would otherwise show a nameless
-  // chip and be silently ignored by the OpenAlex path.
+  // field ids), so drop them when the provider changes — keep the year window
+  // and the analyst switch, which are provider-agnostic. A stale S2 field would
+  // otherwise show a nameless chip and be silently ignored by the OpenAlex path.
   useEffect(() => {
-    setFilters((prev) => (prev.fields.length ? { ...prev, fields: [] } : prev))
+    setOptions((prev) => (prev.fields.length ? { ...prev, fields: [] } : prev))
   }, [provider])
 
   const clearHits = useCallback(() => {
@@ -68,7 +69,7 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
 
   /**
    * Run the seed search: local cache first (instant), live S2 alongside,
-   * both under the active filters. "Nothing matched" only surfaces as an
+   * both under the active options. "Nothing matched" only surfaces as an
    * error when BOTH sources come back empty; a live failure degrades to
    * cache-only rather than erroring while local hits exist.
    */
@@ -82,10 +83,10 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
       // Cache-first: local hits resolve near-instantly and render while the
       // live search is still in flight (or failing, when rate-limited). Scoped
       // to the selected provider so the cached hits match what a click builds.
-      const localPromise = searchLocal(text, 10, filters, provider)
+      const localPromise = searchLocal(text, 10, options, provider)
       localPromise.then((local) => setLocalHits(local.length ? local : null))
       try {
-        const res = await searchLive(text, 12, filters, provider)
+        const res = await searchLive(text, 12, options, provider)
         setHits(res.papers)
         if (res.papers.length === 0 && (await localPromise).length === 0)
           onError(`Nothing matched "${text}" — not on Semantic Scholar, not in your cache.`)
@@ -97,14 +98,14 @@ export function useSeedSearch(onError: (message: string | null) => void): SeedSe
         setSearching(false)
       }
     },
-    [onError, filters, provider],
+    [onError, options, provider],
   )
 
   return {
     query,
     setQuery,
-    filters,
-    setFilters,
+    options,
+    setOptions,
     hits,
     localHits,
     searching,

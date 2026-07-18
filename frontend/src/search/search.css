@@ -281,6 +281,30 @@
 .cat-chip:hover {
   background: rgba(255, 209, 102, 0.12);
 }
+/* The query-analyst on/off switch — a labelled checkbox with a one-line
+   "why" hint underneath. The row label stays aligned with the checkbox. */
+.analyst-row {
+  align-items: flex-start;
+}
+.analyst-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.analyst-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.analyst-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 .filter-foot {
   display: flex;
   align-items: center;

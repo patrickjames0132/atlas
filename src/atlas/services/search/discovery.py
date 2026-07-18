@@ -110,6 +110,7 @@ def _s2_live(
     year_from: int | None,
     year_to: int | None,
     fields_of_study: list[str] | None,
+    analyst: bool,
 ) -> list[dict]:
     """The Semantic Scholar live-search body: analyst expansion + verified
     titles + lexical search, merged.
@@ -120,6 +121,9 @@ def _s2_live(
         year_from: Earliest publication year (inclusive), or None.
         year_to: Latest publication year (inclusive), or None.
         fields_of_study: S2 fields of study to restrict to (any-of), or None.
+        analyst: Run the query analyst. False skips the LLM round-trip
+            entirely — no expansion, no recalled titles — and searches the
+            words as typed.
 
     Returns:
         Relevance-ranked node dicts, verified title matches leading.
@@ -127,13 +131,13 @@ def _s2_live(
     Raises:
         s2.S2Error: When the Semantic Scholar request fails after retries.
     """
-    analysis = _analyze(query)
+    analysis = _analyze(query) if analyst else None
     # Confidently recalled papers, verified via S2 title match, lead the
     # results — like the id path, an exact resolution outranks lexical hits
     # and bypasses the filters (it's the paper the query *means*).
-    verified = _verified_titles(analysis.known_titles)
+    verified = _verified_titles(analysis.known_titles) if analysis else []
     hits = s2.search_papers(
-        analysis.expanded_query,
+        analysis.expanded_query if analysis else query,
         limit=limit,
         year_from=year_from,
         year_to=year_to,
@@ -152,6 +156,7 @@ def _openalex_live(
     year_from: int | None,
     year_to: int | None,
     fields: list[str] | None,
+    analyst: bool,
 ) -> list[dict]:
     """The OpenAlex live-search body — the twin of :func:`_s2_live`.
 
@@ -165,6 +170,9 @@ def _openalex_live(
         year_from: Earliest publication year (inclusive), or None.
         year_to: Latest publication year (inclusive), or None.
         fields: OpenAlex field ids to restrict to (any-of), or None.
+        analyst: Run the query analyst. False skips the LLM round-trip
+            entirely — no expansion, no recalled titles — and searches the
+            words as typed.
 
     Returns:
         Relevance-ranked node dicts, verified title matches leading.
@@ -172,10 +180,14 @@ def _openalex_live(
     Raises:
         openalex.OpenAlexError: When an OpenAlex request fails after retries.
     """
-    analysis = _analyze(query)
-    verified = _verified_titles_openalex(analysis.known_titles)
+    analysis = _analyze(query) if analyst else None
+    verified = _verified_titles_openalex(analysis.known_titles) if analysis else []
     hits = openalex.search_papers(
-        analysis.expanded_query, limit=limit, year_from=year_from, year_to=year_to, fields=fields
+        analysis.expanded_query if analysis else query,
+        limit=limit,
+        year_from=year_from,
+        year_to=year_to,
+        fields=fields,
     )
     # openalex.search_papers already returns bare node dicts (unlike S2's
     # ``[{"node": ...}]``), so no unwrap is needed.
@@ -191,6 +203,7 @@ def live_search(
     year_to: int | None = None,
     fields_of_study: list[str] | None = None,
     provider: Provider = "s2",
+    analyst: bool = True,
 ) -> list[dict]:
     """Relevance-search the selected provider to find a seed paper.
 
@@ -205,6 +218,10 @@ def live_search(
             (``openalex.vocab``). The route validates against the right vocabulary.
         provider: Which backend to search (``s2`` / ``openalex``) — matches the
             graph provider so a hit explores under the backend that found it.
+        analyst: Run the query analyst before the lexical search (the default).
+            False skips the LLM entirely — no expansion, no recalled titles,
+            no spend — and searches the words as typed. Irrelevant for a
+            pasted id/URL, which never touches the analyst anyway.
 
     Returns:
         Relevance-ranked node dicts (the shared node shape — the same a graph
@@ -234,20 +251,22 @@ def live_search(
 
     # Whole-result cache, keyed by provider (an S2 search and an OpenAlex search
     # for the same query are different searches). The key also carries the
-    # filters; the analyst's view is frozen for the TTL, fine for a day.
+    # filters and the analyst flag (raw and expanded searches return different
+    # results); the analyst's view is frozen for the TTL, fine for a day.
     fields_key = ",".join(fields_of_study) if fields_of_study else ""
+    analyst_key = "llm" if analyst else "raw"
     cache_key = (
         f"livesearch:{provider}:{query.lower()}:{limit}:"
-        f"{year_from or ''}:{year_to or ''}:{fields_key}"
+        f"{year_from or ''}:{year_to or ''}:{fields_key}:{analyst_key}"
     )
     cached = cache.get(cache_key, config.graph.cache_ttl)
     if cached is not None:
         return cached
 
     if provider == "openalex":
-        results = _openalex_live(query, limit, year_from, year_to, fields_of_study)
+        results = _openalex_live(query, limit, year_from, year_to, fields_of_study, analyst)
     else:
-        results = _s2_live(query, limit, year_from, year_to, fields_of_study)
+        results = _s2_live(query, limit, year_from, year_to, fields_of_study, analyst)
     cache.set(cache_key, results)
     return results
 

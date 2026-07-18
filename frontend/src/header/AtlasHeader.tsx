@@ -8,7 +8,7 @@
  */
 
 import type { FormEvent } from 'react'
-import type { Provider, SearchFilters } from '../api'
+import type { Provider, SearchOptions } from '../api'
 import { PROVIDER_LABEL } from '../api'
 import Search from '../search/Search'
 import './header.css'
@@ -28,9 +28,9 @@ export interface AtlasHeaderProps {
   searching: boolean
   /** A graph is loading. */
   loadingGraph: boolean
-  /** The optional search filters (passed through to Search). */
-  filters: SearchFilters
-  onFilters: (f: SearchFilters) => void
+  /** The optional search options (passed through to Search). */
+  options: SearchOptions
+  onOptions: (next: SearchOptions) => void
   /** The loaded graph's seed title, shown beside the form (null = none). */
   seedTitle: string | null
   /** Clear the workspace — back to the page-load default state. */
@@ -59,8 +59,8 @@ export default function AtlasHeader({
   onSubmit,
   searching,
   loadingGraph,
-  filters,
-  onFilters,
+  options,
+  onOptions,
   provider,
   onProviderChange,
   seedTitle,
@@ -88,8 +88,8 @@ export default function AtlasHeader({
         onSubmit={onSubmit}
         searching={searching}
         loadingGraph={loadingGraph}
-        filters={filters}
-        onFilters={onFilters}
+        options={options}
+        onOptions={onOptions}
         provider={provider}
       />
       {seedTitle && (

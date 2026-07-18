@@ -1,7 +1,8 @@
 /**
  * Seed search: find a paper to drop into the graph — live across Semantic
  * Scholar, or instantly from the local snapshot cache — with optional
- * date / field-of-study filters on the live search.
+ * search options on the live search (date / field-of-study filters and the
+ * query-analyst on/off switch).
  */
 
 import type { GraphNode, Provider } from './graph'
@@ -18,46 +19,56 @@ export interface LiveSearchResponse {
 }
 
 /**
- * Optional filters on the seed search. All fields are optional — an empty
- * filter set means "search everything", and filters never apply to an
- * explicit arXiv id/URL lookup.
+ * Optional pre-submit search options: date/field filters plus the query-analyst
+ * switch. Everything is optional — the defaults mean "search everything, with
+ * the analyst on" — and none of it applies to an explicit arXiv id/URL lookup.
  */
-export interface SearchFilters {
+export interface SearchOptions {
   /** Earliest publication year (inclusive), or null for no floor. */
   yearFrom: number | null
   /** Latest publication year (inclusive), or null for no ceiling. */
   yearTo: number | null
   /** S2 fields of study to restrict to (any-of); empty = all fields. */
   fields: string[]
+  /** Run the query analyst (LLM query expansion + title recall) before the
+   *  live search. Off = search the words as typed, no LLM call. */
+  analyst: boolean
 }
 
-/** The no-op filter set (everything passes). */
-export const EMPTY_FILTERS: SearchFilters = { yearFrom: null, yearTo: null, fields: [] }
+/** The default options: no filters, analyst on. */
+export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
+  yearFrom: null,
+  yearTo: null,
+  fields: [],
+  analyst: true,
+}
 
 /**
- * Append a filter set to a query string (omitting inactive filters).
+ * Append a search-option set to a query string (omitting defaults).
  *
  * @param params  The query string being built (mutated in place).
- * @param filters The active filters, or undefined for none.
+ * @param options The active options, or undefined for the defaults.
  */
-function applyFilters(params: URLSearchParams, filters?: SearchFilters): void {
-  if (!filters) return
-  if (filters.yearFrom != null) params.set('year_from', String(filters.yearFrom))
-  if (filters.yearTo != null) params.set('year_to', String(filters.yearTo))
-  if (filters.fields.length) params.set('fields', filters.fields.join(','))
+function applyOptions(params: URLSearchParams, options?: SearchOptions): void {
+  if (!options) return
+  if (options.yearFrom != null) params.set('year_from', String(options.yearFrom))
+  if (options.yearTo != null) params.set('year_to', String(options.yearTo))
+  if (options.fields.length) params.set('fields', options.fields.join(','))
+  if (!options.analyst) params.set('analyst', '0')
 }
 
 /**
  * Relevance search across Semantic Scholar to find a seed paper.
  *
  * Accepts keywords, a title, an author, or an arXiv id/URL — the backend
- * resolves ids/URLs directly to that exact paper (ignoring filters), and
+ * resolves ids/URLs directly to that exact paper (ignoring options), and
  * expands free-text queries through the query analyst before the lexical
- * search runs.
+ * search runs (unless the options turn the analyst off).
  *
  * @param q        The search query.
  * @param limit    Maximum hits to return (default 25).
- * @param filters  Optional date/field filters (see {@link SearchFilters}).
+ * @param options  Optional date/field filters + the analyst switch (see
+ *                 {@link SearchOptions}).
  * @param provider Which backend to search ('s2' / 'openalex') — matches the
  *                 graph provider so a hit explores under the backend that found it.
  * @returns The echoed query plus its hits, best matches first.
@@ -67,11 +78,11 @@ function applyFilters(params: URLSearchParams, filters?: SearchFilters): void {
 export async function searchLive(
   q: string,
   limit = 25,
-  filters?: SearchFilters,
+  options?: SearchOptions,
   provider: Provider = 's2',
 ): Promise<LiveSearchResponse> {
   const params = new URLSearchParams({ q, limit: String(limit), provider })
-  applyFilters(params, filters)
+  applyOptions(params, options)
   const res = await fetch(`/api/search?${params.toString()}`)
   if (!res.ok) throw new Error(`Search failed (${res.status})`)
   return res.json()
@@ -105,24 +116,26 @@ export interface LocalHit {
  * Failures degrade to "no local hits" (an empty array) rather than throwing —
  * this must never block the live search running alongside it. The year
  * filter applies; the field filter doesn't (cached nodes are matched purely
- * on text).
+ * on text), and neither does the analyst switch (no LLM is ever involved
+ * locally).
  *
  * @param q        The search query.
  * @param limit    Maximum hits to return (default 10).
- * @param filters  Optional filters — only the year window applies locally.
+ * @param options  Optional search options — only the year window applies locally.
  * @param provider The selected backend — only its cached snapshots are searched.
  * @returns The cached hits (empty on any failure).
  */
 export async function searchLocal(
   q: string,
   limit = 10,
-  filters?: SearchFilters,
+  options?: SearchOptions,
   provider: Provider = 's2',
 ): Promise<LocalHit[]> {
   try {
     const params = new URLSearchParams({ q, limit: String(limit), provider })
-    applyFilters(params, filters)
+    applyOptions(params, options)
     params.delete('fields') // not supported locally
+    params.delete('analyst') // ditto — the local search never involves the LLM
     const res = await fetch(`/api/local_search?${params.toString()}`)
     if (!res.ok) return []
     const data = await res.json()

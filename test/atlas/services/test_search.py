@@ -66,6 +66,43 @@ def test_the_seam_delegates_to_the_query_analyst(monkeypatch):
     assert discovery._analyze("dqn").expanded_query == "dqn deep q-network"
 
 
+def test_analyst_off_skips_the_llm_and_searches_the_words_as_typed(monkeypatch):
+    def explode(*args, **kwargs):
+        raise AssertionError("analyst=False must not reach the analyst or title match")
+
+    monkeypatch.setattr(discovery, "_analyze", explode)
+    monkeypatch.setattr(discovery.s2, "match_title", explode)
+    monkeypatch.setattr(
+        discovery.s2, "search_papers", lambda query, **kw: [{"node": {"id": query}}]
+    )
+    out = discovery.live_search("dqn", analyst=False)
+    assert out == [{"id": "dqn"}]  # the raw query reached S2 untouched
+
+
+def test_analyst_off_openalex_branch_also_skips_the_llm(monkeypatch):
+    def explode(*args, **kwargs):
+        raise AssertionError("analyst=False must not reach the analyst")
+
+    monkeypatch.setattr(discovery, "_analyze", explode)
+    monkeypatch.setattr(
+        discovery.openalex, "search_papers", lambda query, **kw: [{"id": query}]
+    )
+    assert discovery.live_search("gnn", provider="openalex", analyst=False) == [{"id": "gnn"}]
+
+
+def test_analyst_on_and_off_are_cached_separately(monkeypatch):
+    """A raw search and an expanded search return different results, so
+    neither may be served from the other's cache entry."""
+    monkeypatch.setattr(discovery, "_analyze", lambda query: analysis("EXPANDED"))
+    monkeypatch.setattr(
+        discovery.s2, "search_papers", lambda query, **kw: [{"node": {"id": query}}]
+    )
+    expanded = discovery.live_search("dqn")
+    raw = discovery.live_search("dqn", analyst=False)
+    assert [node["id"] for node in expanded] == ["EXPANDED"]
+    assert [node["id"] for node in raw] == ["dqn"]  # not the cached expanded result
+
+
 def test_verified_titles_lead_results_and_dedupe_against_lexical(monkeypatch):
     monkeypatch.setattr(
         discovery, "_analyze",

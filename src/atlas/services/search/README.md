@@ -39,9 +39,14 @@ is how you find one, two complementary ways:
    **confidently recalled titles** are verified against `s2.match_title`
    (S2's `/paper/search/match`; a match failure — including an S2 error —
    skips that title, never the search). Verified papers lead the results.
-3. The **expanded query** runs through `s2.search_papers`, unwrapped into
-   bare node dicts (so live and local search return the same shape),
-   deduped against the verified hits, capped at `limit` together.
+   **Unless `analyst=False`** (the search bar's Options checkbox, v5.18.0):
+   then this whole step is skipped — no LLM call, no recalled titles — and
+   step 3 runs on the words as typed. The LLM round-trip (and its spend) is
+   the user's to decline per search.
+3. The **expanded query** (or the raw one, analyst off) runs through
+   `s2.search_papers`, unwrapped into bare node dicts (so live and local
+   search return the same shape), deduped against the verified hits, capped
+   at `limit` together.
 
 `_analyze` delegates to the **query analyst agent**
 (`agents.query_analyst.analyze`). The problem it solves: S2 search is
@@ -58,8 +63,10 @@ as a documented passthrough precisely so the call site wouldn't move when
 the agent landed — and it didn't.)
 
 Live-search results are **cached whole for a day** (the graph-snapshot
-TTL), keyed by query + filters: re-typing a recent query answers instantly
-— no analyst call, no S2 requests. (The local snapshot search can't serve
+TTL), keyed by query + filters + the analyst flag (a raw search and an
+expanded search return different results, so neither may serve the other's
+entry): re-typing a recent query answers instantly — no analyst call, no S2
+requests. (The local snapshot search can't serve
 acronym queries — "DQN" appears in no cached *title* — so repeat-query
 caching is what makes the second search instant.)
 

@@ -1367,6 +1367,29 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **A query-analyst toggle in the search bar — and rename "Filters"**
+      *(v5.18.0)* — the search surface gave no way to skip the query-analyst
+      agent; sometimes you want the raw keyword search without the LLM
+      expansion round-trip (or its spend). Shipped as the ticket sketched: a
+      checkbox in the popover, which therefore stopped being "Filters" — of
+      the floated names ("Search options" / "Options" / sparkle-icon button)
+      plain **"Options"** won against the mock, since the button sits inside
+      the search form and the context is already there. Backend:
+      `live_search(analyst=)` + `/api/search?analyst=0|false|no` — off skips
+      `_analyze` *and* the recalled-title verification on both provider
+      paths and runs the lexical search on the words as typed; the day-long
+      result cache now keys on the flag too (a raw search and an expanded
+      search must never serve each other's entries). Frontend:
+      `SearchFilters` → `SearchOptions` (`analyst: true` in the defaults),
+      the switch counts toward the button's badge (a closed popover still
+      shows the next search behaves differently) and survives a provider
+      switch; "Clear all" became **"Reset"**, since it now turns a checkbox
+      back *on*. The browser round added a one-line "why" hint under the
+      checkbox — the search only matches words, so "DQN" misses papers that
+      never spell it out — Patrick's verdict: "a bit verbose, but necessary
+      to explain". Tour step, tooltips, and the READMEs across both trees
+      updated in the same change. Suite 522 → 526 backend. *(From the
+      `todos.md` inbox, 2026-07-17; shipped 2026-07-18.)*
 - [x] **One "Abstract" section in the detail panel, with a TL;DR toggle**
       *(v5.17.0)* — the ticket's premise turned out half-stale (the panel
       already rendered ONE section showing TL;DR *or* abstract), so what

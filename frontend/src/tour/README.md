@@ -23,7 +23,7 @@ tour/
 ## Two phases
 
 The app has two first-times, so the tour has two phases, each with its own
-localStorage seen-flag: **HOME_TOUR** (the search box, its filter popover, the
+localStorage seen-flag: **HOME_TOUR** (the search box, its Options popover, the
 data-source dropdown, and the three header drawers — Library, Assistant,
 Sessions) auto-runs on first launch, before any graph exists; **GRAPH_TOUR**
 (the graph tools, the detail panel, the lectures, the Q&A researcher)

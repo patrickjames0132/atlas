@@ -1,18 +1,19 @@
 /**
  * The seed-search form: the query box + Explore button, plus the optional
- * (never required) pre-submit filters — a publication-year window and a
- * field-of-study picker fed by the backend's S2 vocabulary endpoint.
+ * (never required) pre-submit search options — a publication-year window, a
+ * field-of-study picker fed by the backend's S2 vocabulary endpoint, and the
+ * query-analyst on/off switch.
  *
  * Rendered inside AtlasHeader, but it belongs to the search concern — its
- * results (HitList) and state (useSeedSearch) live alongside it here. Filter
+ * results (HitList) and state (useSeedSearch) live alongside it here. Option
  * state lives in useSeedSearch (via Atlas) so runSearch reads it directly;
  * this component only renders and edits it.
  */
 
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { getFields } from '../api'
-import type { Field, Provider, SearchFilters } from '../api'
+import { DEFAULT_SEARCH_OPTIONS, getFields } from '../api'
+import type { Field, Provider, SearchOptions } from '../api'
 import './search.css'
 
 /** Props for {@link Search}. */
@@ -26,9 +27,10 @@ export interface SearchProps {
   searching: boolean
   /** A graph is loading (also disables the button). */
   loadingGraph: boolean
-  /** The active filters (all optional; empty = search everything). */
-  filters: SearchFilters
-  onFilters: (next: SearchFilters) => void
+  /** The active search options (all optional; the defaults search everything
+   *  with the analyst on). */
+  options: SearchOptions
+  onOptions: (next: SearchOptions) => void
   /** The selected provider — the field picker fetches its vocabulary and the
    *  filter values (field ids) are provider-specific. */
   provider: Provider
@@ -43,28 +45,28 @@ const MIN_YEAR = 1800
 
 /** Props for {@link YearRange}. */
 interface YearRangeProps {
-  filters: SearchFilters
-  onFilters: (next: SearchFilters) => void
+  options: SearchOptions
+  onOptions: (next: SearchOptions) => void
 }
 
 /**
- * A dual-handle slider driving the {@link SearchFilters} publication-year window.
+ * A dual-handle slider driving the {@link SearchOptions} publication-year window.
  *
  * Both handles always carry a value, so a handle parked at a bound is read as
  * "no bound": a floor at {@link MIN_YEAR} folds to `yearFrom = null` and a
  * ceiling at the current year folds to `yearTo = null`. That keeps a full-width
- * slider identical to the no-op {@link EMPTY_FILTERS} state (and off the
- * active-filter badge), while losing nothing — the endpoints are the widest
- * bounds the corpus can answer anyway.
+ * slider identical to the no-op {@link DEFAULT_SEARCH_OPTIONS} year window (and
+ * off the active-option badge), while losing nothing — the endpoints are the
+ * widest bounds the corpus can answer anyway.
  *
- * @param filters   The active filter set (its year window is read + written).
- * @param onFilters Commit a new filter set upward.
+ * @param options   The active option set (its year window is read + written).
+ * @param onOptions Commit a new option set upward.
  * @returns The rendered year-range row.
  */
-function YearRange({ filters, onFilters }: YearRangeProps) {
+function YearRange({ options, onOptions }: YearRangeProps) {
   const maxYear = new Date().getFullYear()
-  const lo = filters.yearFrom ?? MIN_YEAR
-  const hi = filters.yearTo ?? maxYear
+  const lo = options.yearFrom ?? MIN_YEAR
+  const hi = options.yearTo ?? maxYear
 
   /**
    * Commit a new [lo, hi] window, folding either bound back to null.
@@ -73,8 +75,8 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
    * @param nextHi The new latest year (folds to null at the current year).
    */
   const commit = (nextLo: number, nextHi: number) => {
-    onFilters({
-      ...filters,
+    onOptions({
+      ...options,
       yearFrom: nextLo <= MIN_YEAR ? null : nextLo,
       yearTo: nextHi >= maxYear ? null : nextHi,
     })
@@ -125,9 +127,9 @@ function YearRange({ filters, onFilters }: YearRangeProps) {
 }
 
 /**
- * Render the seed-search form with its collapsible filter popover.
+ * Render the seed-search form with its collapsible options popover.
  *
- * @returns The search box (form + popover + active-filter badge).
+ * @returns The search box (form + popover + active-option badge).
  */
 export default function Search({
   query,
@@ -135,13 +137,13 @@ export default function Search({
   onSubmit,
   searching,
   loadingGraph,
-  filters,
-  onFilters,
+  options,
+  onOptions,
   provider,
 }: SearchProps) {
   const [open, setOpen] = useState(false)
-  // The field vocabulary loads lazily the first time the filter popover opens,
-  // so the common no-filter path never pays the fetch. null = not yet loaded.
+  // The field vocabulary loads lazily the first time the options popover opens,
+  // so the common no-option path never pays the fetch. null = not yet loaded.
   const [fieldOptions, setFieldOptions] = useState<Field[] | null>(null)
   // Each provider has its own field vocabulary — drop the cached options when
   // the provider changes so the next open refetches the right one.
@@ -152,8 +154,14 @@ export default function Search({
     if (open && fieldOptions === null) getFields(provider).then(setFieldOptions)
   }, [open, fieldOptions, provider])
 
+  // Everything that strays from the defaults counts toward the badge — the
+  // analyst switch included, so a closed popover still shows that the next
+  // search behaves differently.
   const activeCount =
-    (filters.yearFrom != null ? 1 : 0) + (filters.yearTo != null ? 1 : 0) + filters.fields.length
+    (options.yearFrom != null ? 1 : 0) +
+    (options.yearTo != null ? 1 : 0) +
+    options.fields.length +
+    (options.analyst ? 0 : 1)
 
   /**
    * Add a field to the filter (deduped).
@@ -162,8 +170,8 @@ export default function Search({
    *                numeric field id).
    */
   const addField = (fieldId: string) => {
-    if (!fieldId || filters.fields.includes(fieldId)) return
-    onFilters({ ...filters, fields: [...filters.fields, fieldId] })
+    if (!fieldId || options.fields.includes(fieldId)) return
+    onOptions({ ...options, fields: [...options.fields, fieldId] })
   }
 
   /**
@@ -172,7 +180,7 @@ export default function Search({
    * @param fieldId The field id to drop.
    */
   const removeField = (fieldId: string) => {
-    onFilters({ ...filters, fields: filters.fields.filter((other) => other !== fieldId) })
+    onOptions({ ...options, fields: options.fields.filter((other) => other !== fieldId) })
   }
 
   return (
@@ -181,7 +189,7 @@ export default function Search({
         className="seed-search"
         data-tour="search"
         onSubmit={(event) => {
-          setOpen(false) // collapse the filter popover once a search is fired
+          setOpen(false) // collapse the options popover once a search is fired
           onSubmit(event)
         }}
       >
@@ -194,11 +202,11 @@ export default function Search({
         <button
           type="button"
           className={`filter-toggle ${activeCount ? 'on' : ''}`}
-          data-tour="filters"
+          data-tour="search-options"
           onClick={() => setOpen((prev) => !prev)}
-          title="Optional filters: publication year and field of study"
+          title="Optional search settings. Filter by year or field, or turn off the AI query expansion."
         >
-          Filters{activeCount ? ` · ${activeCount}` : ''}
+          Options{activeCount ? ` · ${activeCount}` : ''}
         </button>
         <button type="submit" disabled={searching || loadingGraph}>
           {searching ? 'Searching…' : 'Explore'}
@@ -211,11 +219,11 @@ export default function Search({
             type="button"
             className="link-btn filter-close"
             onClick={() => setOpen(false)}
-            aria-label="Close the filters"
+            aria-label="Close the search options"
           >
             ✕
           </button>
-          <YearRange filters={filters} onFilters={onFilters} />
+          <YearRange options={options} onOptions={onOptions} />
           <div className="filter-row">
             <span className="filter-label">Field</span>
             <select
@@ -232,9 +240,9 @@ export default function Search({
               ))}
             </select>
           </div>
-          {filters.fields.length > 0 && (
+          {options.fields.length > 0 && (
             <div className="filter-cats">
-              {filters.fields.map((fieldId) => (
+              {options.fields.map((fieldId) => (
                 <button
                   key={fieldId}
                   className="cat-chip"
@@ -246,16 +254,33 @@ export default function Search({
               ))}
             </div>
           )}
+          <div className="filter-row analyst-row">
+            <span className="filter-label">AI</span>
+            <div className="analyst-col">
+              <label
+                className="analyst-toggle"
+                title="An AI model expands acronyms and recalls exact paper titles before the search runs. Untick to search your words as typed, with no AI call."
+              >
+                <input
+                  type="checkbox"
+                  checked={options.analyst}
+                  onChange={(event) => onOptions({ ...options, analyst: event.target.checked })}
+                />
+                Expand my query before searching
+              </label>
+              <span className="filter-hint">
+                The search only matches words, so “DQN” misses papers that never spell it out. AI
+                adds the full terms first.
+              </span>
+            </div>
+          </div>
           <div className="filter-foot">
             <span className="filter-hint">
               Optional — applies to the next search (ignored for a pasted id/URL).
             </span>
             {activeCount > 0 && (
-              <button
-                className="link-btn"
-                onClick={() => onFilters({ yearFrom: null, yearTo: null, fields: [] })}
-              >
-                Clear all
+              <button className="link-btn" onClick={() => onOptions(DEFAULT_SEARCH_OPTIONS)}>
+                Reset
               </button>
             )}
           </div>

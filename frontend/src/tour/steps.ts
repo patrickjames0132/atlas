@@ -36,11 +36,14 @@ export const HOME_TOUR: TourStep[] = [
       'what’s happening there right now.',
   },
   {
-    target: '[data-tour="filters"]',
-    title: 'Narrow the search',
+    target: '[data-tour="search-options"]',
+    title: 'Tune the search',
     body:
-      'Optional filters for the title search: a publication-year window and a ' +
-      'field-of-study picker. A pasted id or URL ignores them and loads its paper directly.',
+      'Optional settings for the title search. Narrow it with a publication-year window ' +
+      'or a field-of-study picker. The search only matches words, so “DQN” would miss ' +
+      'papers that never spell it out — by default an AI model adds the full terms ' +
+      'first, and you can turn that off. A pasted id or URL ignores all of this and ' +
+      'loads its paper directly.',
   },
   {
     target: '[data-tour="provider"]',

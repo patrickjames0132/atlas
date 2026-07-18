@@ -1,12 +1,12 @@
 # `src/search`
 
-Finding a seed paper: the search box + filters, the racing dual search, and
-the pick-a-paper results panel.
+Finding a seed paper: the search box + its Options popover, the racing dual
+search, and the pick-a-paper results panel.
 
 ```
 search/
-  useSeedSearch.ts — the state + logic: filters, the local/live race, flags
-  Search.tsx       — the form: query box, Explore, the filter popover
+  useSeedSearch.ts — the state + logic: search options, the local/live race, flags
+  Search.tsx       — the form: query box, Explore, the Options popover
   HitList.tsx      — the results panel (cache hits + live hits)
   search.css       — styles (ported light-touch)
 ```
@@ -58,7 +58,15 @@ search/
   `id` as the filter value (S2 field name / OpenAlex numeric field id), and
   switching provider clears the now-incompatible field selection (the year window
   stays). (The old ~155-category arXiv picker died with arXiv search.)
-- **Filters never apply to a pasted id/URL** (the hint says so) — the
+- **The popover is "Options", not "Filters"** (v5.18.0) — it stopped being
+  pure filters when it grew a behavior switch: the query-analyst checkbox.
+  On by default; unticking it sends `analyst=0` so the backend skips the
+  LLM expansion round-trip (and its spend) and searches the words as typed.
+  The switch counts toward the button's badge like any other non-default
+  option, survives a provider switch (it's provider-agnostic), and "Reset"
+  puts it back on. The whole option set is one `SearchOptions` object
+  (renamed from `SearchFilters` for the same reason).
+- **Options never apply to a pasted id/URL** (the hint says so) — the
   backend resolves ids directly; the id fast path itself lives in Atlas via
   `graph/model.ts`'s `ID_RE`.
 

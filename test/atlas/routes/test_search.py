@@ -34,7 +34,24 @@ def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
         "year_to": None,  # garbage degrades to no-filter
         "fields_of_study": ["17"],  # valid OpenAlex field id kept, unknown dropped
         "provider": "openalex",  # threaded through to the service
+        "analyst": True,  # on unless explicitly switched off
     }
+
+
+def test_search_analyst_arg_switches_the_analyst_off(client, monkeypatch):
+    """analyst=0/false/no turns the query analyst off; anything else (junk
+    included) keeps it on — the LLM is opt-out, never accidentally off."""
+    seen = {}
+    monkeypatch.setattr(
+        search_routes.search_service, "live_search",
+        lambda query, **kwargs: seen.update(kwargs) or [],
+    )
+    for value, expected in [("0", False), ("false", False), ("no", False),
+                            ("1", True), ("junk", True), ("", True)]:
+        client.get(f"/api/search?q=dqn&analyst={value}")
+        assert seen["analyst"] is expected, value
+    client.get("/api/search?q=dqn")  # absent entirely
+    assert seen["analyst"] is True
 
 
 def test_search_field_filter_validates_against_the_provider_vocab(client, monkeypatch):

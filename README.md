@@ -161,8 +161,10 @@ The Vite dev server proxies `/api/*` to Flask.
 1. **Search a paper** — type a title, a topic, or an acronym (the analyst
    expands it and title-resolves famous papers), or paste an **arXiv id /
    URL** to jump straight in. Cached papers appear instantly; an **instant**
-   badge marks papers whose whole neighborhood is cached. Optional filters:
-   a publication-year window (1800 → now) and S2 **fields of study**.
+   badge marks papers whose whole neighborhood is cached. The **Options**
+   popover holds a publication-year window (1800 → now), S2 **fields of
+   study**, and a checkbox that turns the analyst off for a raw, no-LLM
+   search of your words as typed.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🌱 latest ·
    💗 found-by-search. Citers split into two relations: **Field Landmarks**
    (green) are the most-cited papers citing the seed — the historic giants

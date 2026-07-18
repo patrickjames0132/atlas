@@ -2,7 +2,7 @@
 optional date/field filters), an instant search over the local snapshot
 cache, and the field vocabularies that power the search filter picker.
 
-GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=
+GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=&analyst=
                                  -> live seed search (s2 / openalex)
 GET /api/local_search?q=&provider=&limit=&year_from=&year_to=
                                  -> instant seed search over the local cache
@@ -82,6 +82,9 @@ def api_search() -> ResponseReturnValue:
         year_to: Latest publication year (inclusive; optional).
         fields: Comma-separated S2 fields of study (optional; a paper matches
             when it carries any of them). Applied only on the S2 path.
+        analyst: ``0``/``false``/``no`` skips the query-analyst agent — the
+            lexical search runs on the words as typed, with no LLM call.
+            Anything else (including absent) keeps the analyst on.
 
     Returns:
         JSON ``{q, count, papers}`` on success (papers are node dicts — the
@@ -96,6 +99,7 @@ def api_search() -> ResponseReturnValue:
         limit = 25
     if not query:
         return jsonify({"q": query, "count": 0, "papers": []})
+    analyst = (request.args.get("analyst") or "").strip().lower() not in ("0", "false", "no")
     try:
         papers = search_service.live_search(
             query,
@@ -104,6 +108,7 @@ def api_search() -> ResponseReturnValue:
             year_to=_opt_year("year_to"),
             fields_of_study=_opt_fields(provider),
             provider=provider,
+            analyst=analyst,
         )
     except (semantic_scholar.S2Error, openalex.OpenAlexError) as exc:
         name = "OpenAlex" if provider == "openalex" else "Semantic Scholar"

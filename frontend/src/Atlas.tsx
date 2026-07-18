@@ -103,8 +103,8 @@ export default function Atlas() {
     if (stage === 'assistant') setAssistantOpen(true)
   }, [])
 
-  // Seed search: query + optional filters, cache-first local / live S2 hits.
-  // Search errors share the workspace error overlay with graph-load errors.
+  // Seed search: query + optional search options, cache-first local / live S2
+  // hits. Search errors share the workspace error overlay with graph-load errors.
   const onSearchError = useCallback(
     (message: string | null) => {
       dispatch(errorSet(message))
@@ -114,8 +114,8 @@ export default function Atlas() {
   const {
     query,
     setQuery,
-    filters,
-    setFilters,
+    options,
+    setOptions,
     hits,
     localHits,
     searching,
@@ -162,8 +162,8 @@ export default function Atlas() {
         onSubmit={onSubmit}
         searching={searching}
         loadingGraph={loading}
-        filters={filters}
-        onFilters={setFilters}
+        options={options}
+        onOptions={setOptions}
         provider={provider}
         onProviderChange={(next) => dispatch(switchProvider(next))}
         seedTitle={graph?.seed.title ?? null}

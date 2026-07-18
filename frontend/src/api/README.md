@@ -57,10 +57,13 @@ api/
   the pre-rewrite app still type-check on restore. Lecture streams carry
   beats only — lectures never expand the graph, so no trace/discovery
   frames appear (old saves' `hist_trace` field is tolerated and ignored).
-- **`searchLive` rides the analyst invisibly.** Free-text queries are
-  expanded (and famous papers title-resolved) server-side; a pasted arXiv
-  id/URL resolves to exactly that paper with filters skipped. The client
-  just sees better-ordered `papers`.
+- **`searchLive` rides the analyst invisibly — unless told not to.**
+  Free-text queries are expanded (and famous papers title-resolved)
+  server-side; a pasted arXiv id/URL resolves to exactly that paper with
+  options skipped. The client just sees better-ordered `papers`. The one
+  visible control is `SearchOptions.analyst` (the Options popover's
+  checkbox): false sends `analyst=0` and the backend searches the words as
+  typed, no LLM call.
 - **The detail-panel category tags are server-labelled.** `fetchCategories`
   hits a dedicated per-paper endpoint (`/api/paper/<ref>/categories`) that
   returns each arXiv tag already labelled, so the client does no code→name

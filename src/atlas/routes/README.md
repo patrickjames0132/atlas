@@ -96,11 +96,14 @@ Design decisions worth knowing:
   detected id → exact `ARXIV:<id>` lookup, skipping query expansion (an id
   isn't vocabulary — an "improved" id could only be a wrong one) *and* the
   filters (they never apply to an explicit lookup). The query analyst fires
-  only on real free-text queries. An id S2 doesn't know returns nothing
+  only on real free-text queries — and only while it's switched on:
+  `analyst=0/false/no` (the search bar's Options checkbox) skips the LLM
+  and searches the words as typed. An id S2 doesn't know returns nothing
   rather than falling through to a junk lexical search of the id text.
 - **Repeated queries answer instantly** — `live_search` caches its results
-  whole for a day (query + filters keyed), so re-typing a recent query
-  skips the analyst and S2 entirely (see `services/search/README.md`).
+  whole for a day (query + filters + analyst flag keyed), so re-typing a
+  recent query skips the analyst and S2 entirely (see
+  `services/search/README.md`).
 - **Filters degrade, never error.** A non-numeric year becomes "no filter";
   unknown `fields` values are silently dropped against the **selected
   provider's** vocabulary (`semantic_scholar.vocab.valid_fields()` for s2,

@@ -73,6 +73,9 @@ query_analyst.analyze              main.py
   `live_search` passes every free-text query through `_analyze`, whose whole
   body is `return query_analyst.analyze(query)`; it uses `expanded_query`
   for the lexical search and `known_titles` for title-match verification.
+  Since v5.18.0 the user can decline the whole round-trip per search:
+  `live_search(analyst=False)` (the search bar's Options checkbox →
+  `/api/search?analyst=0`) never reaches this agent.
   The seam survives as a named function (rather than inlining the call) so
   search tests can monkeypatch `discovery._analyze` without importing agent
   machinery, and because it predates the agent — the old repo shipped it as

@@ -485,17 +485,6 @@ optional, behind a key.
       constants-audit ticket (Enhancements & tech debt) feeds it a candidate
       list. Placement: the settings button sits top-right **beside the
       help/tutorials button**.
-- [ ] **A query-analyst toggle in the search bar — and rename "Filters"** — the
-      search surface gives no way to skip the query-analyst agent; sometimes you
-      want the raw keyword search without the LLM expansion round-trip (or its
-      spend). Fold it into the existing dropdown as a checkbox, which means the
-      "Filters" label no longer fits once it holds a behavior switch. Patrick
-      floated **"Options"** and asked for better names — candidates:
-      **"Search options"** (says where it applies), plain **"Options"**, or
-      keeping "Filters" and putting the toggle elsewhere (a small sparkle icon
-      button beside the search box, the pattern other AI-search UIs use for
-      "AI on/off"). Decide the name against the mock, not in the ticket. *(From
-      the `todos.md` inbox, 2026-07-17.)*
 
 - [ ] **Cleaner layout for expanded nodes** — nodes/edges the researcher pulls in
       via `expand_node` land right on top of the seed's own edges and nodes, so a
