@@ -489,22 +489,6 @@ optional, behind a key.
       the reorganized shape (which knobs live with the user vs. in the file),
       so doing it first would mean reworking it.
 
-- [ ] **Cleaner layout for expanded nodes — in BOTH layouts** — nodes/edges the
-      researcher pulls in via `expand_node` land right on top of the seed's own
-      edges and nodes, so a dense neighborhood turns to spaghetti. **Scope
-      sharpened 2026-07-18** (Patrick's screenshot review of the v5.23.0
-      relation clustering, which made the failure legible): an expansion's
-      discoveries belong to *their expansion origin*, not the seed — but the
-      new cluster force absorbs any discovery carrying a graph relation (e.g.
-      a dashed-ring `reference`) into the seed's sector, tearing it away from
-      the node it was expanded from. Sketched fix: **satellite mini-clusters** —
-      anchor each expansion's discoveries around their origin node (tracked
-      through `useDiscovery`'s merge), pushed away from the seed formation;
-      likely a second custom force alongside `clusterForce.ts`, keyed by
-      origin instead of relation. **Timeline needs its own treatment** in the
-      same ticket: x is date-pinned there, so separation must come from y
-      (e.g. biasing an expansion's discoveries into a vertical band). *(From
-      the `todos.md` inbox, 2026-07-14.)*
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;
       add a chip (like the relation chips) to show/hide the whole discovered set

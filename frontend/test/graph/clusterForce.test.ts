@@ -5,7 +5,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { clusterCounts, clusterForce, clusterRadius } from '../../src/graph/clusterForce'
+import {
+  clusterCounts,
+  clusterForce,
+  clusterRadius,
+  deriveOrigins,
+} from '../../src/graph/clusterForce'
 import type { VNode } from '../../src/graph/model'
 
 function makeNode(id: string, rels: string[], overrides: Partial<VNode> = {}): VNode {
@@ -54,6 +59,31 @@ describe('clusterCounts', () => {
   })
 })
 
+describe('deriveOrigins', () => {
+  it('re-stamps restored discoveries from their first edge, skipping seed anchors', () => {
+    const nodes = [
+      seed(),
+      makeNode('expanded', ['citation']),
+      makeNode('sat', ['reference'], { discovered: true }),
+      makeNode('fromSeed', ['reference'], { discovered: true }),
+      makeNode('plain', ['reference']),
+    ]
+    deriveOrigins(
+      nodes,
+      [
+        { _s: 'expanded', _t: 'sat' },
+        { _s: 'seed', _t: 'fromSeed' },
+        { _s: 'seed', _t: 'plain' },
+      ],
+      'seed',
+    )
+    expect(nodes.find((node) => node.id === 'sat')!._origin).toBe('expanded')
+    // Seed-anchored and non-discovered nodes stay sector members.
+    expect(nodes.find((node) => node.id === 'fromSeed')!._origin).toBeUndefined()
+    expect(nodes.find((node) => node.id === 'plain')!._origin).toBeUndefined()
+  })
+})
+
 describe('clusterForce', () => {
   /** One initialized force plus the node set it was initialized with. */
   function runOnce(nodes: VNode[]) {
@@ -95,6 +125,31 @@ describe('clusterForce', () => {
     runOnce([theSeed, stranger])
     expect(theSeed.vx).toBe(0)
     expect(theSeed.vy).toBe(0)
+  })
+
+  it('gathers an expansion satellite beyond its origin, not in a seed sector', () => {
+    // Origin sits due east of the seed; its satellite carries a REFERENCE rel,
+    // which the sectors would pull west — the origin must win.
+    const origin = makeNode('origin', ['citation'], { x: 300, y: 0 })
+    const satellite = makeNode('sat', ['reference'], { x: 300, y: 0, _origin: 'origin' })
+    runOnce([seed(), origin, satellite])
+    expect(satellite.vx!).toBeGreaterThan(0)
+  })
+
+  it('excludes satellites from the sector populations', () => {
+    const counts = clusterCounts([
+      seed(),
+      makeNode('r1', ['reference']),
+      makeNode('sat', ['reference'], { _origin: 'r1' }),
+    ])
+    expect(counts).toEqual({ reference: 1 })
+  })
+
+  it('falls back to sector behavior when the origin is filtered out of the sim', () => {
+    const orphan = makeNode('sat', ['reference'], { _origin: 'gone' })
+    runOnce([seed(), orphan])
+    // No origin on screen — the reference sector (west) takes it as usual.
+    expect(orphan.vx!).toBeLessThan(0)
   })
 
   it('re-initializing after discoveries widens a grown cluster’s orbit', () => {

@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef } from 'react'
 // forceCollide to space nodes out by their radius.
 // @ts-expect-error - no type declarations
 import { forceCollide } from 'd3-force-3d'
-import { clusterCounts, clusterForce, clusterRadius } from '../clusterForce'
+import { clusterCounts, clusterForce, clusterRadius, satelliteOffset } from '../clusterForce'
 import { nodeRadius } from '../model'
 import type { Base, VNode } from '../model'
 import { YEAR_SPACING } from '../theme'
@@ -170,9 +170,16 @@ export function useTimeline({
         fg?.d3Force?.('cluster', clusterForce())
         if (linkForce) {
           const counts = clusterCounts(base.nodes)
-          linkForce.distance((link: { type?: string }) =>
-            clusterRadius(counts[link.type ?? ''] ?? 0),
-          )
+          linkForce.distance((link: { type?: string; source?: unknown; target?: unknown }) => {
+            // A link touching an expansion satellite ties it to its ORIGIN,
+            // not to a seed-sector orbit — keep it short or the link force
+            // drags the satellite a whole orbit away. d3 resolves the
+            // endpoints to node objects before asking for distances.
+            const sourceNode = typeof link.source === 'object' ? (link.source as VNode) : undefined
+            const targetNode = typeof link.target === 'object' ? (link.target as VNode) : undefined
+            if (sourceNode?._origin || targetNode?._origin) return satelliteOffset(1)
+            return clusterRadius(counts[link.type ?? ''] ?? 0)
+          })
           linkForce.strength(0.08)
         }
       }

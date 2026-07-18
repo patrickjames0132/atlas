@@ -8,6 +8,13 @@
  * merged IN PLACE — appending to base.nodes/links, never rebuilding — and a
  * version counter signals dependents to recompute despite `base` keeping the
  * same object identity.
+ *
+ * The merge also decides a discovery's layout identity (v5.24.0): one whose
+ * anchor edge lands on a NON-seed node is an expansion satellite — its
+ * `_origin` records that node, and the cluster force gathers it beyond the
+ * origin instead of absorbing it into the seed's relation sectors. In
+ * Timeline (x date-pinned), satellites band outward in y past their origin
+ * instead. Ungrounded/seed-anchored discoveries keep the old behavior.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -94,11 +101,27 @@ export function useDiscovery({
           : base.nodes.find((candidate) => candidate.is_seed)
         const spread = anchorEdge ? 40 : 120
         const viewNode: VNode = { ...node }
+        // An expansion anchored on a NON-seed node is a satellite: mark its
+        // origin so the cluster force gathers it beyond that node instead of
+        // absorbing it into the seed's relation sectors (see clusterForce.ts).
+        // Seed-anchored discoveries genuinely belong to the seed's sectors.
+        if (anchor && anchorEdge && !anchor.is_seed) viewNode._origin = anchor.id
         if (anchor && typeof anchor.x === 'number' && typeof anchor.y === 'number') {
           viewNode.x = anchor.x + (Math.random() - 0.5) * spread
           viewNode.y = anchor.y + (Math.random() - 0.5) * spread
         }
-        if (layout === 'timeline') viewNode.fx = nodeTimelineX(viewNode)
+        if (layout === 'timeline') {
+          viewNode.fx = nodeTimelineX(viewNode)
+          // Timeline can't separate satellites in x (it's date-pinned), so
+          // they band OUTWARD in y instead: pushed past their origin's side
+          // of the settled mass (whose heights are frozen — see
+          // freezeSettledY), where the reheat lets them spread by collide
+          // without landing inside the existing columns.
+          if (viewNode._origin && anchor && typeof anchor.y === 'number') {
+            const outward = Math.sign(anchor.y) || 1
+            viewNode.y = anchor.y + outward * (120 + Math.random() * 60)
+          }
+        }
         base.nodes.push(viewNode)
         addedNodes.push(node)
         node.rels.forEach((rel) => {
