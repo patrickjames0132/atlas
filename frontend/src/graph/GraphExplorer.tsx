@@ -41,6 +41,7 @@ import FindBar from './controls/FindBar'
 import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
 import { REL_TYPES } from './theme'
+import { deriveOrigins } from './clusterForce'
 import { useDiscovery } from './hooks/useDiscovery'
 import { useEscapeClear } from './hooks/useEscapeClear'
 import { useMarquee } from './hooks/useMarquee'
@@ -151,6 +152,10 @@ export default function GraphExplorer({
       _s: edge.source,
       _t: edge.target,
     }))
+    // A restored session's discoveries arrive folded into the graph itself —
+    // re-derive their expansion origins so the satellites re-form (live
+    // discoveries get stamped by useDiscovery's merge instead).
+    deriveOrigins(nodes, links, graph.seed.id)
     const years = nodes
       .map((node) => node.year)
       .filter((year): year is number => typeof year === 'number')

@@ -138,6 +138,23 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
   every layout switch. A new graph re-applies whichever layout is active
   (one shared effect); discoveries re-balance the orbits for free via the
   force's own `initialize`.
+- **Expansion satellites (v5.24.0):** a discovery anchored on a non-seed
+  node gets `_origin` stamped by `useDiscovery`'s merge, and the cluster
+  force gathers it just BEYOND that origin (on the seed→origin ray, its
+  own √population offset) instead of absorbing it into a seed sector —
+  before this, a dashed-ring `reference` discovery was torn away from the
+  node it was expanded from and dumped into the blue cluster. Satellite
+  links keep a short distance (they tie a satellite to its origin, not to
+  a sector orbit — the accessor checks the resolved endpoints for
+  `_origin`), and satellites don't inflate the sector populations. In
+  **Timeline** (x date-pinned, heights frozen post-settle) the same merge
+  bands satellites outward in y past their origin's side of the mass, so
+  the reheat spreads them by collide outside the settled columns rather
+  than inside them. `_origin` is sim-side only — `cleanNode` never
+  persists it, and a restored session (whose discoveries arrive folded
+  into the graph, not through this merge) re-derives it in
+  `GraphExplorer`'s base build via `clusterForce.deriveOrigins`: same
+  rule, the first edge's other endpoint when it isn't the seed.
 
 ## How it's verified
 

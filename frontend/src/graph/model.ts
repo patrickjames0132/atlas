@@ -25,6 +25,12 @@ export type VNode = GraphNode & {
   fy?: number
   vx?: number
   vy?: number
+  /** The node this discovery was expanded FROM (sim-side only, set by
+   *  useDiscovery's merge when the anchor isn't the seed) — the cluster
+   *  force groups such satellites around their origin instead of pulling
+   *  them into the seed's relation sectors. Never persisted (cleanNode);
+   *  restores re-derive it from the discovery edges. */
+  _origin?: string
 }
 
 /**

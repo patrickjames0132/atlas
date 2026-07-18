@@ -1367,6 +1367,34 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Cleaner layout for expanded nodes — in BOTH layouts** *(v5.24.0)* —
+      the researcher's `expand_node` discoveries used to land on top of the
+      seed's neighborhood; after v5.23.0's relation clustering the failure
+      got legible (a dashed-ring `reference` discovery was absorbed into the
+      seed's blue sector, torn away from the node it was expanded from).
+      Shipped as the sketched **satellite mini-clusters**: `useDiscovery`'s
+      merge stamps a discovery anchored on a non-seed node with `_origin`,
+      and the cluster force gathers such satellites just **beyond their
+      origin, on the seed→origin ray** (own √population offset, pull 0.12 —
+      a touch over the sectors' 0.08 so small groups stay gathered), the
+      formation following the origin's live position. Satellite links stay
+      short (the per-type orbit distance would have dragged them a whole
+      orbit out — the accessor checks resolved endpoints for `_origin`),
+      and satellites don't inflate sector populations. **Timeline**: x is
+      date-pinned, so the merge bands satellites **outward in y** past
+      their origin's side of the settled (height-frozen) mass instead.
+      **Restore round**: a browser-verified session-reopen initially
+      dissolved the satellites — saves fold discoveries into the graph, so
+      the stamps were lost; `clusterForce.deriveOrigins` re-derives them in
+      GraphExplorer's base build (first edge's other endpoint, when not the
+      seed). Found while chasing a reported restore→Timeline "blank screen"
+      via Claude-in-Chrome live debugging — canvas-arc hooks showed all 374
+      nodes at finite coords and a mathematically correct zoomToFit, and
+      the blank turned out to be a stale cached bundle (gone on hard
+      reload), not a code defect. Vitest 147 → 154 (sector-vs-origin
+      priority, orphaned-origin fallback, sector-count exemption, origin
+      stamping/derivation, the Timeline y-band). *(From the `todos.md`
+      inbox, 2026-07-14; shipped 2026-07-18.)*
 - [x] **Group graph nodes by relation type in the Force layout** *(v5.23.0)*
       — the force layout mingled every relation into one undifferentiated
       cloud ("way waayyy too much clutter" — Patrick, triggering the
