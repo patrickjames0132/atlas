@@ -18,6 +18,7 @@ Two cache keys per PDF, plus a reverse index:
 
 from __future__ import annotations
 
+from ...config import config
 from ...storage import cache
 from . import fetch, floats, text
 from .errors import PdfError
@@ -83,7 +84,9 @@ def get_pdf_floats(url: str, *, refresh: bool = False) -> dict:
         result = {"available": False, "token": token, "floats": []}
         cache.set(key, result)
         return result
-    mined = floats.extract_floats(path)
+    mined = floats.extract_floats(
+        path, max_floats=config.pdf.research_papers.max_floats, max_pages=config.pdf.research_papers.max_pages
+    )
     result = {"available": bool(mined), "token": token, "floats": mined}
     cache.set(key, result)
     cache.set(f"pdfurl:{token}", url)

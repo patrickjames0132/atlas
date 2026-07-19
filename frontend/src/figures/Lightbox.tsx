@@ -45,11 +45,17 @@ export default function Lightbox({
       />
       {(figure.title || figure.caption || typeof figure.figure === 'number') && (
         <div className="fig-lightbox-cap" onClick={(event) => event.stopPropagation()}>
-          {typeof figure.figure === 'number' && <b>Figure {figure.figure}</b>}
+          {figure.label ? (
+            <b>{figure.label}</b>
+          ) : (
+            typeof figure.figure === 'number' && <b>Figure {figure.slot ?? figure.figure}</b>
+          )}
           {figure.title && (
             <span>
               {typeof figure.figure === 'number' ? ' · ' : ''}
-              <MathText>{figure.title}</MathText>
+              <b>
+                <MathText>{figure.title}</MathText>
+              </b>
             </span>
           )}
           {figure.caption && (

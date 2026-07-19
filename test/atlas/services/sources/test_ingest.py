@@ -90,3 +90,18 @@ def test_list_and_delete_cascade(two_sources):
     titles = {hit["source_title"] for hit in sources.search("adam optimizer", top_k=10)}
     assert "Optim Book" not in titles
     assert sources.delete_source(a_id) is False  # already gone
+
+
+def test_ingest_pdf_keeps_the_file_and_delete_removes_it(tmp_path, stub_embeddings):
+    """The original PDF is kept beside the index (figures are mined from it
+    later) and removed with the source."""
+    from atlas.services.sources import store
+
+    pdf = tmp_path / "kept.pdf"
+    make_pdf(pdf, ["Some indexable text about optimizers."])
+    record = sources.ingest_pdf(pdf, title="Kept")
+    stored = store.pdf_path(record["id"])
+    assert stored.exists() and stored.read_bytes().startswith(b"%PDF")
+
+    assert sources.delete_source(record["id"]) is True
+    assert not stored.exists()

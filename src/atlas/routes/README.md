@@ -182,6 +182,7 @@ on restore.) Delete returns `{deleted: false}` rather than 404
 | `GET /api/sources` | list the library + the `available` flag |
 | `POST /api/sources` | ingest a PDF upload or a `{url}`, streaming SSE progress |
 | `DELETE /api/sources/<id>` | remove a source — `{deleted: bool}`, idempotent |
+| `GET /api/sources/<id>/figure/<n>` | one figure mined from the source's stored PDF, as PNG |
 
 Thin wrappers over `services/sources`. Points worth knowing:
 

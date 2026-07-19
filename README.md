@@ -34,7 +34,8 @@ you upload (embedded locally; nothing leaves your machine).
 >   (agentic Q&A that reads full text — ar5iv, or the paper's open-access
 >   PDF for journal papers — expands the graph, searches
 >   S2, searches *your* library, and attaches real figures inline), a
->   **librarian** (single-shot RAG over your uploads, cited by page), and
+>   **librarian** (RAG over your uploads, cited by page, attaching real
+>   figures from your PDFs), and
 >   the **query analyst**. Everything streams for real — beats, prose, tool
 >   traces, discoveries.
 > - **Bring-your-own sources** with hybrid retrieval (sqlite-vec semantic +

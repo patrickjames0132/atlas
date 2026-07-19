@@ -294,8 +294,10 @@ def api_ask_sources() -> ResponseReturnValue:
         retrieval to a subset of sources.
 
     Returns:
-        An SSE stream: one retrieval ``trace`` frame, ``token`` prose, then
-        ``done`` or ``error``. HTTP 400 when the question is missing.
+        An SSE stream: one retrieval ``trace`` frame, then ``token`` prose —
+        interleaved with figure ``trace``/``figure`` frames when the
+        librarian attaches a figure from an uploaded PDF — then ``done`` or
+        ``error``. HTTP 400 when the question is missing.
     """
     payload = request.get_json(silent=True) or {}
     question = (payload.get("question") or "").strip()

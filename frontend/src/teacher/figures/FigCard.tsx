@@ -27,11 +27,16 @@ export default function FigCard({
         <img src={figure.image} alt={figure.caption || 'Figure'} loading="lazy" />
       </button>
       <figcaption className="chat-fig-cap">
-        <b>Figure {figure.figure}</b>
+        {/* The float's own designation when its caption carried one
+            ("Figure 12.4"); else number attachments in answer order. */}
+        <b>{figure.label ?? `Figure ${figure.slot ?? figure.figure ?? 1}`}</b>
         {figure.title ? (
           <>
             {' · '}
-            <MathText>{figure.title}</MathText>
+            {/* The source stands out like the label; only the caption stays muted. */}
+            <b>
+              <MathText>{figure.title}</MathText>
+            </b>
           </>
         ) : null}
         {figure.caption ? (

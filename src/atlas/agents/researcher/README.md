@@ -25,7 +25,8 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   2  agent.run_stream_events(...) driven one event at a time
      on a private loop (the sync bridge)
   3  tools fire: read_paper / expand_node / search_papers /
-     show_figure / search_sources — each pushes Trace /
+     show_figure / search_sources / show_source_figure —
+     each pushes Trace /
      Discovery / Figure events onto deps.queue, drained into
      the stream between run events (live "watch it work")
   4  the final Answer{text, cited} streams as output-tool args;
@@ -38,7 +39,7 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   loads `figures`), the strategy `SYSTEM_PROMPT`, and `BUDGETS`
   (defaults overridden by the agent entry's `extras`; unknown extras keys
   fail at import so the staging area can't silently accumulate).
-- **`tools.py`** — `ResearcherDeps` (the run-state) and the five tools.
+- **`tools.py`** — `ResearcherDeps` (the run-state) and the six tools.
 - **`main.py`** — the `Answer` model, the `Agent`, the sync event bridge.
 
 ## Design decisions worth knowing
@@ -79,6 +80,16 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   can't drift between the two; for PDF-mined papers the list includes
   tables and algorithm boxes, and image URLs point at
   `/api/pdf_figure/<token>/<n>` instead of the ar5iv proxy.
+- **`show_source_figure` is the library twin of `show_figure`** —
+  page-addressed rather than list-addressed: passages cite `[Title, p.N]`,
+  so the tool takes `(source_id, page, figure)` and picks from the figure
+  manifest mined off the source's stored PDF (`services/sources/figures.py`);
+  the attached image serves from `/api/sources/<id>/figure/<n>` and its
+  `Figure` event carries `index=None` (no numbered paper). It shares the
+  `figures` budget and the library `prepare` gate below, and everything past
+  the step charge lives in the shared `agents/library_figures.py` — the
+  librarian's twin runs the same core, so markers and error text can't
+  drift.
 - **`search_sources` is registered via a `prepare` hook** only when the
   (scope-filtered) library is non-empty — no availability probe at all:
   retrieval degrades by itself, and an empty library never pays the torch

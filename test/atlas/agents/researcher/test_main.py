@@ -279,3 +279,81 @@ def test_lectures_context_respects_the_char_budget(monkeypatch):
     out = researcher.main._lectures_context(lectures)
     assert out.endswith("…")
     assert "Second" not in out
+
+
+def test_show_source_figure_attaches_a_library_figure(monkeypatch):
+    """The library twin of show_figure: page-addressed, image served by the
+    sources figure route, no numbered-paper index."""
+    monkeypatch.setattr(
+        researcher.tools.library_figures.source_figures.store,
+        "get_source",
+        lambda source_id: {"id": source_id, "title": "My Textbook", "kind": "pdf", "pages": 300},
+    )
+    monkeypatch.setattr(
+        researcher.tools.library_figures.source_figures,
+        "get_source_figures",
+        lambda source_id: {
+            "available": True,
+            "floats": [
+                {"kind": "table", "page": 3, "caption": "Table 1: Setup.", "region": [0, 0, 1, 1]},
+                {"kind": "figure", "page": 12, "caption": "Figure 3.1: Backprop.",
+                 "region": [0, 0, 1, 1]},
+            ],
+        },
+    )
+    library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
+    model = scripted(
+        [("show_source_figure", ['{"source_id": "src1", "page": 12}'])],
+        [final("See the book's figure. <<FIG 1>>", [])],
+    )
+    out = run(model, monkeypatch, library=library)
+    figure = next(event for event in out if isinstance(event, events.Figure))
+    # Manifest index 1 (the page-12 float), served by the sources route.
+    assert figure.image == "/api/sources/src1/figure/1"
+    assert figure.index is None and figure.title == "My Textbook"
+    # The designation splits off as `label`; the caption keeps the rest.
+    assert figure.label == "Figure 3.1" and figure.caption == "Backprop."
+    trace = next(event for event in out if isinstance(event, events.FigureTrace))
+    assert trace.ok is True and trace.index is None
+
+
+def test_show_source_figure_wrong_page_reports_figure_pages(monkeypatch):
+    monkeypatch.setattr(
+        researcher.tools.library_figures.source_figures.store,
+        "get_source",
+        lambda source_id: {"id": source_id, "title": "My Textbook", "kind": "pdf", "pages": 300},
+    )
+    monkeypatch.setattr(
+        researcher.tools.library_figures.source_figures,
+        "get_source_figures",
+        lambda source_id: {
+            "available": True,
+            "floats": [
+                {"kind": "figure", "page": 12, "caption": "Figure 3.1.", "region": [0, 0, 1, 1]},
+            ],
+        },
+    )
+    library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
+    seen: dict = {}
+    model = scripted(
+        [("show_source_figure", ['{"source_id": "src1", "page": 5}'])],
+        [final("No figure then.", [])],
+        seen=seen,
+    )
+    out = run(model, monkeypatch, library=library)
+    trace = next(event for event in out if isinstance(event, events.FigureTrace))
+    assert trace.ok is False
+    assert not any(isinstance(event, events.Figure) for event in out)
+
+
+def test_show_source_figure_gated_on_the_library(monkeypatch):
+    """No library, no tool — same prepare gate as search_sources."""
+    seen: dict = {}
+    model = scripted([final("done", [])], seen=seen)
+    run(model, monkeypatch, library=None)
+    assert "show_source_figure" not in seen["tools"]
+
+    seen_with: dict = {}
+    model = scripted([final("done", [])], seen=seen_with)
+    run(model, monkeypatch, library=[{"id": "s", "title": "T", "kind": "pdf", "pages": 1}])
+    assert "show_source_figure" in seen_with["tools"]

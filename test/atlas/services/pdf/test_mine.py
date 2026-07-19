@@ -62,7 +62,7 @@ def test_download_failure_is_cached_as_unavailable(monkeypatch):
 
     # The cached miss answers without another fetch attempt.
     monkeypatch.setattr(
-        mine.fetch, "fetch_pdf", lambda u: pytest.fail("cached miss re-fetched")
+        mine.fetch, "fetch_pdf", lambda url: pytest.fail("cached miss re-fetched")
     )
     assert mine.get_pdf_text(url)["available"] is False
     assert mine.get_pdf_floats(url)["available"] is False

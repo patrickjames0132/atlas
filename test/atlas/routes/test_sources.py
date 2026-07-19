@@ -104,3 +104,25 @@ def test_delete_is_idempotent(client, monkeypatch):
         sources_routes.sources_service, "delete_source", lambda source_id: False
     )
     assert client.delete("/api/sources/nope").json == {"deleted": False}
+
+
+def test_source_figure_route_serves_png_and_404s(client, monkeypatch):
+    """The library figure route: PNG on success; 404 (never 500) for unknown
+    sources/indices or sources without a stored PDF."""
+    from atlas.routes import sources as sources_routes
+
+    monkeypatch.setattr(
+        sources_routes.sources_service,
+        "render_source_figure",
+        lambda source_id, index: b"\x89PNG library",
+    )
+    response = client.get("/api/sources/src1/figure/0")
+    assert response.status_code == 200
+    assert response.mimetype == "image/png"
+    assert response.data == b"\x89PNG library"
+
+    def refuse(source_id, index):
+        raise RuntimeError("no such source")
+
+    monkeypatch.setattr(sources_routes.sources_service, "render_source_figure", refuse)
+    assert client.get("/api/sources/ghost/figure/0").status_code == 404

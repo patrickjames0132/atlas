@@ -141,6 +141,10 @@ export interface TraceEvent {
   year_to?: number | null
   /** Figure number the agent showed — show_figure. */
   figure?: number | null
+  /** The shown float's own designation ("Figure 12.4", "Table 2") for the
+   *  chip text; null/absent on failures, label-less captions, and pre-v5.28
+   *  sessions (the chip then falls back to the number in `figure`). */
+  label?: string | null
   /**
    * Why a failed search never turned anything up — search_papers only, and
    * only when `ok` is false. Undefined on success, and on saved sessions
@@ -170,6 +174,13 @@ export interface AnswerFigure {
    * at the end of the bubble, the old behavior).
    */
   slot?: number
+  /**
+   * The float's own designation parsed off its caption ("Figure 12.4",
+   * "Table 2") — the card heading, with `caption` holding the remaining
+   * text. Null/absent when the caption carries no designation (and on
+   * pre-v5.28 sessions); the card then numbers attachments by slot.
+   */
+  label?: string | null
 }
 
 /** Callbacks for {@link streamAsk}. Optional ones may be omitted. */
@@ -251,6 +262,11 @@ export interface AskSourcesHandlers {
   onToken: (text: string) => void
   /** The retrieval summary (emitted once, before any prose). */
   onRetrieve?: (r: RetrieveEvent) => void
+  /** A non-retrieval trace — the librarian showing (or failing to show) a
+   *  library figure. */
+  onTrace?: (t: TraceEvent) => void
+  /** A figure the librarian attached from an uploaded PDF. */
+  onFigure?: (f: AnswerFigure) => void
   onDone?: () => void
   onError?: (message: string) => void
   signal?: AbortSignal
@@ -258,7 +274,8 @@ export interface AskSourcesHandlers {
 
 /**
  * Stream an answer grounded purely in the user's local library — no graph.
- * A single retrieve event, then prose tokens.
+ * A single retrieve event, then prose tokens — interleaved with figure
+ * traces/attachments when the librarian pulls a figure from an uploaded PDF.
  *
  * @param body The question, a session id for follow-up context, and optional
  *             source_ids to scope retrieval to a subset of sources.
@@ -276,7 +293,16 @@ export async function streamAskSources(
   })
   await readSSE(res, (event, data) => {
     if (event === 'token') h.onToken((data as { text: string }).text)
-    else if (event === 'trace') h.onRetrieve?.(data as RetrieveEvent)
+    else if (event === 'trace') {
+      // Two trace flavors share the frame name: the one-shot retrieval
+      // summary, and (since the librarian can show figures) figure traces.
+      const trace = data as { action?: string }
+      if (trace.action === 'retrieval' || trace.action === undefined) {
+        h.onRetrieve?.(data as RetrieveEvent)
+      } else {
+        h.onTrace?.(data as TraceEvent)
+      }
+    } else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })

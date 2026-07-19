@@ -40,18 +40,35 @@ should measure. The sources route bridges the callback into SSE frames.
 ```
 errors.py      — SourceError                                   (leaf)
 embeddings.py  — the local sentence-transformers model (lazy, degrades)
-store.py       — SQLite schema, connection, sqlite-vec + FTS5 setup, record CRUD
+store.py       — SQLite schema, connection, sqlite-vec + FTS5 setup, record CRUD,
+                 and where each uploaded PDF's original file lives (pdf_path)
 extract.py     — PDF/URL → clean, chunked text
 ingest.py      — chunk → embed → store  (add_source, ingest_pdf, ingest_url)
 retrieval.py   — the hybrid search  (search, + the two rankers and RRF)
+figures.py     — the figure manifest mined from a stored PDF + PNG renders
 ```
 
 Dependencies flow one way (no cycles): `store`→`embeddings`; `extract`→`errors`
 + `arxiv.html_to_text`; `ingest`→`store`+`extract`+`embeddings`;
-`retrieval`→`store`+`embeddings`. `__init__` re-exports the public API
+`retrieval`→`store`+`embeddings`; `figures`→`store`+`services/pdf`. `__init__`
+re-exports the public API
 (`ingest_pdf/ingest_url/add_source/search/list_sources/get_source/delete_source/
-available/SourceError`), so callers use `sources.search(...)` without reaching
-into submodules.
+get_source_figures/render_source_figure/available/SourceError`), so callers use
+`sources.search(...)` without reaching into submodules.
+
+## Stored PDFs & figures (v5.28.0)
+
+`ingest_pdf` keeps the original file at `data_dir/source_pdfs/<id>.pdf`
+(best-effort copy after a successful ingest; `delete_source` removes it), so
+the caption-anchored extractor built for open-access papers
+(`services/pdf/floats.py`) can mine the user's own uploads too: `figures.py`
+caches a **figure manifest** per source (kind, page, caption, region — no
+pixels; see `docs/pdf-mining.md` for why) and renders entries on demand for
+`/api/sources/<id>/figure/<n>`. That's what the `show_source_figure` tools —
+the researcher's and the librarian's, one shared core in
+`agents/library_figures.py` — serve into answers. URL sources and uploads
+from before v5.28.0 have no stored file and report "no figures", never an
+error.
 
 ## The two search modalities, and why we use both
 

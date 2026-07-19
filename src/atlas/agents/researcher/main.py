@@ -29,7 +29,6 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.run import AgentRunResultEvent
 from pydantic_ai.tools import RunContext, ToolDefinition
-from pydantic_core import from_json
 
 from ...services.graph import Node, Provider
 from ...services.sources import store
@@ -43,6 +42,7 @@ from .tools import (
     search_papers,
     search_sources,
     show_figure,
+    show_source_figure,
 )
 
 
@@ -71,6 +71,10 @@ async def _if_sources(
 _search_sources_tool: Tool[ResearcherDeps] = Tool(
     search_sources, prepare=_if_sources, sequential=True
 )
+# Library figures ride the same gate: no library, no tool.
+_show_source_figure_tool: Tool[ResearcherDeps] = Tool(
+    show_source_figure, prepare=_if_sources, sequential=True
+)
 
 # sequential=True everywhere: PydanticAI runs a turn's tool calls
 # concurrently by default, but these tools mutate shared deps state —
@@ -87,6 +91,7 @@ agent: Agent[ResearcherDeps, Answer] = Agent(
         Tool(search_papers, sequential=True),
         Tool(show_figure, sequential=True),
         _search_sources_tool,
+        _show_source_figure_tool,
     ],
 )
 
@@ -99,7 +104,10 @@ def _library_context(library: list[dict]) -> str:
     for source in library:
         location = f"{source['pages']}pp" if source.get("pages") else source.get("kind", "")
         lines.append(f'- [{source["id"]}] "{source["title"]}" ({location})')
-    return "Your library (search with search_sources):\n" + "\n".join(lines)
+    return (
+        "Your library (search with search_sources; attach a cited page's "
+        "figure with show_source_figure):\n" + "\n".join(lines)
+    )
 
 
 # How much of the already-played lectures to fold into the prompt. Bounded so a
@@ -275,7 +283,7 @@ def answer(
         elif isinstance(event, AgentRunResultEvent):
             final = event.result.output
         if answer_grew:
-            grown = _partial_text(args_buffer)
+            grown = streams.partial_text(args_buffer)
             if len(grown) > len(emitted):
                 yield events.Token(text=grown[len(emitted) :])
                 emitted = grown
@@ -292,19 +300,3 @@ def answer(
         if node_id not in cited:
             cited.append(node_id)
     yield events.Cited(node_ids=cited)
-
-
-def _partial_text(args_json: str) -> str:
-    """The ``text`` field of a partially-streamed Answer args JSON.
-
-    ``allow_partial="trailing-strings"`` keeps the truncated tail of the
-    in-flight string, so prose streams smoothly instead of buffering until
-    the field closes. Undecodable/absent yields "" (nothing to emit yet).
-    """
-    try:
-        parsed = from_json(args_json, allow_partial="trailing-strings")
-    except ValueError:
-        return ""
-    if isinstance(parsed, dict) and isinstance(parsed.get("text"), str):
-        return parsed["text"]
-    return ""

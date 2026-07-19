@@ -179,15 +179,6 @@ optional, behind a key.
       even when asked, so "show more often, unprompted" needs the tool-call
       compliance to be solid first (stronger `AGENT_MODEL` / sub-agent
       decomposition). *(From the `todos.md` inbox, 2026-07-07.)*
-- [ ] **Figures from uploaded PDFs in answers** — extend the v1.20.0 figures
-      feature to the user's **own library**: pull images out of an ingested PDF
-      (via `pymupdf`, which we already use for text) and let the agent surface a
-      relevant one when it cites a source passage — the library analogue of
-      `show_figure`, which today only covers arXiv papers (ar5iv). Needs page →
-      image extraction at ingest (or on demand), a way to reference an image from
-      a retrieved passage, and a `show_source_figure`-style tool + `figure` event
-      reusing the existing answer-figure rendering. *(From the `todos.md` inbox,
-      2026-07-03.)*
 - [ ] **Keep "frontier" out of the "landmark papers since" lecture** — the
       evolution lecture ("The landmark papers since", narrating the landmark
       citers) sometimes ends on a beat whose **title contains the word

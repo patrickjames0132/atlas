@@ -30,7 +30,7 @@ from ...integrations.arxiv import fulltext
 from ...services import pdf as pdf_service
 from ...services.graph import Edge, Node, Provider
 from ...services.sources import retrieval
-from .. import events, prompts, traversal
+from .. import captions, events, library_figures, prompts, traversal
 from .config import BUDGETS
 
 # A hop or search can fail on either provider's client; both come back to the
@@ -517,15 +517,21 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
     deps.figures_shown[shown_key] = slot
     deps.figures_left -= 1
     chosen = figs[figure - 1]
-    deps.emit(events.FigureTrace(ok=True, index=index, title=node.title, figure=figure))
+    # The float's own designation ("Figure 3", "Table 2") heads the card and
+    # the chip; the caption travels without it so it isn't shown twice.
+    label, caption_text = captions.split_label(chosen.get("caption") or "")
+    deps.emit(
+        events.FigureTrace(ok=True, index=index, title=node.title, figure=figure, label=label)
+    )
     deps.emit(
         events.Figure(
             image=chosen["image"],
-            caption=chosen.get("caption") or "",
+            caption=caption_text,
             title=node.title,
             index=index,
             figure=figure,
             slot=slot,
+            label=label,
         )
     )
     return (
@@ -533,6 +539,37 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
         f"marker <<FIG {slot}>> on its own line in your prose at exactly the "
         f"point where this figure belongs."
     )
+
+
+def show_source_figure(
+    ctx: RunContext[ResearcherDeps], source_id: str, page: int, figure: int = 1
+) -> str:
+    """Place a figure/table from one of the student's OWN uploaded sources
+    into your answer — the library twin of show_figure. Use it when a
+    passage you're citing (search_sources reports its source and page)
+    refers to a figure the student would benefit from seeing. The result
+    gives you a <<FIG n>> marker: put it on its own line in your prose
+    exactly where the figure belongs.
+
+    Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
+        source_id: The source's id from "Your library".
+        page: The 1-based page the figure is on (usually the cited
+            passage's page).
+        figure: Which figure on that page, 1-based, when it has several.
+
+    Returns:
+        The ``<<FIG n>>`` marker to place in your prose, or a
+        budget/validity message (a page with no figures lists the source's
+        pages that do have them).
+    """
+    deps = ctx.deps
+    if not _spend_step(deps):
+        deps.emit(events.FigureTrace(ok=False, index=None, title=None, figure=figure))
+        return STEPS_EXHAUSTED
+    # Everything past the step charge — resolution, dedupe, slot, events —
+    # is shared with the librarian's twin (agents/library_figures.py).
+    return library_figures.attach_source_figure(deps, source_id, page, figure)
 
 
 def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str | None = None) -> str:

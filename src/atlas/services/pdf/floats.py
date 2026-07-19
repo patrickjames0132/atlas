@@ -9,8 +9,12 @@ relative to its caption, which both finds the right pixels and rejects junk
 
 * **Figure** — captions sit BELOW their content (fallback: above). The region
   seeds from every image rect / vector-drawing cluster adjacent to the
-  caption, then grows by intersection-chaining so side-by-side subfigures and
-  film-strip tiles join in.
+  caption, then grows by axis-aware chaining (``_chain_near``) so side-by-side
+  subfigures, film-strip tiles, and the scattered pieces of sparse line
+  drawings all join in. Size is judged at the answer: candidate clusters may
+  be tiny (``_MIN_CLUSTER_AREA`` only drops dust), but the grown region must
+  clear ``_MIN_REGION_AREA``. The package README's "The geometry, precisely"
+  section walks the whole pipeline with its terminology.
 * **Table** — captions sit ABOVE (fallback: below). Tries pymupdf's
   ``find_tables`` bbox first, then a span of same-width horizontal rules
   (booktabs tables are rules-only and invisible to ``find_tables``), then a
@@ -50,10 +54,16 @@ log = logging.getLogger(__name__)
 
 CAPTION_RE = re.compile(r"^(?:(Figure|Fig|Table)\.?\s+\d+\s*[:.]|(Algorithm)\s+\d+\b)")
 _MAX_CAPTION = 600  # chars — same cap as the ar5iv figure extractor
-_MAX_PAGES = 80  # floats live in the paper body; don't mine a 500-page scan
 _MIN_TILE = 30  # pt — keep film-strip tiles, drop glyph-sized fragments
-_MIN_CLUSTER_AREA = 4000  # pt² — a real figure's drawings, not a stray rule
+_MIN_CLUSTER_AREA = 100  # pt² — admit small pieces (a diagram may be a swarm
+# of tiny arrows/nodes — Sutton & Barto's backup diagrams); only dust is
+# dropped here, because the REGION floor below is what rejects junk.
+_MIN_REGION_AREA = 4000  # pt² — a grown region must be figure-sized; a lone
+# underline or footnote rule near a caption never becomes a "figure".
 _GAP = 60  # max pt between a caption and its content
+_CHAIN_GAP = 60  # max pt a content piece may sit from the region (one axis)
+# while overlapping it in the other — sparse line drawings (arrows-and-nodes
+# backup diagrams) are swarms of small pieces a contact-only chain can't walk.
 _RULE_SPAN_MAX_STEP = 320  # max pt between consecutive rules of one float
 _RULE_X_TOLERANCE = 8  # pt — how exactly two rules must agree to share a float
 _PAD = 4  # pt of margin around a rendered region
@@ -111,6 +121,28 @@ def _overlap_x(first: fitz.Rect, second: fitz.Rect) -> bool:
     return first.x0 < second.x1 and second.x0 < first.x1
 
 
+def _chain_near(region: fitz.Rect, rect: fitz.Rect) -> bool:
+    """Whether a content piece belongs to the growing region.
+
+    True when the two overlap in one axis and sit within ``_CHAIN_GAP`` in
+    the other — the shape of both subfigure tiles (touching) and a sparse
+    line drawing's scattered pieces (nearby columns/rows of arrows and
+    nodes).
+
+    Args:
+        region: The region grown so far.
+        rect: The candidate piece.
+
+    Returns:
+        True when the piece should join.
+    """
+    x_overlap = rect.x0 < region.x1 and region.x0 < rect.x1
+    y_overlap = rect.y0 < region.y1 and region.y0 < rect.y1
+    x_gap = max(region.x0 - rect.x1, rect.x0 - region.x1)
+    y_gap = max(region.y0 - rect.y1, rect.y0 - region.y1)
+    return (x_overlap and y_gap <= _CHAIN_GAP) or (y_overlap and x_gap <= _CHAIN_GAP)
+
+
 def _grab_adjacent(
     caption: fitz.Rect, rects: list[fitz.Rect], above: bool
 ) -> fitz.Rect | None:
@@ -120,7 +152,10 @@ def _grab_adjacent(
     it / bottom edge below it) within ``_GAP``, x-overlapping the caption —
     an overlapping rect (a cluster that visually contains its caption) counts
     as "above" too. Then any rect intersecting the padded region joins, so
-    subfigure tiles chain in.
+    subfigure tiles — and the tiny pieces of an arrows-and-nodes line
+    drawing — chain in. The candidates may individually be small
+    (``_MIN_CLUSTER_AREA`` only drops dust); what must be figure-sized is
+    the grown region (``_MIN_REGION_AREA``).
 
     Args:
         caption: The caption block's rect.
@@ -128,7 +163,8 @@ def _grab_adjacent(
         above: Search above the caption (True) or below it (False).
 
     Returns:
-        The unioned region, or None when nothing sits on that side.
+        The unioned region, or None when nothing sits on that side — or when
+        what does is too small to be a figure.
     """
     region: fitz.Rect | None = None
     remaining = list(rects)
@@ -146,10 +182,12 @@ def _grab_adjacent(
     while changed:
         changed = False
         for rect in list(remaining):
-            if rect.intersects(region + (-8, -8, 8, 8)):
+            if _chain_near(region, rect):
                 region = region | rect
                 remaining.remove(rect)
                 changed = True
+    if region.width * region.height < _MIN_REGION_AREA:
+        return None
     return region
 
 
@@ -291,14 +329,21 @@ def _table_region(
     return region
 
 
-def extract_floats(path: str | Path) -> list[dict]:
+def extract_floats(path: str | Path, *, max_floats: int, max_pages: int) -> list[dict]:
     """Mine a PDF's caption-anchored floats: figures, tables, algorithms.
+
+    The caps are the caller's, on purpose: a paper wants paper-sized limits
+    (``config.pdf.research_papers``), while an uploaded textbook
+    must be mined cover to cover (``config.pdf.library_documents`` — a 550-page book
+    keeps its chapter-12 figures; see docs/bugs.md, the Sarsa(λ) incident).
 
     Args:
         path: Filesystem path to the PDF.
+        max_floats: Stop after this many mined floats.
+        max_pages: Scan at most this many pages.
 
     Returns:
-        Up to ``config.pdf.max_floats`` dicts, in page order:
+        Up to ``max_floats`` dicts, in page order:
         ``{"kind": "figure"|"table"|"algorithm", "page": 1-based page number,
         "caption": str, "region": [x0, y0, x1, y1]}``. The region covers the
         content for figures and content+caption for tables/algorithms (whose
@@ -315,8 +360,8 @@ def extract_floats(path: str | Path) -> list[dict]:
         return []
     found: list[dict] = []
     try:
-        for page_index in range(min(doc.page_count, _MAX_PAGES)):
-            if len(found) >= config.pdf.max_floats:
+        for page_index in range(min(doc.page_count, max_pages)):
+            if len(found) >= max_floats:
                 break
             page = doc.load_page(page_index)
             captions: list[tuple[fitz.Rect, str, str]] = []
@@ -333,7 +378,7 @@ def extract_floats(path: str | Path) -> list[dict]:
             rects = _content_rects(page)
             rules = _horizontal_rules(page)
             for caption_rect, kind, caption_text in captions:
-                if len(found) >= config.pdf.max_floats:
+                if len(found) >= max_floats:
                     break
                 if kind == "algorithm":
                     region = _algorithm_region(caption_rect, rules)

@@ -44,7 +44,7 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
   if (trace.action === 'figure')
     return (
       <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
-        🖼 {trace.ok ? 'Showed' : 'Tried'} <b>Figure {trace.figure}</b>
+        🖼 {trace.ok ? 'Showed' : 'Tried'} <b>{trace.label ?? `Figure ${trace.figure}`}</b>
         {trace.title ? (
           <>
             {' '}

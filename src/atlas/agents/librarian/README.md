@@ -2,8 +2,9 @@
 
 The offline library chat: a graph-free RAG agent answering purely from the
 user's own uploaded sources (books, PDFs, web pages), citing inline by title
-and page. The first *streaming* agent in the crew, and the first to load
-shared skills.
+and page — and, since v5.28.0, attaching real figures from the uploaded PDFs
+via its one tool, `show_source_figure`. The first *streaming* agent in the
+crew, and the first to load shared skills.
 
 ## Why it exists
 
@@ -21,7 +22,10 @@ librarian.answer(question, history, source_ids)     main.py
   1  sources.search(question, top_k=chat_k, scope)  ← deterministic, model not engaged
   2  yield RetrievalTrace(found, sources)           ← "what I'm working from"
   3  no hits? yield Token(NO_HITS_ANSWER); return   ← an answer, not an error
-  4  passages + question → one streamed completion
+  4  passages (+ their source ids) + question →
+     streams.drive'd run: show_source_figure may fire
+     (FigureTrace/Figure events drain out live), then
+     the structured Reply's text streams
   5  yield Token(delta) as the prose arrives
 ```
 
@@ -33,11 +37,16 @@ the sources before a single token streams.
 
 - **`config.py`** — `AGENT_ID`, `SKILLS` (`teaching-voice` +
   `citation-discipline`), the librarian-specific `SYSTEM_PROMPT` (grounding
-  scope + the `[Title, p.N]` attribution form), and `NO_HITS_ANSWER`.
+  scope, the `[Title, p.N]` attribution form, and the figure-attachment
+  instructions), `NO_HITS_ANSWER`, and `BUDGETS` (the `figures` cap,
+  overridable via the agent entry's `extras` like the researcher's).
 - **`main.py`** — the `Agent` (instructions = `SYSTEM_PROMPT` plus each
-  `prompts.skill`-loaded skill; PydanticAI joins the sequence itself) and
-  `answer`.
-- No `tools.py` — retrieve-then-answer needs no tool loop.
+  `prompts.skill`-loaded skill; PydanticAI joins the sequence itself), the
+  structured `Reply` output, and `answer`.
+- **`tools.py`** — `LibrarianDeps` (queue + figure budget) and
+  `show_source_figure`, a thin wrapper over the shared
+  `agents/library_figures.attach_source_figure` (the researcher's twin uses
+  the same core, so markers, dedupe, and error text can't drift apart).
 
 ## Design decisions worth knowing
 
@@ -53,6 +62,17 @@ the sources before a single token streams.
 - **Scope semantics are the retrieval layer's** (`None` = whole library,
   present list = only those, `[]` = nothing) — `answer` forwards
   `source_ids` untouched, adding no interpretation of its own.
+- **Structured `Reply` output, not plain text** — the price of the tool:
+  a model narrates its tool turns ("let me pull that figure…"), and with
+  text output PydanticAI marks the first text part as the provisional final
+  result, so the narration would stream as answer prose. The researcher's
+  pattern (structured output; everything outside the final result ignored)
+  fixes it, with `streams.partial_text` streaming the prose out of the
+  output tool's partial JSON.
+- **The prompt lists the retrieved passages' source ids** (`- [id] "Title"`)
+  because passages cite by title+page while `show_source_figure` addresses
+  by id+page — the map is the bridge, scoped to just the sources actually
+  retrieved.
 - **`chat_k` over `search_k`**: the passages are the answer's *only*
   grounding (no paper reading, no follow-up searches), so the chat retrieves
   more than the researcher's search tool will.
@@ -88,5 +108,8 @@ the sources before a single token streams.
 model: `TestModel` streams a canned answer (trace-then-tokens order, token
 reassembly); an exploding `FunctionModel` proves no hits never engage the
 model; a recording `stream_function` proves the passages land tagged in the
-prompt and prior turns ride ahead of it as message history; a kwargs spy
-proves scope and `chat_k` reach retrieval untouched.
+prompt — with their source-id map — and prior turns ride ahead of it as
+message history; a kwargs spy proves scope and `chat_k` reach retrieval
+untouched; a scripted tool-then-answer run proves `show_source_figure`
+attaches (sources image URL, `index=None`) and that tool-turn narration
+never streams.

@@ -401,6 +401,8 @@ export function useConversation() {
             {
               signal: ctrl.signal,
               onRetrieve: (retrieval) => dispatch(retrieveSet(retrieval)),
+              onTrace: (trace) => dispatch(traceAdded(trace)),
+              onFigure: (figure) => dispatch(figureAdded(figure)),
               onToken: (token) => dispatch(tokenAppended(token)),
               onError: (message) => setError(message),
             },

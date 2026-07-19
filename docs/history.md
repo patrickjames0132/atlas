@@ -481,6 +481,42 @@
 
 ### Bring-your-own sources
 
+- [x] **Figures from uploaded PDFs in answers** *(v5.28.0)* — the library
+      analogue of `show_figure`, shipped for BOTH answering agents. Uploaded
+      PDFs now **keep their original file** beside the indexed text
+      (`data/source_pdfs/<id>.pdf`, removed with the source; older uploads and
+      URL sources degrade to "no figures"), and the caption-anchored extractor
+      built for open-access papers mines them into a per-source **figure
+      manifest** (`services/sources/figures.py`, month-cached, no pixels
+      stored; images render on demand at `/api/sources/<id>/figure/<n>`). The
+      **researcher** and — added mid-branch on Patrick's call — the
+      **librarian** both carry a `show_source_figure(source_id, page, figure)`
+      tool over one shared core (`agents/library_figures.py`):
+      page-addressed to match how passages are cited (`[Title, p.N]`), with
+      the prompt carrying an id → title map of the retrieved sources. Giving
+      the tool-less librarian a tool forced two structural borrowings from the
+      researcher: the `streams.drive` event bridge (so `Figure`/`FigureTrace`
+      events flow live between text deltas) and a structured `Reply` output —
+      plain-text streaming leaked tool-turn narration into the answer, caught
+      by a scripted test (`streams.partial_text` is now the shared prose
+      streamer). Browser-testing surfaced two notable extraction bugs (both in
+      `docs/bugs.md`): the **backup-diagrams incident** (a miss message
+      listing pages without captions invited attaching an unrelated figure and
+      hallucinating its content — fixed by caption-carrying candidate lists,
+      nearest-page-first, plus caption echo on every attach) and the
+      **Sarsa(λ) incident** (a captioned textbook figure unminable for three
+      stacked reasons: paper-sized caps, a dust filter that ate
+      diagram-piece swarms, and contact-only chaining that couldn't walk
+      sparse diagonal pieces — fixed by per-corpus `config.pdf`
+      `research_papers`/`library_documents` caps, thresholding the region
+      instead of the inputs, and axis-aware `_chain_near`; verified on the
+      real 548-page book: 119 floats in ~6s, Figure 12.9 mined and rendered).
+      Figure cards/chips/lightbox now display the float's own designation
+      parsed off its caption (`agents/captions.py` → the events' `label`
+      field; "Figure 12.4 · source — caption"), falling back to slot order
+      when a caption has none. The mining geometry is documented in depth in
+      `services/pdf/README.md` § "The geometry, precisely".
+
 - [x] **Phase 3d — Bring your own sources** — pull the user's own material into
       the teacher's reach so Q&A can draw on it alongside the papers it fetches —
       "how does this paper relate to chapter 3 of my textbook?" Books are far too

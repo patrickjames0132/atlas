@@ -515,6 +515,18 @@ class SourcesConfig(ConfigModel):
     retrieval: Retrieval
 
 
+class MiningCaps(ConfigModel):
+    """How much of one PDF the float miner will look at — one set of caps per
+    corpus, because limits tuned for papers were silent data loss on books
+    (docs/bugs.md, the Sarsa(λ) incident).
+    """
+
+    max_floats: PositiveInt = Field(
+        description="Stop mining after this many figures/tables/algorithms."
+    )
+    max_pages: PositiveInt = Field(description="Scan at most this many pages.")
+
+
 class PdfConfig(ConfigModel):
     """Fetching and mining open-access PDFs for papers with no ar5iv render.
 
@@ -542,10 +554,20 @@ class PdfConfig(ConfigModel):
         "the least-recently-used files beyond it are pruned after each download. "
         "At ~2 MB per typical paper, 200 files ≈ 400 MB."
     )
-    max_floats: PositiveInt = Field(
-        description="Maximum figures/tables/algorithms mined from one PDF — the "
-        "pymupdf twin of the ar5iv extractor's 8-figure cap, a little higher "
-        "because tables and algorithms now count too."
+    research_papers: MiningCaps = Field(
+        description="Mining caps for open-access PAPER PDFs (the graph's journal "
+        "papers). Papers are short and mined on a panel open, so these stay small: "
+        "12 floats is the pymupdf twin of the ar5iv extractor's 8-figure cap (a "
+        "little higher because tables and algorithms count too), and 80 pages "
+        "covers even long papers while keeping a mislabeled 1000-page scan from "
+        "stalling the panel."
+    )
+    library_documents: MiningCaps = Field(
+        description="Mining caps for UPLOADED LIBRARY PDFs, sized for textbooks "
+        "instead of papers: hundreds of numbered figures, all of which must be "
+        "addressable (chapter 12's included — the Sarsa(λ) lesson in "
+        "docs/bugs.md). Mining runs once per upload and is cached (~6s for a "
+        "548-page book); the caps only guard against pathological documents."
     )
     render_dpi: PositiveInt = Field(
         description="Resolution for rendering a mined float's page region to PNG. "

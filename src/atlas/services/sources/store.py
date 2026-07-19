@@ -21,11 +21,43 @@ import logging
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 from ...config import config
 from . import embeddings
 
 log = logging.getLogger(__name__)
+
+
+def pdf_dir() -> Path:
+    """The directory keeping uploaded source PDFs (created on demand).
+
+    The ingested *text* lives in the database; the original file is kept
+    beside it (since v5.28.0) so figures can be mined from it later —
+    ``data_dir/source_pdfs``, gitignored with the rest of ``data/``.
+
+    Returns:
+        The directory path.
+    """
+    directory = config.storage.data_dir / "source_pdfs"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def pdf_path(source_id: str) -> Path:
+    """Where a source's original PDF lives (whether or not it exists).
+
+    Sources ingested before v5.28.0 — and URL sources, which never had a
+    file — simply have nothing at this path; callers treat that as "no
+    figures", never an error.
+
+    Args:
+        source_id: The source's id.
+
+    Returns:
+        The file path.
+    """
+    return pdf_dir() / f"{source_id}.pdf"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
@@ -244,4 +276,8 @@ def delete_source(source_id: str) -> bool:
             )
         cursor = conn.execute("DELETE FROM sources WHERE id = ?", (source_id,))
         conn.execute("DELETE FROM chunks WHERE source_id = ?", (source_id,))
-        return cursor.rowcount > 0
+    try:
+        pdf_path(source_id).unlink(missing_ok=True)
+    except OSError:  # the rows are gone either way; a stray file is harmless
+        log.warning("couldn't remove stored PDF for %s", source_id, exc_info=True)
+    return cursor.rowcount > 0

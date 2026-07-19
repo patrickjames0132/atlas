@@ -107,12 +107,16 @@ class Discovery(BaseModel):
 
 
 class Figure(BaseModel):
-    """A real paper figure the researcher attached to its answer.
+    """A real figure the researcher attached to its answer — a paper's
+    (``show_figure``) or one from the user's own uploaded library
+    (``show_source_figure``).
 
     The frontend interleaves the image at the ``<<FIG slot>>`` marker the
     model placed in its prose (falling back to the end of the answer if the
     marker never appears). ``index``/``figure`` echo which paper and which of
-    its figures this is; ``image`` is the URL to fetch the image from.
+    its figures this is — ``index`` is None for a library figure, which
+    belongs to no numbered paper (``title`` then names the source); ``image``
+    is the URL to fetch the image from.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -121,9 +125,15 @@ class Figure(BaseModel):
     image: str
     caption: str
     title: str | None
-    index: int
+    index: int | None
     figure: int
     slot: int
+    label: str | None = None
+    """The float's own designation parsed off its caption ("Figure 12.4",
+    "Table 2") — what the card heading and trace chips display, with
+    ``caption`` holding the remaining text. None when the caption carries no
+    designation (the frontend then numbers attachments by slot); absent on
+    pre-v5.28 saved sessions."""
 
 
 class Cited(BaseModel):
@@ -225,7 +235,9 @@ class SourceSearchTrace(BaseModel):
 
 
 class FigureTrace(BaseModel):
-    """The researcher attached (or failed to attach) a paper's figure."""
+    """An agent attached (or failed to attach) a figure — a paper's
+    (researcher) or an uploaded source's (researcher/librarian).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -235,6 +247,10 @@ class FigureTrace(BaseModel):
     index: int | None
     title: str | None
     figure: int | None
+    label: str | None = None
+    """The attached float's own designation ("Figure 12.4") for the chip
+    text; None on failures and label-less captions (the chip then falls
+    back to the per-paper/per-page number in ``figure``)."""
 
 
 class RetrievalTrace(BaseModel):

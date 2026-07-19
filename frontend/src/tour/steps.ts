@@ -57,8 +57,9 @@ export const HOME_TOUR: TourStep[] = [
     target: '[data-tour="library-btn"]',
     title: 'Your library',
     body:
-      'Bring your own material: textbooks, PDFs, web pages. The AI teacher can search it ' +
-      'and cite passages by page, right alongside the papers on the graph.',
+      'Bring your own material: textbooks, PDFs, web pages. The AI teacher can search it, ' +
+      'cite passages by page, and pull figures out of your uploaded PDFs into its ' +
+      'answers, right alongside the papers on the graph.',
   },
   {
     target: '[data-tour="library-panel"]',

@@ -32,7 +32,7 @@ protocol for every workflow, declared in one file.
 | `Token`     | researcher, librarian      | a chunk of streamed answer prose                               |
 | `Trace`     | researcher, orchestrator, librarian | "watch the agent work" — one variant per action (below) |
 | `Discovery` | researcher, orchestrator   | papers + edges to merge into the live graph                    |
-| `Figure`    | researcher            | a real paper figure attached to the answer                     |
+| `Figure`    | researcher, librarian | a real figure attached to the answer — a paper's, or one mined from an uploaded PDF (`index=None`) |
 | `Cited`     | researcher            | final event: the node ids the answer draws on                  |
 | `Done`      | every workflow        | clean finish — always last on success                          |
 | `Error`     | every workflow        | failure — always last, so the frontend never hangs             |
@@ -209,6 +209,7 @@ agents/
   factory.py         ← shared: config.llm entry -> live PydanticAI model
   streams.py         ← shared: the sync event bridge (drive a run, yield events)
   prompts.py         ← shared: skills -> instructions, passages/history -> model input
+  library_figures.py ← shared: the show_source_figure core (researcher + librarian)
   skills/            ← shared: skills.md files any sub-agent's config may load
     numbered-papers.md      the index-not-id grounding protocol
     teaching-voice.md       the "sharp, friendly teacher" persona rules

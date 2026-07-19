@@ -58,7 +58,14 @@
     "max_bytes": 26214400,
     "timeout": 60,
     "cache_files": 200,
-    "max_floats": 12,
+    "research_papers": {
+      "max_floats": 12,
+      "max_pages": 80
+    },
+    "library_documents": {
+      "max_floats": 400,
+      "max_pages": 1500
+    },
     "render_dpi": 150
   },
   "server": {

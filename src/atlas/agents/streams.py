@@ -34,10 +34,36 @@ from typing import Any, AsyncIterator, Coroutine, Iterator, TypeVar
 from pydantic_ai import Agent
 from pydantic_ai.messages import AgentStreamEvent
 from pydantic_ai.run import AgentRunResultEvent
+from pydantic_core import from_json
 
 OUTPUT_TOOL = "final_result"
 """PydanticAI's default output-tool name — structured final results stream
 as this tool call's argument deltas."""
+
+
+def partial_text(args_json: str, field: str = "text") -> str:
+    """A string field's value out of a partially-streamed output-tool args JSON.
+
+    ``allow_partial="trailing-strings"`` keeps the truncated tail of the
+    in-flight string, so prose streams smoothly instead of buffering until
+    the field closes. Shared by every agent that streams a structured
+    result's prose (researcher, librarian) — structured output is the house
+    answer to tool-call narration: text a model emits *outside* its final
+    result is ignored instead of streamed-then-disavowed.
+
+    Args:
+        args_json: The output tool call's JSON args accumulated so far.
+        field: The string field to extract.
+
+    Returns:
+        The field's current value; ``""`` while it's undecodable or absent.
+    """
+    try:
+        parsed = from_json(args_json, allow_partial="trailing-strings")
+    except ValueError:
+        return ""
+    value = parsed.get(field) if isinstance(parsed, dict) else None
+    return value if isinstance(value, str) else ""
 
 _Result = TypeVar("_Result")
 

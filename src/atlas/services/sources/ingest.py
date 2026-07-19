@@ -8,6 +8,7 @@ are thin wrappers that extract the text first.
 from __future__ import annotations
 
 import logging
+import shutil
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from uuid import uuid4
@@ -128,9 +129,18 @@ def ingest_pdf(
     """
     path = Path(path)
     pages, total = extract.extract_pdf(path)
-    return add_source(
+    record = add_source(
         title or path.stem, "pdf", path.name, pages, pages=total, on_progress=on_progress
     )
+    # Keep the original file beside the indexed text (best-effort — the
+    # ingest itself already succeeded): it's what figures are mined from
+    # later (``figures.py``). Copy, don't move: the caller owns ``path``
+    # (the upload route deletes its own temp file).
+    try:
+        shutil.copyfile(path, store.pdf_path(record["id"]))
+    except OSError:
+        log.warning("couldn't keep the PDF for source %s", record["id"], exc_info=True)
+    return record
 
 
 def ingest_url(

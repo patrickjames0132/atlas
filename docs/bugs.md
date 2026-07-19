@@ -22,6 +22,76 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### The Sarsa(λ) figure that "didn't exist" — three stacked reasons a captioned textbook figure was unminable
+
+*Found by Patrick browser-testing the v5.28.0 fixes (2026-07-18): asked for
+Figure 12.9 (Sarsa(λ)'s backup diagram) by name; the tool insisted the book
+had no such extractable figure — while the PDF plainly captions it on p326.*
+
+- **Symptom.** `show_source_figure` reported "no extractable figures" for a
+  properly captioned, numbered textbook figure, and the model relayed the
+  miss as "returned as uncaptioned inline diagrams" (parroting our error
+  text's parenthetical).
+- **Root cause.** Three independent gaps, uncovered one beneath the next:
+  (1) **paper-sized mining caps** — `extract_floats` stopped at 80 pages /
+  12 floats, so a 548-page textbook's manifest ended in chapter 2 and
+  everything beyond was invisible; (2) with the caps lifted, the diagram was
+  *still* missed because it's drawn as a **swarm of tiny vector pieces**
+  (arrow/node clusters of 200–1200 pt²), every one below the 4000 pt²
+  per-cluster floor that guarded against junk; (3) with small pieces
+  admitted, contact-only chaining (8 pt pad) **couldn't walk the sparse
+  diagram** — its pieces relate diagonally, 40–60 pt apart, so only one
+  fragment near the caption seeded and the region fell under the size floor.
+- **Fix.** Caps became the caller's, with book-sized `config.pdf.library_*`
+  values for uploaded sources (paper values unchanged for OA mining); the
+  size threshold moved from inputs to the answer (`_MIN_CLUSTER_AREA` now
+  only drops dust; the grown region must clear `_MIN_REGION_AREA`); chaining
+  became **axis-aware** (`_chain_near`: overlap in one axis, ≤ 60 pt gap in
+  the other), which climbs the whole diagram from one seeded piece. Cached
+  manifests re-mine via the `srcfloats:v3:` key bump. Verified on the real
+  book: 119 floats cover-to-cover in ~6 s, Figure 12.9 mined and rendered;
+  the spike corpus (attention/PPO/LDA) mines identically to before.
+- **Lesson / guard.** Limits tuned for one corpus (papers) become silent
+  data loss on another (books) — size caps belong to the call-site, and
+  input-side quality filters discard evidence that only aggregates into
+  significance (the swarm was junk piecewise, a figure collectively;
+  threshold the *answer*). Guarded by `test_max_pages_cap` (caps are
+  per-call), the region-floor behavior in the synthetic float tests, and
+  this entry.
+
+### The backup-diagrams incident — a tool that listed pages without captions invited figure hallucination
+
+*Found by Patrick browser-testing the v5.28.0 library-figures branch
+(2026-07-18): asked for Sutton & Barto's Bellman backup diagrams, got the
+Chapter-2 bandit parameter study confidently captioned as backup diagrams.*
+
+- **Symptom.** The librarian attached a real, correctly-rendered figure
+  (image and caption agreed — extraction was NOT at fault) whose content had
+  nothing to do with the prose describing it: the model presented Figure 2.6
+  (bandit parameter study) as "the backup diagrams for the Bellman optimality
+  equations".
+- **Root cause.** Three stacked design gaps, reconstructed from
+  `data/atlas.log`. (1) The wanted backup diagrams are **uncaptioned inline
+  graphics** — invisible to caption-anchored mining (the documented
+  limitation, and textbooks hit it hard). (2) The tool's wrong-page message
+  listed the pages that DO have figures **as bare page numbers** — an open
+  invitation to grab blind, which the model did (pages 86, 116 missed → it
+  took page 60's figure). (3) The success result **didn't echo the caption**,
+  so the model never had a chance to notice the mismatch before describing
+  the figure as what it wanted it to be.
+- **Fix.** `resolve_page_figure`'s miss message now lists candidates **with
+  their captions** ("only attach one if its caption matches — otherwise
+  explain in prose"); `attach_source_figure`'s success result **echoes the
+  attached caption** with describe-only-as-captioned instructions; both
+  agents' prompts forbid attaching an unrelated figure as a stand-in.
+- **Lesson / guard.** A tool result is the model's only eyes: any affordance
+  it lists ("figures exist on pages…") WILL be used, so steering text must
+  carry enough information (captions) to be used *correctly* — and every
+  attach-style action should echo what was actually attached, because the
+  model otherwise fills the gap with what it expected. Guarded by
+  `test_resolve_page_figure_miss_lists_candidates_with_captions` and the
+  caption-echo text in `agents/library_figures.py`.
+
 ### Rule spans that never grew — PyMuPDF's `Rect | Rect` silently ignores empty rects
 
 *Found during the v5.27.0 PDF-figure-mining spike (2026-07-18), in the

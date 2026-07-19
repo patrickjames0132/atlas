@@ -3,6 +3,7 @@
 GET  /api/sources       -> list the user's local semantic library
 POST /api/sources       -> ingest a PDF upload or a {url}, streaming progress
 DEL  /api/sources/<id>  -> remove a source from the library
+GET  /api/sources/<id>/figure/<n> -> one mined source figure, rendered to PNG
 
 Ingestion streams SSE: ``progress`` frames (``{done, total}`` chunks
 embedded — embedding is where the time goes) and then ``done`` (the stored
@@ -139,6 +140,36 @@ def api_sources_add() -> ResponseReturnValue:
                 url, title=url_title, on_progress=on_progress
             )
         )
+    )
+
+
+@bp.get("/api/sources/<source_id>/figure/<int:figure_index>")
+def api_source_figure(source_id: str, figure_index: int) -> ResponseReturnValue:
+    """Serve one figure mined from a source's stored PDF, rendered to PNG.
+
+    The image URLs the researcher's ``show_source_figure`` attaches to
+    answers point here — the library twin of ``/api/pdf_figure``.
+
+    Args:
+        source_id: The source's id.
+        figure_index: 0-based index into the source's figure manifest.
+
+    Returns:
+        PNG bytes with a day-long cache header; 404 for an unknown source,
+        an out-of-range index, or a source with no stored PDF (URL sources,
+        pre-v5.28 uploads).
+    """
+    try:
+        payload = sources_service.render_source_figure(source_id, figure_index)
+    except Exception:
+        log.warning(
+            "source figure render failed for %s/%d", source_id, figure_index, exc_info=True
+        )
+        return Response(status=404)
+    return Response(
+        payload,
+        mimetype="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 

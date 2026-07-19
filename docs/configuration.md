@@ -255,8 +255,18 @@ are not — is written up in [pdf-mining.md](pdf-mining.md).
   LRU-pruned). At ~2 MB per typical paper that's ~400 MB worst case;
   mined text/floats stay in the SQLite cache for a month either way, so an
   evicted PDF only costs a re-download when its figures are next *rendered*.
-- **`max_floats: 12`** — the pymupdf twin of the ar5iv extractor's 8-figure
-  cap, slightly higher because tables and algorithm boxes count too.
+- **`research_papers: {max_floats: 12, max_pages: 80}`** — mining caps for
+  open-access *paper* PDFs: the pymupdf twin of the ar5iv extractor's
+  8-figure cap (slightly higher because tables and algorithm boxes count
+  too), and a page cap that keeps a mislabeled 1000-page scan from stalling
+  a panel open.
+- **`library_documents: {max_floats: 400, max_pages: 1500}`** — the same caps for
+  *uploaded library* PDFs, sized for textbooks instead of papers — one
+  sub-object per corpus, because limits tuned for papers were silent data
+  loss on books: they truncated Sutton & Barto at page 80 / 12 figures,
+  making chapter 12's figures unaddressable (the Sarsa(λ) incident in
+  `docs/bugs.md`). A 548-page book mines cover-to-cover in ~6 s, once,
+  cached.
 - **`render_dpi: 150`** — mined floats are served as page-region renders
   (vector figures have no embedded image to extract); 150 dpi reads crisply
   in the panel and lightbox without ballooning image bytes.
