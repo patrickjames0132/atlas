@@ -151,14 +151,15 @@ Formerly `density_budget`, and written **`n*`** throughout the older notes.
 This is what ships on the live S2 path's **truncated** pools (a complete live
 pool computes Rule 1 instead). Formerly `density_selection_rule`.
 
-**`select_landmarks`** — the app-facing wrapper around Rule 2: reads the
-`graph.adaptive_cite_limit` toggle, applies the `graph.cite_limit` ceiling, logs.
-Formerly `density_selection`.
+**`select_landmarks`** — the app-facing wrapper around Rule 2: applies the
+`UNBOUNDED_LANDMARK_CAP` payload guard, logs. Formerly `density_selection`
+(and, until the v6.0.0 config purge, the reader of the deleted
+`graph.adaptive_cite_limit` toggle and `graph.cite_limit` ceiling).
 
 > **Why two functions per rule?** Each rule exists twice — a **pure** version
-> that takes its cap as an argument, and a **config-aware** wrapper that reads
-> `config.json`. The pure half exists so pipelines and studies can run *the exact
-> serving rule* without depending on a local config file. Pure rules are named
+> that takes its cap as an argument, and a serving wrapper that adds the
+> payload guard and the log line. The pure half exists so pipelines and
+> studies can run *the exact serving rule* over any cap. Pure rules are named
 > for their mechanics; wrappers are named for their job.
 
 ---
@@ -183,7 +184,8 @@ features and clamps the result. Config-free. Formerly `model_budget`.
 `graph.adaptive_cite_limit` toggle and called `predicted_budget`; **deleted in
 v5.13.0** when the model retired from serving (see
 [`predict-vs-compute.md`](predict-vs-compute.md)'s epilogue). The config key of
-the same name survives — it now gates the computed and selected rules.
+the same name outlived it as a gate on the computed and selected rules, until
+the **v6.0.0 config purge** deleted it too — sizing is always adaptive now.
 
 **age origin** — *which paper's year the `age` feature is measured from.* Two
 choices, and the distinction is the whole subject of the `live_pool_validation`

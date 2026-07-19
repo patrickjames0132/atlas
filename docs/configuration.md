@@ -65,55 +65,36 @@ special case for it. A typical split:
 
 ## `graph` — neighborhood size
 
-- **`ref_limit` / `cite_limit` / `similar_limit` = 100 / 150 / 60** — ship
-  counts, not display caps: the frontend sliders default to a modest reveal
-  and treat these as their maximum, so generous values give the sliders
-  range without cluttering the first render.
-- **`adaptive_cite_limit: true`** — a flat landmark budget fits no one:
-  an old classic's top citers span decades and read as a map (Hawking
-  Radiation earns a large budget), while a young hot paper's top citers are
-  same-era pile-on (DQN reads better at ~60, "Attention Is All You Need" at
-  ~30). When on, the landmark ship count is sized per seed — by one of two
-  routes to the same criterion, both in `services/graph/budget.py`:
-  - **Computed** — the **STOP rule** (`computed_cite_limit`): walk the seed's
-    citers most-cited first, bucketing by publication year, and stop where a
-    year first overflows `PER_YEAR_CAP` (12); ship that many, a prefix of the
-    all-time ranking. Used by every path holding a whole-history ranking: the
-    **offline corpus**, **OpenAlex** (the rule only ever reads the top of the
-    ranking, so one server-sorted page suffices), and a **complete live S2
-    pool** (a seed whose citer list ends before the API's offset ceiling). No
-    model artifact involved — the count is measured, not estimated. (A trained
-    model predicted this number for OpenAlex until v5.13.0; see
-    [`predict-vs-compute.md`](predict-vs-compute.md).)
-  - **Selected** from the citer pool directly — up to `PER_YEAR_CAP` landmarks
-    **per publication year**, taking the most-cited in each and *skipping* citers
-    whose year is already full (`select_landmarks`, the **SKIP rule**). Used by
-    the live S2 fallback's **truncated** pools (the offset ceiling cut the list
-    off): a truncated ranking has no honest prefix — DQN's stops at 29 landmarks
-    with **nothing from 2024–2025**, an 18-month hole before the Latest
-    frontier, where skipping full years ships 84, twelve in each of 2019–2025.
+The app **sizes every relation itself** — there are no per-relation count
+knobs. (The `ref_limit` / `cite_limit` / `latest_limit` / `similar_limit`
+fields were deleted after sitting at `null` in the real `config.json` for
+months; the only remaining ceiling is `UNBOUNDED_LANDMARK_CAP` (500) in
+`src/atlas/integrations/caps.py` — a named **payload guard**, not a tuning
+knob, so a mega seed can't page its entire citer list into one response.)
 
-  Turn off to always ship the flat `cite_limit` on every path. Both routes' terms
-  are defined in [`landmark-vocabulary.md`](landmark-vocabulary.md).
-- **`adaptive_latest_band: true`** — the *Latest Publications* relation fills
-  recent years evenly, one query per year up to the current year; the lower edge
-  defaults to a fixed `latest_band_years` offset (5). For an old seed whose
-  landmarks tail off years before that, the timeline shows a dead stretch between
-  the last landmark and the first band. When on, the band start is chosen **per
-  seed** at the **tail edge** of the seed's landmark cluster — scanning back from
-  the newest landmark year, the first year still holding ≥ `tau` of the peak
-  year's landmark count (a second
-  model trained on real data, `src/ml_pipelines/latest_gap/model.joblib`, served in
-  `services/graph/bands.py`) — so an old classic's bands widen back to meet its
-  cluster while a young paper starts at its own recent edge (a tight frontier). A
-  `max_span` cap bounds query cost. Turn off (or if the model can't load) to use
-  the fixed `latest_band_years` span. See `src/ml_pipelines/latest_gap/README.md` and
-  `research/latest_gap/`.
-- **`recs_pool: "all-cs"`** — the Recommendations API's default `"recent"`
-  pool only draws from newly published papers. Seed on anything older than
-  a year or two (e.g. a 2017 paper) and `"recent"` returns *zero* similar
-  neighbors. `"all-cs"` searches all of CS, which is what you want unless
-  you're deliberately exploring only brand-new work.
+Sizing is **always adaptive** — no on/off toggles either (they were only ever
+off-switches for the app's one sizing mechanism). The landmark band is sized
+per seed by the STOP/SKIP rules in `services/graph/budget.py` (terms in
+[`landmark-vocabulary.md`](landmark-vocabulary.md), history in
+[`predict-vs-compute.md`](predict-vs-compute.md)), and the Latest bands start
+at the **density tail edge** of the seed's landmark cluster (the fitted tau
+rule in `services/graph/bands.py`; see `src/ml_pipelines/latest_gap/README.md`).
+The recommendations candidate pool is a call parameter now too
+(`s2.recommendations(..., pool=)`, defaulting to `"all-cs"` in code — S2's
+`"recent"` pool returns zero hits for seeds older than a year or two).
+
+What remains configurable — the Latest bands' shape, grouped under
+`graph.latest_nodes` (its own sub-object because the two knobs only mean
+anything together, and the planned settings modal's non-adaptive mode hands
+exactly this pair to the user):
+
+- **`latest_nodes.number_of_bands: 5`** — the **fallback** band span, used
+  only when the tau rule can't place a per-seed start (model unloadable, or
+  too few dated landmarks): the bands then cover this many one-year slices
+  below the landmark cutoff, running up to the current year.
+- **`latest_nodes.nodes_per_band: 50`** — top-N most-cited citers kept from
+  each one-year band (≤200, OpenAlex's page cap). Per-year banding gives even
+  coverage; one big recency query would let its oldest year dominate.
 - **`cache_ttl: 86400`** (1 day) — citation graphs change slowly; a day-long
   cache keeps repeat exploration and backtracking instant without
   re-hitting S2.

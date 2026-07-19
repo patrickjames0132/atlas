@@ -45,6 +45,7 @@ from typing import Callable, Protocol
 import duckdb
 
 from ....config import config
+from ...caps import UNBOUNDED_LANDMARK_CAP
 from . import paths as corpus_paths
 from .ingest import NBUCKETS
 from .paths import ReleasePaths, read_current_release
@@ -53,7 +54,7 @@ log = logging.getLogger(__name__)
 
 #: Injected landmark budget: ``(ranked citer years) -> how many to ship | None``.
 #: ``services/graph`` passes ``budget.computed_cite_limit``, which runs the STOP
-#: rule over the real pool; None falls back to the flat ``landmark_limit``. It
+#: rule over the real pool; None falls back to the flat payload guard. It
 #: takes years and returns a count because the rule only reasons about *when*
 #: citers were published — the entries themselves stay here. A parameter, not an
 #: import, so ``integrations`` stays below ``services`` in the dependency order —
@@ -68,7 +69,7 @@ LandmarkBudgetFn = Callable[[Sequence[int | None]], int | None]
 
 #: Injected boundary chooser: ``(landmark_years, landmark_max_year) -> first band
 #: year | None``. ``services/graph`` passes ``bands.earliest_band_year``; None keeps
-#: the fixed ``latest_band_years`` span. Identical to OpenAlex's ``BandStartFn`` —
+#: the fixed ``number_of_bands`` span. Identical to OpenAlex's ``BandStartFn`` —
 #: the same rule, reading the same kind of distribution, because this path now ships
 #: the same kind of landmark band.
 BandStartFn = Callable[[list[int], int], int | None]
@@ -84,7 +85,7 @@ class CitationSource(Protocol):
     :meth:`DuckDBCitationSource.resolve_corpus_id`).
     """
 
-    def landmark_citers(self, corpus_id: int, limit: int | None, *,
+    def landmark_citers(self, corpus_id: int, *,
                         max_landmark_year: int,
                         landmark_budget: LandmarkBudgetFn | None = None) -> list[dict]:
         """The seed's landmark-era citers, most-cited first (its Field Landmarks)."""
@@ -375,7 +376,7 @@ class DuckDBCitationSource:
                 entries.append(_row_to_entry((*paper_row, influential)))
         return entries
 
-    def landmark_citers(self, corpus_id: int, limit: int | None, *,
+    def landmark_citers(self, corpus_id: int, *,
                         max_landmark_year: int,
                         landmark_budget: LandmarkBudgetFn | None = None) -> list[dict]:
         """The seed's landmark-era citers, most-cited first (its Field Landmarks).
@@ -398,26 +399,25 @@ class DuckDBCitationSource:
 
         Args:
             corpus_id: The seed's ``corpusid``.
-            limit: Max citers to return — the fallback ceiling when
-                ``landmark_budget`` is absent or declines; None for all.
             max_landmark_year: The last year that still counts as landmark-era;
                 anything newer belongs to the Latest bands.
             landmark_budget: Optional rule measuring how many of the ranked pool
                 to ship, from its citer years (see :data:`LandmarkBudgetFn`).
-                Its count wins over ``limit``; a None answer falls back to it.
+                Its count wins over the ``UNBOUNDED_LANDMARK_CAP`` payload
+                guard; a None answer (or no rule) falls back to it.
 
         Returns:
             ``{"node", "influential"}`` entries, most-cited first.
         """
         if landmark_budget is None:
-            ranked = self._ranked_landmark_citers(corpus_id, limit,
+            ranked = self._ranked_landmark_citers(corpus_id, UNBOUNDED_LANDMARK_CAP,
                                                   max_landmark_year=max_landmark_year)
         else:
             ranked = self._ranked_landmark_citers(corpus_id, None,
                                                   max_landmark_year=max_landmark_year)
             budget = landmark_budget([year for _citer_id, year, _influential in ranked])
-            # A None answer means the adaptive toggle is off — honour the ceiling.
-            ranked = ranked[:budget] if budget is not None else ranked[:limit]
+            # A declining rule (None) falls back to the flat payload guard.
+            ranked = ranked[:budget] if budget is not None else ranked[:UNBOUNDED_LANDMARK_CAP]
         return self._entries_for(
             [(citer_id, influential) for citer_id, _year, influential in ranked]
         )
@@ -438,7 +438,7 @@ class DuckDBCitationSource:
 
         Args:
             corpus_id: The seed's ``corpusid``.
-            band_start: First year to band (from ``bands.band_start_rule``).
+            band_start: First year to band (from ``bands.earliest_band_year``).
             current_year: Last year to band, inclusive.
             per_year: Max citers per year band.
 
@@ -500,8 +500,6 @@ def citation_relations(
     seed_paper: dict,
     seed_ref: str,
     *,
-    landmark_limit: int | None,
-    latest_limit: int | None,
     max_landmark_year: int,
     current_year: int,
     landmark_budget: LandmarkBudgetFn | None = None,
@@ -545,19 +543,16 @@ def citation_relations(
         seed_paper: The normalized seed node (its ``arxiv_id`` drives resolution).
         seed_ref: The raw reference the graph was seeded on (a ``CorpusId:`` /
             arXiv id fallback for resolution).
-        landmark_limit: Max landmark citers, used only when no ``landmark_budget``
-            is supplied (or it declines); None for all.
-        latest_limit: Max latest citers (keeps the newest), or None for all.
         max_landmark_year: The last landmark-era year — anything newer is banded as
             latest. Passed in rather than computed so both providers split on the
             same boundary (``openalex.landmark_max_year``).
         current_year: The last year to band, inclusive.
         landmark_budget: Optional rule measuring how many of the *ranked* landmark
             pool to ship, from its citer years (see :data:`LandmarkBudgetFn`). Its
-            count wins over ``landmark_limit``, and its presence makes the query
+            count wins over the payload guard, and its presence makes the query
             unlimited.
         band_start: Optional per-seed band-start chooser (see :data:`BandStartFn`).
-            None, or a None answer, keeps the fixed ``latest_band_years`` span.
+            None, or a None answer, keeps the fixed ``number_of_bands`` span.
 
     Returns:
         ``(landmark_entries, latest_entries)``, or None to fall back to live S2.
@@ -572,14 +567,14 @@ def citation_relations(
     # FIELD LANDMARKS. The budget rule travels into the source so the trim can
     # happen between its two phases: the rule measures the full *ranked* pool's
     # years, and only the winners it keeps are hydrated wide.
-    landmark = source.landmark_citers(corpus_id, landmark_limit,
+    landmark = source.landmark_citers(corpus_id,
                                       max_landmark_year=max_landmark_year,
                                       landmark_budget=landmark_budget)
 
     # LATEST PUBLICATIONS: per-year bands. The start defaults to the fixed span and
     # may widen per seed, read off the landmarks we just chose — which is why this
     # runs second.
-    earliest = max_landmark_year - config.graph.latest_band_years + 1
+    earliest = max_landmark_year - config.graph.latest_nodes.number_of_bands + 1
     if band_start is not None:
         adaptive = band_start(
             [year for year in (entry["node"].get("year") for entry in landmark) if year],
@@ -589,16 +584,14 @@ def citation_relations(
             earliest = adaptive
     recent = source.latest_bands(corpus_id, band_start=earliest,
                                  current_year=current_year,
-                                 per_year=config.graph.latest_per_year)
+                                 per_year=config.graph.latest_nodes.nodes_per_band)
 
     # The bands reach below max_landmark_year, so a giant can appear in both —
     # keep it a landmark rather than double-showing it (as the OpenAlex path does).
     shipped = {entry["node"]["id"] for entry in landmark}
     latest = [entry for entry in recent if entry["node"]["id"] not in shipped]
-    # Newest-first already (the query orders by date), so a limit keeps the newest;
-    # then flip so rank 0 is the OLDEST banded year and the reveal slider walks
-    # forward through time toward the present.
-    if latest_limit is not None:
-        latest = latest[:latest_limit]
+    # Newest-first already (the query orders by date); flip so rank 0 is the
+    # OLDEST banded year and the reveal slider walks forward through time
+    # toward the present.
     latest.reverse()
     return landmark, latest

@@ -17,7 +17,7 @@ src/ml_pipelines/
                    every path now computes its STOP-rule label directly; the
                    artifact remains the label's derivation record and a
                    latest_gap-collector dependency)
-  latest_gap/    — the adaptive latest-band boundary (graph.adaptive_latest_band)
+  latest_gap/    — the adaptive latest-band boundary (bands.earliest_band_year)
   live_pool_validation/ — validation only: both models measured against the live
                    S2 path's truncated pools, simulated from the offline corpus
 ```

@@ -33,3 +33,11 @@ chosen per graph in the header's "Data source" dropdown:
 Each provider owns its own controlled **vocabulary** — `arxiv.vocab` (category
 codes) and `semantic_scholar.vocab` (fields of study) — rather than a shared
 `taxonomy` package. Static/inline data, no remote call.
+
+One deliberately provider-neutral module sits beside the packages:
+**`caps.py`**, home of `UNBOUNDED_LANDMARK_CAP` (500) — the shared **payload
+guard** every citation traversal trims to (never fitted, never config; it
+exists so a mega seed can't page its entire citer list into one graph
+payload). It lives here rather than inside either provider because S2 (live
+and corpus) and OpenAlex must agree on the same guard while staying
+independent of each other.

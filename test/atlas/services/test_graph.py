@@ -48,7 +48,7 @@ def fake_s2(monkeypatch):
 
     monkeypatch.setattr(build.s2, "get_paper", get_paper)
     monkeypatch.setattr(build.s2, "references",
-                        lambda pid, limit: [{"node": make_node("ref1"), "influential": True}])
+                        lambda pid, limit=None: [{"node": make_node("ref1"), "influential": True}])
     monkeypatch.setattr(build.s2, "citation_relations", citation_relations)
     return calls
 
@@ -76,7 +76,7 @@ def fake_openalex(monkeypatch):
     monkeypatch.setattr(build.openalex, "node", lambda work: make_node("seed", title="The Seed"))
     monkeypatch.setattr(build.openalex, "bare_work_id", lambda work: "W99")
     monkeypatch.setattr(build.openalex, "references",
-                        lambda work_id, limit: [{"node": make_node("ref1"), "influential": False}])
+                        lambda work_id, limit=None: [{"node": make_node("ref1"), "influential": False}])
     monkeypatch.setattr(build.openalex, "citation_relations", citation_relations)
     return calls
 
@@ -112,7 +112,7 @@ def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
         latest = [{"node": make_node("CorpusId:3", pub_date="2026-07-01"), "influential": False}]
         return landmark, latest
 
-    def live_should_not_run(paper_id, *, landmark_limit, latest_limit, landmark_select=None):
+    def live_should_not_run(paper_id, **kwargs):
         raise AssertionError("live citation_relations called despite an available corpus")
 
     monkeypatch.setattr(build.s2.corpus, "citation_relations", corpus_relations)
@@ -169,7 +169,7 @@ def test_a_paper_thats_both_a_reference_and_a_citer_merges(fake_s2, monkeypatch)
     """A mutual citation — a paper the seed cites that also cites the seed —
     resolves into ONE node carrying both relations, with an edge each way."""
     monkeypatch.setattr(build.s2, "references",
-                        lambda pid, limit: [{"node": make_node("mutual"), "influential": False}])
+                        lambda pid, limit=None: [{"node": make_node("mutual"), "influential": False}])
 
     def citation_relations(pid, **kwargs):
         return [{"node": make_node("mutual"), "influential": False}], []
@@ -311,12 +311,11 @@ def test_openalex_computes_its_budget_no_model_involved(fake_openalex, monkeypat
     The model used to serve this path on the premise that a remote server-sorted
     query needs its N before any citer is in hand. The STOP rule is prefix-local,
     so the traversal's one-page probe holds everything it reads — ``build``
-    injects ``budget.computed_cite_limit`` and passes the flat ``cite_limit``
-    only as the ceiling. The call is bound against the real signature so a kwarg
-    rename can't hide behind this fake (the lesson the corpus test below pins).
+    injects ``budget.computed_cite_limit``; the traversal's own payload guard is
+    the ceiling (no per-relation config cap remains). The call is bound against
+    the real signature so a kwarg rename can't hide behind this fake (the lesson
+    the corpus test below pins).
     """
-    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
-    monkeypatch.setattr(config.graph, "cite_limit", 200)
     real = inspect.signature(build.openalex.citation_relations)
     received: dict[str, object] = {}
 
@@ -328,7 +327,6 @@ def test_openalex_computes_its_budget_no_model_involved(fake_openalex, monkeypat
     monkeypatch.setattr(build.openalex, "citation_relations", openalex_relations)
     build.build_graph("1706.03762", provider="openalex")
     assert received["landmark_budget"] is budget.computed_cite_limit
-    assert received["landmark_limit"] == 200  # the flat ceiling, not a prediction
 
 
 def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
@@ -338,14 +336,12 @@ def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
     citation-sorted query up front. Measured (``ml_pipelines/live_pool_validation``),
     that LIMIT bought 0.9% — 22.08s for 63 citers vs 22.28s for all 28,732 of DQN's
     — because the scan, dedupe and 200M-row join dominate either way. So it gets
-    ``computed_cite_limit``, and the flat ``cite_limit`` only as a ceiling for when
-    the rule declines.
+    ``computed_cite_limit``; the source's own payload guard is the ceiling for
+    when the rule declines.
 
     Note it still receives a *count* rule, not the live path's selector: this pool
     is a whole-history ranking, so its band is a prefix of the giants.
     """
-    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
-    monkeypatch.setattr(config.graph, "cite_limit", 200)
     received: dict[str, object] = {}
 
     def corpus_relations(seed_paper, seed_ref, **kwargs):
@@ -356,8 +352,6 @@ def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
     build.build_graph("1706.03762", provider="s2")
 
     assert received["landmark_budget"] is budget.computed_cite_limit
-    # The flat ceiling, NOT a per-seed prediction — the model is off this path.
-    assert received["landmark_limit"] == 200
     # And it gets the tau rule for its Latest bands — the same one OpenAlex gets,
     # which works here precisely because landmarks are a prefix with a real year
     # distribution to read (see the live_pool_validation verdict).
@@ -395,12 +389,10 @@ def test_live_s2_fallback_gets_both_rules_one_per_pool_kind(fake_s2, monkeypatch
     A truncated pool takes the banded SKIP selector (a count could only keep a
     prefix, which strands the recent years); a complete pool takes the computed
     STOP budget plus the tau band-start, shipping the corpus shape. ``build``
-    injects all of them and the flat ``cite_limit`` only as a ceiling; the call
-    is bound against the real signature so a kwarg rename can't hide behind
-    this fake.
+    injects all of them; the traversal's own payload guard is the ceiling. The
+    call is bound against the real signature so a kwarg rename can't hide
+    behind this fake.
     """
-    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
-    monkeypatch.setattr(config.graph, "cite_limit", 200)
     monkeypatch.setattr(build.s2.corpus, "citation_relations",
                         lambda seed_paper, seed_ref, **kwargs: None)  # force the live path
     real = inspect.signature(build.s2.citation_relations)
@@ -414,8 +406,6 @@ def test_live_s2_fallback_gets_both_rules_one_per_pool_kind(fake_s2, monkeypatch
     monkeypatch.setattr(build.s2, "citation_relations", live_relations)
     build.build_graph("1706.03762", provider="s2")
 
-    # The flat config ceiling, NOT a per-seed prediction.
-    assert received["landmark_limit"] == 200
     assert received["landmark_select"] is budget.select_landmarks
     assert received["landmark_budget"] is budget.computed_cite_limit
     assert received["band_start"] is bands.earliest_band_year

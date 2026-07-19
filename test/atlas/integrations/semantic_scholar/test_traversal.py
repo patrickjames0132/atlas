@@ -122,7 +122,7 @@ def test_citation_relations_splits_latest_from_landmark(monkeypatch):
         }
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=10, latest_limit=10)
+    landmark, latest = _relations()
     assert [hit["node"]["id"] for hit in landmark] == ["old-giant", "old-mid"]  # most-cited first
     assert [hit["node"]["id"] for hit in latest] == ["fresh", "fresher"]  # oldest-first
 
@@ -143,7 +143,7 @@ def test_citation_relations_dateless_citer_is_landmark_not_latest(monkeypatch):
         }
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=10, latest_limit=10)
+    landmark, latest = _relations()
     assert [hit["node"]["id"] for hit in landmark] == ["undated"]
     assert [hit["node"]["id"] for hit in latest] == ["recent"]
 
@@ -161,7 +161,7 @@ def test_citation_relations_year_settles_a_dateless_citer_inside_the_window(monk
                                           "citationCount": 3, "year": next_year}}]}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=10, latest_limit=10)
+    landmark, latest = _relations()
     assert [hit["node"]["id"] for hit in latest] == ["dateless-but-current"]
     assert landmark == []
 
@@ -179,7 +179,7 @@ def test_citation_relations_cutoff_year_stays_a_landmark_when_dateless(monkeypat
                                           "citationCount": 3, "year": this_year - 1}}]}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=10, latest_limit=10)
+    landmark, latest = _relations()
     assert [hit["node"]["id"] for hit in landmark] == ["ambiguous"]
     assert latest == []
 
@@ -204,13 +204,15 @@ def test_latest_orders_a_dateless_citer_where_the_timeline_draws_it(monkeypatch)
         }
 
     monkeypatch.setattr(client, "request", fake_request)
-    _, latest = _relations(landmark_limit=10, latest_limit=10)
+    _, latest = _relations()
     # Oldest-first: the year-only citer sits at January, ahead of March and June.
     assert [hit["node"]["id"] for hit in latest] == ["year-only", "march", "june"]
 
 
-def test_citation_relations_respects_each_limit(monkeypatch):
-    """landmark_limit and latest_limit trim their partitions independently."""
+def test_truncated_landmarks_trim_to_the_payload_guard(monkeypatch):
+    """With no selector injected, the truncated fallback ships a most-cited
+    prefix trimmed to the payload guard — never the whole pool. Latest has no
+    per-relation cap (the rolling window bounds it structurally)."""
 
     def fake_request(url, **kw):
         if _offset_of(url):
@@ -228,13 +230,15 @@ def test_citation_relations_respects_each_limit(monkeypatch):
         }
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=2, latest_limit=3)
-    assert len(landmark) == 2 and len(latest) == 3
+    monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 2)
+    landmark, latest = _relations()
+    assert len(landmark) == 2 and len(latest) == 5
 
 
-def test_citation_relations_none_limit_ships_everything(monkeypatch):
-    """A null config limit (unbounded) ships the whole ranked pool for that
-    relation — so the frontend slider can max out to the paper's full count."""
+def test_citation_relations_ships_everything_under_the_guard(monkeypatch):
+    """No per-relation config caps: the whole ranked pool ships for each
+    relation (the payload guard is the only ceiling) — so the frontend slider
+    can max out to the paper's full count."""
 
     def fake_request(url, **kw):
         if _offset_of(url):
@@ -252,7 +256,7 @@ def test_citation_relations_none_limit_ships_everything(monkeypatch):
         }
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=None, latest_limit=None)
+    landmark, latest = _relations()
     assert len(landmark) == 6 and len(latest) == 4  # every citer, uncapped
 
 
@@ -276,13 +280,11 @@ def _landmark_pool(monkeypatch, years: list[int]) -> None:
 
 
 def test_citation_relations_landmark_select_picks_the_band(monkeypatch):
-    """An injected selector chooses which ranked landmarks ship, and WINS over the
-    flat landmark_limit. It picks by index, so it can skip — which is the point: a
-    flat count could only ever keep a prefix."""
+    """An injected selector chooses which ranked landmarks ship, and WINS over
+    the flat payload guard. It picks by index, so it can skip — which is the
+    point: a flat count could only ever keep a prefix."""
     _landmark_pool(monkeypatch, [2020] * 5)
-    landmark, _ = _relations(
-        landmark_limit=10, latest_limit=10, landmark_select=lambda years: [0, 2, 4]
-    )
+    landmark, _ = _relations(landmark_select=lambda years: [0, 2, 4])
     assert [hit["node"]["id"] for hit in landmark] == ["old0", "old2", "old4"]
 
 
@@ -297,25 +299,25 @@ def test_citation_relations_landmark_select_reads_the_ranked_years(monkeypatch):
         seen["years"] = list(years)
         return None
 
-    _relations(landmark_limit=None, latest_limit=10, landmark_select=record)
+    _relations(landmark_select=record)
     assert seen["years"] == [2018, 2024, 2019, 2024]  # most-cited first, not sorted by year
 
 
-def test_citation_relations_landmark_select_declining_keeps_the_flat_limit(monkeypatch):
+def test_citation_relations_landmark_select_declining_keeps_the_flat_guard(monkeypatch):
     """A selector that returns None (the adaptive toggle off) leaves the flat
-    landmark_limit in charge rather than shipping the whole pool."""
+    payload guard in charge rather than shipping the whole pool."""
     _landmark_pool(monkeypatch, [2024] * 20)
-    landmark, _ = _relations(
-        landmark_limit=4, latest_limit=10, landmark_select=lambda years: None
-    )
+    monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 4)
+    landmark, _ = _relations(landmark_select=lambda years: None)
     assert len(landmark) == 4
 
 
 def test_citation_relations_without_a_selector_is_unchanged(monkeypatch):
-    """The default (no rule) keeps the flat-limit behavior — the expansion path
+    """The default (no rule) keeps the flat-guard behavior — the expansion path
     and every pre-existing caller are untouched."""
     _landmark_pool(monkeypatch, [2024] * 20)
-    landmark, _ = _relations(landmark_limit=6, latest_limit=10)
+    monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 6)
+    landmark, _ = _relations()
     assert len(landmark) == 6
 
 
@@ -356,7 +358,6 @@ def test_complete_pool_ships_the_corpus_shape(monkeypatch):
         return 2
 
     landmark, latest = _relations(
-        landmark_limit=None, latest_limit=None,
         max_landmark_year=this_year - 2, current_year=this_year,
         landmark_budget=budget,
         band_start=lambda landmark_years, max_year: this_year - 1,
@@ -371,9 +372,9 @@ def test_complete_pool_ships_the_corpus_shape(monkeypatch):
     assert [hit["node"]["id"] for hit in latest] == ["recent_a", "recent_b"]
 
 
-def test_complete_pool_budget_declining_keeps_the_flat_limit(monkeypatch):
+def test_complete_pool_budget_declining_keeps_the_flat_guard(monkeypatch):
     """On the corpus shape, a budget rule answering None (adaptive off) falls
-    back to the flat landmark_limit — still a prefix of the ranking."""
+    back to the flat payload guard — still a prefix of the ranking."""
     this_year = datetime.date.today().year
     _complete_pool(monkeypatch, [
         {"paperId": "giant", "citationCount": 5000, "year": 2015,
@@ -381,8 +382,8 @@ def test_complete_pool_budget_declining_keeps_the_flat_limit(monkeypatch):
         {"paperId": "mid", "citationCount": 300, "year": 2016,
          "publicationDate": "2016-06-01"},
     ])
+    monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 1)
     landmark, _ = _relations(
-        landmark_limit=1, latest_limit=None,
         max_landmark_year=this_year - 2, current_year=this_year,
         landmark_budget=lambda citer_years: None,
     )
@@ -391,7 +392,7 @@ def test_complete_pool_budget_declining_keeps_the_flat_limit(monkeypatch):
 
 def test_complete_pool_bands_cap_each_year_and_exclude_landmarks(monkeypatch):
     """The complete-pool Latest bands mirror the corpus: each band year ships
-    its top ``latest_per_year`` by citations, and a citer already shipped as a
+    its top ``nodes_per_band`` by citations, and a citer already shipped as a
     landmark stays a landmark rather than double-showing."""
     from atlas.config import config
 
@@ -409,9 +410,8 @@ def test_complete_pool_bands_cap_each_year_and_exclude_landmarks(monkeypatch):
         {"paperId": "band_dreg", "citationCount": 1, "year": band_year,
          "publicationDate": f"{band_year}-05-01"},
     ])
-    monkeypatch.setattr(config.graph, "latest_per_year", 2)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 2)
     landmark, latest = _relations(
-        landmark_limit=None, latest_limit=None,
         max_landmark_year=this_year - 2, current_year=this_year,
         landmark_budget=lambda citer_years: 1,
         band_start=lambda landmark_years, max_year: this_year - 3,
@@ -444,10 +444,7 @@ def test_truncated_pool_still_skips_never_prefixes(monkeypatch):
         calls.append("select")
         return [0]
 
-    landmark, _ = _relations(
-        landmark_limit=None, latest_limit=None,
-        landmark_select=select, landmark_budget=budget,
-    )
+    landmark, _ = _relations(landmark_select=select, landmark_budget=budget)
     assert calls == ["select"]  # the budget never ran
     assert [hit["node"]["id"] for hit in landmark] == ["c0"]
 
@@ -471,7 +468,6 @@ def test_a_short_page_with_a_next_pointer_keeps_paging(monkeypatch):
 
     monkeypatch.setattr(client, "request", fake_request)
     landmark, _ = _relations(
-        landmark_limit=None, latest_limit=None,
         max_landmark_year=this_year - 2, current_year=this_year,
         landmark_budget=lambda citer_years: 2,
     )
@@ -500,26 +496,26 @@ def test_a_failed_deep_page_means_completeness_is_unknowable(monkeypatch):
         return 1
 
     landmark, _ = _relations(
-        landmark_limit=None, latest_limit=None,
         landmark_select=lambda citer_years: [0], landmark_budget=budget,
     )
     assert calls == []  # never claimed completeness
     assert [hit["node"]["id"] for hit in landmark] == ["only"]
 
 
-def test_references_none_limit_returns_all_fetched(monkeypatch):
-    """A null ref_limit returns the whole fetched (ranked) reference page."""
+def test_references_default_returns_all_fetched(monkeypatch):
+    """The build's default (no limit) returns the whole fetched (ranked)
+    reference page."""
 
     def fake_request(url, **kw):
         return {"data": [{"citedPaper": {"paperId": f"r{index}", "citationCount": index}}
                          for index in range(7)]}
 
     monkeypatch.setattr(client, "request", fake_request)
-    assert len(traversal.references("p1", None)) == 7
+    assert len(traversal.references("p1")) == 7
 
 
 def test_recommendations_none_limit_requests_s2_max(monkeypatch):
-    """A null similar_limit asks S2 for its max recommendations page (500)."""
+    """A None limit asks S2 for its max recommendations page (500)."""
     seen = {}
 
     def fake_request(url, **kw):
@@ -561,7 +557,7 @@ def test_citation_relations_pages_past_the_latest_window(monkeypatch):
                 "next": offset + 1000}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = _relations(landmark_limit=10, latest_limit=10)
+    landmark, latest = _relations()
     # Kept paging past the first out-of-window page (1000) to the list's end.
     assert seen_offsets == [0, 1000, 2000, 3000, 4000]
     assert {hit["node"]["id"] for hit in latest} == {"new0"}  # the window is unaffected
@@ -581,7 +577,7 @@ def test_deep_paging_stops_at_the_offset_ceiling(monkeypatch):
                 "next": offset + 1000}
 
     monkeypatch.setattr(client, "request", fake_request)
-    _relations(landmark_limit=None, latest_limit=None)
+    _relations()
     assert seen_offsets[-1] == traversal._MAX_OFFSET  # never requests past the ceiling
     assert seen_offsets == list(range(0, traversal._MAX_OFFSET + 1, 1000))
 

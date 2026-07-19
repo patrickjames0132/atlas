@@ -3,7 +3,7 @@
 **What it produces.** `model.joblib` (beside this trainer) — the model the app
 loads (`atlas.services.graph.bands`) to decide, per seed, where the *Latest
 Publications* per-year bands should **start** (replacing the fixed
-`config.graph.latest_band_years` span).
+`config.graph.latest_nodes.number_of_bands` span).
 
 **Why.** Field Landmarks are a seed's all-time most-cited citers (any year);
 Latest Publications fills recent years evenly, one `cited_by_count` query per
@@ -98,7 +98,7 @@ loads (the fitted `tau`/`max_span` + rule contract marker + metrics); the
 `.metadata.json` is the same in human-readable JSON (never loaded — for eyeballing
 and diffing). **Regenerated, not edited** — rerun the pipeline rather than editing
 them. **Loaded defensively** — a missing, corrupt, or contract-mismatched artifact
-makes the app fall back to the fixed `latest_band_years` span, degrading
+makes the app fall back to the fixed `number_of_bands` span, degrading
 gracefully. (This model pickles no estimator — just fitted numbers — so it's free
 of the scikit-learn version-skew hazard the `cite_budget` pickle carries.)
 

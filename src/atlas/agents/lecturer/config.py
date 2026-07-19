@@ -19,7 +19,7 @@ EXTRA_DEFAULTS: dict[str, int] = {
     # THE CURRENT FRONTIER's recency window, in months. Wide (~5 years) on
     # purpose: since the OpenAlex hybrid (v4.0.0) the graph's light-green
     # "Latest Publications" nodes span the newest years plus the
-    # `graph.latest_band_years` per-year bands below them, so the old
+    # `graph.number_of_bands` per-year bands below them, so the old
     # 12-month lecture window narrated almost none of what the user sees.
     "frontier_window_months": 60,
     # How many beats a lecture asks for. The bound lives in the prompt (there

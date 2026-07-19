@@ -222,7 +222,7 @@ the one-phase query's `publicationdate DESC NULLS LAST` order.
 3. **landmarks** — the all-time giants up to `max_landmark_year`, citation-ranked,
    the prefix's length *computed* by the injected `landmark_budget` rule,
 4. **latest** — per-year bands from the injected `band_start` rule up to the
-   current year, each holding that year's top `latest_per_year`, with anything
+   current year, each holding that year's top `nodes_per_band`, with anything
    already shipped as a landmark excluded,
 
 returning the same `(landmark, latest)` shape as the live `s2.citation_relations`,

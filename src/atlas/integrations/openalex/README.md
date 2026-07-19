@@ -56,18 +56,17 @@ So the two citer relations are:
   overflows pays one ceiling-sized refetch. This also guarantees no landmark
   year exceeds `PER_YEAR_CAP`, which a predicted count never could.
 - **Latest Publications** (`latest`) — **recent** citers as **uniform per-year
-  bands**: one `publication_year:<Y>` query per year (each top `latest_per_year`
+  bands**: one `publication_year:<Y>` query per year (each top `nodes_per_band`
   (config; default 50) by citations), from the band start **up to the current
   year** — no separate newest-date window, every recent year gets its own fair
-  slice. The band's lower edge is `latest_band_years` (config; default 5) below
+  slice. The band's lower edge is `number_of_bands` (config; default 5) below
   the landmark cutoff by default, but **adapts per seed** when a `band_start`
   chooser is supplied (see below): for an old seed whose landmarks tail off
   early, the bands *widen* backward to meet the cluster. The newest
   `_LATEST_YEARS` = 2 calendar years are never landmarks — they're always the top
   bands. Anything already a Field Landmark is excluded (a recent *giant* stays a
-  landmark, not double-shown); the rest ship **oldest-first** (a `latest_limit`
-  still keeps the newest N), so the frontend's reveal slider walks forward through
-  time toward the present.
+  landmark, not double-shown); the rest ship **oldest-first**, so the frontend's
+  reveal slider walks forward through time toward the present.
 
 The recent papers are deliberately **Latest Publications, not landmarks** — they
 *are* recent work, and the old giants are the true field landmarks. Together the
@@ -85,7 +84,7 @@ count is still ≥ `tau` of the peak year's). Its return is used directly
 (no only-widen clamp), so it can sit earlier than the fixed start for an old seed
 (closing the gap) or later for a young one (a tight recent frontier). It's a
 *parameter*, not an import, so `integrations` stays below `services` in the
-dependency order; `None` (the default) keeps the fixed `latest_band_years` span.
+dependency order; `None` (the default) keeps the fixed `number_of_bands` span.
 See `services/graph/bands.py` and `src/ml_pipelines/latest_gap`; **tail edge**,
 **band**, **landmark** and the rest of the vocabulary are defined once in
 [`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md).

@@ -118,7 +118,7 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
         return None
     seed_id = seed_paper["id"]
     report(2, "Fetching references…")
-    refs = s2.references(seed_id, config.graph.ref_limit)
+    refs = s2.references(seed_id)
     report(3, "Fetching citations…")
     # Prefer the offline citations corpus: it holds every citation edge with the
     # citers' own counts, so landmark citers come back citation-sorted across all
@@ -140,8 +140,6 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
     relations = s2.corpus.citation_relations(
         seed_paper,
         seed_ref,
-        landmark_limit=config.graph.cite_limit,
-        latest_limit=config.graph.latest_limit,
         # Both providers split on the same boundary — passed in rather than
         # imported so ``integrations``' two providers stay independent of each
         # other, and computed here where the clock already lives.
@@ -168,8 +166,6 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
         # rolling window (see ``s2.citation_relations``).
         relations = s2.citation_relations(
             seed_id,
-            landmark_limit=config.graph.cite_limit,
-            latest_limit=config.graph.latest_limit,
             max_landmark_year=openalex.landmark_max_year(today),
             current_year=today.year,
             landmark_select=budget.select_landmarks,
@@ -204,7 +200,7 @@ def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Tr
         return None
     report(2, "Fetching references…")
     # ``cited_by:`` — the seed's own bibliography, server-sorted by citations.
-    refs = openalex.references(work_id, config.graph.ref_limit)
+    refs = openalex.references(work_id)
     report(3, "Fetching citations…")
     # Server-sorted ``cites:`` queries return the most-cited landmark citers
     # directly (no recency bias); the STOP rule computes the band's length from
@@ -213,8 +209,6 @@ def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Tr
     # rule sizes the latest frontier (see ``bands.earliest_band_year``).
     landmark, latest = openalex.citation_relations(
         work_id,
-        landmark_limit=config.graph.cite_limit,
-        latest_limit=config.graph.latest_limit,
         band_start=bands.earliest_band_year,
         landmark_budget=budget.computed_cite_limit,
     )

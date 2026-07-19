@@ -86,8 +86,8 @@ def test_landmark_is_all_time_latest_is_uniform_year_bands(monkeypatch):
     (no separate newest-date window), shipped oldest-first so the reveal slider
     walks toward the present — and a recent paper that's also an all-time giant
     stays a landmark, excluded from latest (not double-shown)."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 3)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 3)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     current, _, landmark_max = _split_years()  # bands: (landmark_max-2) .. current
     band_years = []
 
@@ -111,7 +111,7 @@ def test_landmark_is_all_time_latest_is_uniform_year_bands(monkeypatch):
                 "meta": {"next_cursor": None}}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, latest = traversal.citation_relations("W5", landmark_limit=None, latest_limit=None)
+    landmark, latest = traversal.citation_relations("W5")
 
     # Bands span from the fixed start up to and INCLUDING the current year.
     assert band_years == list(range(landmark_max - 2, current + 1))
@@ -131,8 +131,8 @@ def test_latest_is_year_bands_with_no_date_window(monkeypatch):
     ``from_publication_date``/``publication_date:desc`` window at all — robust to
     OpenAlex's coarse year-only (``<year>-01-01``) dates, and the bands run right
     up to the current year (the ex-window years are just more bands now)."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 1)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     current, _, landmark_max = _split_years()
     filters = []
 
@@ -146,17 +146,16 @@ def test_latest_is_year_bands_with_no_date_window(monkeypatch):
         return {"results": [], "meta": {"next_cursor": None}}
 
     monkeypatch.setattr(client, "request", fake_request)
-    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None)
+    traversal.citation_relations("W5")
     # band_years=1 → fixed start is landmark_max; bands cover landmark_max..current.
     assert filters == list(range(landmark_max, current + 1))
 
 
-def test_latest_limit_keeps_newest_but_ships_oldest_first(monkeypatch):
-    """A latest_limit trims to the NEWEST N citers (the frontier is what the
-    relation is for), but the survivors ship oldest-first — the enumeration
-    rank drives the reveal slider, which walks toward the present."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 1)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+def test_latest_ships_oldest_first(monkeypatch):
+    """The banded citers ship oldest-first — the enumeration rank drives the
+    reveal slider, which walks toward the present."""
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     current_year, latest_from, _ = _split_years()
 
     def fake_request(url):
@@ -173,18 +172,18 @@ def test_latest_limit_keeps_newest_but_ships_oldest_first(monkeypatch):
         return {"results": [], "meta": {"next_cursor": None}}  # other bands + landmarks empty
 
     monkeypatch.setattr(client, "request", fake_request)
-    _, latest = traversal.citation_relations("W5", landmark_limit=None, latest_limit=2)
-    # Wold (the oldest) is trimmed away; the kept two run oldest → newest.
-    assert [entry["node"]["id"] for entry in latest] == ["DOI:10/mid", "DOI:10/new"]
+    _, latest = traversal.citation_relations("W5")
+    # Nothing trims: all three ship, running oldest → newest.
+    assert [entry["node"]["id"] for entry in latest] == ["DOI:10/old", "DOI:10/mid", "DOI:10/new"]
 
 
 def test_band_start_callable_places_the_band_span(monkeypatch):
     """A supplied band_start chooser places the first band year per-seed from the
     landmark distribution — it's fed the shipped landmarks' years and the
     landmark-max year, and its return is used directly (no only-widen clamp), so
-    it can place the start earlier OR later than the fixed latest_band_years."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 2)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    it can place the start earlier OR later than the fixed number_of_bands."""
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 2)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     current, _, landmark_max = _split_years()
     band_years = []
     seen_args = {}
@@ -205,8 +204,7 @@ def test_band_start_callable_places_the_band_span(monkeypatch):
         return landmark_max - 4  # place the start well back from the fixed 2-year span
 
     monkeypatch.setattr(client, "request", fake_request)
-    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
-                                 band_start=band_start)
+    traversal.citation_relations("W5", band_start=band_start)
     # The chooser saw the landmark year and the max year (no fixed-start arg now).
     assert seen_args["years"] == [2001]
     assert seen_args["lm_max"] == landmark_max
@@ -216,9 +214,9 @@ def test_band_start_callable_places_the_band_span(monkeypatch):
 
 def test_band_start_none_keeps_the_fixed_span(monkeypatch):
     """When the chooser returns None (or isn't supplied), the band span is the
-    fixed latest_band_years — the non-adaptive fallback behavior is unchanged."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 3)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    fixed number_of_bands — the non-adaptive fallback behavior is unchanged."""
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 3)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     current, _, landmark_max = _split_years()
     band_years = []
 
@@ -229,8 +227,7 @@ def test_band_start_none_keeps_the_fixed_span(monkeypatch):
         return {"results": [], "meta": {"next_cursor": None}}
 
     monkeypatch.setattr(client, "request", fake_request)
-    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
-                                 band_start=lambda years, lm_max: None)
+    traversal.citation_relations("W5", band_start=lambda years, lm_max: None)
     # None → the fixed 3-year start, bands running up to the current year.
     assert band_years == list(range(landmark_max - 2, current + 1))
 
@@ -239,8 +236,8 @@ def test_band_start_callable_can_place_a_later_start(monkeypatch):
     """With no only-widen clamp, a chooser may start the bands LATER than the
     fixed span too — a young seed whose landmark cluster edge is recent gets a
     tight recent frontier, not the full fixed span."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 5)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 5)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     current, _, landmark_max = _split_years()
     band_years = []
 
@@ -252,27 +249,27 @@ def test_band_start_callable_can_place_a_later_start(monkeypatch):
 
     monkeypatch.setattr(client, "request", fake_request)
     # Fixed span would start at landmark_max-4; the chooser places it LATER.
-    traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
-                                 band_start=lambda years, lm_max: landmark_max)
+    traversal.citation_relations("W5", band_start=lambda years, lm_max: landmark_max)
     assert band_years == list(range(landmark_max, current + 1))  # tight, no widening back
 
 
-def test_landmark_limit_caps_all_time_query(monkeypatch):
-    """landmark_limit caps the (only) all-time landmark query."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 1)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+def test_payload_guard_caps_all_time_query(monkeypatch):
+    """The payload guard caps the (only) all-time landmark query."""
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
+    monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 2)
 
     def fake_request(url):
         params = _query(url)
         if params["sort"] == "publication_date:desc" or "publication_year:" in params["filter"]:
             return {"results": [], "meta": {"next_cursor": None}}
-        assert params["per-page"] == "2"  # landmark_limit=2 caps the all-time query's page
+        assert params["per-page"] == "2"  # the guard of 2 caps the all-time query's page
         return {"results": [_work("Wa", doi="10/a", cites=900),
                             _work("Wb", doi="10/b", cites=800)],
                 "meta": {"next_cursor": None}}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, _ = traversal.citation_relations("W5", landmark_limit=2, latest_limit=None)
+    landmark, _ = traversal.citation_relations("W5")
     assert [entry["node"]["citation_count"] for entry in landmark] == [900, 800]  # top 2 kept
 
 
@@ -281,8 +278,8 @@ def test_landmark_budget_computes_from_a_one_page_probe(monkeypatch):
     from ONE ranked page: the rule sees the probe's years most-cited first, and
     its count trims the band — no model, no second request when the rule stops
     inside the probe."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 1)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     landmark_queries = []
     seen: dict[str, object] = {}
 
@@ -302,8 +299,7 @@ def test_landmark_budget_computes_from_a_one_page_probe(monkeypatch):
         seen["years"] = list(citer_years)
         return 2
 
-    landmark, _ = traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
-                                               landmark_budget=budget)
+    landmark, _ = traversal.citation_relations("W5", landmark_budget=budget)
     assert seen["years"] == [1999, 2004, 1999]  # the ranked probe, most-cited first
     assert [entry["node"]["id"] for entry in landmark] == ["DOI:10/a", "DOI:10/b"]  # a prefix
     assert len(landmark_queries) == 1  # the probe was conclusive — one request
@@ -314,8 +310,8 @@ def test_landmark_budget_probe_extends_when_nothing_overflows(monkeypatch):
     """A seed whose top-200 never overflows a year is the one case the probe
     can't settle — the fetch extends to the ceiling and the rule re-measures
     over the longer ranking."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 1)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
     landmark_calls = []
 
     def fake_request(url):
@@ -336,17 +332,16 @@ def test_landmark_budget_probe_extends_when_nothing_overflows(monkeypatch):
         # Spread years never overflow: the rule admits everything it sees.
         return len(list(citer_years))
 
-    landmark, _ = traversal.citation_relations("W5", landmark_limit=None, latest_limit=None,
-                                               landmark_budget=budget)
+    landmark, _ = traversal.citation_relations("W5", landmark_budget=budget)
     assert len(landmark_calls) == 2  # probe, then the ceiling-sized refetch
     assert len(landmark) == 250  # measured over the full ranking
 
 
 def test_landmark_budget_declining_keeps_the_flat_cap(monkeypatch):
     """A budget rule answering None (the adaptive toggle off) leaves the flat
-    landmark_limit in charge — same fallback contract as the corpus source."""
-    monkeypatch.setattr(config.graph, "latest_band_years", 1)
-    monkeypatch.setattr(config.graph, "latest_per_year", 40)
+    payload guard in charge — same fallback contract as the corpus source."""
+    monkeypatch.setattr(config.graph.latest_nodes, "number_of_bands", 1)
+    monkeypatch.setattr(config.graph.latest_nodes, "nodes_per_band", 40)
 
     def fake_request(url):
         params = _query(url)
@@ -358,7 +353,8 @@ def test_landmark_budget_declining_keeps_the_flat_cap(monkeypatch):
                 "meta": {"next_cursor": None}}
 
     monkeypatch.setattr(client, "request", fake_request)
-    landmark, _ = traversal.citation_relations("W5", landmark_limit=2, latest_limit=None,
+    monkeypatch.setattr(traversal, "UNBOUNDED_LANDMARK_CAP", 2)
+    landmark, _ = traversal.citation_relations("W5",
                                                landmark_budget=lambda citer_years: None)
     assert [entry["node"]["id"] for entry in landmark] == ["DOI:10/a", "DOI:10/b"]
 

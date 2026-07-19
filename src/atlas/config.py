@@ -225,21 +225,42 @@ class ProvidersConfig(ConfigModel):
     openalex: OpenAlexConfig
 
 
-class GraphConfig(ConfigModel):
-    """How big a neighborhood one seed paper pulls onto the canvas.
+class LatestNodesConfig(ConfigModel):
+    """The shape of the 'Latest Publications' relation's per-year bands.
 
-    Each ``*_limit`` is a **ship count**, not a display cap: the backend ranks
-    the relation and ships this many nodes (each tagged with its ``rank``), and
-    the frontend's per-relation slider treats it as the **maximum** — it defaults
-    to showing a modest 25 and reveals more on demand, no re-query. So raise
-    these to give the sliders more range ("fetch as much as possible"), at some
-    payload cost; a value at or below 25 leaves that slider no room to move.
-    **``null`` means unbounded** — ship everything the paper actually has for
-    that relation, so the slider can max out to the full count (handy for
-    testing; heavy for a busy paper — a reference/similar list is naturally
-    small, but ``citation``/``latest`` on a mega seed can be thousands). See
-    docs/configuration.md for the node-count math and why ``recs_pool`` must
-    stay "all-cs".
+    Its own settings group because the two knobs only mean anything together
+    — a band count without a per-band size (or vice versa) describes no
+    relation — and because the planned settings modal's non-adaptive mode
+    hands exactly this pair to the user.
+    """
+
+    number_of_bands: PositiveInt = Field(
+        description="How many one-year bands below the landmark cutoff the 'Latest "
+        "Publications' relation covers — one cited_by_count:desc query per year, each "
+        "feeding the LATEST relation (not landmarks), running up to the current year. "
+        "Fills recent years evenly. The fixed FALLBACK band span for when the fitted "
+        "tau rule (services/graph/bands.py earliest_band_year) can't place a per-seed "
+        "start — model unloadable, or too few dated landmarks. See "
+        "openalex/traversal.py citation_relations."
+    )
+    nodes_per_band: PositiveInt = Field(
+        description="Top-N most-cited citers kept from each one-year Latest band "
+        "(≤200, OpenAlex's page cap). Per-year banding gives even coverage; a single "
+        "recent-window query sorted by citations would let its oldest year dominate."
+    )
+
+
+class GraphConfig(ConfigModel):
+    """The graph build's few remaining knobs — provider, band shape, cache.
+
+    Deliberately small: the app **sizes every relation itself** (the adaptive
+    rules in ``services/graph/budget.py`` and ``bands.py``, ceilinged by the
+    ``integrations.caps.UNBOUNDED_LANDMARK_CAP`` payload guard), so there are
+    no per-relation count caps and no adaptive on/off toggles here — those
+    were deleted as knobs nobody turned. What remains either genuinely varies
+    per deployment (``default_provider``, ``cache_ttl``) or shapes the Latest
+    bands in ways the fitted rules fall back on (``latest_nodes``). See
+    docs/configuration.md.
     """
 
     default_provider: Literal["s2", "openalex"] = Field(
@@ -254,54 +275,8 @@ class GraphConfig(ConfigModel):
         "to its lower-cited arXiv-preprint stub). The user overrides this per graph from "
         "the header dropdown."
     )
-    ref_limit: PositiveInt | None = Field(
-        description="References (papers it cites) to ship — the References slider's max. "
-        "null = ship them all."
-    )
-    cite_limit: PositiveInt | None = Field(
-        description="Max all-time-most-cited LANDMARK citations ('citation' nodes) to ship — "
-        "the Field Landmarks slider's max. null = ship the unbounded cap (500)."
-    )
-    adaptive_cite_limit: bool = Field(
-        description="Size the landmark band to the seed instead of always shipping "
-        "cite_limit: an old classic earns a deep band (its top citers span decades), a "
-        "young hot paper a tight one (its top citers are same-era pile-on). Every path "
-        "measures its real citer pool with the rules in services/graph/budget.py; "
-        "cite_limit stays the ceiling."
-    )
-    latest_limit: PositiveInt | None = Field(
-        description="LATEST citations (the recent frontier — citers from the newest "
-        "years plus the per-year bands below them) to ship as 'latest' nodes — the "
-        "Latest Publications slider's max. null = ship them all."
-    )
-    similar_limit: PositiveInt | None = Field(
-        description="SPECTER2-embedding neighbors to ship as 'similar' nodes — the "
-        "Similar slider's max. null = as many as S2 will return."
-    )
-    latest_band_years: PositiveInt = Field(
-        description="How far below the landmark cutoff the per-year 'Latest Publications' "
-        "bands start — one cited_by_count:desc query per year, each feeding the LATEST "
-        "relation (not landmarks), running up to the current year. Fills recent years "
-        "evenly. The fixed FALLBACK lower edge when adaptive_latest_band is off or its model "
-        "can't load. See openalex/traversal.py citation_relations."
-    )
-    adaptive_latest_band: bool = Field(
-        description="Start the 'Latest Publications' bands at the density tail edge of the "
-        "seed's landmark cluster (the most recent still-dense year) instead of a fixed "
-        "latest_band_years lower edge: an old classic whose landmarks tail off early extends "
-        "its bands back to close the gap, while a young paper starts at its own recent edge "
-        "(a tight frontier). Capped by max_span for bounded query cost. See "
-        "services/graph/bands.py earliest_band_year."
-    )
-    latest_per_year: PositiveInt = Field(
-        description="Top-N most-cited citers kept from each Latest-Publications year band "
-        "(≤200, OpenAlex's page cap). Per-year banding gives even coverage; a single "
-        "recent-window query sorted by citations would let its oldest year dominate."
-    )
-    recs_pool: Literal["all-cs", "recent"] = Field(
-        description="Candidate pool for similar-paper recommendations. 'recent' "
-        "returns nothing for older seeds — keep 'all-cs' unless you only explore "
-        "brand-new papers."
+    latest_nodes: LatestNodesConfig = Field(
+        description="The 'Latest Publications' bands' shape (see LatestNodesConfig)."
     )
     cache_ttl: NonNegativeInt = Field(
         description="Seconds a graph snapshot stays cached before rebuilding. "

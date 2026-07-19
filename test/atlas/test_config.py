@@ -56,9 +56,10 @@ def test_relative_data_dir_is_anchored_to_repo_root():
 
 
 def test_unknown_keys_are_rejected():
-    """A typo'd key fails loudly instead of being silently ignored."""
-    cfg = set_nested(example_config(), ("graph", "ref_limitt"), 10)
-    with pytest.raises(ValidationError, match="ref_limitt"):
+    """A typo'd (or deleted — e.g. the retired count caps) key fails loudly
+    instead of being silently ignored."""
+    cfg = set_nested(example_config(), ("graph", "cache_ttll"), 10)
+    with pytest.raises(ValidationError, match="cache_ttll"):
         Config.model_validate(cfg)
 
 
@@ -119,7 +120,6 @@ def test_agent_provider_must_be_configured():
 @pytest.mark.parametrize(
     ("path", "bad_value"),
     [
-        (("graph", "recs_pool"), "trending"),  # not one of the two known pools
         (("server", "port"), 70000),  # not a TCP port
         (("providers", "s2", "timeout"), -5),  # negative timeout is nonsense
         (("llm", "agents", 0, "model"), ""),  # a blank model name can't be called

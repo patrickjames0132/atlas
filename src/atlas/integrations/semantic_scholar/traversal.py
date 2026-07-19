@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from typing import Callable
 
 from ...config import config
+from ..caps import UNBOUNDED_LANDMARK_CAP
 from . import client, nodes
 
 log = logging.getLogger(__name__)
@@ -35,6 +36,13 @@ _RANK_POOL = 1000
 # the arithmetic suggests. Anything older is unreachable from the live API at any
 # price — only the offline citations corpus has it.
 _MAX_OFFSET = 8000
+
+# Default candidate pool for /recommendations. A parameter, not config: S2's
+# "recent" pool returns *zero* recommendations for any seed older than a year
+# or two (verified live on a 2017 seed), so all-cs is the only default that
+# works for the graph's use; a caller wanting brand-new work passes "recent"
+# deliberately.
+_DEFAULT_RECS_POOL = "all-cs"
 
 #: The most citers a deep-paged live fetch can ever return: the last servable
 #: page's window end (``_MAX_OFFSET + _RANK_POOL``). Public because the
@@ -279,8 +287,13 @@ def _neighbors(path: str, key: str, limit: int | None) -> list[dict]:
     return _select_by_influence(pool, limit)
 
 
-def references(paper_id: str, limit: int | None) -> list[dict]:
+def references(paper_id: str, limit: int | None = None) -> list[dict]:
     """Fetch the papers this one CITES (its intellectual ancestors).
+
+    The graph build takes the default: the whole fetched page, ranked
+    most-cited first — a reference list fits in one ``_RANK_POOL`` page, so
+    there is nothing to trim. The agent's ``expand_node`` hop passes its own
+    ``limit`` (the hop budget).
 
     Args:
         paper_id: An S2 paperId or prefixed id.
@@ -399,7 +412,7 @@ def citations(paper_id: str, limit: int) -> list[dict]:
 
 #: Injected landmark selector: ``(ranked citer years) -> indices to ship | None``.
 #: ``services/graph`` passes ``budget.select_landmarks``, which bands the ranking
-#: by year; None falls back to the flat ``landmark_limit``. It takes years and
+#: by year; None falls back to the flat payload guard. It takes years and
 #: returns indices because the rule only reasons about *when* citers were
 #: published — the entries themselves stay here. A parameter, not an import, so
 #: ``integrations`` stays below ``services`` in the dependency order — the same
@@ -416,15 +429,13 @@ LandmarkBudgetFn = Callable[[Sequence[int | None]], int | None]
 #: Injected Latest band-start chooser for a COMPLETE pool: ``(landmark_years,
 #: landmark_max_year) -> first band year | None``. ``services/graph`` passes
 #: ``bands.earliest_band_year`` — the same tau rule the corpus and OpenAlex
-#: paths use; None keeps the fixed ``latest_band_years`` span.
+#: paths use; None keeps the fixed ``number_of_bands`` span.
 BandStartFn = Callable[[list[int], int], int | None]
 
 
 def _complete_pool_relations(
     pool: list[dict],
     *,
-    landmark_limit: int | None,
-    latest_limit: int | None,
     max_landmark_year: int,
     current_year: int,
     landmark_budget: LandmarkBudgetFn,
@@ -446,20 +457,17 @@ def _complete_pool_relations(
       flatten the year distribution the tau rule reads next.
     * **Latest** — per-year bands from the ``band_start`` rule (read off the
       shipped landmarks' years, which is why it runs second) up to
-      ``current_year``, each year's top ``latest_per_year`` by citations; a
-      giant appearing in both stays a landmark. Newest-first, trimmed to
-      ``latest_limit`` (keeping the newest), then flipped oldest-first for the
+      ``current_year``, each year's top ``nodes_per_band`` by citations; a
+      giant appearing in both stays a landmark. Shipped oldest-first for the
       reveal slider.
 
     Args:
         pool: The complete citer pool (see :func:`_fetch_reachable_pool`).
-        landmark_limit: The flat ceiling, used when the budget rule declines.
-        latest_limit: Max latest citers (keeps the newest), or None for all.
         max_landmark_year: The last landmark-era year (inclusive).
         current_year: The last year to band, inclusive.
         landmark_budget: The STOP rule measuring the ranked pool's years.
         band_start: Optional per-seed band-start chooser; None (or a None
-            answer) keeps the fixed ``latest_band_years`` span.
+            answer) keeps the fixed ``number_of_bands`` span.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -470,10 +478,10 @@ def _complete_pool_relations(
     ]
     ranked = _select_by_influence(era, None)
     budget = landmark_budget([entry["node"].get("year") for entry in ranked])
-    # A None answer means the adaptive toggle is off — honour the flat ceiling.
-    landmark = ranked[:budget] if budget is not None else ranked[:landmark_limit]
+    # A declining rule (None) falls back to the flat payload guard.
+    landmark = ranked[:budget] if budget is not None else ranked[:UNBOUNDED_LANDMARK_CAP]
 
-    earliest = max_landmark_year - config.graph.latest_band_years + 1
+    earliest = max_landmark_year - config.graph.latest_nodes.number_of_bands + 1
     if band_start is not None:
         adaptive = band_start(
             [year for year in (entry["node"].get("year") for entry in landmark) if year],
@@ -489,11 +497,9 @@ def _complete_pool_relations(
     shipped = {entry["node"]["id"] for entry in landmark}
     recent: list[dict] = []
     for year_entries in by_year.values():
-        recent += _select_by_influence(year_entries, config.graph.latest_per_year)
+        recent += _select_by_influence(year_entries, config.graph.latest_nodes.nodes_per_band)
     latest = [entry for entry in recent if entry["node"]["id"] not in shipped]
     latest.sort(key=_latest_order, reverse=True)
-    if latest_limit is not None:
-        latest = latest[:latest_limit]
     latest.reverse()
     return landmark, latest
 
@@ -501,8 +507,6 @@ def _complete_pool_relations(
 def citation_relations(
     paper_id: str,
     *,
-    landmark_limit: int | None,
-    latest_limit: int | None,
     max_landmark_year: int,
     current_year: int,
     landmark_select: LandmarkSelectFn | None = None,
@@ -525,25 +529,22 @@ def citation_relations(
     * **Truncated** (the ceiling cut the list off): the pool is a recency
       sliver with no all-history ranking to prefix. Citers inside the rolling
       ``_LATEST_WINDOW_MONTHS`` window are the recent **frontier** (``latest``,
-      shipped oldest-first so the reveal slider walks toward the present; a
-      limit keeps the newest), and everything older competes as a historic
-      **landmark** (most-cited first), banded by the ``landmark_select`` SKIP
-      rule — a *prefix* of a truncated ranking is all one era (DQN's top 29 are
-      2019–2023, an 18-month hole before the frontier), so every year gets its
-      slice instead. What's past the ceiling — DQN's 2013–2018 citers, the real
-      giants — no amount of paging reaches; that's the corpus's job.
+      shipped oldest-first so the reveal slider walks toward the present), and
+      everything older competes as a historic **landmark** (most-cited first),
+      banded by the ``landmark_select`` SKIP rule — a *prefix* of a truncated
+      ranking is all one era (DQN's top 29 are 2019–2023, an 18-month hole
+      before the frontier), so every year gets its slice instead. What's past
+      the ceiling — DQN's 2013–2018 citers, the real giants — no amount of
+      paging reaches; that's the corpus's job.
 
     Args:
         paper_id: An S2 paperId or prefixed id.
-        landmark_limit: Maximum landmark (historic) citers to return, or ``None``
-            for all. Used when no rule is supplied, or when it declines.
-        latest_limit: Maximum recent-frontier citers to return, or ``None`` for all.
         max_landmark_year: The last landmark-era year — the complete-pool split
             boundary (the same one the corpus and OpenAlex split on; passed in so
             the providers stay independent).
         current_year: The last year the complete-pool shape bands, inclusive.
         landmark_select: Optional SKIP rule for the **truncated** pool (see
-            :data:`LandmarkSelectFn`); its pick wins over ``landmark_limit``.
+            :data:`LandmarkSelectFn`); its pick wins over the payload guard.
         landmark_budget: Optional STOP rule for the **complete** pool (see
             :data:`LandmarkBudgetFn`); required for the corpus shape — without
             it a complete pool still ships the truncated shape.
@@ -561,8 +562,6 @@ def citation_relations(
         log.debug("live s2 pool is the complete history (%d citers) — corpus shape", len(pool))
         return _complete_pool_relations(
             pool,
-            landmark_limit=landmark_limit,
-            latest_limit=latest_limit,
             max_landmark_year=max_landmark_year,
             current_year=current_year,
             landmark_budget=landmark_budget,
@@ -571,17 +570,15 @@ def citation_relations(
     cutoff = _latest_cutoff()
     recent = [entry for entry in pool if _is_latest(entry, cutoff)]
     older = [entry for entry in pool if not _is_latest(entry, cutoff)]
-    # Latest: selected newest-first by publication date (a limit keeps the
-    # newest N) then flipped oldest-first to match the OpenAlex path — the
-    # frontend's reveal slider walks toward the present. Landmark: most-cited
-    # first.
+    # Latest: sorted newest-first by publication date then flipped oldest-first
+    # to match the OpenAlex path — the frontend's reveal slider walks toward
+    # the present. Landmark: most-cited first.
     #
     # A dateless citer sorts as Jan 1 of its year, which is exactly where the
     # timeline draws it (no month -> the year's gridline), so the reveal order
     # and the on-screen order agree. Bare `or ""` would instead rank it before
     # every dated paper in the window while drawing it in the middle of them.
     latest = sorted(recent, key=_latest_order, reverse=True)
-    latest = latest[:latest_limit]
     latest.reverse()
     # Rank the whole older pool first: the selector reads that ranking's years and
     # answers in its indices, so it can only run after the sort and before the trim.
@@ -590,7 +587,7 @@ def citation_relations(
     if landmark_select is not None:
         keep = landmark_select([entry["node"].get("year") for entry in ranked_older])
     if keep is None:
-        return ranked_older[:landmark_limit], latest
+        return ranked_older[:UNBOUNDED_LANDMARK_CAP], latest
     return [ranked_older[index] for index in keep], latest
 
 
@@ -602,8 +599,9 @@ def recommendations(paper_id: str, limit: int | None, pool: str | None = None) -
         limit: Maximum recommendations to return, or ``None`` for as many as S2
             will give (its ``/recommendations`` page maxes at 500).
         pool: The candidate set — ``"all-cs"`` or ``"recent"``. Defaults to
-            ``config.graph.recs_pool`` (``all-cs``; the ``recent`` pool
-            returns nothing for older seeds).
+            :data:`_DEFAULT_RECS_POOL` (``all-cs``); pass ``"recent"`` only
+            when deliberately exploring brand-new work — that pool returns
+            nothing for seeds older than a year or two.
 
     Returns:
         A list of ``{"node": <node dict>}`` entries (no influence flag — the
@@ -612,7 +610,7 @@ def recommendations(paper_id: str, limit: int | None, pool: str | None = None) -
     Raises:
         client.S2Error: When the request fails after retries.
     """
-    pool = pool or config.graph.recs_pool
+    pool = pool or _DEFAULT_RECS_POOL
     # The recs endpoint needs a concrete page size; None ("unbounded") asks for
     # S2's maximum, 500.
     page = limit if limit is not None else 500

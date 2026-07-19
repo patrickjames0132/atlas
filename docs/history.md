@@ -2271,6 +2271,40 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       defensively / version-skew" notes folded into each package README. Verified
       the app loads both models from the new paths and the full gate is green.
       *(From the `todos.md` inbox, 2026-07-10.)*
+- [x] **Delete the four dead per-relation count caps — the app should size itself**
+      *(v6.0.0)* — `ref_limit`, `cite_limit`, `latest_limit` and `similar_limit`
+      were all **`null` in the real `config.json`** and had been for a long time:
+      the app already sizes every relation itself (the fitted `PER_YEAR_CAP` of
+      12 per publication year, `bands`' fitted `tau`/`max_span`, and
+      `UNBOUNDED_LANDMARK_CAP` as the payload ceiling) — knobs nobody turns.
+      Patrick's call (2026-07-17): sizing should be **automatic**, with a
+      user-facing "show me more" setting later if wanted — not a config file
+      nobody edits. Unblocked by v5.11.0 making the two sizings agree on what an
+      unset `cite_limit` meant (`predicted_budget` read it as
+      `UNBOUNDED_LANDMARK_CAP`, `select_landmarks` as infinity — a field two
+      code paths interpret differently can't be deleted).
+      **Shipped as the v6.0.0 config purge — scope grown mid-flight (Patrick,
+      2026-07-19):** the four caps went, and with them their whole plumbing (the
+      `landmark_limit`/`latest_limit` traversal params and every ceiling read in
+      `budget.py`/`build.py`); `adaptive_cite_limit` and `adaptive_latest_band`
+      went too — sizing is **purely adaptive** now, the toggles were
+      off-switches nobody flipped (the settings modal's coming `adaptive`
+      checkbox re-introduces the choice as a *user-facing, per-request* concern,
+      not a config field), which also collapsed `bands.band_start_rule` into the
+      one config-free `earliest_band_year`; and `recs_pool` became a
+      **parameter** on `s2.recommendations` (module-constant `"all-cs"`
+      default). `UNBOUNDED_LANDMARK_CAP` moved to a new shared
+      `integrations/caps.py`, **named as the payload guard it is** (never
+      fitted, deliberately not config — the "worth deciding while in there"
+      item), where both providers use it without depending on each other. The
+      surviving band knobs were renamed and grouped:
+      `graph.latest_nodes.{number_of_bands, nodes_per_band}` (were
+      `latest_band_years`/`latest_per_year`). **Migration:** `extra="forbid"`
+      fails startup until each machine's gitignored `config.json` drops to the
+      four-key `graph` shape, and `CLAUDE.md`'s session-start drift check now
+      flags keys the template has *dropped*, not just added. `GraphConfig` ends
+      at `default_provider · latest_nodes · cache_ttl`. *(Patrick, 2026-07-17;
+      browser-tested.)*
 - [x] **~~Iterative (multi-round) landmark mining to beat recency bias~~ —
       RETIRED** *(v4.0.0)* — this was an idea to loop S2 reference-list mining to
       fill the sparse early-landmark band. The **OpenAlex hybrid** (shipped)

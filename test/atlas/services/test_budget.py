@@ -25,8 +25,7 @@ from collections import Counter
 
 import pytest
 
-from atlas.config import config
-from atlas.integrations import openalex
+from atlas.integrations.caps import UNBOUNDED_LANDMARK_CAP
 from atlas.services.graph import budget
 
 # Fix the age reference so pins don't drift with the wall clock; the
@@ -40,11 +39,9 @@ stop_rule = budget.number_of_ranked_citers_before_a_single_year_overflows
 
 
 @pytest.fixture(autouse=True)
-def _adaptive_unbounded(monkeypatch):
-    """Patrick's live shape: adaptive on, cite_limit null (unbounded ceiling)."""
-    monkeypatch.setattr(config.graph, "adaptive_cite_limit", True)
-    monkeypatch.setattr(config.graph, "cite_limit", None)
-    budget._reset_model_cache()  # a prior test may have swapped load_model
+def _fresh_model_cache():
+    """Reset the memoized model around each test (one may swap load_model)."""
+    budget._reset_model_cache()
     yield
     budget._reset_model_cache()
 
@@ -151,14 +148,15 @@ class TestComputedCiteLimit:
         # 500 same-year citers overflow immediately: the count is the cap.
         assert budget.computed_cite_limit([2025] * 500) == budget.PER_YEAR_CAP
 
-    def test_ceiling_clamps_the_count(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "cite_limit", 5)
-        # A spread pool that never overflows would ship whole — the ceiling caps it.
-        assert budget.computed_cite_limit(list(range(1990, 2020))) == 5
+    def test_payload_guard_clamps_the_count(self):
+        # A spread pool that never overflows would ship whole — the payload
+        # guard caps it (600 one-citer years measure 600, ship 500).
+        never_overflowing = list(range(1000, 1600))
+        assert budget.computed_cite_limit(never_overflowing) == UNBOUNDED_LANDMARK_CAP
 
-    def test_toggle_off_declines_so_the_flat_limit_applies(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "adaptive_cite_limit", False)
-        assert budget.computed_cite_limit([2025] * 500) is None
+    def test_spread_pool_ships_whole_under_the_guard(self):
+        # Below the guard nothing clamps: the STOP count is the answer.
+        assert budget.computed_cite_limit(list(range(1990, 2020))) == 30
 
     def test_needs_no_model_artifact(self, monkeypatch):
         # Computing must not depend on the trained bundle at all.
@@ -211,30 +209,21 @@ class TestSkipRule:
         years = [None, 2020, None, 2021, None]
         assert budget.select_landmarks(years) == [1, 3]
 
-    def test_ceiling_keeps_the_most_cited(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "cite_limit", 5)
-        years = [year for year in range(2019, 2026) for _ in range(500)]
-        keep = budget.select_landmarks(years)
-        assert keep == [0, 1, 2, 3, 4]  # a prefix of the citation-ranked selection
-
-    def test_unset_cite_limit_still_means_the_unbounded_cap(self, monkeypatch):
-        """An unset limit is the unbounded cap, not infinity — as the model's clamp
-        has always read it. Moot while this rule only saw the live path's truncated
-        pool (the count is PER_YEAR_CAP x span, and a few years can't reach 500);
-        load-bearing since the corpus path started computing over whole histories.
-        Hawking's citers span 1954-2026, which would otherwise ship 54 x 12 = 612.
+    def test_payload_guard_caps_the_selection(self):
+        """The guard is the cap, not infinity — as the model's clamp has always
+        read it. Moot while this rule only saw the live path's truncated pool
+        (the count is PER_YEAR_CAP x span, and a few years can't reach 500);
+        load-bearing since the corpus path started computing over whole
+        histories. Hawking's citers span 1954-2026, which would otherwise ship
+        54 x 12 = 612 — the trim keeps the most-cited prefix.
         """
-        monkeypatch.setattr(config.graph, "cite_limit", None)
         hawking_span = [year for year in range(1954, 2027) for _ in range(50)]
         keep = budget.select_landmarks(hawking_span)
-        assert len(keep) == openalex.UNBOUNDED_LANDMARK_CAP
-        # ...and the two sizings agree on what "unset" means.
+        assert len(keep) == UNBOUNDED_LANDMARK_CAP
+        assert keep == sorted(keep)  # a prefix of the citation-ranked selection
+        # ...and the two sizings agree on the same guard.
         assert budget.predicted_budget(1975, 10_825, as_of_year=2026) <= (
-            openalex.UNBOUNDED_LANDMARK_CAP)
-
-    def test_toggle_off_declines_so_the_flat_limit_applies(self, monkeypatch):
-        monkeypatch.setattr(config.graph, "adaptive_cite_limit", False)
-        assert budget.select_landmarks([2025] * 400) is None
+            UNBOUNDED_LANDMARK_CAP)
 
     def test_needs_no_model_artifact(self, monkeypatch):
         # The selection path must not depend on the trained bundle at all.
