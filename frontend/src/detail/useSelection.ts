@@ -41,8 +41,10 @@ export interface SelectionApi {
   /** The node id whose summary hydration (fetchPaperDetail) is in flight
    *  (else null) — the detail panel shows its summary skeleton for it. */
   detailLoading: string | null
-  /** Figures per arXiv id, as they finish loading (failures cache as
-   *  unavailable, so a missing entry always means "in flight"). */
+  /** Figures per figure key — a node's arXiv id, else its node id (papers
+   *  off arXiv get theirs mined from their open-access PDF) — as they
+   *  finish loading (failures cache as unavailable, so a missing entry
+   *  always means "in flight"). */
   figures: Record<string, FiguresResponse>
   /** Code & artifact links (HF Papers) per arXiv id, as they finish loading. */
   codeLinks: Record<string, CodeLinksResponse>
@@ -71,7 +73,8 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
   // The node id whose summary hydration is in flight — drives the panel's
   // summary skeleton so the abstract doesn't just pop in.
   const [detailLoading, setDetailLoading] = useState<string | null>(null)
-  // Figures (ar5iv) per arXiv id, lazily fetched when a node is opened.
+  // Figures per figure key (arXiv id, else node id — those come mined from
+  // the paper's OA PDF), lazily fetched when a node is opened.
   const [figures, setFigures] = useState<Record<string, FiguresResponse>>({})
   const [figLoading, setFigLoading] = useState<string | null>(null)
   // Code & artifact links (HF Papers) per arXiv id, same lazy pattern.
@@ -107,17 +110,19 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
     return { ...node, ...detail, arxiv_id: detail.arxiv_id ?? node.arxiv_id } as VNode
   }, [base, selectedId, details])
 
-  // Lazily fetch the selected paper's figures (ar5iv) the first time it's
-  // opened. Failures cache as unavailable so a flaky ar5iv isn't re-hit.
+  // Lazily fetch the selected paper's figures the first time it's opened —
+  // by arXiv id (ar5iv) when it has one, else by node id (the backend mines
+  // the paper's OA PDF, so this works for journal papers too). Failures
+  // cache as unavailable so a flaky upstream isn't re-hit.
   useEffect(() => {
-    const aid = selected?.arxiv_id
-    if (!aid || figures[aid] || figLoading === aid) return
-    setFigLoading(aid)
-    fetchFigures(aid)
-      .then((res) => setFigures((prev) => ({ ...prev, [aid]: res })))
-      .catch(() => setFigures((prev) => ({ ...prev, [aid]: { available: false, figures: [] } })))
-      .finally(() => setFigLoading((cur) => (cur === aid ? null : cur)))
-  }, [selected, figures, figLoading])
+    const figKey = selected ? (selected.arxiv_id ?? selected.id) : null
+    if (!figKey || figures[figKey] || figLoading === figKey) return
+    setFigLoading(figKey)
+    fetchFigures(figKey, provider)
+      .then((res) => setFigures((prev) => ({ ...prev, [figKey]: res })))
+      .catch(() => setFigures((prev) => ({ ...prev, [figKey]: { available: false, figures: [] } })))
+      .finally(() => setFigLoading((cur) => (cur === figKey ? null : cur)))
+  }, [selected, figures, figLoading, provider])
 
   // Same for the paper's code & artifact links (HF Papers). fetchCodeLinks
   // never throws — failures land as { available: false }.

@@ -1,7 +1,8 @@
 /**
  * The right-hand paper detail panel: relation badges, title, authors, the
  * TL;DR / abstract, its own arXiv category tags, code & artifact links
- * (Hugging Face Papers), lazily-loaded figures (ar5iv, click-to-enlarge via
+ * (Hugging Face Papers), lazily-loaded figures (ar5iv, or floats mined from
+ * the paper's open-access PDF for papers off arXiv — click-to-enlarge via
  * the shared lightbox), and the paper actions (abstract/PDF links, pin,
  * explore-from-here).
  *
@@ -37,8 +38,10 @@ export interface DetailPanelProps {
    *  tags" / "OpenAlex tags"), naming who classified the paper. */
   fieldsLabel: string
   /** The node's figures, once fetched (undefined while still in flight —
-   *  the fetch always fires for arXiv papers, and failures cache as
-   *  unavailable, so undefined can only mean pending). */
+   *  the fetch fires for every paper, and failures cache as unavailable, so
+   *  undefined can only mean pending). arXiv papers join the panel's joint
+   *  loading gate; papers off arXiv reveal theirs when the (slower) OA-PDF
+   *  mining answers, without holding the rest of the panel hostage. */
   figures?: FiguresResponse
   /** The node's code & artifact links, once fetched (undefined until then). */
   codeLinks?: CodeLinksResponse
@@ -395,10 +398,16 @@ export default function DetailPanel({
             Abstract ↗
           </a>
         )}
-        {node.url && node.arxiv_id && (
+        {node.url && node.arxiv_id ? (
           <a href={node.url.replace('/abs/', '/pdf/')} target="_blank" rel="noreferrer">
             PDF ↗
           </a>
+        ) : (
+          node.oa_pdf && (
+            <a href={node.oa_pdf} target="_blank" rel="noreferrer">
+              PDF ↗
+            </a>
+          )
         )}
         <button className="ghost-btn" onClick={onTogglePin}>
           {isPinned ? 'Unpin' : 'Pin'}

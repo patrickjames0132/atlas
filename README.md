@@ -31,7 +31,8 @@ you upload (embedded locally; nothing leaves your machine).
 >   agents** behind one orchestrator: a **lecturer** (streamed, illustrated
 >   lectures in typed beats over the graph you built — history / intuition /
 >   evolution / current frontier, each with the papers' real figures inline), a **researcher**
->   (agentic Q&A that reads full text via ar5iv, expands the graph, searches
+>   (agentic Q&A that reads full text — ar5iv, or the paper's open-access
+>   PDF for journal papers — expands the graph, searches
 >   S2, searches *your* library, and attaches real figures inline), a
 >   **librarian** (single-shot RAG over your uploads, cited by page), and
 >   the **query analyst**. Everything streams for real — beats, prose, tool
@@ -89,7 +90,7 @@ Claude · React + TypeScript (strict) + Vite + Redux Toolkit ·
 [`react-force-graph-2d`](https://github.com/vasturiano/react-force-graph) ·
 [OpenAlex](https://openalex.org) (citations) +
 [Semantic Scholar Academic Graph API](https://api.semanticscholar.org/api-docs/) ·
-[ar5iv](https://ar5iv.org) for figures/full text ·
+[ar5iv](https://ar5iv.org) + pymupdf-mined open-access PDFs for figures/full text ·
 [Hugging Face Papers](https://huggingface.co/papers) for code & artifacts ·
 sentence-transformers + sqlite-vec for the local library. Runs locally.
 
@@ -181,8 +182,9 @@ The Vite dev server proxies `/api/*` to Flask.
    its own. Node size = citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
-   tags, figures, code & artifacts); **double-click to re-seed** on it —
-   journal papers included. LaTeX math (`$…$`) renders throughout — titles,
+   tags, figures — mined straight from the open-access PDF for journal
+   papers, tables and algorithms included — code & artifacts);
+   **double-click to re-seed** on it — journal papers included. LaTeX math (`$…$`) renders throughout — titles,
    abstracts, lecture beats, answers, and figure captions — via KaTeX.
 3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
    on/off **filter chips**, a dual-knob **year slider** and a dual-knob

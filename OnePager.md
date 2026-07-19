@@ -167,10 +167,6 @@ optional, behind a key.
       multi-step asks, let an orchestrator model route or fan out across
       sub-agents and synthesize. Same trigger as above: build when usage
       shows the researcher's own tool loop isn't enough.
-- [ ] **General non-arXiv full text** — S2's `openAccessPdf` + the existing
-      pymupdf pipeline as a fallback reader for `read_paper` on journal
-      papers (text only; figures stay ar5iv-quality-or-nothing).
-
 - [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
       agentic Q&A only calls `show_figure` when the question explicitly asks for
       a picture; you have to request an image every time to get one. It should

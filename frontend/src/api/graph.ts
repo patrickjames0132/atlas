@@ -54,6 +54,11 @@ export interface GraphNode {
    *  detail-tier like the abstract: null for neighbors until the panel
    *  hydrates them; absent on pre-v5.26 sessions/snapshots. */
   venue?: string | null
+  /** The paper's open-access PDF URL (S2 openAccessPdf / an OpenAlex
+   *  location's pdf_url) — the backend mines it for full text and figures
+   *  when there's no ar5iv render. Detail-tier under S2; absent on
+   *  pre-v5.27 sessions/snapshots. */
+  oa_pdf?: string | null
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean
@@ -233,17 +238,19 @@ export async function generateTldr(
 }
 
 /**
- * A figure pulled from the paper (via ar5iv): a proxied image URL + the
- * paper's own caption.
+ * A figure pulled from the paper — an ar5iv figure (proxied image + the
+ * paper's own caption) or, for papers without an ar5iv render, a float
+ * (figure/table/algorithm) mined from its open-access PDF and served as a
+ * rendered PNG.
  */
 export interface Figure {
   image: string
   caption: string
 }
 
-/** The `/api/paper/<id>/figures` response. */
+/** The `/api/paper/<ref>/figures` response. */
 export interface FiguresResponse {
-  /** False when ar5iv has no render for the paper (older / PDF-only submissions). */
+  /** False when the paper has neither an ar5iv render nor a minable OA PDF. */
   available: boolean
   figures: Figure[]
 }
@@ -251,14 +258,17 @@ export interface FiguresResponse {
 /**
  * The paper's figures + captions for the detail panel.
  *
- * Never throws — failures degrade to `{ available: false }` so a flaky ar5iv
- * can't break the panel.
+ * Never throws — failures degrade to `{ available: false }` so a flaky
+ * upstream can't break the panel.
  *
- * @param arxivId The paper's arXiv id.
- * @returns The figure list, or `{available: false}` when ar5iv has no render.
+ * @param ref The paper's arXiv id, or its node id for papers not on arXiv.
+ * @param provider The graph's provider — who resolves the OA-PDF fallback.
+ * @returns The figure list, or `{available: false}` when none can be had.
  */
-export async function fetchFigures(arxivId: string): Promise<FiguresResponse> {
-  const res = await fetch(`/api/paper/${encodeURIComponent(arxivId)}/figures`)
+export async function fetchFigures(ref: string, provider: Provider): Promise<FiguresResponse> {
+  const res = await fetch(
+    `/api/paper/${encodeURIComponent(ref)}/figures?provider=${encodeURIComponent(provider)}`,
+  )
   if (!res.ok) return { available: false, figures: [] }
   return res.json()
 }

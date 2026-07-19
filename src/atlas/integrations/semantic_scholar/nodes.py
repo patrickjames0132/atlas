@@ -16,7 +16,7 @@ from __future__ import annotations
 DETAIL_FIELDS = (
     "paperId,externalIds,title,abstract,tldr,year,publicationDate,"
     "citationCount,referenceCount,authors.name,s2FieldsOfStudy,fieldsOfStudy,"
-    "venue,publicationVenue"
+    "venue,publicationVenue,openAccessPdf"
 )
 # Lighter fields for the many neighbors in a traversal — no abstract/tldr,
 # which we hydrate lazily when a node is opened. publicationDate gives month
@@ -92,12 +92,14 @@ def node(paper: dict | None) -> dict | None:
     Returns:
         A node dict with keys ``id, arxiv_id, title, abstract, tldr, year,
         month, pub_date, citation_count, authors, url, fields_of_study,
-        venue`` — or None when ``paper`` is empty or carries no ``paperId``.
-        ``month`` (1–12) is parsed from S2's ``publicationDate`` so the
-        timeline can place papers between year lines; it is None when only
-        the year is known. ``fields_of_study`` is empty — and ``venue``
-        None — for neighbor/search nodes, which don't request them; both
-        hydrate when the node is opened (DETAIL_FIELDS).
+        venue, oa_pdf`` — or None when ``paper`` is empty or carries no
+        ``paperId``. ``month`` (1–12) is parsed from S2's ``publicationDate``
+        so the timeline can place papers between year lines; it is None when
+        only the year is known. ``fields_of_study`` is empty — and ``venue``
+        and ``oa_pdf`` None — for neighbor/search nodes, which don't request
+        them; all hydrate when the node is opened (DETAIL_FIELDS). ``oa_pdf``
+        is S2's ``openAccessPdf`` URL — where the paper's PDF-mining
+        fallback (full text and figures without an ar5iv render) reads from.
     """
     if not paper or not paper.get("paperId"):
         return None
@@ -120,6 +122,8 @@ def node(paper: dict | None) -> dict | None:
         url = f"https://arxiv.org/abs/{arxiv_id}"
     else:
         url = f"https://www.semanticscholar.org/paper/{paper['paperId']}"
+    open_access = paper.get("openAccessPdf")
+    oa_pdf = open_access.get("url") if isinstance(open_access, dict) else None
     return {
         "id": paper["paperId"],
         "arxiv_id": arxiv_id,
@@ -134,6 +138,7 @@ def node(paper: dict | None) -> dict | None:
         "url": url,
         "fields_of_study": fields_of_study(paper),
         "venue": venue_name(paper),
+        "oa_pdf": oa_pdf or None,
     }
 
 

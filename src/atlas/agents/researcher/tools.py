@@ -27,6 +27,7 @@ from ...integrations import openalex
 from ...integrations import semantic_scholar as s2
 from ...integrations.arxiv import figures as figures_mod
 from ...integrations.arxiv import fulltext
+from ...services import pdf as pdf_service
 from ...services.graph import Edge, Node, Provider
 from ...services.sources import retrieval
 from .. import events, prompts, traversal
@@ -111,17 +112,85 @@ def _record_cited(deps: ResearcherDeps, node_id: str) -> None:
         deps.cited_ids.append(node_id)
 
 
-def _figure_list(arxiv_id: str, index: int) -> str:
-    """A full read's "Figures" block, so the model can show_figure the right
-    one. Empty on no figures or a failed fetch — figures are a nicety, not
-    the read.
+def _oa_pdf_url(node: Node, provider: Provider) -> str | None:
+    """The paper's open-access PDF URL, cheapest source first.
+
+    An arXiv id needs no lookup (``arxiv.org/pdf`` is always OA); a hydrated
+    node may carry ``oa_pdf`` already; otherwise the shared resolver asks the
+    graph's provider (cached).
+
+    Args:
+        node: The numbered-list node.
+        provider: The graph's academic-data backend.
+
+    Returns:
+        The URL, or None when the paper has no known OA PDF.
     """
+    if node.arxiv_id:
+        return pdf_service.arxiv_pdf_url(node.arxiv_id)
+    if node.oa_pdf:
+        return node.oa_pdf
+    return pdf_service.resolve_oa_pdf(node.id, provider)
+
+
+def _node_figures(node: Node, provider: Provider) -> list[dict]:
+    """The paper's showable figures, as ``{"image", "caption"}`` dicts.
+
+    One list, one numbering — ``_figure_list`` prints it and ``show_figure``
+    indexes into it, so the number the model reads is always the figure it
+    gets. ar5iv figures (with their real captions) when the paper has a
+    render; otherwise floats mined from its open-access PDF — figures,
+    tables, and algorithm boxes alike. Image URLs come back ready for the
+    browser (same-origin proxy / PDF-figure route). Empty on any failure —
+    figures are a nicety, not the read.
+
+    Args:
+        node: The numbered-list node.
+        provider: The graph's academic-data backend.
+
+    Returns:
+        The figure dicts, in display order.
+    """
+    if node.arxiv_id:
+        try:
+            result = figures_mod.get_figures(node.arxiv_id)
+        except Exception:
+            log.warning("figure list fetch failed for %s", node.arxiv_id, exc_info=True)
+            result = {}
+        figs = result.get("figures") or []
+        if figs:
+            return [
+                {
+                    "image": "/api/figure_proxy?src="
+                    + urllib.parse.quote(figure["image"], safe=""),
+                    "caption": figure.get("caption") or "",
+                }
+                for figure in figs
+            ]
+    url = _oa_pdf_url(node, provider)
+    if not url:
+        return []
     try:
-        result = figures_mod.get_figures(arxiv_id)
+        mined = pdf_service.get_pdf_floats(url)
     except Exception:
-        log.warning("figure list fetch failed for %s", arxiv_id, exc_info=True)
-        return ""
-    figs = result.get("figures") or []
+        log.warning("PDF float mining failed for %s", node.id, exc_info=True)
+        return []
+    token = mined.get("token")
+    return [
+        {
+            "image": f"/api/pdf_figure/{token}/{position}",
+            "caption": entry.get("caption") or "",
+        }
+        for position, entry in enumerate(mined.get("floats") or [])
+    ]
+
+
+def _figure_list(node: Node, provider: Provider, index: int) -> str:
+    """A full read's "Figures" block, so the model can show_figure the right
+    one. Empty when the paper has none extractable — figures are a nicety,
+    not the read.
+    """
+    figs = _node_figures(node, provider)
     if not figs:
         return ""
     lines = [
@@ -139,9 +208,11 @@ def _paper_text(node: Node, detail: str, index: int, provider: Provider) -> str:
 
     Discovered neighbors arrive without abstract/tldr, so those hydrate on
     demand — from the graph's provider (OpenAlex fills the abstract from its
-    inverted index; it has no TL;DR). A full read pulls the ar5iv full text
-    (truncated to the ``fulltext_max_chars`` budget) when the paper has an arXiv
-    render; otherwise it degrades to the summary form with a note.
+    inverted index; it has no TL;DR). A full read tries the ar5iv render
+    first, then falls back to the paper's open-access PDF (journal papers,
+    and the arXiv papers ar5iv couldn't convert) — either way truncated to
+    the ``fulltext_max_chars`` budget. Only when neither exists does it
+    degrade to the summary form with a note.
     """
     abstract, tldr = node.abstract, node.tldr
     if abstract is None and tldr is None:
@@ -153,23 +224,37 @@ def _paper_text(node: Node, detail: str, index: int, provider: Provider) -> str:
         if hydrated:
             abstract = hydrated.get("abstract")
             tldr = hydrated.get("tldr")
+            if not node.oa_pdf and hydrated.get("oa_pdf"):
+                node.oa_pdf = hydrated["oa_pdf"]
 
     header = f"Title: {node.title}" + (f" ({node.year})" if node.year else "")
-    if detail == "full" and node.arxiv_id:
-        text = fulltext.get_fulltext(node.arxiv_id)
-        if text.get("available") and text.get("text"):
-            limit = BUDGETS["fulltext_max_chars"]
-            body = text["text"][:limit]
-            tail = "\n\n[...truncated]" if len(text["text"]) > limit else ""
-            figs = _figure_list(node.arxiv_id, index)
-            return f"{header}\nTL;DR: {tldr or '—'}\n\nFull text:\n{body}{tail}{figs}"
+    if detail == "full":
+        limit = BUDGETS["fulltext_max_chars"]
+        if node.arxiv_id:
+            text = fulltext.get_fulltext(node.arxiv_id)
+            if text.get("available") and text.get("text"):
+                body = text["text"][:limit]
+                tail = "\n\n[...truncated]" if len(text["text"]) > limit else ""
+                figs = _figure_list(node, provider, index)
+                return f"{header}\nTL;DR: {tldr or '—'}\n\nFull text:\n{body}{tail}{figs}"
+        oa_url = _oa_pdf_url(node, provider)
+        if oa_url:
+            pdf_text = pdf_service.get_pdf_text(oa_url)
+            if pdf_text.get("available") and pdf_text.get("text"):
+                body = pdf_text["text"][:limit]
+                tail = "\n\n[...truncated]" if len(pdf_text["text"]) > limit else ""
+                figs = _figure_list(node, provider, index)
+                return (
+                    f"{header}\nTL;DR: {tldr or '—'}\n\n"
+                    f"Full text (extracted from the paper's PDF):\n{body}{tail}{figs}"
+                )
 
     parts = [header]
     if tldr:
         parts.append(f"TL;DR: {tldr}")
     parts.append(f"Abstract: {abstract}" if abstract else "Abstract: (unavailable)")
-    if detail == "full" and not node.arxiv_id:
-        parts.append("(No arXiv full text for this paper — summary only.)")
+    if detail == "full":
+        parts.append("(No full text available for this paper — summary only.)")
     return "\n".join(parts)
 
 
@@ -182,8 +267,10 @@ def read_paper(
         ctx: The run context carrying the researcher's deps (framework-injected).
         index: The [n] index of the paper from the numbered list.
         detail: "summary" for its abstract + TL;DR (cheap); "full" for the
-            full text via ar5iv — use sparingly, it has a smaller budget. A
-            full read also lists the paper's figures for show_figure.
+            full text — from ar5iv, or extracted from the paper's open-access
+            PDF when there's no arXiv render — use sparingly, it has a
+            smaller budget. A full read also lists the paper's figures (and
+            for PDF-mined papers, tables and algorithms) for show_figure.
 
     Returns:
         The paper's text — title + TL;DR + abstract (summary), or the full
@@ -381,10 +468,11 @@ def search_papers(
 
 
 def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str:
-    """Place one of a paper's own figures (image + caption, from ar5iv) into
-    your answer. Only for a paper you've read in full — the full read lists
-    its figures. The result gives you a <<FIG n>> marker: put it on its own
-    line in your prose exactly where the figure belongs.
+    """Place one of a paper's own figures (image + caption — from ar5iv, or
+    mined from its open-access PDF, where tables and algorithm boxes count
+    too) into your answer. Only for a paper you've read in full — the full
+    read lists its figures. The result gives you a <<FIG n>> marker: put it
+    on its own line in your prose exactly where the figure belongs.
 
     Args:
         ctx: The run context carrying the researcher's deps (framework-injected).
@@ -403,9 +491,6 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
     if not _spend_step(deps):
         deps.emit(events.FigureTrace(ok=False, index=index, title=node.title, figure=figure))
         return STEPS_EXHAUSTED
-    if not node.arxiv_id:
-        deps.emit(events.FigureTrace(ok=False, index=index, title=node.title, figure=figure))
-        return f'"{node.title}" has no arXiv figures to show.'
     if deps.figures_left <= 0:
         deps.emit(events.FigureTrace(ok=False, index=index, title=node.title, figure=figure))
         return "Figure budget spent — answer with the figures already shown."
@@ -418,16 +503,12 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
             f"<<FIG {deps.figures_shown[shown_key]}>>."
         )
 
-    try:
-        result = figures_mod.get_figures(node.arxiv_id)
-    except Exception as exc:
-        log.exception("show_figure fetch failed")
-        deps.emit(events.FigureTrace(ok=False, index=index, title=node.title, figure=figure))
-        return f'Couldn\'t fetch figures for "{node.title}": {exc}'
-    figs = result.get("figures") or []
+    # Same list (and numbering) the full read printed — ar5iv render or
+    # mined OA-PDF floats, with browser-ready image URLs either way.
+    figs = _node_figures(node, deps.provider)
     if not figs:
         deps.emit(events.FigureTrace(ok=False, index=index, title=node.title, figure=figure))
-        return f'"{node.title}" has no figures on ar5iv.'
+        return f'"{node.title}" has no extractable figures to show.'
     if figure > len(figs):
         deps.emit(events.FigureTrace(ok=False, index=index, title=node.title, figure=figure))
         return f'"{node.title}" has only {len(figs)} figure(s); {figure} doesn\'t exist.'
@@ -439,8 +520,7 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
     deps.emit(events.FigureTrace(ok=True, index=index, title=node.title, figure=figure))
     deps.emit(
         events.Figure(
-            # Same-origin proxy — the frontend can't hotlink ar5iv directly.
-            image="/api/figure_proxy?src=" + urllib.parse.quote(chosen["image"], safe=""),
+            image=chosen["image"],
             caption=chosen.get("caption") or "",
             title=node.title,
             index=index,

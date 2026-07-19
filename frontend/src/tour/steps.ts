@@ -256,7 +256,9 @@ export const GRAPH_TOUR: TourStep[] = [
     title: 'The paper’s own figures',
     body:
       'Real figures pulled from the paper itself, captions included (click one to ' +
-      'enlarge). The teacher can pull these same figures into its answers.',
+      'enlarge). Journal papers get theirs mined straight from the open-access PDF — ' +
+      'tables and algorithm boxes included. The teacher can pull these same figures ' +
+      'into its answers.',
   },
   {
     target: '[data-tour="lecture-scope"]',

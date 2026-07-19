@@ -145,6 +145,36 @@
 
 ### Detail panel & paper enrichment
 
+- [x] **General non-arXiv full text — and figures** *(v5.27.0)* — papers
+      without an ar5iv render (journal papers, failed LaTeX conversions) now
+      get **full text and figures mined from their open-access PDF**. The
+      ticket's original scope was "S2's `openAccessPdf` + the existing pymupdf
+      pipeline as a fallback reader for `read_paper` (text only; figures stay
+      ar5iv-quality-or-nothing)" — it shipped considerably wider on Patrick's
+      call: **both providers** resolve the OA URL (S2 `openAccessPdf` — added
+      to `DETAIL_FIELDS`; OpenAlex location `pdf_url`s, which in practice know
+      OA copies S2's records miss — both surfaced as the node shape's new
+      `oa_pdf` field), and a caption-anchored extractor
+      (**`services/pdf`**, new package) mines **figures, tables, AND algorithm
+      boxes** from the PDF for the detail panel's figure strip, the
+      researcher's `show_figure`, and a real **PDF ↗ link for journal papers**
+      in the panel actions. Extraction is caption-first (spiked on JMLR-LDA /
+      Attention / PPO: 33 of 35 real floats with correct captions): `Figure N:`
+      regions grow from image rects + vector-drawing clusters with
+      subfigure/film-strip chaining, `Table N:` via `find_tables` → same-width
+      booktabs **rule spans** → widened drawing skeletons, `Algorithm N`
+      between its bounding rules (which doubles as the in-prose-mention
+      filter; the `[:.]` in the caption regex kills "Figure 2 provides…"
+      false positives). Mined floats are served as on-demand page-region
+      renders (`/api/pdf_figure/<token>/<n>`, opaque server-minted tokens — no
+      open proxy) with nothing pixel-cached server-side; the PDF itself is the
+      cache (`data/oa_pdfs/`, LRU-capped) with text + figure manifest memoized
+      in SQLite — design rationale written up in **`docs/pdf-mining.md`**.
+      Known limitation: floats made purely of text (no image/drawing/rule
+      anywhere, e.g. blei03a's Figure 6) have no geometric anchor and are
+      skipped. New `config.pdf` section (size cap, timeout, cache size, float
+      cap, render dpi); verified live end-to-end on the PLOS "Why Most
+      Published Research Findings Are False" PDF via OpenAlex resolution.
 - [x] **Phase 2.1 — Sidebar enrichment** *(v1.2.0)* — under the detail panel's
       TL;DR, the paper's **own figures with their captions** (`figures.py`
       extracts them from **ar5iv** HTML, cached 30 days; images streamed through

@@ -221,6 +221,32 @@ def _venue(work: dict) -> str | None:
     return source.get("display_name") or None
 
 
+def _oa_pdf(work: dict) -> str | None:
+    """The work's open-access PDF URL, mined from its locations.
+
+    OpenAlex lists every place a work lives (``locations``), each with an
+    optional direct ``pdf_url`` and an ``is_oa`` flag. Prefer an explicitly
+    open-access location's PDF; fall back to any location's PDF (repositories
+    frequently omit the flag on files that are in fact open). Present even at
+    neighbor tier — ``locations`` rides ``NEIGHBOR_SELECT`` already.
+
+    Args:
+        work: A raw OpenAlex work object.
+
+    Returns:
+        The PDF URL, or None when no location offers one.
+    """
+    fallback: str | None = None
+    for location in work.get("locations") or []:
+        pdf_url = location.get("pdf_url")
+        if not pdf_url:
+            continue
+        if location.get("is_oa"):
+            return str(pdf_url)
+        fallback = fallback or str(pdf_url)
+    return fallback
+
+
 def _authors(work: dict) -> str | None:
     """Comma-joined author display names from ``authorships`` (None when empty)."""
     names = [
@@ -237,7 +263,7 @@ def node(work: dict | None) -> dict | None:
     Produces the identical key set to ``semantic_scholar.nodes.node`` so both
     sources are interchangeable downstream: ``id, arxiv_id, title, abstract,
     tldr, year, month, pub_date, citation_count, authors, url,
-    fields_of_study, venue``. ``tldr`` is always None (OpenAlex has none — the detail
+    fields_of_study, venue, oa_pdf``. ``tldr`` is always None (OpenAlex has none — the detail
     panel shows the abstract instead); ``fields_of_study`` carries OpenAlex
     topic labels when ``topics`` was selected (``DETAIL_SELECT`` — the seed or a
     clicked detail node), and is ``[]`` for the light neighbor traversals.
@@ -291,4 +317,5 @@ def node(work: dict | None) -> dict | None:
         "url": url,
         "fields_of_study": _fields_of_study(work),
         "venue": _venue(work),
+        "oa_pdf": _oa_pdf(work),
     }

@@ -71,6 +71,14 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   fulltext_max_chars) — the staging area, promoted to typed config once
   their shape settles. The old `AGENT_WALLCLOCK` was dropped, not ported:
   the step cap plus per-tool budgets already bound the run.
+- **Full reads and figures fall back to the paper's open-access PDF**
+  (`services/pdf`) when there's no ar5iv render — so journal papers (and
+  arXiv papers ar5iv couldn't convert) get read in full and can show
+  figures too. `_node_figures` is the single source for the figure list:
+  the full read prints it and `show_figure` indexes into it, so numbering
+  can't drift between the two; for PDF-mined papers the list includes
+  tables and algorithm boxes, and image URLs point at
+  `/api/pdf_figure/<token>/<n>` instead of the ar5iv proxy.
 - **`search_sources` is registered via a `prepare` hook** only when the
   (scope-filtered) library is non-empty — no availability probe at all:
   retrieval degrades by itself, and an empty library never pays the torch

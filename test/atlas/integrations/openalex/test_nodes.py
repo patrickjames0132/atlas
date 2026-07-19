@@ -159,6 +159,7 @@ def test_node_full_shape_parity_and_month():
         "url": "https://doi.org/10.1038/248030a0",
         "fields_of_study": [],
         "venue": None,
+        "oa_pdf": None,
     }
 
 
@@ -210,3 +211,25 @@ def test_node_arxiv_url_and_id_when_on_arxiv():
 def test_node_none_for_empty_or_idless():
     assert nodes.node(None) is None
     assert nodes.node({}) is None  # no doi, no arxiv, no id
+
+
+def test_node_oa_pdf_prefers_open_access_location():
+    """An is_oa location's pdf_url wins; any pdf_url is the fallback."""
+    work = {
+        "id": "https://openalex.org/W1",
+        "doi": "https://doi.org/10.1/x",
+        "title": "T",
+        "locations": [
+            {"source": {"display_name": "Elsevier"}, "pdf_url": "https://closed/x.pdf"},
+            {
+                "source": {"display_name": "PubMed Central"},
+                "pdf_url": "https://pmc/x.pdf",
+                "is_oa": True,
+            },
+        ],
+    }
+    assert nodes.node(work)["oa_pdf"] == "https://pmc/x.pdf"
+    work["locations"] = [work["locations"][0]]
+    assert nodes.node(work)["oa_pdf"] == "https://closed/x.pdf"
+    work["locations"] = []
+    assert nodes.node(work)["oa_pdf"] is None

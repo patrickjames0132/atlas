@@ -91,3 +91,12 @@ def test_node_none_for_unresolved():
 def test_from_papers_wraps_and_skips_unresolved():
     raw = [{"paperId": "r1", "title": "Resolved"}, None, {"title": "no paperId"}]
     assert nodes.from_papers(raw) == [{"node": nodes.node({"paperId": "r1", "title": "Resolved"})}]
+
+
+def test_node_oa_pdf_from_open_access_field():
+    """openAccessPdf.url surfaces as oa_pdf; absent/empty → None."""
+    raw = {"paperId": "a", "openAccessPdf": {"url": "https://jmlr.org/x.pdf", "status": "GOLD"}}
+    assert nodes.node(raw)["oa_pdf"] == "https://jmlr.org/x.pdf"
+    assert nodes.node({"paperId": "a"})["oa_pdf"] is None
+    assert nodes.node({"paperId": "a", "openAccessPdf": None})["oa_pdf"] is None
+    assert nodes.node({"paperId": "a", "openAccessPdf": {"url": ""}})["oa_pdf"] is None

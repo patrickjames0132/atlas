@@ -16,3 +16,7 @@ Each feature is its own package; see each package's README:
 - **`sources/`** — the bring-your-own-sources subsystem: local ingestion,
   embedding, and hybrid (semantic + lexical) retrieval of the user's own
   uploaded PDFs and web pages.
+- **`pdf/`** — open-access PDF mining for papers ar5iv can't serve: resolve
+  a paper's OA-PDF URL (either provider), download/cache the file, and
+  extract full text plus caption-anchored figures/tables/algorithms for the
+  detail panel and the researcher's full reads.

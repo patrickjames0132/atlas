@@ -17,7 +17,10 @@ to keep ar5iv rather than go pure-PDF):
   paper's figures or its full body text. ar5iv fills both gaps by rendering the
   paper's own LaTeX source to HTML, which this package fetches once and extracts
   two different things from: figures + captions (for the detail panel) and
-  readable body text (for the agentic Q&A tool).
+  readable body text (for the agentic Q&A tool). It's the *preferred* source,
+  not the only one anymore: papers with no ar5iv render (journal papers, failed
+  conversions) fall back to pymupdf mining of their open-access PDF —
+  `services/pdf`, a consumer-side fallback that changes nothing here.
 - **a paper's own category tags** — Semantic Scholar doesn't carry a paper's
   arXiv category codes (`cs.LG`, `math.PR`, …) either. arXiv's export API
   (a different host from ar5iv, built for exactly this per-id metadata lookup)

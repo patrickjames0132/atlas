@@ -32,11 +32,13 @@ figures.
   shows in place and the abstract stays a tab away.
 - **Everything about a paper loads lazily, and each thing exactly once.**
   Graph neighbors arrive summary-light; opening one hydrates its
-  abstract/TL;DR on first click (cached per paper). Figures (ar5iv) fetch
-  on first open, with failures cached as `unavailable` so a flaky ar5iv
-  isn't re-hit; code links (HF Papers) and category tags (arXiv's own
-  metadata) each use a requested-set for the same guarantee. A new graph
-  invalidates all four caches and selects its seed.
+  abstract/TL;DR on first click (cached per paper). Figures fetch on first
+  open — keyed by `arxiv_id ?? id`, since a paper off arXiv gets its
+  figures mined server-side from its open-access PDF — with failures cached
+  as `unavailable` so a flaky upstream isn't re-hit; code links (HF Papers)
+  and category tags (arXiv's own metadata) each use a requested-set for the
+  same guarantee. A new graph invalidates all four caches and selects its
+  seed.
 - **The loadable sections reveal together, behind one joint gate.** While
   ANY of the node's fetches is in flight — summary hydration (reported by
   `useSelection`'s `detailLoading` id), arXiv tags, code links, figures —
@@ -49,8 +51,10 @@ figures.
   appear at the reveal. The arXiv-keyed trio infers "in flight" from
   `arxiv_id && response === undefined` — those fetches always fire on
   first open and cache their failures, so undefined can only mean
-  pending; non-arXiv papers never fetch them, so only hydration can gate
-  those. The node-local parts (badges, title, meta, actions) render
+  pending. Non-arXiv papers gate only on hydration: their figures fetch
+  (OA-PDF mining, potentially a whole download) is deliberately OUTSIDE
+  the joint gate, revealing when it lands rather than holding the panel
+  hostage. The node-local parts (badges, title, meta, actions) render
   instantly — they never load, so they never pop. Skeletons are
   **headless on purpose**: a section may resolve to "nothing", and a named
   header that then vanishes would be its own jank. Purely decorative —
@@ -58,8 +62,9 @@ figures.
 - **Hydration works for non-arXiv papers** (fixed in this port): the fetch
   uses `arxiv_id ?? id` — the old code's arXiv gate left journal papers
   abstract-less forever, the client half of the hydration bug fixed
-  server-side in Phase 5. Figures, code links, and category tags stay
-  arXiv-gated on purpose: ar5iv, HF Papers, and arXiv's own metadata are all
+  server-side in Phase 5. Figures now use the same `arxiv_id ?? id` key
+  (the backend mines a journal paper's OA PDF). Code links and category
+  tags stay arXiv-gated on purpose: HF Papers and arXiv's own metadata are
   arXiv-keyed — a journal paper's node just never requests them.
 - **The click gesture:** single click selects; a quick (<350 ms) second
   click on the same node re-seeds the whole graph on it — wandering the
@@ -69,8 +74,10 @@ figures.
   `CodeSection`/`CategoryTags` children are single-parent — nested in the
   parent's file per the hybrid structure rule. The HF section caps rows
   (3 models / 2 datasets / 2 Spaces) with the totals linking out to HF
-  Papers; the PDF link renders only for arXiv papers (it rewrites `/abs/` →
-  `/pdf/`). Category tags render as read-only pills (unlike the search
+  Papers; the PDF link rewrites `/abs/` → `/pdf/` for arXiv papers, and for
+  papers off arXiv it points at the hydrated `oa_pdf` URL (the same
+  open-access PDF the backend mines for figures) — absent both, no link.
+  Category tags render as read-only pills (unlike the search
   filter's clickable `.cat-chip` — nothing to toggle here) between the
   meta line and the TL;DR.
 

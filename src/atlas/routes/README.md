@@ -16,9 +16,10 @@ down.
 | `GET /api/graph?seed=&refresh=` | build (or re-fetch) a seed's neighborhood graph |
 | `GET /api/graph/stream?seed=&refresh=` | same, as SSE with coarse build-stage progress |
 | `GET /api/paper/<ref>` | hydrate one paper's details for the panel |
-| `GET /api/paper/<ref>/figures` | the paper's ar5iv figures, proxied |
+| `GET /api/paper/<ref>/figures` | the paper's figures — ar5iv, else floats mined from its OA PDF |
 | `GET /api/paper/<ref>/code` | Hugging Face code & artifact links |
 | `GET /api/paper/<ref>/categories` | the paper's own arXiv category tags |
+| `GET /api/pdf_figure/<token>/<n>` | one mined PDF float, rendered to PNG |
 | `GET /api/figure_proxy?src=` | same-origin relay for ar5iv images |
 
 Design decisions worth knowing:
@@ -72,7 +73,17 @@ Design decisions worth knowing:
   ar5iv host before any fetch, so `/api/figure_proxy` can't be used as an
   open relay; responses carry a day-long `Cache-Control`. This is the
   same-origin contract behind both the detail panel's figure strip and the
-  researcher's `show_figure` payloads.
+  researcher's `show_figure` payloads. Its figure-manifest sibling
+  `/api/pdf_figure/<token>/<n>` holds the same posture a different way: the
+  browser sends an opaque token (minted server-side when a PDF was mined,
+  resolved through the cache's `pdfurl:` registry), never a URL — unknown
+  tokens simply 404.
+- **`/api/paper/<ref>/figures` chains two sources.** The ar5iv render (real
+  `<figcaption>`s) when the paper has one; else the paper's open-access PDF
+  is fetched and mined (`services/pdf` — caption-anchored figures, tables,
+  and algorithm boxes). An arXiv ref falls back to `arxiv.org/pdf` directly;
+  a non-arXiv ref resolves its OA URL through the `provider` query arg's
+  backend, which paper hydration usually pre-primed.
 - **`/api/paper/<ref>/categories` is a panel nicety, not load-bearing** —
   same degrade-to-`available: false` contract as figures/code (a bad id, a
   raw S2 paperId with no arXiv metadata, or an arXiv outage all look the

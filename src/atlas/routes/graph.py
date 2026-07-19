@@ -5,9 +5,10 @@ GET /api/graph?seed=&refresh=      -> neighborhood graph for a seed paper
 GET /api/graph/stream?seed=&refresh= -> same, as SSE with coarse build progress
 GET /api/paper/<arxiv_id>          -> full details for one paper (panel hydrate)
 POST /api/paper/tldr               -> generate (or recall) a paper's TL;DR
-GET /api/paper/<arxiv_id>/figures  -> the paper's figures + captions (ar5iv)
+GET /api/paper/<ref>/figures       -> figures + captions (ar5iv, else mined OA PDF)
 GET /api/paper/<arxiv_id>/code     -> code & artifact links (Hugging Face Papers)
 GET /api/paper/<arxiv_id>/categories -> the paper's own arXiv category tags
+GET /api/pdf_figure/<token>/<n>    -> one mined PDF float, rendered to PNG
 GET /api/figure_proxy?src=         -> same-origin proxy for an ar5iv image
 
 Two failure philosophies live here, on purpose: the *load-bearing* endpoints
@@ -30,6 +31,7 @@ from flask.typing import ResponseReturnValue
 from ..agents import summarizer
 from ..integrations import arxiv, huggingface, openalex, semantic_scholar
 from ..services import graph as graph_service
+from ..services import pdf as pdf_service
 from ..services.graph import Provider
 from ..storage import cache
 from .sse import sse, sse_response
@@ -233,6 +235,11 @@ def api_paper(paper_ref: str) -> ResponseReturnValue:
     # hydration must never trigger a generation — see api_paper_tldr.
     if not node.get("tldr"):
         node["tldr"] = cache.get(_tldr_cache_key(str(node["id"])))
+    # Prime the OA-PDF resolver from this hydration (the URL rode along for
+    # free), so the figures fetch that follows a panel open — and any later
+    # full read — doesn't re-ask the provider.
+    oa_pdf = node.get("oa_pdf")
+    pdf_service.prime(str(node["id"]), oa_pdf if isinstance(oa_pdf, str) and oa_pdf else None)
     return jsonify(node)
 
 
@@ -298,30 +305,62 @@ def api_paper_tldr() -> ResponseReturnValue:
 
 @bp.get("/api/paper/<path:paper_ref>/figures")
 def api_figures(paper_ref: str) -> Response:
-    """Fetch a paper's figures + captions (from ar5iv) for the detail panel.
+    """Fetch a paper's figures + captions for the detail panel.
 
-    Image URLs are rewritten to the same-origin proxy below so the browser
-    never hotlinks ar5iv directly.
+    Two sources, best first: the ar5iv render (real ``<figcaption>``s) when
+    the paper has one, else floats mined from its open-access PDF — figures,
+    tables, and algorithm boxes with caption-anchored extraction (see
+    ``services/pdf``). ar5iv image URLs are rewritten to the same-origin
+    proxy; manifest entries are served as rendered PNGs by ``api_pdf_figure``.
 
     Args:
-        paper_ref: The paper's arXiv id (path-encoded).
+        paper_ref: The paper's arXiv id, or its provider node id for papers
+            not on arXiv (the frontend sends ``arxiv_id ?? id``).
+
+    Query args:
+        provider: ``s2`` or ``openalex`` — who to ask for the OA-PDF URL on
+            a cache miss (defaults to ``config.graph.default_provider``).
 
     Returns:
-        JSON ``{available, figures: [{image, caption}]}``. ar5iv gaps (no
-        LaTeX render) come back as ``available: false`` — not an error — and
-        an ar5iv outage degrades the same way rather than 500-ing the panel.
+        JSON ``{available, figures: [{image, caption}]}``. Papers with
+        neither an ar5iv render nor a minable OA PDF come back as
+        ``available: false`` — not an error — and any outage degrades the
+        same way rather than 500-ing the panel.
     """
     ref = normalize_arxiv_id(paper_ref)
+    is_arxiv = arxiv.looks_arxiv(ref)
+    if is_arxiv:
+        try:
+            result = arxiv.get_figures(ref)
+        except Exception:  # ar5iv down/slow — try the PDF fallback instead
+            current_app.logger.warning("figure fetch failed for %s", ref, exc_info=True)
+            result = {"available": False, "figures": []}
+        if result.get("figures"):
+            for figure in result["figures"]:
+                figure["image"] = "/api/figure_proxy?src=" + urllib.parse.quote(
+                    figure["image"], safe=""
+                )
+            return jsonify(result)
+
+    # No ar5iv render (or not an arXiv paper at all): mine the OA PDF.
     try:
-        result = arxiv.get_figures(ref)
-    except Exception:  # ar5iv down/slow — degrade gracefully, don't 500 the panel
-        current_app.logger.warning("figure fetch failed for %s", ref, exc_info=True)
+        oa_url: str | None
+        if is_arxiv:
+            oa_url = pdf_service.arxiv_pdf_url(ref)
+        else:
+            oa_url = pdf_service.resolve_oa_pdf(ref, _requested_provider())
+        if not oa_url:
+            return jsonify({"available": False, "figures": []})
+        mined = pdf_service.get_pdf_floats(oa_url)
+    except Exception:  # download/mining trouble — degrade, don't 500 the panel
+        current_app.logger.warning("PDF figure mining failed for %s", ref, exc_info=True)
         return jsonify({"available": False, "figures": []})
-    for figure in result.get("figures", []):
-        figure["image"] = "/api/figure_proxy?src=" + urllib.parse.quote(
-            figure["image"], safe=""
-        )
-    return jsonify(result)
+    token = mined.get("token")
+    figures = [
+        {"image": f"/api/pdf_figure/{token}/{position}", "caption": entry.get("caption") or ""}
+        for position, entry in enumerate(mined.get("floats") or [])
+    ]
+    return jsonify({"available": bool(figures), "figures": figures})
 
 
 @bp.get("/api/paper/<path:paper_ref>/code")
@@ -367,6 +406,37 @@ def api_categories(paper_ref: str) -> Response:
         current_app.logger.warning("category fetch failed for %s", ref, exc_info=True)
         return jsonify({"available": False, "categories": []})
     return jsonify(result)
+
+
+@bp.get("/api/pdf_figure/<token>/<int:figure_index>")
+def api_pdf_figure(token: str, figure_index: int) -> ResponseReturnValue:
+    """Serve one mined PDF float as a rendered PNG.
+
+    The image URLs ``api_figures`` (and the researcher's ``show_figure``)
+    hand the browser point here. Tokens are minted server-side when a PDF is
+    mined — an unknown token resolves to no URL and 404s, which is what keeps
+    this from being an open proxy (the browser never supplies a URL).
+
+    Args:
+        token: The mined PDF's token (see ``services/pdf``).
+        figure_index: 0-based index into that PDF's figure manifest.
+
+    Returns:
+        PNG bytes with a day-long cache header; 404 for an unknown
+        token/index or when the PDF can't be re-fetched/rendered.
+    """
+    try:
+        payload = pdf_service.render_figure(token, figure_index)
+    except pdf_service.PdfError:
+        current_app.logger.warning(
+            "pdf figure render failed for %s/%d", token, figure_index, exc_info=True
+        )
+        return Response(status=404)
+    return Response(
+        payload,
+        mimetype="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @bp.get("/api/figure_proxy")

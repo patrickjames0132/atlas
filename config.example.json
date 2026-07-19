@@ -54,6 +54,13 @@
       "chat_k": 8
     }
   },
+  "pdf": {
+    "max_bytes": 26214400,
+    "timeout": 60,
+    "cache_files": 200,
+    "max_floats": 12,
+    "render_dpi": 150
+  },
   "server": {
     "host": "127.0.0.1",
     "port": 5000,

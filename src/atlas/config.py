@@ -515,6 +515,44 @@ class SourcesConfig(ConfigModel):
     retrieval: Retrieval
 
 
+class PdfConfig(ConfigModel):
+    """Fetching and mining open-access PDFs for papers with no ar5iv render.
+
+    Journal papers (and the rare arXiv paper ar5iv can't convert) have no
+    HTML render to read text/figures from; when a provider reports an
+    open-access PDF URL, Atlas downloads it once into a small on-disk cache
+    and mines it with pymupdf — full text for the researcher's ``read_paper``
+    and caption-anchored figures/tables/algorithms for the detail panel and
+    ``show_figure``. Everything degrades gracefully: a paywalled, oversized,
+    or unparseable PDF simply reports "unavailable".
+    """
+
+    max_bytes: PositiveInt = Field(
+        description="Largest PDF the fetcher will download, in bytes. Oversized "
+        "files abort mid-stream and report unavailable — 25 MB covers virtually "
+        "every paper while keeping a hostile/mislabeled URL from filling the disk."
+    )
+    timeout: PositiveInt = Field(
+        description="HTTP timeout in seconds for one PDF download. PDFs are much "
+        "bigger than API responses, so this is separate from (and longer than) the "
+        "provider timeouts."
+    )
+    cache_files: PositiveInt = Field(
+        description="Maximum PDFs kept in the on-disk cache (data_dir/oa_pdfs); "
+        "the least-recently-used files beyond it are pruned after each download. "
+        "At ~2 MB per typical paper, 200 files ≈ 400 MB."
+    )
+    max_floats: PositiveInt = Field(
+        description="Maximum figures/tables/algorithms mined from one PDF — the "
+        "pymupdf twin of the ar5iv extractor's 8-figure cap, a little higher "
+        "because tables and algorithms now count too."
+    )
+    render_dpi: PositiveInt = Field(
+        description="Resolution for rendering a mined float's page region to PNG. "
+        "150 dpi reads crisply in the panel/lightbox without ballooning image size."
+    )
+
+
 class ServerConfig(ConfigModel):
     """Where the Flask app listens, how loudly it logs, and the route-owned
     conversation policy.
@@ -540,6 +578,7 @@ class Config(ConfigModel):
     providers: ProvidersConfig
     graph: GraphConfig
     sources: SourcesConfig
+    pdf: PdfConfig
     server: ServerConfig
     llm: LLMConfig
 

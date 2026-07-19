@@ -43,6 +43,12 @@ class Node(BaseModel):
     """The publication venue's display name (arXiv, Nature, NeurIPS…) — a
     detail-tier field like the abstract, so neighbors carry None until the
     panel hydrates them. Defaults so pre-venue cached snapshots validate."""
+    oa_pdf: str | None = None
+    """The paper's open-access PDF URL (S2 ``openAccessPdf`` / an OpenAlex
+    location's ``pdf_url``) — where PDF mining (full text + figures without
+    an ar5iv render) reads from. Detail-tier on S2 (neighbors carry None
+    until hydration); OpenAlex fills it at neighbor tier too. Defaults so
+    pre-oa_pdf cached snapshots validate."""
     rels: list[str]
     is_seed: bool
 

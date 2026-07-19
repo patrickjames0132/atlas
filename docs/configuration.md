@@ -237,3 +237,26 @@ vendors. Each entry:
   sources chat retrieves more passages per query because that retrieval is
   the *only* grounding the answer gets — there's no paper full-text and no
   follow-up search to fall back on.
+
+## `pdf` — open-access PDF mining
+
+Fetch-and-mine settings for papers without an ar5iv render (see
+`services/pdf`): full text for the researcher's full reads and
+caption-anchored figures/tables/algorithms for the detail panel. The
+storage design behind these knobs — why whole PDFs are cached and images
+are not — is written up in [pdf-mining.md](pdf-mining.md).
+
+- **`max_bytes: 26214400` (25 MB)** — aborts a download mid-stream, since a
+  Content-Length header can lie or be missing. Virtually every paper PDF is
+  a few MB; the cap is about a mislabeled/hostile URL, not typical papers.
+- **`timeout: 60`** — PDFs are much bigger than the JSON the provider
+  timeouts were sized for, so downloads get their own, longer clock.
+- **`cache_files: 200`** — the on-disk PDF cache (`data_dir/oa_pdfs`,
+  LRU-pruned). At ~2 MB per typical paper that's ~400 MB worst case;
+  mined text/floats stay in the SQLite cache for a month either way, so an
+  evicted PDF only costs a re-download when its figures are next *rendered*.
+- **`max_floats: 12`** — the pymupdf twin of the ar5iv extractor's 8-figure
+  cap, slightly higher because tables and algorithm boxes count too.
+- **`render_dpi: 150`** — mined floats are served as page-region renders
+  (vector figures have no embedded image to extract); 150 dpi reads crisply
+  in the panel and lightbox without ballooning image bytes.

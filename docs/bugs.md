@@ -22,6 +22,34 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### Rule spans that never grew — PyMuPDF's `Rect | Rect` silently ignores empty rects
+
+*Found during the v5.27.0 PDF-figure-mining spike (2026-07-18), in the
+booktabs-table extractor.*
+
+- **Symptom.** Caption-anchored table extraction found its seed rule but every
+  span came back one-rule tall, so booktabs tables (attention's Tables 1–2,
+  PPO's Table 1) all reported "no region" — while the identical logic,
+  hand-traced with the same coordinates, was obviously correct. Instrumented
+  prints showed the seed found, `same_width` true, `step` in range… and the
+  union unchanged after the loop.
+- **Root cause.** A hairline rule is a **zero-height rect**, which PyMuPDF
+  considers *empty* (`is_empty`: `y0 >= y1` — height-0 qualifies), and
+  `Rect.__or__` **ignores empty operands entirely** — `span | rule` returns
+  `span` unchanged, no error. Every union in the span-growing loop was a
+  silent no-op.
+- **Fix.** Build spans from raw coordinates (`min`/`max` over `y0`/`y1`),
+  never with `|`, in `services/pdf/floats.py::_rule_span` (and
+  `_algorithm_region`, written coordinate-wise from the start).
+- **Lesson / guard.** When geometry comes from *drawings*, degenerate rects
+  are the norm, not the exception — hairline rules ARE the anatomy of tables
+  and algorithm floats, so any PyMuPDF rect-algebra over them must be
+  audited for empty-operand semantics (`|`, `&`, `contains` all special-case
+  empty). Guarded by the synthetic-PDF tests in
+  `test/atlas/services/pdf/test_floats.py` (`draw_line` produces exactly such
+  height-0 rects; the booktabs and algorithm tests fail if `|` sneaks back),
+  and by comments at both construction sites.
+
 ### The citations ingest slowed 3x across a release — and the process itself was the state that grew
 
 *Found on the 2026-07-15 first-full-release ingest (filed as the "O(n²)" Backlog

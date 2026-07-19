@@ -560,7 +560,7 @@ export default function GraphExplorer({
           node={selected}
           detailLoading={detailLoading === selected.id}
           fieldsLabel={provider === 'openalex' ? 'OpenAlex tags' : 'Semantic Scholar tags'}
-          figures={selected.arxiv_id ? figures[selected.arxiv_id] : undefined}
+          figures={figures[selected.arxiv_id ?? selected.id]}
           codeLinks={selected.arxiv_id ? codeLinks[selected.arxiv_id] : undefined}
           categories={selected.arxiv_id ? categories[selected.arxiv_id] : undefined}
           onEnlarge={setLightbox}

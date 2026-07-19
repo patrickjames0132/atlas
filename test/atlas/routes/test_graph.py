@@ -178,9 +178,81 @@ def test_figures_rewrites_images_to_the_proxy_and_degrades(client, monkeypatch):
         raise TimeoutError("ar5iv slow")
 
     monkeypatch.setattr(graph_routes.arxiv, "get_figures", boom)
+    # The ar5iv failure falls through to OA-PDF mining — keep THAT offline
+    # too, and unavailable, so the route's final degrade shape is exercised.
+    monkeypatch.setattr(
+        graph_routes.pdf_service,
+        "get_pdf_floats",
+        lambda url: {"available": False, "token": "t0", "floats": []},
+    )
     response = client.get("/api/paper/1312.5602/figures")
     assert response.status_code == 200  # degrade, never 500 the panel
     assert response.json == {"available": False, "figures": []}
+
+
+def test_figures_fall_back_to_mined_pdf_floats(client, monkeypatch):
+    """No ar5iv render → the paper's OA PDF is mined; mined floats come back
+    as /api/pdf_figure image URLs. For an arXiv ref the PDF URL needs no
+    provider lookup (arxiv.org/pdf is always OA)."""
+    monkeypatch.setattr(
+        graph_routes.arxiv, "get_figures", lambda ref: {"available": False, "figures": []}
+    )
+    seen = {}
+
+    def fake_floats(url):
+        seen["url"] = url
+        return {
+            "available": True,
+            "token": "abc123",
+            "floats": [
+                {"kind": "figure", "page": 3, "caption": "Figure 1: The model.", "region": [0, 0, 1, 1]},
+                {"kind": "table", "page": 5, "caption": "Table 2: Results.", "region": [0, 0, 1, 1]},
+            ],
+        }
+
+    monkeypatch.setattr(graph_routes.pdf_service, "get_pdf_floats", fake_floats)
+    response = client.get("/api/paper/1312.5602/figures")
+    assert seen["url"] == "https://arxiv.org/pdf/1312.5602"
+    assert response.json == {
+        "available": True,
+        "figures": [
+            {"image": "/api/pdf_figure/abc123/0", "caption": "Figure 1: The model."},
+            {"image": "/api/pdf_figure/abc123/1", "caption": "Table 2: Results."},
+        ],
+    }
+
+
+def test_figures_for_non_arxiv_ref_resolve_via_provider(client, monkeypatch):
+    """A non-arXiv ref (a node id) skips ar5iv entirely and asks the OA-PDF
+    resolver, honoring the provider param; no OA PDF → unavailable."""
+    calls = {}
+
+    def fake_resolve(node_id, provider):
+        calls["args"] = (node_id, provider)
+        return None
+
+    monkeypatch.setattr(graph_routes.pdf_service, "resolve_oa_pdf", fake_resolve)
+    response = client.get("/api/paper/DOI:10.1038/x/figures?provider=openalex")
+    assert calls["args"] == ("DOI:10.1038/x", "openalex")
+    assert response.json == {"available": False, "figures": []}
+
+
+def test_pdf_figure_route_serves_png_and_404s_unknown(client, monkeypatch):
+    """The mined-float image route: PNG bytes on success, 404 (not 500) for
+    unknown tokens/indices."""
+    monkeypatch.setattr(
+        graph_routes.pdf_service, "render_figure", lambda token, index: b"\x89PNG fake"
+    )
+    response = client.get("/api/pdf_figure/abc123/0")
+    assert response.status_code == 200
+    assert response.mimetype == "image/png"
+    assert response.data == b"\x89PNG fake"
+
+    def unknown(token, index):
+        raise graph_routes.pdf_service.PdfError("unknown token")
+
+    monkeypatch.setattr(graph_routes.pdf_service, "render_figure", unknown)
+    assert client.get("/api/pdf_figure/nope/0").status_code == 404
 
 
 def test_tldr_generates_once_then_serves_from_cache(client, monkeypatch):
