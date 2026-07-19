@@ -193,15 +193,6 @@ optional, behind a key.
       the caption echo just fixed — the tool result must say exactly what's
       being shown ("page 87 of X", not a figure designation). *(Filed
       2026-07-19, out of the v5.28.0 browser tests.)*
-- [ ] **Keep "frontier" out of the "landmark papers since" lecture** — the
-      evolution lecture ("The landmark papers since", narrating the landmark
-      citers) sometimes ends on a beat whose **title contains the word
-      "frontier"**, which is usually wrong for this mode and reads as a spillover
-      from the separate **"The current frontier"** lecture (the `latest` relation)
-      where that vocabulary belongs. Fix the lecturer's **EVOLUTION mode-intent**
-      so the closing beat doesn't reach for "frontier" language — this lecture is
-      about the giants that built on the seed, not the present frontier. *(From
-      the `todos.md` inbox, 2026-07-11.)*
 - [ ] **Should display filters scope the agents? Researcher yes, lecturer maybe
       not** — today filtering the graph (relation chips, year / citation sliders)
       narrows what **both** the researcher and the lecturer are grounded in:
@@ -216,8 +207,6 @@ optional, behind a key.
       lecturer narrates its full relation regardless of display filters, while the
       researcher stays scoped to what's shown. *(From the `todos.md` inbox,
       2026-07-13.)*
-
-
 - [ ] **A precise "overlapping references/citations" skill for the researcher** —
       asking which references or citations the seed paper SHARES with an
       expanded paper kind-of works today, but the answer comes from the model
@@ -227,10 +216,6 @@ optional, behind a key.
       both) exposed as a researcher skill, so the answer is exact set output
       rather than model recall. Probably wants the result grounded as
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
-- [ ] **OCR for scanned PDFs in the library** — image-only PDFs are rejected at
-      ingest today; OCR them so they ingest and retrieve like any other source.
-      *(Deferred — needs a system Tesseract dep, fiddly on Windows. Moved out of
-      the shipped Phase 3d polish list, 2026-07-16.)*
 
 ### Citations & graph data
 

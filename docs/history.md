@@ -478,6 +478,20 @@
       newly-played lecture is included by default), with a one-line note above the
       ask bar showing how many are in play. *(From the `todos.md` inbox,
       2026-07-11; browser-tested.)*
+- [x] **Keep "frontier" out of the "landmark papers since" lecture** *(v5.28.1)* —
+      the evolution lecture ("The landmark papers since", narrating the landmark
+      citers) sometimes ended on a beat whose **title contained the word
+      "frontier"**, which is usually wrong for this mode and reads as a spillover
+      from the separate **"The current frontier"** lecture (the `latest` relation)
+      where that vocabulary belongs. The node pools were never the leak — landmark
+      citers and Latest Publications are disjoint by id, and `_story_nodes` scopes
+      each mode by `rels` tag — the **EVOLUTION mode-intent itself** told the
+      model to end "at the current state of the art", inviting exactly the
+      where-is-the-field-heading close that belongs to the frontier lecture. Now
+      it ends "at the newest landmark on your list", with an explicit fence: the
+      CURRENT FRONTIER is a separate lecture — no surveying what's active right
+      now, no forecasting where the field is heading. *(From the `todos.md`
+      inbox, 2026-07-11; browser-tested.)*
 
 ### Bring-your-own sources
 
