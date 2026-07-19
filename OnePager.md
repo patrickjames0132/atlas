@@ -530,6 +530,13 @@ optional, behind a key.
       canvas-resize plumbing; probably lands in stages (desktop-narrow
       first, true mobile after). *(From the `todos.md` inbox, 2026-07-18.)*
 
+- [ ] **Wrap text in the research chat input** — the chat box keeps what you
+      type on a single line, so longer questions scroll horizontally and are
+      hard to follow while composing. Make the input wrap (likely a
+      `<textarea>`/auto-growing input instead of a single-line field) so a
+      multi-line question stays readable. *(From the `todos.md` inbox,
+      2026-07-19.)*
+
 ### Enhancements & tech debt
 
 - [ ] **Revisit the root `README.md` — wording, clutter, formatting** — the
