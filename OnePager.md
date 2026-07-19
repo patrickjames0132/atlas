@@ -530,6 +530,13 @@ optional, behind a key.
       canvas-resize plumbing; probably lands in stages (desktop-narrow
       first, true mobile after). *(From the `todos.md` inbox, 2026-07-18.)*
 
+- [ ] **Highlight inline library-source references like paper links** — when an
+      answer cites an uploaded library source inline (source, page number), the
+      reference renders as plain text; style it in the same blue treatment used
+      for research-paper link references so it stands out. The one difference:
+      it's a highlight only — clicking shouldn't do anything, since there's no
+      node/page to jump to. *(From the `todos.md` inbox, 2026-07-19.)*
+
 - [ ] **Wrap text in the research chat input** — the chat box keeps what you
       type on a single line, so longer questions scroll horizontally and are
       hard to follow while composing. Make the input wrap (likely a
