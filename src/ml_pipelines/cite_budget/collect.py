@@ -42,8 +42,8 @@ from .features import (
 
 log = logging.getLogger("collect")
 
-# How many of a seed's top citers to inspect. Matches the app's unbounded
-# landmark cap (openalex.UNBOUNDED_LANDMARK_CAP) — the pool the density rule
+# How many of a seed's top citers to inspect. Matches the app's payload guard
+# (integrations.caps.UNBOUNDED_LANDMARK_CAP) — the pool the density rule
 # would trim from at build time.
 POOL_SIZE = 500
 PAGE = 200  # OpenAlex per-page cap for the citer pages

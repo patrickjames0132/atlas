@@ -20,14 +20,12 @@ def relations(**overrides):
     """``citation_relations`` for the synthetic seed, with a build's boundary args.
 
     Args:
-        **overrides: Any argument to override (e.g. ``landmark_limit=1``).
+        **overrides: Any argument to override (e.g. ``landmark_budget=...``).
 
     Returns:
         Whatever ``citation_relations`` returns — ``(landmark, latest)`` or None.
     """
     kwargs = {
-        "landmark_limit": None,
-        "latest_limit": None,
         "max_landmark_year": MAX_LANDMARK_YEAR,
         "current_year": CURRENT_YEAR,
     }
@@ -98,37 +96,40 @@ def test_landmark_carries_influential_flag(synthetic_corpus):
     assert by_id["CorpusId:4"]["influential"] is False
 
 
-def test_landmark_limit_trims_least_cited(synthetic_corpus):
-    """A landmark limit keeps the most-cited (BERT), drops GPT-3."""
-    landmark, _ = relations(landmark_limit=1)
+def test_payload_guard_trims_least_cited(synthetic_corpus, monkeypatch):
+    """The payload guard keeps the most-cited (BERT), drops GPT-3."""
+    monkeypatch.setattr(source, "UNBOUNDED_LANDMARK_CAP", 1)
+    landmark, _ = relations()
     assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2"]
 
 
-def test_landmark_budget_measures_the_whole_ranked_pool(synthetic_corpus):
+def test_landmark_budget_measures_the_whole_ranked_pool(synthetic_corpus, monkeypatch):
     """A supplied budget rule sees the FULL ranking, not a pre-trimmed prefix.
 
     The point of the v5.11.0 change: the corpus stopped pushing a predicted count
     into the query and started measuring the real pool. So the rule must be handed
     every ranked citer, or it is measuring the very trim it was meant to decide.
     """
+    monkeypatch.setattr(source, "UNBOUNDED_LANDMARK_CAP", 1)
     seen: dict[str, object] = {}
 
     def take_the_second_only(citer_years):
         seen["years"] = list(citer_years)
         return 2
 
-    landmark, _ = relations(landmark_limit=1, landmark_budget=take_the_second_only)
-    # It saw both landmarks despite landmark_limit=1 — the limit is not applied
+    landmark, _ = relations(landmark_budget=take_the_second_only)
+    # It saw both landmarks despite the guard of 1 — the guard is not applied
     # ahead of the rule, which is the whole change. (Citation rank: BERT 2018 with
     # 80k, then GPT-3 2020 with 50k — so the years arrive ranked, not chronological.)
     assert seen["years"] == [2018, 2020]
-    # And its count won over the limit: a prefix of the citation ranking.
+    # And its count won over the guard: a prefix of the citation ranking.
     assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2", "CorpusId:4"]
 
 
-def test_landmark_budget_declining_falls_back_to_the_flat_limit(synthetic_corpus):
-    """A rule returning None (the adaptive toggle is off) yields the ceiling."""
-    landmark, _ = relations(landmark_limit=1, landmark_budget=lambda citer_years: None)
+def test_landmark_budget_declining_falls_back_to_the_flat_guard(synthetic_corpus, monkeypatch):
+    """A rule returning None (the adaptive toggle is off) yields the guard."""
+    monkeypatch.setattr(source, "UNBOUNDED_LANDMARK_CAP", 1)
+    landmark, _ = relations(landmark_budget=lambda citer_years: None)
     assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2"]
 
 
@@ -172,10 +173,11 @@ def test_citers_are_deduped_across_export_batches(synthetic_corpus):
     assert len(ids) == len(set(ids))
 
 
-def test_a_limit_counts_papers_not_duplicate_rows(synthetic_corpus):
+def test_a_limit_counts_papers_not_duplicate_rows(synthetic_corpus, monkeypatch):
     """The bug this guards: `LIMIT 1` over un-deduped rows could return one row
     that's a *second copy* of a citer — spending the budget on nothing."""
-    landmark, _latest = relations(landmark_limit=1)
+    monkeypatch.setattr(source, "UNBOUNDED_LANDMARK_CAP", 1)
+    landmark, _latest = relations()
     assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2"]  # the most-cited
 
 

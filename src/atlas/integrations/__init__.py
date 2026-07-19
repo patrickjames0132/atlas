@@ -8,6 +8,9 @@
   (Was ``ar5iv``; renamed as the single home for arXiv code.)
 * ``huggingface``      — code & artifact links (GitHub repo, models/datasets/
   Spaces) from Hugging Face Papers.
+* ``caps``             — the provider-neutral ``UNBOUNDED_LANDMARK_CAP`` payload
+  guard both citation providers trim to (shared here so they stay independent
+  of each other).
 
 Clients here own their own transport (stdlib ``urllib`` or ``huggingface_hub``),
 rate-limit etiquette, and caching keys; the ``services`` package composes them

@@ -33,6 +33,7 @@ from typing import Callable
 
 from ...config import config
 from .. import arxiv
+from ..caps import UNBOUNDED_LANDMARK_CAP
 from . import client, nodes
 
 log = logging.getLogger(__name__)
@@ -53,12 +54,6 @@ _OR_FILTER_MAX = 50
 # ``landmark`` = the all-time most-cited up to the year below that.
 _LATEST_YEARS = 2  # current year + previous year are latest-only, never landmarks
 
-# How many landmark citers to pull for an *unbounded* relation (config ship count
-# = ``null``). Server-sorted, so these are the top-N by citation count — plenty of
-# range for the frontend's reveal-on-demand slider without paging a mega seed's
-# entire citer list (Hawking has ~5.7k; "Attention" ~150k). An explicit numeric
-# limit overrides this.
-UNBOUNDED_LANDMARK_CAP = 500
 
 
 def landmark_max_year(as_of: datetime.date) -> int:
@@ -227,7 +222,7 @@ def get_paper(ref: str) -> dict | None:
     return nodes.node(work) if work else None
 
 
-def references(work_id: str, limit: int | None) -> list[dict]:
+def references(work_id: str, limit: int | None = None) -> list[dict]:
     """The papers a seed CITES — its bibliography (the OpenAlex twin of
     ``s2.references``).
 
@@ -235,11 +230,13 @@ def references(work_id: str, limit: int | None) -> list[dict]:
     reference list (outbound citations). OpenAlex sorts them server-side by
     ``cited_by_count:desc``, so — unlike the S2 path, whose endpoint offers no
     ``sort`` and must over-fetch a pool and rank locally — the most-cited
-    references come back directly.
+    references come back directly. The graph build takes the default (the
+    shared payload guard, which a reference list rarely nears); the agent's
+    ``expand_node`` hop passes its own ``limit`` (the hop budget).
 
     Args:
         work_id: The seed's bare OpenAlex id (``W…``).
-        limit: Max references to return, or None for the unbounded cap.
+        limit: Max references to return, or None for the payload guard.
 
     Returns:
         ``[{"node", "influential"}]`` entries, most-cited first (``influential``
@@ -326,7 +323,7 @@ def _by_recency(entry: dict) -> tuple:
 
 #: Injected boundary chooser: ``(landmark_years, landmark_max_year) -> first band
 #: year | None``. ``services/graph`` passes ``bands.earliest_band_year`` (the
-#: trained per-seed rule); None keeps the fixed ``latest_band_years`` span. A
+#: trained per-seed rule); None keeps the fixed ``number_of_bands`` span. A
 #: parameter, not an import, so ``integrations`` stays below ``services`` in the
 #: dependency order.
 BandStartFn = Callable[[list[int], int], int | None]
@@ -360,7 +357,7 @@ def _budgeted_landmarks(filter_clause: str, cap: int,
     The probe is conclusive when the rule stops inside it or the citer list
     itself ends inside it. A seed whose top-200 spread so evenly that no year
     overflows pays for one second, ceiling-sized fetch and re-measures over the
-    longer ranking (and a rule answer of None — the adaptive toggle off — falls
+    longer ranking (and a rule answer of None — a declining rule — falls
     back to the flat ``cap``, extending the same way).
 
     Trimming to the rule's count also restores the ``PER_YEAR_CAP`` invariant
@@ -369,7 +366,7 @@ def _budgeted_landmarks(filter_clause: str, cap: int,
 
     Args:
         filter_clause: The landmark ``filter=`` value (``cites:`` + date bound).
-        cap: The ceiling — the configured ``cite_limit``, or the unbounded cap.
+        cap: The ceiling — the ``UNBOUNDED_LANDMARK_CAP`` payload guard.
         landmark_budget: Optional rule measuring how many of the ranked pool to
             ship (see :data:`LandmarkBudgetFn`).
 
@@ -396,8 +393,6 @@ def _budgeted_landmarks(filter_clause: str, cap: int,
 def citation_relations(
     work_id: str,
     *,
-    landmark_limit: int | None,
-    latest_limit: int | None,
     band_start: BandStartFn | None = None,
     landmark_budget: LandmarkBudgetFn | None = None,
 ) -> tuple[list[dict], list[dict]]:
@@ -408,18 +403,19 @@ def citation_relations(
       ``sort=cited_by_count:desc``. The historic giants; naturally old. With a
       ``landmark_budget`` the band's length is **computed** from the ranking's
       years (the STOP rule over a one-page probe — see
-      :func:`_budgeted_landmarks`); without one it's the flat cap.
+      :func:`_budgeted_landmarks`); without one it's the flat
+      ``UNBOUNDED_LANDMARK_CAP`` payload guard.
     * **latest** (light-green, *Latest Publications*) — **recent** citers as
       **per-year bands**: one ``publication_year:<Y>`` query per year (each top
-      ``latest_per_year`` by citations), from the band start up to the current
-      year. The band span defaults to ``config.graph.latest_band_years`` (below
+      ``nodes_per_band`` by citations), from the band start up to the current
+      year. The band span defaults to ``config.graph.latest_nodes.number_of_bands`` (below
       the landmark cutoff) plus the ``_LATEST_YEARS`` latest-only years above it,
       but when a ``band_start`` chooser is supplied it may **widen** per seed to
       close the landmark→latest gap (see :func:`bands.earliest_band_year`).
       Anything already a Field Landmark is excluded (a recent *giant* stays a
-      landmark, not double-shown). A ``latest_limit`` keeps the **newest** N,
-      but the returned order is **oldest-first** — the enumeration rank drives
-      the frontend's reveal slider, which should walk toward the present.
+      landmark, not double-shown). The returned order is **oldest-first** — the
+      enumeration rank drives the frontend's reveal slider, which should walk
+      toward the present.
 
     The split is by **publication year**, not an exact date, because OpenAlex
     dating is coarse — many works are year-only, defaulted to ``<year>-01-01``,
@@ -429,16 +425,14 @@ def citation_relations(
 
     Args:
         work_id: The seed's bare OpenAlex id (``W…``).
-        landmark_limit: Max all-time landmarks, or None for the unbounded cap.
-        latest_limit: Max latest citers (keeps the newest), or None for all.
         band_start: Optional per-seed band-start chooser (the shipped landmarks'
             years and the landmark-max year → first band year, or None to keep
             the fixed span). None (the default) always uses the fixed
-            ``latest_band_years`` span.
+            ``number_of_bands`` span.
         landmark_budget: Optional rule computing how many of the ranked landmark
-            pool to ship (see :data:`LandmarkBudgetFn`); its count wins over
-            ``landmark_limit``, which stays the ceiling. None (the default)
-            ships the flat cap.
+            pool to ship (see :data:`LandmarkBudgetFn`); its count wins over the
+            payload guard, which stays the ceiling. None (the default) ships
+            the flat cap.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -448,13 +442,12 @@ def citation_relations(
     """
     current_year = datetime.date.today().year
     max_landmark_year = landmark_max_year(datetime.date.today())
-    cap = landmark_limit if landmark_limit is not None else UNBOUNDED_LANDMARK_CAP
-    per_year = config.graph.latest_per_year
+    per_year = config.graph.latest_nodes.nodes_per_band
 
     # FIELD LANDMARKS: the all-time giants, up to the last landmark year.
     landmark = _budgeted_landmarks(
         f"cites:{work_id},to_publication_date:{max_landmark_year}-12-31",
-        cap,
+        UNBOUNDED_LANDMARK_CAP,
         landmark_budget,
     )
     landmark_ids = {entry["node"]["id"] for entry in landmark}
@@ -463,7 +456,7 @@ def citation_relations(
     # start up to the current year (by citations, one query each so no single year
     # dominates), excluding giants. Uniform per-year bands the whole way — no
     # separate newest-date window — so every recent year gets its own fair slice.
-    earliest_band_year = max_landmark_year - config.graph.latest_band_years + 1
+    earliest_band_year = max_landmark_year - config.graph.latest_nodes.number_of_bands + 1
     if band_start is not None:
         landmark_years = [entry["node"].get("year") for entry in landmark]
         adaptive_start = band_start(
@@ -486,12 +479,10 @@ def citation_relations(
         if node_id not in seen and node_id not in landmark_ids:
             seen.add(node_id)
             latest.append(entry)
-    # Select newest-first (so a limit keeps the newest N), then flip: rank 0 is
-    # the OLDEST banded year and the frontier comes last, so the frontend's
-    # reveal slider walks forward through time toward the present.
+    # Sort newest-first, then flip: rank 0 is the OLDEST banded year and the
+    # frontier comes last, so the frontend's reveal slider walks forward
+    # through time toward the present.
     latest.sort(key=_by_recency, reverse=True)
-    if latest_limit is not None:
-        latest = latest[:latest_limit]
     latest.reverse()
 
     return landmark, latest

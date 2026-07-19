@@ -120,9 +120,10 @@ cache hit, a deliberate trade.
    This is the mechanism that lets you **re-seed on any node**, including a
    journal paper with no arXiv id, so exploration never dead-ends.
 
-3. **Adaptive budgets** (shared by both providers). The **landmark budget adapts
-   to the seed** when `config.graph.adaptive_cite_limit` is on — by one of two
-   routes to the same criterion, chosen by *what kind of pool the path holds*:
+3. **Adaptive budgets** (shared by both providers). The **landmark budget always
+   adapts to the seed** — there is no toggle; sizing is how the app works — by
+   one of two routes to the same criterion, chosen by *what kind of pool the
+   path holds*:
 
    - **Computed** — `budget.computed_cite_limit` runs the **STOP** rule over the
      real citer years and returns a count: the length of the citation-ranked
@@ -183,13 +184,15 @@ cache hit, a deliberate trade.
    `config.json` — `live_pool_validation` measures both over simulated truncated
    pools.
 
-   The **latest bands adapt** too (`config.graph.adaptive_latest_band`): `bands.py`
+   The **latest bands adapt** too (always on, like the budget): `bands.py`
    places the band start at the **density tail edge** of the landmark cluster (a
    second offline model, `src/ml_pipelines/latest_gap/model.joblib`), closing the
-   gap for an old seed and keeping a tight frontier for a young one. `build.py`
-   injects `bands.earliest_band_year` as the OpenAlex `band_start` callable so
-   `integrations` stays below `services` in the import order (its config-free
-   core is `bands.band_start_rule`, shared with the validation pipeline). See
+   gap for an old seed and keeping a tight frontier for a young one, falling
+   back to the fixed `config.graph.latest_nodes.number_of_bands` span when the model can't
+   load or the seed has too few dated landmarks. `build.py` injects
+   `bands.earliest_band_year` as the OpenAlex `band_start` callable so
+   `integrations` stays below `services` in the import order (config-free, so
+   the validation pipeline runs the same function). See
    `src/ml_pipelines/latest_gap/README.md`.
 
 4. **Dedupe + relation accumulation.** The `add_neighbor()` closure merges
@@ -264,8 +267,8 @@ the only one predicting**. It receives the model's count because its query is
 remote and server-sorted, so nothing is in hand at the moment of decision. The
 corpus receives `budget.computed_cite_limit` (measure the pool you already
 fetched), the live fallback `budget.select_landmarks` (band it, since a prefix of a
-truncated pool strands the recent years), and both take the flat `cite_limit` only
-as a ceiling.
+truncated pool strands the recent years), and both take the flat
+`UNBOUNDED_LANDMARK_CAP` payload guard (`integrations/caps.py`) only as a ceiling.
 
 The adaptive budget's own tests live in **`test_budget.py`** — both routes: the
 predicted one (loading the committed model, pinning the worked examples /

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from atlas.config import config
 from atlas.services.graph import bands
 
 # A landmark-era max year for the served-rule tests.
@@ -18,9 +17,8 @@ LANDMARK_MAX = 2024
 
 
 @pytest.fixture(autouse=True)
-def _adaptive_on(monkeypatch):
-    """Default the feature on, and reset the memoized model around each test."""
-    monkeypatch.setattr(config.graph, "adaptive_latest_band", True)
+def _fresh_model_cache():
+    """Reset the memoized model around each test (one may swap load_model)."""
     bands._reset_model_cache()
     yield
     bands._reset_model_cache()
@@ -90,11 +88,6 @@ class TestEarliestBandYear:
         clean = [2008]*5 + [2010]*5 + [2012]*5 + [2013, 2014]  # peak 5 -> threshold 2.5
         poisoned = clean + [2026, 2026]  # two misdated-future citers, count 2 < 2.5
         assert start(clean) == start(poisoned)
-
-    def test_toggle_off_returns_none(self, monkeypatch):
-        _use_bundle(monkeypatch, tau=0.5, max_span=7)
-        monkeypatch.setattr(config.graph, "adaptive_latest_band", False)
-        assert start([2010]*5 + [2011]*5 + [2012]*3) is None
 
     def test_too_few_dated_years_returns_none(self, monkeypatch):
         _use_bundle(monkeypatch, tau=0.5, max_span=7)

@@ -470,7 +470,33 @@ optional, behind a key.
       help/tutorials button**. **Sequencing (Patrick, 2026-07-18): do this
       only AFTER the config reorganization has landed** — the modal builds on
       the reorganized shape (which knobs live with the user vs. in the file),
-      so doing it first would mean reworking it.
+      so doing it first would mean reworking it. *(The reorg shipped as the
+      v6.0.0 config purge — see history — so this is unblocked.)*
+      **Scope & design notes (Patrick, 2026-07-19):**
+      - **Layout mirrors Claude Desktop's settings modal**: a left sidebar with
+        a search field and grouped nav sections (icon + label per entry,
+        selected item highlighted), a right content pane with bold section
+        headings and label-left / control-right rows separated by hairline
+        dividers.
+      - **`config.json` is the modal's store**: the modal reads its displayed
+        values from `config.json` and writes changes back to it — and the user
+        can point the app at **their own config.json location** from the modal.
+        (This sharpens the load-once design question above: the modal is a
+        config *editor*, so it needs a reload path or per-request overrides
+        for the graph-affecting settings.)
+      - **The headline setting is a single `adaptive` checkbox.** ON = today's
+        behavior: STOP/SKIP size the landmark band, the tau rule places the
+        Latest cluster start, and the filter chips have **no sliders**. OFF =
+        the build ships **all nodes** (the `UNBOUNDED_LANDMARK_CAP` payload
+        guard as the only ceiling), the per-chip **count sliders come back**
+        (a feature we once had and removed) so the user trims what's
+        *displayed*, and the Latest bands' shape becomes user input: cluster
+        start, `latest_nodes.number_of_bands`, `latest_nodes.nodes_per_band`.
+        The flag lives **with the user**, reaching the build per request — it
+        deliberately does not return to `config.json` (the v6.0.0 purge
+        deleted the old file toggles). **Open question:** with adaptive ON,
+        should nodes-per-band come from the SKIP rule instead of the fixed
+        `nodes_per_band` (50)?
 
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;
@@ -528,34 +554,6 @@ optional, behind a key.
       stay honest to the current app — check claims against the shipped
       feature set while in there. *(From the `todos.md` inbox, 2026-07-18.)*
 
-- [ ] **Delete the four dead per-relation count caps — the app should size itself**
-      — `ref_limit`, `cite_limit`, `latest_limit` and `similar_limit` are all
-      **`null` in the real `config.json`** and have been for a long time: the app
-      already sizes every relation itself (the fitted `PER_YEAR_CAP` of 12 per
-      publication year, `bands`' fitted `tau`/`max_span`, and
-      `UNBOUNDED_LANDMARK_CAP` as the payload ceiling). Like `recs_pool` below,
-      they're knobs nobody turns. Patrick's call (2026-07-17): sizing should be
-      **automatic**, with a user-facing "show me more" setting later if wanted —
-      not a config file nobody edits.
-      **Now unblocked.** The blocker used to be that the two sizings disagreed
-      about what an unset `cite_limit` *meant*: `predicted_budget` read it as
-      `UNBOUNDED_LANDMARK_CAP` (500) while `select_landmarks` read it as infinity.
-      You can't delete a field two code paths interpret differently. v5.11.0 made
-      them agree, so the field can now go without changing behavior.
-      **The work:** drop the four fields from `config.py` and
-      `config.example.json`, delete the ceiling reads in `budget.py` /
-      `build.py` / the traversals, and prune `docs/configuration.md`. **Migration:**
-      `config.py` is `extra="forbid"`, so every existing `config.json` fails at
-      startup until the keys are deleted — a hand-edit on both machines, and
-      `config.json` is gitignored so it can't be done for them. Consider whether
-      the session-start config-drift check in `CLAUDE.md` should also flag keys the
-      template has *dropped*, not just ones it has added.
-      **Worth deciding while in there:** `UNBOUNDED_LANDMARK_CAP = 500` becomes the
-      *only* ceiling once `cite_limit` goes, and unlike `PER_YEAR_CAP = 12` it was
-      never fitted — its docstring frames it as a paging pragmatic ("without paging
-      a mega seed's entire citer list"). That's a defensible payload guard rather
-      than a legibility rule, but it should be *named* as one, since "data-driven
-      over magic numbers" is the house line. *(Patrick, 2026-07-17.)*
 - [ ] **Audit every constant in `src/` for config-knob-worthiness — then decide
       which knobs belong in the UI instead** — a systematic pass over the
       module-level constants (`NBUCKETS`, `_RANK_POOL`, `_MAX_OFFSET`,

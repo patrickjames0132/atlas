@@ -24,15 +24,10 @@
   },
   "graph": {
     "default_provider": "s2",
-    "ref_limit": 100,
-    "cite_limit": 150,
-    "adaptive_cite_limit": true,
-    "latest_limit": 150,
-    "similar_limit": 60,
-    "latest_band_years": 5,
-    "adaptive_latest_band": true,
-    "latest_per_year": 50,
-    "recs_pool": "all-cs",
+    "latest_nodes": {
+      "number_of_bands": 5,
+      "nodes_per_band": 50
+    },
     "cache_ttl": 86400
   },
   "sources": {

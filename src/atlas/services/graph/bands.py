@@ -7,7 +7,7 @@ once, with worked examples, in ``docs/landmark-vocabulary.md``; the sibling
 Field Landmarks are a seed's all-time most-cited citers (any year); Latest
 Publications fills recent years evenly with one ``cited_by_count`` query *per
 year*, up to the current year. Those bands used to start at a **fixed** lower
-edge (``config.graph.latest_band_years``). For an *old* seed whose landmark
+edge (``config.graph.latest_nodes.number_of_bands``). For an *old* seed whose landmark
 cluster tails off years before that fixed start, the timeline shows a dead
 stretch between the last landmark and the first band — the gap this module
 closes.
@@ -35,7 +35,7 @@ artifact (``src/ml_pipelines/latest_gap/model.joblib``). This module is the *ser
 half — it loads that artifact and applies the rule; the *tail-edge rule itself*
 (:func:`tail_edge`) is imported by training too, so there's one contract and no
 train/serve skew. A missing or unreadable artifact degrades gracefully to the
-fixed ``latest_band_years`` span rather than failing a graph build.
+fixed ``number_of_bands`` span rather than failing a graph build.
 
 Unlike the sibling ``budget`` model, the boundary is a property of each seed's
 landmark *distribution*, not of its age/citations (a feature regression on those
@@ -52,7 +52,7 @@ from typing import Any
 
 import joblib
 
-from ...config import PROJECT_ROOT, config
+from ...config import PROJECT_ROOT
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ def load_model() -> dict[str, Any] | None:
     """Load and memoize the trained-boundary bundle, or None when unavailable.
 
     A missing, unreadable, or wrong-rule artifact is logged and returns None so
-    the caller falls back to the fixed ``latest_band_years`` span — a graph
+    the caller falls back to the fixed ``number_of_bands`` span — a graph
     build must never fail just because this model hasn't been trained yet.
 
     Returns:
@@ -132,15 +132,15 @@ def load_model() -> dict[str, Any] | None:
         None when the artifact can't be loaded or its rule doesn't match.
     """
     if not MODEL_PATH.exists():
-        log.warning("latest-gap model missing at %s; using fixed latest_band_years", MODEL_PATH)
+        log.warning("latest-gap model missing at %s; using fixed number_of_bands", MODEL_PATH)
         return None
     try:
         bundle: dict[str, Any] = joblib.load(MODEL_PATH)
     except Exception as error:  # a corrupt/incompatible artifact must not crash a build
-        log.warning("latest-gap model failed to load (%s); using fixed latest_band_years", error)
+        log.warning("latest-gap model failed to load (%s); using fixed number_of_bands", error)
         return None
     if bundle.get("rule") != RULE_NAME:
-        log.warning("latest-gap model rule mismatch %s; using fixed latest_band_years",
+        log.warning("latest-gap model rule mismatch %s; using fixed number_of_bands",
                     bundle.get("rule"))
         return None
     return bundle
@@ -164,11 +164,14 @@ def earliest_band_year(landmark_years: list[int], landmark_max_year: int) -> int
     start the bands where the landmark cluster's density falls off
     (:func:`tail_edge`), floored so the start reaches back at most ``max_span``
     years before the landmark cutoff (bounded query cost). No "only widen" clamp
-    — a young seed whose cluster edge is recent starts its bands there.
+    — a young seed whose cluster edge is recent starts its bands there. Always
+    on (there is no toggle — banding is how the app sizes itself); config-free,
+    so the ``live_pool_validation`` study places band starts over simulated
+    pools with exactly the serving rule.
 
-    Falls back (returns None → the caller keeps the fixed span) when the feature
-    is off, the artifact isn't loadable, or the seed has too few dated landmark
-    years to place a trustworthy boundary.
+    Falls back (returns None → the caller keeps the fixed ``number_of_bands``
+    span) when the artifact isn't loadable or the seed has too few dated
+    landmark years to place a trustworthy boundary.
 
     Args:
         landmark_years: Publication years of the seed's *shipped* landmark
@@ -178,29 +181,6 @@ def earliest_band_year(landmark_years: list[int], landmark_max_year: int) -> int
 
     Returns:
         The adaptive first band year, or None to keep the fixed span.
-    """
-    if not config.graph.adaptive_latest_band:
-        return None
-    return band_start_rule(landmark_years, landmark_max_year)
-
-
-def band_start_rule(landmark_years: list[int], landmark_max_year: int) -> int | None:
-    """The fitted tail-edge rule itself, config-free — shared by serving and pipelines.
-
-    :func:`earliest_band_year` gates this on ``config.graph.adaptive_latest_band``
-    for the app; the rule is factored out (the ``budget.predicted_budget`` precedent)
-    so the ``live_pool_validation`` study can place band starts over simulated
-    pools without depending on the local ``config.json``. Still returns None when
-    the artifact isn't loadable or the seed has too few dated landmark years.
-
-    Args:
-        landmark_years: Publication years of the seed's shipped landmark citers.
-        landmark_max_year: The last landmark-era year — the ``max_span`` floor is
-            measured back from it.
-
-    Returns:
-        The adaptive first band year, or None when no trustworthy boundary can
-        be placed.
     """
     dated = [year for year in landmark_years if year]
     if len(dated) < MIN_LANDMARK_YEARS:

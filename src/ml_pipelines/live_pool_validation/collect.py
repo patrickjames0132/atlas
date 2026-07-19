@@ -19,7 +19,7 @@ by side:
 * ``citers_before_overflow_full`` — the same STOP rule over the corpus's whole
   ranked pool (the corpus-models ticket's label re-collection).
 * ``band_start`` — the latest-gap boundary the tau rule places on the truncated
-  pool's shipped landmarks (``bands.band_start_rule``).
+  pool's shipped landmarks (``bands.earliest_band_year``).
 
 Runs on the machine that holds the ingested corpus (the parquet root configured
 in ``config.storage.s2.parquet``); everything but one OpenAlex id-mapping fetch
@@ -240,7 +240,7 @@ def pool_metrics(citers: list[dict[str, Any]], *, seed_year: int | None,
         "citers_before_overflow_full": citers_before_overflow(
             full_years, budget.PER_YEAR_CAP),
         "corpus_rank_pool": len(full_years),
-        "band_start": (bands.band_start_rule(dated_selected, landmark_max_year)
+        "band_start": (bands.earliest_band_year(dated_selected, landmark_max_year)
                        if landmark_max_year else None),
         "landmark_max_year": landmark_max_year,
     }

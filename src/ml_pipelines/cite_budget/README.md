@@ -124,7 +124,7 @@ loads (the fitted estimator + its contract marker + clamp floor + metadata); the
 eyeballing and for a git diff to show what a retrain moved). **Regenerated, not
 edited** — never hand-edit them; rerun the pipeline, and the diff is the record.
 **Loaded defensively** — a missing, corrupt, or contract-mismatched artifact makes
-the app fall back to the flat `cite_limit`, so a bad or absent model degrades
+the app fall back to the flat payload guard, so a bad or absent model degrades
 gracefully. **Version skew:** the pickled scikit-learn estimator can fail to load
 if the runtime's scikit-learn diverges far enough; the fallback then kicks in —
 retrain to refresh the pickle.

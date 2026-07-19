@@ -113,11 +113,11 @@ fetch reached the end of the citation list (since v5.13.0):
   don't apply to these seeds.
 - **Truncated pool** — the ceiling cut the list off (a hyper-cited seed):
   - **latest** (light-green nodes) — citers published within the rolling last
-    `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first. Capped at
-    `config.graph.latest_limit`.
+    `_LATEST_WINDOW_MONTHS` (12) months, by `pub_date`, newest-first.
   - **landmark** (green nodes) — everything else, the most-cited *historic*
     citers. Chosen by the injected `landmark_select` rule (below), falling back
-    to a flat `landmark_limit`.
+    to a flat `UNBOUNDED_LANDMARK_CAP` prefix (the shared payload guard from
+    `integrations/caps.py`).
 
 **When S2 gives no `publicationDate`, `year` decides** (`_is_latest`). A citer
 from a year *after* the cutoff's year is in the window whatever month it came
@@ -146,7 +146,7 @@ published — the entries stay here):
   kind of object they hold: a whole-history ranking.
 - **`LandmarkSelectFn`** (`budget.select_landmarks`) — for a **truncated**
   pool: a rule handed the *ranked* pool's citer years, answering with the
-  **indices** to ship; its pick wins over the flat `landmark_limit`.
+  **indices** to ship; its pick wins over the flat payload guard.
 
 Both rules rank the citers most-cited first, drop each into a bucket named by
 its publication year, and never let a bucket exceed the per-year cap

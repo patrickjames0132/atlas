@@ -40,12 +40,15 @@ skipping the Trivy scan).
 
 **Then check `config.json` against `config.example.json`.** `config.json` is the
 real settings file and is **gitignored**, so it drifts from the tracked template
-whenever a new setting lands. At session start, diff the two — any key present in
-`config.example.json` but missing from `config.json` (or a shape that no longer
-matches) means the local file is stale: flag it and fill in the gap (carrying
-over the example's default) before doing anything that depends on config. Don't
-touch `config.example.json` to match `config.json` — the template leads, the
-local file follows.
+whenever a setting lands **or is deleted**. At session start, diff the two — in
+*both* directions: a key present in `config.example.json` but missing from
+`config.json` (or a shape that no longer matches) means the local file is stale —
+flag it and fill in the gap (carrying over the example's default); a key present
+in `config.json` but **gone from the template** is worse than stale — `config.py`
+is `extra="forbid"`, so the leftover key **fails app startup** — delete it from
+the local file. Do all this before anything that depends on config. Don't touch
+`config.example.json` to match `config.json` — the template leads, the local
+file follows.
 
 ## How we work together — the loop
 

@@ -87,7 +87,7 @@ the two studies' pools are comparable), the collector:
 4. **Labels the full-history pool**: `citers_before_overflow_full` — STOP over the
    corpus's whole citation-ranked citer set (top 500, matching `cite_budget`'s
    `POOL_SIZE`), the corpus ticket's label re-collection.
-5. **Places the latest-gap boundary**: `band_start` from `bands.band_start_rule`
+5. **Places the latest-gap boundary**: `band_start` from `bands.earliest_band_year`
    (the fitted tau rule, config-free) on the truncated pool's shipped landmarks —
    the rule was fit on whole-history distributions, so its transfer to truncated
    ones is *checked*, not assumed.

@@ -5,7 +5,8 @@ and the two rules below — is defined once, with this same worked example, in
 ``docs/landmark-vocabulary.md``. The *why* (when to predict, when to compute) is
 ``docs/predict-vs-compute.md``. This module is the rules as shipped.
 
-The graph build ships up to ``cite_limit`` landmark citers per seed, but the right
+The graph build ships up to ``UNBOUNDED_LANDMARK_CAP`` landmark citers per seed
+(the shared payload guard — see ``integrations.caps``), but the right
 number depends on the seed: an old classic's landmarks span decades and read as a
 map of the field, while a young hot paper's top citers pile into one or two years
 — same count, far more clutter. Both rules here make "clutter" concrete the same
@@ -91,8 +92,8 @@ from typing import Any
 
 import joblib
 
-from ...config import PROJECT_ROOT, config
-from ...integrations import openalex
+from ...config import PROJECT_ROOT
+from ...integrations.caps import UNBOUNDED_LANDMARK_CAP
 
 log = logging.getLogger(__name__)
 
@@ -260,13 +261,13 @@ def predicted_budget(year: int, citation_count: int, *, as_of_year: int,
     if bundle is None:
         return None
     if ceiling is None:
-        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
+        ceiling = UNBOUNDED_LANDMARK_CAP
     features = compute_features(year, citation_count, as_of_year=as_of_year)
     predicted = float(bundle["model"].predict([features])[0])
     return min(max(round(predicted), int(bundle["floor"])), ceiling)
 
 
-def computed_cite_limit(citer_years: Sequence[int | None]) -> int | None:
+def computed_cite_limit(citer_years: Sequence[int | None]) -> int:
     """The landmark ship count, **computed** from the pool rather than predicted.
 
     The one serving rule for every path holding a whole-history ranked pool —
@@ -295,25 +296,19 @@ def computed_cite_limit(citer_years: Sequence[int | None]) -> int | None:
       year distribution that the tau rule needs to read, breaking the Latest
       bands on these paths.
 
-    Trimmed to the ``cite_limit`` ceiling (unset meaning
-    :data:`~atlas.integrations.openalex.UNBOUNDED_LANDMARK_CAP`, as everywhere
-    else). No *floor*, unlike the predicted path: a floor exists to stop a model
-    guessing absurdly low, and a measurement can't — if the rule says 5, 5 is the
-    honest answer.
+    Trimmed to the :data:`~atlas.integrations.caps.UNBOUNDED_LANDMARK_CAP`
+    payload guard, as everywhere else. No *floor*, unlike the predicted path: a
+    floor exists to stop a model guessing absurdly low, and a measurement can't
+    — if the rule says 5, 5 is the honest answer.
 
     Args:
         citer_years: The whole ranked landmark pool's publication years, most-cited
             first, ``None`` where the corpus has no year for a citer.
 
     Returns:
-        The number of ranked citers to ship, or None when the adaptive toggle is
-        off (telling the caller to fall back to the flat ``cite_limit``).
+        The number of ranked citers to ship.
     """
-    if not config.graph.adaptive_cite_limit:
-        return None
-    ceiling = config.graph.cite_limit
-    if ceiling is None:
-        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
+    ceiling = UNBOUNDED_LANDMARK_CAP
     computed = number_of_ranked_citers_before_a_single_year_overflows(
         citer_years, PER_YEAR_CAP)
     budget = min(computed, ceiling)
@@ -324,15 +319,15 @@ def computed_cite_limit(citer_years: Sequence[int | None]) -> int | None:
     return budget
 
 
-def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
-    """The app-facing landmark selection: the SKIP rule, plus this build's config.
+def select_landmarks(citer_years: Sequence[int | None]) -> list[int]:
+    """The app-facing landmark selection: the SKIP rule as the build serves it.
 
     The rule for the one pool that can't honestly prefix: the live S2
     fallback's **truncated** pools (a complete live pool takes
     :func:`computed_cite_limit` instead). The walk itself — admit up to
     :data:`PER_YEAR_CAP` per publication year, skipping citers whose year is
     already full — is :func:`select_up_to_cap_per_year`, which has the worked
-    example; this wrapper only adds the toggle, the ceiling, and the log line.
+    example; this wrapper only adds the ceiling and the log line.
 
     Returns *indices* rather than entries because ``integrations`` owns the citer
     dicts and this layer only ever sees their years; ``build.py`` injects this into
@@ -349,20 +344,12 @@ def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
     practice: S2 reports no year mostly for PDF-extraction stubs ("This paper is
     included in the Proceedings of…"), not for papers anyone would call landmarks.
 
-    Gated by the same ``adaptive_cite_limit`` toggle as the computed path — that
-    flag means "size the landmark band to this seed", and this is how every path
-    honours it — and trimmed to the ``cite_limit`` ceiling, which (being a prefix
-    of a citation-ranked selection) keeps the most-cited.
-
-    **An unset ``cite_limit`` means the unbounded cap, not infinity** — the same
-    default :func:`predicted_budget` and :func:`computed_cite_limit` apply, so no
-    two sizings can disagree about what "no configured limit" means. In practice it
-    can't bite here: this rule ships ``PER_YEAR_CAP × span`` and the live pool is
-    truncated to a couple of dozen years at most (Hawking's reaches 1998, so 348).
-    It's defensive, and it matters for a reason beyond this function — while the
-    paths read an unset limit *differently*, the config knob can't be deleted, and
-    deleting it is the goal (see the OnePager's "delete the four dead per-relation
-    count caps").
+    Trimmed to the shared payload guard, which (being a prefix of a
+    citation-ranked selection) keeps the most-cited. In practice the guard
+    can't bite here: this rule ships ``PER_YEAR_CAP × span`` and the live pool
+    is truncated to a couple of dozen years at most (Hawking's reaches 1998, so
+    348). It's defensive, and it keeps every sizing rule agreeing on the same
+    ceiling.
 
     Args:
         citer_years: The ranked landmark pool's publication years, most-cited
@@ -370,16 +357,10 @@ def select_landmarks(citer_years: Sequence[int | None]) -> list[int] | None:
 
     Returns:
         The indices of ``citer_years`` to ship, ascending (so the shipped band
-        stays most-cited-first). None when the adaptive toggle is off, telling the
-        caller to fall back to the flat ``cite_limit``.
+        stays most-cited-first).
     """
-    if not config.graph.adaptive_cite_limit:
-        return None
     keep = select_up_to_cap_per_year(citer_years)
-    ceiling = config.graph.cite_limit
-    if ceiling is None:
-        ceiling = openalex.UNBOUNDED_LANDMARK_CAP
-    keep = keep[:ceiling]
+    keep = keep[:UNBOUNDED_LANDMARK_CAP]
     log.info(
         "landmark selection: %d of %d ranked citers (cap %d/year)",
         len(keep), len(citer_years), PER_YEAR_CAP,

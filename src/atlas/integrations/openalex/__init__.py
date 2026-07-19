@@ -11,9 +11,7 @@ Public API mirrors ``semantic_scholar``'s shape so a caller reads the same:
 
     from ..integrations import openalex
     work = openalex.resolve_work(arxiv_id=..., title=..., year=...)
-    landmark, latest = openalex.citation_relations(
-        openalex.bare_work_id(work), landmark_limit=..., latest_limit=...
-    )
+    landmark, latest = openalex.citation_relations(openalex.bare_work_id(work))
 """
 
 from __future__ import annotations
@@ -23,7 +21,6 @@ from .client import OpenAlexError
 from .nodes import bare_openalex_id, node
 from .search import search_papers
 from .traversal import (
-    UNBOUNDED_LANDMARK_CAP,
     bare_work_id,
     citation_relations,
     citations,
@@ -36,7 +33,6 @@ from .traversal import (
 )
 
 __all__ = [
-    "UNBOUNDED_LANDMARK_CAP",
     "OpenAlexError",
     "bare_openalex_id",
     "bare_work_id",
