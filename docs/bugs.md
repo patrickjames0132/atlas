@@ -22,6 +22,47 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A failed figure chip named the wrong figure, in a book that numbers with hyphens
+
+*Found by Patrick browser-testing the librarian (2026-07-19): a failed figure
+attach rendered as a bare "Tried **Figure 1**" — naming neither the source it
+reached into nor, as it turned out, the figure it actually asked for.*
+
+- **Symptom.** Two different wrongnesses that looked like one. A **failed**
+  attach produced a chip with no source name and a figure number the book
+  didn't use; a **successful** attach on a hyphen-numbered book (the Feynman
+  Lectures: "Figure 3-2") showed the card headed **"Figure 3"** with its
+  caption beginning at a stray `-2.`.
+- **Root cause.** Three mechanisms, none in the renderer — `ChatMessage.tsx`
+  had drawn "of <title>" correctly all along, it was simply never given one:
+  (1) the two earliest failure paths in `agents/library_figures.py` fail
+  *before* the source resolves, so they emitted `title=None`; (2) `label` was
+  only ever set on the success path (it's split off the resolved caption), so
+  a failure fell back to `Figure {figure}` — and `figure` is the **page-local
+  ordinal** ("the 2nd figure on p.42"), not the source's own numbering, so
+  that fallback confidently named a figure that may not exist; (3)
+  `captions.split_label`'s number pattern accepted only dotted forms
+  (`3`, `12.4`, `A.2`), so **chapter-hyphenated numbering truncated**:
+  "Figure 3-2. Two-slit interference." split into label `Figure 3` and rest
+  `-2. Two-slit interference.`
+- **Fix.** Failure traces now look the title up from `source_id` (a local
+  SQLite read on an already-failing path, degrading to an unnamed chip if it
+  too fails, so it can never mask the original error) and carry an
+  **attempted** label — `figure 2 on p.42` — which says what was asked for
+  instead of asserting a number. The label regex accepts hyphen/en-dash/
+  em-dash numbering, but only when digits follow immediately, so a spaced
+  "Figure 3 - A single slit" keeps its dash in the caption.
+- **Lesson / guard.** *A fallback that states a fact is worse than one that
+  states a request.* "Figure 1" reads as the source's own label; "figure 1 on
+  p.72" can only be read as the address that was tried — and the same
+  mislabeling family as the Sarsa(λ) incident below, where our text asserted
+  something about a figure we hadn't actually identified. Guarded by
+  `test/atlas/agents/test_library_figures.py` (every emit path's chip
+  contract, including the unknown-source and lookup-explodes degradations)
+  and the hyphen/en-dash/spaced-dash cases in `test_captions.py`. Note the
+  hyphen truncation was found *by writing the test*, not by the browser
+  round — the assertion "Figure 3-2 beats the ordinal" simply failed.
+
 ### The Sarsa(λ) figure that "didn't exist" — three stacked reasons a captioned textbook figure was unminable
 
 *Found by Patrick browser-testing the v5.28.0 fixes (2026-07-18): asked for

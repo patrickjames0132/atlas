@@ -16,6 +16,7 @@ import logging
 from typing import Protocol
 
 from ..services.sources import figures as source_figures
+from ..services.sources import store as source_store
 from . import captions, events
 
 log = logging.getLogger(__name__)
@@ -30,6 +31,49 @@ class FigureDeps(Protocol):
     def emit(self, event: events.Event) -> None:
         """Queue an event for the agent's stream bridge."""
         ...  # pragma: no cover — protocol signature only
+
+
+def _source_title(source_id: str) -> str | None:
+    """The source's display title, for a trace chip — None when unknowable.
+
+    A failed attach still has to say *which* source it was reaching into, and
+    the failure paths below run before (or instead of) a successful
+    resolution, so the title isn't in hand. Looking it up is one local SQLite
+    read on a path that's already an error, and any failure here degrades to
+    an unnamed chip rather than masking the original problem.
+
+    Args:
+        source_id: The source's id, as the model gave it.
+
+    Returns:
+        The source's title, or None when no such source exists (or the
+        lookup itself fails).
+    """
+    try:
+        source = source_store.get_source(source_id)
+    except Exception:
+        log.warning("source title lookup failed for %r", source_id, exc_info=True)
+        return None
+    return source["title"] if source else None
+
+
+def _attempted_label(page: int, figure: int) -> str:
+    """What the model asked for, in words — the chip's label when no float
+    designation is available.
+
+    ``figure`` addresses a **page-local** ordinal ("the 2nd figure on p.42"),
+    not the book's own numbering, so the bare fallback the chip used to draw
+    ("Figure 2") named a figure the source may well call something else. This
+    says what was actually attempted.
+
+    Args:
+        page: The 1-based page the figure was addressed on.
+        figure: Which figure on that page, 1-based.
+
+    Returns:
+        E.g. ``"figure 2 on p.42"``.
+    """
+    return f"figure {figure} on p.{page}"
 
 
 def attach_source_figure(deps: FigureDeps, source_id: str, page: int, figure: int) -> str:
@@ -47,23 +91,44 @@ def attach_source_figure(deps: FigureDeps, source_id: str, page: int, figure: in
         success, else a budget/validity message the model steers by (never
         raises).
     """
+    attempted = _attempted_label(page, figure)
     try:
         resolution, problem = source_figures.resolve_page_figure(source_id, page, figure)
     except Exception:
         log.exception("show_source_figure mining failed")
-        deps.emit(events.FigureTrace(ok=False, index=None, title=None, figure=figure))
+        deps.emit(
+            events.FigureTrace(
+                ok=False, index=None, title=_source_title(source_id),
+                figure=figure, label=attempted,
+            )
+        )
         return f"Couldn't extract figures from source {source_id!r}."
     if resolution is None:
-        deps.emit(events.FigureTrace(ok=False, index=None, title=None, figure=figure))
+        deps.emit(
+            events.FigureTrace(
+                ok=False, index=None, title=_source_title(source_id),
+                figure=figure, label=attempted,
+            )
+        )
         return problem
     title = resolution["title"]
     if deps.figures_left <= 0:
-        deps.emit(events.FigureTrace(ok=False, index=None, title=title, figure=figure))
+        deps.emit(
+            events.FigureTrace(
+                ok=False, index=None, title=title, figure=figure, label=attempted
+            )
+        )
         return "Figure budget spent — answer with the figures already shown."
 
     shown_key = (f"{source_id}:p{page}", figure)
     if shown_key in deps.figures_shown:
-        deps.emit(events.FigureTrace(ok=True, index=None, title=title, figure=figure))
+        # A repeat: the float's own designation isn't in hand here (no
+        # resolution was re-read), so the chip says what was asked for.
+        deps.emit(
+            events.FigureTrace(
+                ok=True, index=None, title=title, figure=figure, label=attempted
+            )
+        )
         return (
             f'That figure from "{title}" is already shown — its marker is '
             f"<<FIG {deps.figures_shown[shown_key]}>>."
@@ -75,7 +140,9 @@ def attach_source_figure(deps: FigureDeps, source_id: str, page: int, figure: in
     # chip; the caption travels without it so it isn't shown twice.
     label, caption_text = captions.split_label(resolution["entry"].get("caption") or "")
     deps.emit(
-        events.FigureTrace(ok=True, index=None, title=title, figure=figure, label=label)
+        events.FigureTrace(
+            ok=True, index=None, title=title, figure=figure, label=label or attempted
+        )
     )
     deps.emit(
         events.Figure(

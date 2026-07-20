@@ -208,23 +208,16 @@ optional, behind a key.
       filtered out it's the float-geometry constants. See
       [docs/pdf-mining.md](docs/pdf-mining.md) before touching
       `services/pdf` — the storage decisions there are settled.
-      *(From the `todos.md` inbox, 2026-07-19.)*
-- [ ] **A failed figure chip drops the source and mislabels the figure** — when
-      the agent can't show a figure the trace chip reads "Tried **Figure 1**"
-      rather than naming the figure *and* the source it was reaching into. Two
-      causes, both in the emitters, not the renderer
-      (`teacher/transcript/ChatMessage.tsx` already renders "of <title>" when
-      it's given one): (1) the two earliest failure paths in
-      `agents/library_figures.py` emit `title=None` because they fail *before*
-      the source resolves, so the "of …" clause is dropped entirely; (2)
-      `label` is only ever set on success (it's split off the resolved entry's
-      caption), so the chip falls back to `Figure {figure}` — and that number
-      is the **page-local ordinal**, so "Figure 1" is actively misleading for a
-      figure the book calls something else. Fix: look the source title up from
-      `source_id` on the failure paths, and give the fallback label the
-      coordinates actually requested (e.g. "figure 1 on p.42 of X") so a failed
-      chip says what was attempted. Same treatment for the researcher's
-      `show_figure` failures in `researcher/tools.py`.
+      **Narrowed 2026-07-19 (browser round):** the v6.1.1 hyphen fix to
+      `captions.split_label` did *not* help, and neither did re-uploading the
+      volume — so it's neither a stale manifest nor (only) caption labelling.
+      The chip now reports the honest failure ("Tried figure 1 on p.72 of
+      the_feynman_lectures_vol_III_quantum_mechanics"), which means the miner
+      is returning **no floats for that page at all** — the caption anchor
+      never matched, or the page's drawings were filtered out before captions
+      were considered. Next step is still to dump the manifest for the source
+      and compare against the PDF; if the manifest is empty everywhere, the
+      question is whether the volume has a text layer at all.
       *(From the `todos.md` inbox, 2026-07-19.)*
 - [ ] **Should display filters scope the agents? Researcher yes, lecturer maybe
       not** — today filtering the graph (relation chips, year / citation sliders)
