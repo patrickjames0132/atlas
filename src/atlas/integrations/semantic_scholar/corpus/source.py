@@ -503,6 +503,8 @@ def citation_relations(
     current_year: int,
     landmark_budget: LandmarkBudgetFn | None = None,
     band_start: BandStartFn | None = None,
+    number_of_bands: int | None = None,
+    nodes_per_band: int | None = None,
 ) -> tuple[list[dict], list[dict]] | None:
     """Split a seed's corpus citers into (landmarks, latest) — or None to fall back.
 
@@ -552,6 +554,14 @@ def citation_relations(
             unlimited.
         band_start: Optional per-seed band-start chooser (see :data:`BandStartFn`).
             None, or a None answer, keeps the fixed ``number_of_bands`` span.
+        number_of_bands: That fixed span's length, in one-year bands below the
+            landmark cutoff. None (the default) reads the shared
+            :data:`~atlas.integrations.caps.LATEST_NUMBER_OF_BANDS` at call
+            time; the settings modal's non-adaptive mode passes a number to
+            override it per request.
+        nodes_per_band: The top-N most-cited citers each one-year band keeps.
+            None (the default) likewise reads the shared
+            :data:`~atlas.integrations.caps.LATEST_NODES_PER_BAND`.
 
     Returns:
         ``(landmark_entries, latest_entries)``, or None to fall back to live S2.
@@ -573,7 +583,12 @@ def citation_relations(
     # LATEST PUBLICATIONS: per-year bands. The start defaults to the fixed span and
     # may widen per seed, read off the landmarks we just chose — which is why this
     # runs second.
-    earliest = max_landmark_year - LATEST_NUMBER_OF_BANDS + 1
+    # Resolved here, not in the signature's default, so the module constants stay
+    # the live source of truth (a default would freeze their import-time values).
+    band_span = LATEST_NUMBER_OF_BANDS if number_of_bands is None else number_of_bands
+    per_year = LATEST_NODES_PER_BAND if nodes_per_band is None else nodes_per_band
+
+    earliest = max_landmark_year - band_span + 1
     if band_start is not None:
         adaptive = band_start(
             [year for year in (entry["node"].get("year") for entry in landmark) if year],
@@ -583,7 +598,7 @@ def citation_relations(
             earliest = adaptive
     recent = source.latest_bands(corpus_id, band_start=earliest,
                                  current_year=current_year,
-                                 per_year=LATEST_NODES_PER_BAND)
+                                 per_year=per_year)
 
     # The bands reach below max_landmark_year, so a giant can appear in both —
     # keep it a landmark rather than double-showing it (as the OpenAlex path does).

@@ -143,3 +143,76 @@ describe('GraphControls Release button', () => {
     expect(onReleaseAll).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('per-chip count sliders', () => {
+  const withCaps = {
+    showRelCaps: true,
+    relTotals: { reference: 40, citation: 120, latest: 30 },
+  }
+
+  it('shows no sliders while the build is adaptive', () => {
+    // The default: the backend already sized the graph, so there is nothing
+    // for a second trim to do.
+    render(<GraphControls {...makeProps({ relTotals: withCaps.relTotals })} />)
+    expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
+  })
+
+  it('gives each enabled relation a slider once sizing is user-controlled', () => {
+    render(<GraphControls {...makeProps(withCaps)} />)
+    expect(screen.getByRole('slider', { name: /References shown/i })).toBeTruthy()
+    expect(screen.getByRole('slider', { name: /Field Landmarks shown/i })).toBeTruthy()
+  })
+
+  it('bounds a slider by that relation and defaults to showing all of it', () => {
+    render(<GraphControls {...makeProps(withCaps)} />)
+    const slider = screen.getByRole('slider', { name: /References shown/i }) as HTMLInputElement
+    expect(slider.max).toBe('40')
+    expect(slider.min).toBe('1') // never trims to nothing
+    expect(slider.value).toBe('40') // no cap set -> the whole relation
+  })
+
+  it('reports the cap as a fraction of the relation', () => {
+    render(<GraphControls {...makeProps({ ...withCaps, relCaps: { reference: 12 } })} />)
+    expect(screen.getByText('12/40')).toBeTruthy()
+  })
+
+  it('reports the chosen cap upward', () => {
+    const onRelCap = vi.fn()
+    render(<GraphControls {...makeProps({ ...withCaps, onRelCap })} />)
+    fireEvent.change(screen.getByRole('slider', { name: /References shown/i }), {
+      target: { value: '15' },
+    })
+    expect(onRelCap).toHaveBeenCalledWith('reference', 15)
+  })
+
+  it('drops the slider for a relation whose chip is off', () => {
+    // A cap on a hidden relation would trim nothing visible.
+    render(
+      <GraphControls {...makeProps({ ...withCaps, enabled: new Set(['citation', 'latest']) })} />,
+    )
+    expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
+    expect(screen.getByRole('slider', { name: /Field Landmarks shown/i })).toBeTruthy()
+  })
+
+  it('drops the slider for a relation with nothing to trim', () => {
+    render(<GraphControls {...makeProps({ ...withCaps, relTotals: { reference: 1 } })} />)
+    expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
+  })
+
+  it('keeps the chip as a working toggle even in caps mode', () => {
+    // The chip is now the slider's label, but it must still fire the on/off
+    // toggle — that's the whole reason it stayed a button.
+    const onToggleType = vi.fn()
+    render(<GraphControls {...makeProps({ ...withCaps, onToggleType })} />)
+    fireEvent.click(screen.getByRole('button', { name: 'References' }))
+    expect(onToggleType).toHaveBeenCalledWith('reference')
+  })
+
+  it('still shows the chip for a relation with no slider', () => {
+    // Field Landmarks with a single paper: no slider, but the chip must remain
+    // so it can still be toggled off/on.
+    render(<GraphControls {...makeProps({ ...withCaps, relTotals: { citation: 1 } })} />)
+    expect(screen.getByRole('button', { name: /Field Landmarks/i })).toBeTruthy()
+    expect(screen.queryByRole('slider', { name: /Field Landmarks shown/i })).toBeNull()
+  })
+})

@@ -159,6 +159,21 @@ export const GRAPH_TOUR: TourStep[] = [
       'at the frontier. Same relationship, two eras.',
   },
   {
+    target: '[data-tour="relations"]',
+    stage: 'controls',
+    // Only while the build is user-sized — Settings ▸ Graph with automatic
+    // sizing switched off, which is what grows a slider under each chip. An
+    // adaptive graph has none, so the step stays out of the way.
+    presentIf: '.rel-cap-slider',
+    title: 'How many of each',
+    body:
+      "Because you've turned off automatic sizing, the graph ships everything it can " +
+      'and each chip now heads a count slider. Drag one to keep only that many of that ' +
+      'relation, most-cited first — a display trim, so widening it back costs no ' +
+      'rebuild. Turn automatic sizing back on in Settings ▸ Graph and the app ' +
+      'picks these numbers per paper instead.',
+  },
+  {
     target: '[data-tour="years"]',
     stage: 'controls',
     presentIf: '[data-tour="years"]',

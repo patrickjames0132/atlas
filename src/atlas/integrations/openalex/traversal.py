@@ -394,6 +394,8 @@ def citation_relations(
     *,
     band_start: BandStartFn | None = None,
     landmark_budget: LandmarkBudgetFn | None = None,
+    number_of_bands: int | None = None,
+    nodes_per_band: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's OpenAlex citers into landmark and latest relations.
 
@@ -432,6 +434,14 @@ def citation_relations(
             pool to ship (see :data:`LandmarkBudgetFn`); its count wins over the
             payload guard, which stays the ceiling. None (the default) ships
             the flat cap.
+        number_of_bands: The fixed band span below the landmark cutoff, used
+            when ``band_start`` is absent or declines. None (the default) reads
+            the shared :data:`~atlas.integrations.caps.LATEST_NUMBER_OF_BANDS`
+            *at call time*; the settings modal's non-adaptive mode passes a
+            number to override it per request.
+        nodes_per_band: The top-N most-cited citers each one-year band keeps.
+            None (the default) likewise reads the shared
+            :data:`~atlas.integrations.caps.LATEST_NODES_PER_BAND` at call time.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -441,7 +451,10 @@ def citation_relations(
     """
     current_year = datetime.date.today().year
     max_landmark_year = landmark_max_year(datetime.date.today())
-    per_year = LATEST_NODES_PER_BAND
+    # Resolved here, not in the signature's default, so the module constant stays
+    # the live source of truth (a default would freeze its import-time value).
+    band_span = LATEST_NUMBER_OF_BANDS if number_of_bands is None else number_of_bands
+    per_year = LATEST_NODES_PER_BAND if nodes_per_band is None else nodes_per_band
 
     # FIELD LANDMARKS: the all-time giants, up to the last landmark year.
     landmark = _budgeted_landmarks(
@@ -455,7 +468,7 @@ def citation_relations(
     # start up to the current year (by citations, one query each so no single year
     # dominates), excluding giants. Uniform per-year bands the whole way — no
     # separate newest-date window — so every recent year gets its own fair slice.
-    earliest_band_year = max_landmark_year - LATEST_NUMBER_OF_BANDS + 1
+    earliest_band_year = max_landmark_year - band_span + 1
     if band_start is not None:
         landmark_years = [entry["node"].get("year") for entry in landmark]
         adaptive_start = band_start(

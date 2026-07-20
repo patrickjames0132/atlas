@@ -30,14 +30,20 @@ import {
   type AtlasConfig,
   type SettingsPayload,
 } from '../api'
+import { DEFAULT_SHAPE, setBuildShape, useBuildShape } from '../graph/buildShape'
 import './settings.css'
+
+/** Bounds for the band-shape inputs, mirroring the backend's own clamps. */
+const CURRENT_YEAR = new Date().getFullYear()
+const MAX_BANDS = 50
+const MAX_PER_BAND = 200 // OpenAlex's page cap — no query can return more.
 
 /** The sidebar's sections, in display order. */
 const SECTIONS = [
   { id: 'general', icon: '⚙', label: 'General' },
+  { id: 'graph', icon: '🕸', label: 'Graph' },
   { id: 'providers', icon: '🌐', label: 'Data Providers' },
   { id: 'agents', icon: '🎓', label: 'Agents' },
-  { id: 'corpus', icon: '🗄', label: 'Citations Corpus' },
 ] as const
 
 /** A section id from {@link SECTIONS}. */
@@ -219,6 +225,83 @@ function ModelInput({
   )
 }
 
+/**
+ * The adaptive switch — the Graph section's headline control.
+ *
+ * Unlike every other row here it edits **no config draft**: the build shape
+ * belongs to the browser, not the file (see `graph/buildShape.ts`), so it reads
+ * and writes the module store directly and applies immediately — the same
+ * write-through the config-file location row uses, and the reason neither shows
+ * up in the Save bar.
+ *
+ * @returns The checkbox.
+ */
+function AdaptiveToggle() {
+  const shape = useBuildShape()
+  return (
+    <label className="settings-switch">
+      <input
+        type="checkbox"
+        checked={shape.adaptive}
+        onChange={(event) => setBuildShape({ ...shape, adaptive: event.target.checked })}
+        aria-label="Size graphs automatically"
+      />
+      <span className="settings-switch-track" aria-hidden="true">
+        <span className="settings-switch-knob" />
+      </span>
+    </label>
+  )
+}
+
+/**
+ * One band-shape number, live only while `adaptive` is off.
+ *
+ * Disabled rather than hidden with adaptive on: the values still describe what
+ * turning it off would do, and a row that vanishes mid-search is worse than one
+ * that greys out.
+ *
+ * @returns The number input.
+ */
+function BandNumber({
+  field,
+  min,
+  max,
+  placeholder,
+}: {
+  field: 'clusterStart' | 'numberOfBands' | 'nodesPerBand'
+  min: number
+  max: number
+  placeholder?: string
+}) {
+  const shape = useBuildShape()
+  const value = shape[field]
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      disabled={shape.adaptive}
+      placeholder={placeholder}
+      value={value ?? ''}
+      onChange={(event) => {
+        const raw = event.target.value
+        // Cleared -> null is meaningful for clusterStart ("no start named",
+        // i.e. keep the fixed span); the two counts fall back to their default.
+        if (raw === '') {
+          setBuildShape({
+            ...shape,
+            [field]: field === 'clusterStart' ? null : DEFAULT_SHAPE[field],
+          })
+          return
+        }
+        const parsed = Number(raw)
+        if (Number.isNaN(parsed)) return
+        setBuildShape({ ...shape, [field]: Math.max(min, Math.min(max, Math.round(parsed))) })
+      }}
+    />
+  )
+}
+
 /** Every editable row, in display order — the registry search + render share. */
 const ROW_DEFS: RowDef[] = [
   {
@@ -277,6 +360,40 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
+    key: 'adaptive',
+    section: 'graph',
+    group: 'Sizing',
+    label: 'Size graphs automatically',
+    hint: 'On, the app picks how many landmark citers to ship and where the Latest bands start, per seed. Off, it ships everything it can and you size the bands yourself — and the filter chips gain count sliders to trim what you see. Kept in this browser, not the config file.',
+    control: () => <AdaptiveToggle />,
+  },
+  {
+    key: 'cluster-start',
+    section: 'graph',
+    group: 'Latest bands',
+    label: 'Cluster start year',
+    hint: 'First year the Latest bands cover. Blank falls back to the band count below. Only used while automatic sizing is off.',
+    control: () => (
+      <BandNumber field="clusterStart" min={1800} max={CURRENT_YEAR} placeholder="auto" />
+    ),
+  },
+  {
+    key: 'number-of-bands',
+    section: 'graph',
+    group: 'Latest bands',
+    label: 'Number of bands',
+    hint: 'How many one-year bands to cover below the landmark cutoff, when no cluster start year is set.',
+    control: () => <BandNumber field="numberOfBands" min={1} max={MAX_BANDS} />,
+  },
+  {
+    key: 'nodes-per-band',
+    section: 'graph',
+    group: 'Latest bands',
+    label: 'Papers per band',
+    hint: 'Top-N most-cited papers each one-year band keeps. Capped at 200 — a single provider query can return no more.',
+    control: () => <BandNumber field="nodesPerBand" min={1} max={MAX_PER_BAND} />,
+  },
+  {
     key: 's2-key',
     section: 'providers',
     group: 'Semantic Scholar',
@@ -309,6 +426,26 @@ const ROW_DEFS: RowDef[] = [
         onChange={(value) =>
           edit((next) => {
             next.providers.s2.min_interval = value === '' ? 0 : value
+          })
+        }
+      />
+    ),
+  },
+  {
+    key: 'corpus-path',
+    section: 'providers',
+    group: 'Semantic Scholar',
+    label: 'Citations corpus',
+    hint: 'Root directory of the offline S2 citations corpus (shards, Parquet, and the CURRENT pointer). Empty = corpus off — the live S2 citation endpoint serves instead.',
+    control: (draft, edit) => (
+      <input
+        type="text"
+        className="settings-wide"
+        placeholder="(not configured)"
+        value={draft.storage.s2_corpus ?? ''}
+        onChange={(event) =>
+          edit((next) => {
+            next.storage.s2_corpus = event.target.value.trim() || null
           })
         }
       />
@@ -582,25 +719,6 @@ const ROW_DEFS: RowDef[] = [
         extrasKey="figures"
         fallback={3}
         min={0}
-      />
-    ),
-  },
-  {
-    key: 'corpus-path',
-    section: 'corpus',
-    label: 'Corpus location',
-    hint: 'Root directory of the offline S2 citations corpus (shards, Parquet, and the CURRENT pointer). Empty = corpus off — the live S2 citation endpoint serves instead.',
-    control: (draft, edit) => (
-      <input
-        type="text"
-        className="settings-wide"
-        placeholder="(not configured)"
-        value={draft.storage.s2_corpus ?? ''}
-        onChange={(event) =>
-          edit((next) => {
-            next.storage.s2_corpus = event.target.value.trim() || null
-          })
-        }
       />
     ),
   },

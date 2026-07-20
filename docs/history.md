@@ -1472,6 +1472,66 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Settings modal stage 2 — the adaptive sizing switch & per-chip count
+      sliders** *(v6.3.0)* — the graph-*shaping* half of the settings-modal
+      ticket (the modal itself shipped in v6.1.0). A new **Graph** section
+      carries a single **"Size graphs automatically"** switch. ON (the default,
+      and every build before this) the app sizes itself — the STOP/SKIP rules
+      pick the landmark band, the fitted tau rule places the Latest cluster
+      start. OFF, the build ships **everything it can** (the
+      `UNBOUNDED_LANDMARK_CAP` payload guard as the only ceiling) and hands the
+      Latest band shape to the user: cluster start, number of bands, papers per
+      band (code defaults in `integrations/caps.py`, overridden per request).
+      **The shape is the user's, not the deployment's** — it rides on each graph
+      request from a localStorage module store (`graph/buildShape.ts`, the
+      `ui/theme.ts` pattern), deliberately *not* back in `config.json` (the
+      v6.0.0 purge deleted the old file toggles for exactly this reason). It's
+      not a Redux slice either: `workspace.provider` is the closest analogue, but
+      that's part of a *saved session*, and reopening a saved graph should
+      rebuild it the way *you* currently size graphs, not the way whoever saved
+      it did.
+      **Non-adaptive mode added no branches to the traversals.** All three
+      citation paths (live S2, the S2 corpus, OpenAlex) already take their sizing
+      rules as injected callables and already fall back to the flat payload guard
+      when a rule declines — so "ship everything" is just a `BuildShape` injecting
+      a budget rule that always returns None and dropping the truncated-pool SKIP
+      selector. A new `services/graph/shape.py` holds that decision; no provider
+      learns shapes exist. Along the way the band constants were made to **resolve
+      at call time, not in a signature default** — a literal default would freeze
+      `caps.py`'s import-time values, so `number_of_bands`/`nodes_per_band`
+      default to None and read the shared constants inside the traversal (which
+      also fixed the traversal tests that monkeypatch those constants).
+      **The cache key.** Snapshots are keyed `(provider, seed)`, which knows
+      nothing about shape — so `BuildShape.cache_suffix()` joins it, but is
+      **empty for an adaptive build**, so the default path's key is byte-for-byte
+      the pre-shape one and every already-cached snapshot still hits; each
+      distinct non-adaptive shape caches beside the adaptive one instead of
+      clobbering it.
+      **The count sliders come back** (a feature we once had and removed): with
+      sizing off, each relation's filter chip becomes the label atop its own
+      count slider — styled to match the year/citation range sliders (same 4px
+      track, 16px thumb, colored fill) after two of Patrick's design rounds
+      (checkbox → pill switch; a separate slider block → the chip-as-label
+      layout). Drag to keep the N most-cited of that relation — a **display
+      trim**, so widening back costs no rebuild. The chip stays the on/off
+      toggle (highlighted while on); turning it off hides its slider. Ranking is
+      over the base graph, not the filtered view, so the year slider doesn't
+      renumber what "top 20" means.
+      The **adaptive switch rebuilds the graph immediately** (one click is a
+      complete intent); the band-shape numbers rebuild on modal close (they
+      write per keystroke — rebuilding each would hammer the provider), both
+      watched in `Atlas.tsx` off the store so the modal stays a settings editor
+      that knows nothing about the graph. Open question parked: with adaptive ON,
+      whether nodes-per-band should come from the SKIP rule instead of the fixed
+      50. The **corpus on/off toggle** — the ticket's other half — stays in the
+      Backlog. Two settings-modal tidy-ups rode along: the Latest-bands fields
+      now **grey but still show their values** while automatic sizing is on (a
+      disabled-input style — the browser default read as still-editable), and the
+      lone **Citations Corpus** section folded into **Data Providers ▸ Semantic
+      Scholar**, where the `storage.s2_corpus` path belongs. *(From the
+      `todos.md` inbox, 2026-07-16; scoped 2026-07-19; switch/slider design
+      rounds by Patrick, 2026-07-20; browser-tested.)*
+
 - [x] **A light/dark mode toggle** *(v6.2.0)* — the app was dark-only. A
       header toggle (beside settings) now switches themes, remembered per
       browser, with a new `ui.default_theme` config setting deciding what a
@@ -1554,9 +1614,9 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       floor client-side (spinner stop + clamp), as a second line behind the
       server's validation. *(From the `todos.md` inbox, 2026-07-16; layout,
       scope, and polish rounds by Patrick, 2026-07-19; browser-tested.
-      Stage 2+ — the adaptive checkbox, the revived per-chip sliders, the
-      band-shape inputs, and the corpus on/off toggle — stays in the
-      Backlog.)*
+      Stage 2 — the adaptive sizing switch, the revived per-chip sliders, and
+      the band-shape inputs — shipped in v6.3.0 (above); the corpus on/off
+      toggle stays in the Backlog.)*
 
 - [x] **Show the publisher/venue in the Detail panel** *(v5.26.0)* — the
       panel named no venue. Now the meta block reads **`Authors: …`** /

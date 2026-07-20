@@ -185,6 +185,81 @@
   background: var(--c);
 }
 
+/* Build user-sized: each relation is its filter chip sitting atop its own count
+   slider. The chip is the same pill toggle as always (highlighted while on); the
+   slider under it trims how many of that relation show. Full-width slider with
+   the count to its right — the panel is narrow, so the chip labels the row and
+   nothing needs a second text column. */
+.rel-caps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rel-cap-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* Chip on the left, count on the right — the count reads as this relation's
+   "label value", the way "1995 – 2026" labels the year slider below. */
+.rel-cap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rel-cap-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Sized to match the year/citation range sliders exactly: same 4px track, same
+   16px thumb, full width. It's single-knob, so the filled portion up to the
+   thumb comes from a gradient driven by the `--fill` var (their `.range-fill`
+   is a separate element; here it's the track background). */
+.rel-cap-slider {
+  width: 100%;
+  height: 16px;
+  margin: 2px 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.rel-cap-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--c) var(--fill), var(--border) var(--fill));
+}
+.rel-cap-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--c) var(--fill), var(--border) var(--fill));
+}
+.rel-cap-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px var(--shadow);
+  cursor: pointer;
+}
+.rel-cap-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px var(--shadow);
+  cursor: pointer;
+}
+
 .years {
   margin-top: 12px;
 }

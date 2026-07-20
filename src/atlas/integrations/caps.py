@@ -22,8 +22,13 @@ must agree on them while staying independent of each other.
   Latest band keeps (≤200, OpenAlex's page cap) — the Latest analog of the
   landmarks' fitted ``PER_YEAR_CAP``, except this one was eyeballed, not
   fitted. Per-year banding gives even coverage; a single recency query
-  sorted by citations would let its oldest year dominate. The settings
-  modal's non-adaptive mode will hand this pair to the user per request.
+  sorted by citations would let its oldest year dominate.
+
+Since v6.2.0 the last two are **defaults, not fixed values**: the settings
+modal's non-adaptive mode hands this pair to the user, who sends them per
+request (see ``services/graph/shape.py``). Each traversal resolves them at
+*call time* rather than in a signature default, so these constants stay the
+live source of truth for every build that doesn't override them.
 """
 
 UNBOUNDED_LANDMARK_CAP = 500

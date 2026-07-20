@@ -478,33 +478,20 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **Settings modal, stage 2+ — the adaptive checkbox, the revived sliders,
-      and the corpus toggle** — the modal itself shipped in v6.1.0 (see
-      history); what's left is the *graph-shaping* half, which needs
-      per-request plumbing rather than config edits.
-      - **The headline setting is a single `adaptive` checkbox.** ON = today's
-        behavior: STOP/SKIP size the landmark band, the tau rule places the
-        Latest cluster start, and the filter chips have **no sliders**. OFF =
-        the build ships **all nodes** (the `UNBOUNDED_LANDMARK_CAP` payload
-        guard as the only ceiling), the per-chip **count sliders come back**
-        (a feature we once had and removed) so the user trims what's
-        *displayed*, and the Latest bands' shape becomes user input: cluster
-        start, `LATEST_NUMBER_OF_BANDS`, `LATEST_NODES_PER_BAND` (code
-        defaults in `integrations/caps.py`, overridden per request).
-        The flag lives **with the user**, reaching the build per request — it
-        deliberately does not return to `config.json` (the v6.0.0 purge
-        deleted the old file toggles). **Open question:** with adaptive ON,
-        should nodes-per-band come from the SKIP rule instead of the fixed
-        `nodes_per_band` (50)?
-      - **Corpus vs live citations, as a choice.** The corpus path is a
-        `storage.s2_corpus` edit today (settable in the modal since v6.1.0),
-        but there's no way to say "ignore the corpus for this build" — useful
-        when it's stale, mid-ingest, or suspect. The fallback already exists
-        and is automatic when the corpus can't serve a seed; this makes it
-        deliberate. **The catch:** the graph cache is keyed by
-        `(provider, seed)` and **not** by citation source, so a toggle must
-        bust or key around it or the old snapshot just comes back.
-      *(From the `todos.md` inbox, 2026-07-16; scoped 2026-07-19.)*
+- [ ] **Settings modal — the corpus vs. live-citations toggle** — the
+      adaptive-sizing half of the stage-2 ticket shipped in v6.3.0 (the switch,
+      the revived per-chip count sliders, the band-shape inputs — see history).
+      What's left is the **corpus toggle.** The corpus path is a
+      `storage.s2_corpus` edit today (settable in the modal since v6.1.0), but
+      there's no way to say "ignore the corpus for this build" — useful when
+      it's stale, mid-ingest, or suspect. The fallback already exists and is
+      automatic when the corpus can't serve a seed; this makes it deliberate.
+      **The catch:** the graph cache is keyed by `(provider, seed)` and **not**
+      by citation source. v6.3.0's `BuildShape.cache_suffix()` is the pattern to
+      follow — a suffix that's empty on the default path and distinguishing
+      otherwise — so a corpus/live choice keys around the cache instead of
+      serving the wrong old snapshot. *(From the `todos.md` inbox, 2026-07-16;
+      scoped 2026-07-19; adaptive half shipped 2026-07-20.)*
 
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;

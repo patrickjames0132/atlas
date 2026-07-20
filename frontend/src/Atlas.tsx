@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { getSettings, listSources, PROVIDER_LABEL } from './api'
+import { getBuildShape, sameBuild, useBuildShape } from './graph/buildShape'
 import { ID_RE } from './graph/model'
 import { applyConfiguredDefault, setTheme, useTheme } from './ui/theme'
 import { useAppDispatch, useAppSelector } from './store'
@@ -46,7 +47,7 @@ import './atlas.css'
  */
 export default function Atlas() {
   const dispatch = useAppDispatch()
-  const { graph, epoch, loading, buildProgress, error, provider } = useAppSelector(
+  const { graph, epoch, loading, buildProgress, error, provider, seedRef } = useAppSelector(
     (state) => state.workspace,
   )
 
@@ -71,6 +72,46 @@ export default function Atlas() {
   graphRef.current = graph
 
   useEffect(refreshLibraryCount, [refreshLibraryCount])
+
+  // The build shape as it was when the settings modal opened. The modal's shape
+  // rows write through immediately (they're browser state, not config draft), so
+  // this snapshot is the only way to tell on close whether the graph on screen
+  // was built the way the user now wants it built.
+  const shapeOnOpen = useRef(getBuildShape())
+  useEffect(() => {
+    if (showSettings) shapeOnOpen.current = getBuildShape()
+  }, [showSettings])
+
+  /**
+   * Rebuild the current graph when the settings modal changed how it'd be built.
+   *
+   * Runs on *close*, which is right for the band-shape number inputs: they
+   * write on every character, and rebuilding per keystroke would hammer the
+   * provider. The `adaptive` switch is handled separately below — one click is
+   * a complete intent, so it shouldn't wait for the modal to close.
+   *
+   * No `refresh` flag either way: a changed shape is part of the cache key, so
+   * it misses the old snapshot on its own, and switching back is a cache hit.
+   */
+  const rebuildIfShapeChanged = useCallback(() => {
+    if (!seedRef || sameBuild(shapeOnOpen.current, getBuildShape())) return
+    dispatch(loadGraph({ seed: seedRef }))
+    shapeOnOpen.current = getBuildShape()
+  }, [dispatch, seedRef])
+
+  // The adaptive switch rebuilds immediately. Watched here rather than wired
+  // through the modal so the modal stays a settings editor that knows nothing
+  // about the graph — it just writes the store, and this notices.
+  const { adaptive } = useBuildShape()
+  const previousAdaptive = useRef(adaptive)
+  useEffect(() => {
+    if (previousAdaptive.current === adaptive) return // mount, or an unrelated edit
+    previousAdaptive.current = adaptive
+    // Keep the close-time comparison honest: this rebuild already applied the
+    // switch, so closing the modal mustn't rebuild a second time for it.
+    shapeOnOpen.current = getBuildShape()
+    if (seedRef) dispatch(loadGraph({ seed: seedRef }))
+  }, [adaptive, seedRef, dispatch])
 
   // Seed browser-level defaults from config: the header's data-source
   // selector and (for a browser with no saved choice) the colour theme. The
@@ -219,7 +260,13 @@ export default function Atlas() {
         <Tour steps={hasGraph ? GRAPH_TOUR : HOME_TOUR} onClose={closeTour} onStage={onTourStage} />
       )}
 
-      <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsModal
+        open={showSettings}
+        onClose={() => {
+          setShowSettings(false)
+          rebuildIfShapeChanged()
+        }}
+      />
 
       <Sources
         open={showSources}

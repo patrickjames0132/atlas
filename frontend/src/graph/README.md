@@ -9,6 +9,8 @@ graph/
   GraphExplorer.tsx — the composition root of the graph area (see below)
   model.ts          — view-model types (VNode/VLink/Base) + pure helpers
   theme.ts          — the relation color scheme + layout geometry constants
+  buildShape.ts     — the user's graph-sizing preference (adaptive on/off + the
+                      band shape), a localStorage-backed module store
   clusterForce.ts   — the Force layout's relation clustering (custom d3 force:
                       sector anchors around the seed, √population orbits;
                       wired by hooks/useTimeline's applyLayoutPhysics)
@@ -100,6 +102,55 @@ to anything in this folder.
   (`citation` and `latest`) read as one "citation" badge in a lighter green
   (the graph's landmark green was darkened to separate it from `latest`, so the
   badge keeps the original in-between shade).
+
+## `buildShape.ts` — how much graph the backend ships
+
+A module-level store behind `useSyncExternalStore`, the same pattern as
+`ui/theme.ts` and for the same reason: the settings modal writes it,
+`GraphControls` reads it to decide whether the count sliders exist, and
+`api/graph.ts` reads it *outside React* to put it on the request.
+
+- **`adaptive` is the headline.** ON (the default) the backend sizes the graph
+  itself — the STOP/SKIP rules pick the landmark band, the fitted tau rule
+  places the Latest cluster start — and the other three fields are inert. OFF,
+  the build ships everything up to the payload guard and the user sizes the
+  bands (`clusterStart`, `numberOfBands`, `nodesPerBand`).
+- **It's browser state, not config.** Every other knob lives in `config.json`;
+  this one belongs to the person exploring and changes between one build and
+  the next, so it rides along as query parameters. The v6.0.0 purge deleted the
+  old file toggles deliberately and this doesn't bring them back.
+- **It's not a Redux slice either.** `workspace.provider` is the closest
+  analogue, but that's part of a *saved session* — reopening a saved graph
+  should rebuild it the way *you* currently size graphs, not the way whoever
+  saved it did. localStorage, like the theme, is the honest home.
+- **`shapeParams` sends nothing while adaptive**, so the common request URL is
+  exactly what it was before shapes existed. `sameBuild` likewise treats any
+  two adaptive shapes as equal — that's what stops Atlas rebuilding the graph
+  on modal close when nothing that matters changed.
+
+## The per-chip count sliders
+
+With adaptive OFF, each relation chip in `GraphControls` grows a count slider,
+and `GraphExplorer` trims the view by it. Worth knowing:
+
+- **They're a display trim, not a rebuild.** Widening one back costs nothing —
+  the papers were already shipped. Only the *build shape* triggers a refetch:
+  the `adaptive` switch immediately, the band-shape numbers on modal close.
+- **The chip is the slider's label.** With automatic sizing off, `GraphControls`
+  drops the wrapping pill row and instead renders each relation as its filter
+  chip sitting atop its own count slider (`rel-cap-group`). The chip is the same
+  toggle it always was — click to hide/show the relation, highlighted while on —
+  it just now heads a slider. A slider appears only under a chip that's on and
+  holds more than one paper; an off or single-paper relation shows the chip
+  alone. The whole block keeps `data-tour="relations"`, and the tour's "How many
+  of each" step gates on a `.rel-cap-slider` existing.
+- **Ranking is computed over `base`, not the filtered view**, so dragging the
+  year slider doesn't silently renumber what "top 20 landmarks" means.
+- **A node survives if it ranks inside the cap of at least one of its enabled
+  relations** — mirroring the reachability rule, so a paper that's both a top
+  reference and a mid-ranked landmark keeps the slot its best relation earns.
+- **A full-span slider deletes the cap** rather than storing the total, so a
+  later discovery widening the relation isn't clipped to yesterday's count.
 
 ## Who uses it, and how/why
 

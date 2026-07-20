@@ -27,6 +27,18 @@ export interface GraphControlsProps {
   enabled: Set<string>
   /** Toggle one relation type on/off. */
   onToggleType: (type: string) => void
+  /** Show the per-chip count sliders — true only while the build is user-sized
+   *  (the settings modal's automatic sizing turned off). An adaptive build is
+   *  already trimmed by the backend, so the sliders stay out of the way.
+   *  Optional, defaulting off: a caller with no interest in caps renders the
+   *  plain chips it always did. */
+  showRelCaps?: boolean
+  /** How many papers of each relation to show; a missing key means all. */
+  relCaps?: Record<string, number>
+  /** How many papers each relation holds in the graph (the sliders' bounds). */
+  relTotals?: Record<string, number>
+  /** Set one relation's display cap (the full total means "no cap"). */
+  onRelCap?: (type: string, cap: number) => void
   /** The base graph's year range (slider bounds). */
   minYear: number
   maxYear: number
@@ -82,6 +94,10 @@ export default function GraphControls({
   onLayout,
   enabled,
   onToggleType,
+  showRelCaps = false,
+  relCaps = {},
+  relTotals = {},
+  onRelCap,
   minYear,
   maxYear,
   yearLo,
@@ -178,23 +194,80 @@ export default function GraphControls({
             Timeline
           </button>
         </div>
-        <div className="ctrl-rels" data-tour="relations">
-          {REL_TYPES.map((type) => {
-            const on = enabled.has(type)
-            return (
-              <button
-                key={type}
-                className={`rel-toggle ${on ? 'on' : ''}`}
-                onClick={() => onToggleType(type)}
-                style={{ '--c': REL_COLOR[type] } as CSSProperties}
-                title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
-              >
-                <i />
-                {REL_LABEL[type]}
-              </button>
-            )
-          })}
-        </div>
+        {/* Two layouts, one control. With automatic sizing on it's the plain
+            wrapping pill row it has always been. With it off, each chip becomes
+            the label atop its own count slider — the chip is still the on/off
+            toggle (highlighted while on), it just now heads a slider that trims
+            how many of that relation show. */}
+        {showRelCaps ? (
+          <div className="rel-caps" data-tour="relations">
+            {REL_TYPES.map((type) => {
+              const on = enabled.has(type)
+              const total = relTotals[type] ?? 0
+              // A slider only under a chip that's on and has more than one paper
+              // to trim; otherwise the chip stands alone (still a toggle).
+              const showSlider = on && total > 1
+              const cap = relCaps[type] ?? total
+              return (
+                <div
+                  key={type}
+                  className="rel-cap-group"
+                  style={{ '--c': REL_COLOR[type] } as CSSProperties}
+                >
+                  <div className="rel-cap-head">
+                    <button
+                      className={`rel-toggle ${on ? 'on' : ''}`}
+                      onClick={() => onToggleType(type)}
+                      title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
+                    >
+                      <i />
+                      {REL_LABEL[type]}
+                    </button>
+                    {showSlider && (
+                      <span className="rel-cap-count">
+                        {cap}/{total}
+                      </span>
+                    )}
+                  </div>
+                  {showSlider && (
+                    <input
+                      className="rel-cap-slider"
+                      type="range"
+                      min={1}
+                      max={total}
+                      value={cap}
+                      // The filled portion up to the thumb, as a CSS var the
+                      // track gradient reads — the single-knob analog of the
+                      // range sliders' `.range-fill`.
+                      style={{ '--fill': `${(cap / total) * 100}%` } as CSSProperties}
+                      onChange={(event) => onRelCap?.(type, Number(event.target.value))}
+                      title={`Show the ${cap} most-cited of ${total} ${REL_LABEL[type]}`}
+                      aria-label={`${REL_LABEL[type]} shown`}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="ctrl-rels" data-tour="relations">
+            {REL_TYPES.map((type) => {
+              const on = enabled.has(type)
+              return (
+                <button
+                  key={type}
+                  className={`rel-toggle ${on ? 'on' : ''}`}
+                  onClick={() => onToggleType(type)}
+                  style={{ '--c': REL_COLOR[type] } as CSSProperties}
+                  title={on ? `Hide ${REL_LABEL[type]}` : `Show ${REL_LABEL[type]}`}
+                >
+                  <i />
+                  {REL_LABEL[type]}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {showYears && (
           <div className="years" data-tour="years">
