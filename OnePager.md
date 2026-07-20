@@ -538,6 +538,28 @@ optional, behind a key.
       multi-line question stays readable. *(From the `todos.md` inbox,
       2026-07-19.)*
 
+- [ ] **Light-mode relation colors — darker & higher-contrast** — the v6.2.0
+      light/dark toggle deliberately left the *relation* palette unthemed (gold
+      seed, blue references, green landmarks, pink search were chosen to read on
+      either background, so only the neutrals flip). In light mode those read a
+      touch washed out against the off-white; give the reference-type colors
+      **darker, more contrasting** variants for light while keeping the soft
+      off-white and grey neutrals. This revisits the "relation palette is not
+      themed" call from that ticket — so it's a light-only override of the shared
+      relation colors, not a full re-theme. *(From the `todos.md` inbox,
+      2026-07-20.)*
+
+- [ ] **Default the theme to the browser's `prefers-color-scheme`** — v6.2.0
+      deliberately did *not* read `prefers-color-scheme` (dark-first app; a light
+      OS setting shouldn't silently hand a first-timer the alternative), seeding
+      the opening theme from `ui.default_theme` instead. This flips that: for a
+      browser with no saved choice, honor the OS preference by default. Decide
+      how it composes with `ui.default_theme` — does the config default become
+      the fallback when the OS expresses no preference, or does the OS win
+      outright? — and keep the explicit ☀/☾ toggle authoritative once the user
+      picks. Touches `ui/theme.ts`'s `readStored` / `applyConfiguredDefault`
+      rule. *(From the `todos.md` inbox, 2026-07-20.)*
+
 ### Enhancements & tech debt
 
 - [ ] **Revisit the root `README.md` — wording, clutter, formatting** — the
@@ -692,6 +714,17 @@ optional, behind a key.
       retyped across modules. A whole-codebase sweep, not a targeted one; keep the
       wire format identical so snapshots, saved sessions, and the SSE protocol are
       unaffected. *(From the `todos.md` inbox, 2026-07-13.)*
+- [ ] **Support additional LLM providers (OpenAI, Google, Meta, …)** — the whole
+      agent crew runs on Claude only today; the README now says other providers
+      are on the roadmap. PydanticAI already abstracts providers and `config.llm`
+      is shaped for more than one (`LLMProvidersConfig` names `AnthropicProvider`,
+      `OpenAIProvider`, …), so the work is: wire provider construction per vendor,
+      let each agent's `model` string name a vendor (`openai:…`, `google:…`,
+      today's are `anthropic:…`), and generalize the settings modal — the agent
+      **model dropdowns** populate from the Anthropic Models API only, and the
+      "LLM vendor" row is a fixed label. Watch for per-provider streaming and
+      tool-call differences in the agentic paths (see `teacher/agentic.py`'s
+      SDK-boundary handling). *(From the `todos.md` inbox, 2026-07-20.)*
 
 ### Larger phases
 
