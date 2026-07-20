@@ -14,41 +14,6 @@ corpus of papers to store. The only things kept on disk are a small cache of
 the graphs you've looked at, your saved sessions, and the library of sources
 you upload (embedded locally; nothing leaves your machine).
 
-> **Status: v2.0.0 — the readability rewrite.** The entire app was rebuilt
-> file-by-file for a codebase a human can read: every package carries its own
-> README (what/why → structure → design decisions → who uses it → how it's
-> verified), the backend is strictly typed (mypy strict, Pydantic models on
-> every boundary), and the frontend runs strict TypeScript with a
-> three-slice Redux store. Along the way the app itself leveled up:
->
-> - **Search covers all of Semantic Scholar** (200M+ papers across venues,
->   not just arXiv) — with an LLM **query analyst** that expands acronyms
->   ("DQN" → "deep Q-network") and **recalls famous papers by exact title**,
->   verified against S2's title-match endpoint so the seminal paper leads
->   the hits. Pasted arXiv ids/URLs still jump straight in; repeated
->   queries answer instantly from a whole-result cache.
-> - **The AI teacher is a crew of [PydanticAI](https://ai.pydantic.dev)
->   agents** behind one orchestrator: a **lecturer** (streamed, illustrated
->   lectures in typed beats over the graph you built — history / intuition /
->   evolution / current frontier, each with the papers' real figures inline), a **researcher**
->   (agentic Q&A that reads full text — ar5iv, or the paper's open-access
->   PDF for journal papers — expands the graph, searches
->   S2, searches *your* library, and attaches real figures inline), a
->   **librarian** (RAG over your uploads, cited by page, attaching real
->   figures from your PDFs), and
->   the **query analyst**. Everything streams for real — beats, prose, tool
->   traces, discoveries.
-> - **Bring-your-own sources** with hybrid retrieval (sqlite-vec semantic +
->   FTS5 lexical, fused with RRF), parallel PDF uploads with **live
->   embedding progress bars** (**GPU-accelerated** when there's a GPU to use),
->   and a per-source scope picker for the agents.
-> - **Sessions** save the whole workspace — graph, discovered papers, chat —
->   and restore with zero API calls.
->
-> See **[OnePager.md](OnePager.md)** for the vision, the full feature stack,
-> and the open backlog — and **[docs/history.md](docs/history.md)** for the
-> complete shipped record, version by version.
-
 ```
 ┌──────────┐  find seed   ┌─────────┐   whole graph      ┌──────────────────┐
 │  search  │ ───────────▶ │ backend │ ─── seed/refs/ ──▶ │  Semantic Scholar│
@@ -60,31 +25,6 @@ you upload (embedded locally; nothing leaves your machine).
                      │  React + force graph  │  ← the interactive map you explore
                      └───────────────────────┘
 ```
-
-Since **v5.0.0** the citation graph is built from **one** academic-data provider,
-chosen per graph in the header's **"Data source"** dropdown (the v4.x
-S2+OpenAlex hybrid is retired). **OpenAlex** returns true top-cited landmark
-citers via server-sorted `cites:` queries (no offset ceiling); **Semantic
-Scholar** does the whole graph too, but its live citation API is newest-first with
-no citation sort and rejects any page past an offset of 8,000 — so the newest
-**9,000** citers (the last page starts at 8,000 and holds 1,000) are all it can
-ever reach, and its Field Landmarks can only be the best of the citers inside that
-window. Since **v5.5.0**
-the live path at least mines that whole reachable window and bands it **twelve
-landmarks per publication year**, so a mega-seed's landmarks span the years the API
-can see (DQN: 2019–2025, led by Conservative Q-Learning and Decision Transformer)
-instead of piling into the last two. Everything older than the wall — DQN's
-2013–2018 citers, the ones you'd actually name — stays out of reach live. Since
-**v5.4.0** that ceiling is lifted for real by an **offline S2 citations corpus**
-(opt-in): the
-bulk `citations`+`papers` Datasets releases are downloaded and ingested to local
-DuckDB-over-Parquet via the `atlas corpus` CLI, and the S2 provider then draws
-Field Landmarks **citation-sorted across all history** from your own copy (the
-graph's note says which source is behind the landmarks). It's the local prototype
-of the eventual AWS Airflow→S3→Athena pipeline; see
-[`src/atlas/integrations/semantic_scholar/corpus/README.md`](src/atlas/integrations/semantic_scholar/corpus/README.md).
-The *Similar* relation is retired from the built graph (kept for the researcher's
-`expand_node`).
 
 **Stack:** Python/Flask + uv · [PydanticAI](https://ai.pydantic.dev) agents on
 Claude · React + TypeScript (strict) + Vite + Redux Toolkit ·
@@ -121,21 +61,30 @@ cp config.example.json config.json
 ```
 
 All configuration lives in `config.json` (gitignored — it holds your keys; no
-environment variables, ever). Every field is required and validated at startup
-by Pydantic; the value-by-value rationale lives in
-[docs/configuration.md](docs/configuration.md). The two keys that matter:
+environment variables, ever). Every field must be *present* and is validated at
+startup by Pydantic, so a malformed value fails fast with a clear message — but
+the API-key values may be left blank. For the **full value-by-value reference**
+(every tunable, its default, and *why* it's there), see
+**[docs/configuration.md](docs/configuration.md)**.
 
-- **`providers.s2.api_key`** — a free
-  [Semantic Scholar API key](https://www.semanticscholar.org/product/api).
-  Optional but strongly recommended; the unauthenticated pool is tight.
-- **`providers.openalex.api_key`** — optional. OpenAlex (the citation source)
-  runs keyless
-  on its `mailto` polite pool ($0.10/day of metered search — plenty for browsing);
-  a free key at [openalex.org/settings/api](https://openalex.org/settings/api)
-  lifts it to $1/day. Set `providers.openalex.mailto` to your email either way.
-- **`llm.providers.anthropic.api_key`** — powers the whole agent crew
-  (lecture, research Q&A, library chat, query analysis). The per-agent model
-  choices live under `llm.agents`.
+The two **data-source keys are completely optional** — Atlas explores the graph
+fully without them, just on tighter public rate limits. The **Anthropic key is
+the one that unlocks the AI teacher** (lectures, research Q&A, library chat); the
+graph explorer runs fine without it, but the Assistant panel needs it.
+
+- **`providers.s2.api_key`** — **optional.** A free
+  [Semantic Scholar API key](https://www.semanticscholar.org/product/api) is
+  recommended (the keyless pool is tight), but keyless works.
+- **`providers.openalex.api_key`** — **optional.** OpenAlex (the citation
+  source) runs keyless on its `mailto` polite pool ($0.10/day of metered search
+  — plenty for browsing); a free key at
+  [openalex.org/settings/api](https://openalex.org/settings/api) lifts it to
+  $1/day. Set `providers.openalex.mailto` to your email either way.
+- **`llm.providers.anthropic.api_key`** — **required to power the agents.** A
+  [Claude API key](https://console.anthropic.com/settings/keys) drives the whole
+  crew (lectures, research Q&A, library chat, query analysis); the per-agent
+  model choices live under `llm.agents`. Anthropic is the only LLM provider
+  today — **support for other providers is on the roadmap.**
 
 ### 2. Build the frontend & run
 
@@ -173,14 +122,19 @@ The Vite dev server proxies `/api/*` to Flask.
    (under **OpenAlex**, the true all-time top-cited, returned directly by a sorted
    `cites:` query; under **Semantic Scholar**, the whole citation history when the
    offline corpus serves it or the seed's citer list is fully reachable live —
-   see the "Data source" note), with **how many to show measured per-seed from
+   the graph's own note names which source is behind them; see
+   [docs/citation-coverage.md](docs/citation-coverage.md) for how the two sources
+   compare), with **how many to show measured per-seed from
    the real citer pool** (an old classic maps out large, a young hot paper stays
    tight — the STOP rule in `services/graph/budget.py`); **Latest Publications**
    (light green) is the recent frontier — recent citers, per-year banded for even
    coverage, with the band's **start sized per-seed by a trained model**
    so an old classic's bands widen back to meet its landmark cluster instead of
    leaving a gap (see `src/ml_pipelines/latest_gap/`) — as a filterable relation of
-   its own. Node size = citations; thick links = influential citations; a
+   its own. (Every term here — *landmark*, *band*, *tail edge*, the sizing
+   rules — is defined once, with a worked example, in
+   [docs/landmark-vocabulary.md](docs/landmark-vocabulary.md).) Node size =
+   citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
    details (TL;DR, abstract/PDF links, arXiv & Semantic Scholar category
    tags, figures — mined straight from the open-access PDF for journal
@@ -257,3 +211,8 @@ Args/Returns completeness; the frontend's prettier + oxlint incl. JSDoc
 completeness), strict mypy, pytest (`test/`, 419 offline tests), and Vitest
 (`frontend/test/`, offline too) — plus `cd frontend && npm run build`
 (strict tsc + Vite) for the type/build check.
+
+For the project's direction and past, two living docs sit beside the code:
+**[OnePager.md](OnePager.md)** (the vision, the full feature stack, and the
+open backlog) and **[docs/history.md](docs/history.md)** (the complete shipped
+record, version by version).
