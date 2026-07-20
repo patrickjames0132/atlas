@@ -264,6 +264,11 @@ optional, behind a key.
       middle — e.g. SKIP with a citation floor, or a shorter band span — or
       should the truncated path simply mirror the complete path's shape and
       accept the hole the 29-vs-84 measurement documented?
+      **Scope grown (Patrick, 2026-07-19): the truncated path's *Latest* side
+      too** — its rolling 12-month window should move in line with the
+      adaptive Latest (tau-started per-year bands), even if that means the
+      truncated path's landmarks end up a very small set. And **sequencing:
+      do this after the settings modal ships.**
       **The success criterion (Patrick, 2026-07-17):** whatever rule the
       truncated pool ends up with should land **as close as possible to what the
       STOP rule would ship if the seed's full citation history were reachable**
