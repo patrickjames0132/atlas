@@ -265,12 +265,7 @@
 .skel {
   display: block;
   border-radius: 6px;
-  background: linear-gradient(
-    100deg,
-    var(--border) 40%,
-    rgba(255, 255, 255, 0.09) 50%,
-    var(--border) 60%
-  );
+  background: linear-gradient(100deg, var(--border) 40%, var(--hover) 50%, var(--border) 60%);
   background-size: 200% 100%;
   animation: skel-shimmer 1.4s ease-in-out infinite;
 }

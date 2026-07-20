@@ -30,6 +30,7 @@ export interface AtlasConfig {
     }
   }
   graph: { cache_ttl: number; [key: string]: unknown }
+  ui: { default_theme: 'dark' | 'light'; [key: string]: unknown }
   llm: {
     providers: { anthropic?: { api_key: string; [key: string]: unknown }; [key: string]: unknown }
     agents: { id: string; model: string; extras?: Record<string, number>; [key: string]: unknown }[]

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { getSettings, listSources, PROVIDER_LABEL } from './api'
 import { ID_RE } from './graph/model'
+import { applyConfiguredDefault, setTheme, useTheme } from './ui/theme'
 import { useAppDispatch, useAppSelector } from './store'
 import {
   errorSet,
@@ -53,6 +54,7 @@ export default function Atlas() {
   const [showSources, setShowSources] = useState(false)
   const [showSessions, setShowSessions] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const theme = useTheme()
   const [assistantOpen, setAssistantOpen] = useState(false)
   // Gates the graph-free library-chat entry point; refreshed when the
   // Sources drawer closes (they may have added/removed sources).
@@ -70,7 +72,8 @@ export default function Atlas() {
 
   useEffect(refreshLibraryCount, [refreshLibraryCount])
 
-  // Seed the header's data-source selector from the configured default. The
+  // Seed browser-level defaults from config: the header's data-source
+  // selector and (for a browser with no saved choice) the colour theme. The
   // store's initial value is a placeholder — the honest default lives in
   // config (`providers.default_provider`, editable in the settings modal),
   // and without this the setting would be inert: the dropdown always started
@@ -81,8 +84,11 @@ export default function Atlas() {
     let cancelled = false
     void getSettings()
       .then((settings) => {
+        if (cancelled) return
         const configured = settings.config.providers.default_provider
-        if (!cancelled && !graphRef.current && configured) dispatch(providerSet(configured))
+        if (!graphRef.current && configured) dispatch(providerSet(configured))
+        // Only fills a browser that has never chosen a theme — see the store.
+        applyConfiguredDefault(settings.config.ui.default_theme)
       })
       .catch(() => {})
     return () => {
@@ -204,6 +210,8 @@ export default function Atlas() {
         onToggleAssistant={() => setAssistantOpen((prev) => !prev)}
         onOpenSessions={() => setShowSessions(true)}
         onOpenSettings={() => setShowSettings(true)}
+        theme={theme}
+        onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         onStartTour={() => setTourOpen(true)}
       />
 

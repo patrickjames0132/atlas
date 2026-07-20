@@ -10,7 +10,7 @@
   width: 272px;
   box-sizing: border-box;
   padding: 12px;
-  background: rgba(23, 26, 33, 0.92);
+  background: var(--panel-float);
   border: 1px solid var(--border);
   border-radius: 10px;
   backdrop-filter: blur(4px);
@@ -72,8 +72,8 @@
   height: 34px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: rgba(31, 35, 44, 0.97);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  background: var(--panel);
+  box-shadow: 0 6px 18px var(--shadow);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -90,10 +90,10 @@
   align-items: center;
   gap: 8px;
   padding: 5px 8px 5px 12px;
-  background: rgba(31, 35, 44, 0.97);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 999px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 18px var(--shadow);
   backdrop-filter: blur(4px);
 }
 .graph-find::before {
@@ -254,7 +254,7 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--panel);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 3px var(--shadow);
   cursor: pointer;
 }
 .range-dual input[type='range']::-moz-range-thumb {
@@ -264,7 +264,7 @@
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--panel);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 3px var(--shadow);
   cursor: pointer;
 }
 
@@ -387,7 +387,7 @@
   display: flex;
   gap: 14px;
   padding: 8px 12px;
-  background: rgba(23, 26, 33, 0.85);
+  background: var(--panel-float-soft);
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 12px;

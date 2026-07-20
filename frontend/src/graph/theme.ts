@@ -6,7 +6,46 @@
  * out of sync on what "a reference" looks like.
  */
 
+import { useTheme } from '../ui/theme'
 import type { EdgeType } from '../api'
+
+/** The theme-dependent colors the canvas paints with. */
+export interface CanvasInk {
+  /** Node labels and the discovered-node dashed ring. */
+  ink: string
+  /** The softer pinned-node ring. */
+  soft: string
+  /** The solid detail-selection ring. */
+  hard: string
+  /** The canvas backdrop — force-graph paints it itself, so it can't be CSS. */
+  background: string
+}
+
+/**
+ * The canvas's neutral inks for the active theme.
+ *
+ * The relation colors above are theme-independent (they carry meaning), but
+ * labels and rings were hardcoded near-white — invisible on a light
+ * background. Canvas painting is JS, so it can't inherit from a stylesheet:
+ * this reads the computed `--canvas-*` custom properties instead, and
+ * re-reads whenever the theme changes (the hook subscribes, so the component
+ * re-renders and its painters close over fresh values).
+ *
+ * @returns The inks to paint labels and rings with.
+ */
+export function useCanvasInk(): CanvasInk {
+  // Depend on the theme so a switch re-renders the caller; the values
+  // themselves come from the CSS variables the theme just swapped.
+  useTheme()
+  const style = getComputedStyle(document.documentElement)
+  const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
+  return {
+    ink: read('--canvas-ink', 'rgba(231,236,245,0.9)'),
+    soft: read('--canvas-ink-soft', 'rgba(242,244,248,0.55)'),
+    hard: read('--canvas-ink-hard', '#f2f4f8'),
+    background: read('--bg', '#0f1115'),
+  }
+}
 
 /** Node fill per relation role — also used by filter chips, legend, lecture
  * buttons. (Detail-panel badges use BADGE_COLOR, which keeps a lighter green

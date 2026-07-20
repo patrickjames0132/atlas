@@ -645,6 +645,24 @@ class ServerConfig(ConfigModel):
     )
 
 
+class UIConfig(ConfigModel):
+    """Frontend defaults — what a fresh browser starts with.
+
+    Same shape of setting as ``providers.default_provider``: config decides
+    where the UI *starts*, and an in-app control overrides it from there,
+    remembered per browser. Nothing here affects a request; it's the opening
+    state of a preference the user owns.
+    """
+
+    default_theme: Literal["dark", "light"] = Field(
+        description="Which colour theme a browser with no saved preference opens in. "
+        "The header's toggle overrides it and remembers the choice locally, so this "
+        "is the default, not a lock. 'dark' is the app's native look — the relation "
+        "palette (gold seed, blue references, green landmarks) is tuned against it, "
+        "though it reads on either background."
+    )
+
+
 class Config(ConfigModel):
     """All configuration, grouped by the part of the app that consumes it."""
 
@@ -655,6 +673,7 @@ class Config(ConfigModel):
     pdf: PdfConfig
     server: ServerConfig
     llm: LLMConfig
+    ui: UIConfig
 
 
 CONFIG_PATH = PROJECT_ROOT / "config.json"

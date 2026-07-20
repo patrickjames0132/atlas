@@ -1,3 +1,9 @@
+/* Dark is the default theme and the app's native look; light is an explicit
+ * opt-in (the header's toggle stamps `data-theme` on this element — see
+ * ui/theme.ts). Every themed color lives here as a custom property so a new
+ * one is a stylesheet edit; the three `--canvas-*` inks exist because the
+ * graph paints with JS and can't read a stylesheet rule, so GraphCanvas reads
+ * these computed values instead of hardcoding near-white strokes. */
 :root {
   --bg: #0f1115;
   --panel: #171a21;
@@ -8,10 +14,48 @@
   --accent: #6ea8fe;
   --accent-strong: #3b82f6;
   --chip: #232936;
+  --canvas-ink: rgba(231, 236, 245, 0.9);
+  --canvas-ink-soft: rgba(242, 244, 248, 0.55);
+  --canvas-ink-hard: #f2f4f8;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --hover: rgba(255, 255, 255, 0.05);
+  /* Translucent surfaces that float over the canvas (controls, legend) —
+   * they blur what's behind them, so they can't just be --panel. */
+  --panel-float: rgba(23, 26, 33, 0.92);
+  --panel-float-soft: rgba(23, 26, 33, 0.85);
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: var(--text);
   background: var(--bg);
+}
+
+/* Light theme. The relation palette (gold seed, blue references, green
+ * landmarks, pink search) is deliberately NOT overridden — those hues carry
+ * meaning and read on either background; only the neutrals flip. */
+:root[data-theme='light'] {
+  /* Softened after a first pass read as harsh: the ink was near-black
+   * (#11141b) on off-white — around 17:1, well past what a UI needs — and
+   * the borders were dark enough to draw hard lines around every panel. The
+   * greys below follow the React/Angular docs' lead: strong text lands in
+   * the mid-20s rather than near-black, borders barely separate, and the
+   * page sits a shade off white so panels can be white without glaring. */
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --border: #e6e9ee;
+  --text: #4a5261;
+  --text-strong: #23272f;
+  --muted: #79808f;
+  --accent: #2c6fd1;
+  --accent-strong: #2563eb;
+  --chip: #eff2f6;
+  --canvas-ink: rgba(35, 39, 47, 0.82);
+  --canvas-ink-soft: rgba(35, 39, 47, 0.4);
+  --canvas-ink-hard: #23272f;
+  /* Softer on light — a 0.45 black shadow reads as grime on white. */
+  --shadow: rgba(15, 23, 42, 0.12);
+  --hover: rgba(17, 20, 27, 0.05);
+  --panel-float: rgba(255, 255, 255, 0.94);
+  --panel-float-soft: rgba(255, 255, 255, 0.88);
 }
 
 * {

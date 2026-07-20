@@ -9,6 +9,7 @@
 
 import type { FormEvent } from 'react'
 import type { Provider, SearchOptions } from '../api'
+import type { Theme } from '../ui/theme'
 import { PROVIDER_LABEL } from '../api'
 import Search from '../search/Search'
 import './header.css'
@@ -45,6 +46,10 @@ export interface AtlasHeaderProps {
   onOpenSessions: () => void
   /** Open the settings modal (config-file editor). */
   onOpenSettings: () => void
+  /** The active theme — decides which icon the toggle shows. */
+  theme: Theme
+  /** Flip between light and dark. */
+  onToggleTheme: () => void
   /** Start (or restart) the guided tour for the current phase — the search
    *  surface before a graph is up, the graph tools once one is. */
   onStartTour: () => void
@@ -73,6 +78,8 @@ export default function AtlasHeader({
   onToggleAssistant,
   onOpenSessions,
   onOpenSettings,
+  theme,
+  onToggleTheme,
   onStartTour,
 }: AtlasHeaderProps) {
   return (
@@ -145,7 +152,20 @@ export default function AtlasHeader({
         🗂 Sessions
       </button>
       <button
-        className="sources-toggle"
+        className="sources-toggle icon-toggle"
+        onClick={onToggleTheme}
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {/* The icon shows the ACTION, not the current state — like a play
+            button showing ▶ while paused. In dark mode you're offered the
+            sun; in light mode, the moon. The U+FE0E on the sun forces text
+            presentation: without it the platform renders a colour emoji that
+            sizes the whole button differently from the moon. */}
+        <span className="theme-glyph">{theme === 'dark' ? '\u2600\uFE0E' : '\u263E'}</span>
+      </button>
+      <button
+        className="sources-toggle icon-toggle"
         data-tour="settings-btn"
         onClick={onOpenSettings}
         title="Settings — the app's configuration, editable in place"
@@ -154,7 +174,7 @@ export default function AtlasHeader({
         <span className="settings-gear">⚙</span>
       </button>
       <button
-        className="sources-toggle tour-launch"
+        className="sources-toggle icon-toggle tour-launch"
         onClick={onStartTour}
         title="A quick guided tour of the tools on screen"
         aria-label="Start the guided tour"

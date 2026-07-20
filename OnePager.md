@@ -506,20 +506,6 @@ optional, behind a key.
         bust or key around it or the old snapshot just comes back.
       *(From the `todos.md` inbox, 2026-07-16; scoped 2026-07-19.)*
 
-- [ ] **A light/dark mode toggle** — the app is dark-only: the palette lives as
-      CSS custom properties on `:root` in `frontend/src/index.css` (`--bg`,
-      `--panel`, `--border`, `--text`, `--text-strong`, `--muted`, `--accent`,
-      `--accent-strong`), which is most of the work already done — a light
-      theme is a second set of values plus a toggle that swaps them (a
-      `data-theme` attribute on the root, persisted in localStorage, defaulting
-      to `prefers-color-scheme`). **The catch is what *doesn't* read the
-      tokens:** the graph canvas paints node/edge colors from its own
-      constants, the relation palette is fixed (green landmarks, light-green
-      latest, blue references, pink search), and several components carry
-      hardcoded rgba washes — those all need auditing before a light
-      background stops looking broken. Placement: the settings modal's General
-      section is the natural home (it's a user preference, not config).
-      *(From the `todos.md` inbox, 2026-07-19.)*
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
       (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;
       add a chip (like the relation chips) to show/hide the whole discovered set

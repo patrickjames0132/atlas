@@ -110,5 +110,8 @@
         }
       }
     ]
+  },
+  "ui": {
+    "default_theme": "dark"
   }
 }

@@ -26,8 +26,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Every header button is exactly this tall, whatever it contains. Height used
+ * to fall out of padding + the content's line box, so a 17px glyph, a bold
+ * "?", and a 13px label each produced a different button — hence the fixed
+ * height and flex centring, which take the content out of the geometry. */
 .sources-toggle {
-  padding: 8px 12px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg);
@@ -106,16 +114,30 @@ button.brand {
 
 /* The guided-tour launcher — same chrome as the drawer toggles, squared down
    to a compact "?" (see tour/README.md). */
-.tour-launch {
-  padding: 8px 0;
+/* Icon-only buttons (theme, settings, tour) are that same square: an explicit
+ * width to go with the shared height, and no padding to negotiate with. The
+ * glyph spans below control only the DRAWN size — the box is fixed either
+ * way, so a bigger sun can't widen its button. */
+.icon-toggle {
   width: 34px;
-  text-align: center;
+  padding: 0;
+}
+
+.tour-launch {
   font-weight: 700;
 }
 
-/* The header's settings gear: same button chrome and size — the glyph is
- * enlarged with a transform, which doesn't affect layout. */
+/* Enlarged with a transform, which doesn't affect layout. */
 .settings-gear {
   display: inline-block;
   transform: scale(1.45);
+}
+
+/* The toggle's two glyphs come from different Unicode blocks: ☀ picks up
+ * emoji presentation (colour, oversized) unless the markup's U+FE0E forces
+ * text, and ☾ is a small text glyph either way. */
+.theme-glyph {
+  display: inline-block;
+  font-size: 17px;
+  line-height: 1;
 }

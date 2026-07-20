@@ -241,6 +241,25 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
+    key: 'default-theme',
+    section: 'general',
+    label: 'Colour theme',
+    hint: 'What a browser with no saved preference opens in. The header toggle overrides it and remembers the choice locally, so this is the default, not a lock.',
+    control: (draft, edit) => (
+      <select
+        value={draft.ui.default_theme}
+        onChange={(event) =>
+          edit((next) => {
+            next.ui.default_theme = event.target.value as 'dark' | 'light'
+          })
+        }
+      >
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    ),
+  },
+  {
     key: 'cache-ttl',
     section: 'general',
     label: 'Graph cache lifetime',

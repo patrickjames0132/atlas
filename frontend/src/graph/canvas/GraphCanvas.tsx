@@ -15,7 +15,7 @@ import type { GraphNode } from '../../api'
 import { latexToUnicode } from '../../notation/latexToUnicode'
 import { nodeRadius, primaryRel } from '../model'
 import type { VLink, VNode } from '../model'
-import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR, SELECTION_RING } from '../theme'
+import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR, SELECTION_RING, useCanvasInk } from '../theme'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
 // untyped alias so our canvas/link callbacks stay readable.
@@ -76,13 +76,14 @@ export default function GraphCanvas({
   onEngineStop,
   onRenderFramePre,
 }: GraphCanvasProps) {
+  const canvasInk = useCanvasInk()
   return (
     <ForceGraph2D
       ref={fgRef}
       width={width}
       height={height}
       graphData={data}
-      backgroundColor="#0f1115"
+      backgroundColor={canvasInk.background}
       nodeLabel={(node: GraphNode) =>
         `${latexToUnicode(node.title)}${node.year ? ` (${node.year})` : ''}`
       }
@@ -136,7 +137,7 @@ export default function GraphCanvas({
           ctx.beginPath()
           ctx.arc(node.x, node.y, radius + 1.5, 0, 2 * Math.PI)
           ctx.lineWidth = 2 / globalScale
-          ctx.strokeStyle = 'rgba(242,244,248,0.9)'
+          ctx.strokeStyle = canvasInk.ink
           ctx.setLineDash([3 / globalScale, 2 / globalScale])
           ctx.stroke()
           ctx.setLineDash([])
@@ -152,7 +153,7 @@ export default function GraphCanvas({
         }
         if (isPinned && !dim) {
           ctx.lineWidth = 1.5 / globalScale
-          ctx.strokeStyle = 'rgba(242,244,248,0.55)'
+          ctx.strokeStyle = canvasInk.soft
           ctx.stroke()
         }
         if (isPicked && !dim) {
@@ -166,7 +167,7 @@ export default function GraphCanvas({
         }
         if (isSel) {
           ctx.lineWidth = 2 / globalScale
-          ctx.strokeStyle = '#f2f4f8'
+          ctx.strokeStyle = canvasInk.hard
           ctx.stroke()
         }
         if (!dim && (node.is_seed || isSel || isLit || isPicked || globalScale > 1.6)) {
@@ -174,7 +175,7 @@ export default function GraphCanvas({
           ctx.font = `${fontSize}px -apple-system, sans-serif`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'top'
-          ctx.fillStyle = 'rgba(231,236,245,0.9)'
+          ctx.fillStyle = canvasInk.ink
           const title = latexToUnicode(node.title)
           ctx.fillText(
             title.length > 42 ? title.slice(0, 40) + '…' : title,

@@ -79,7 +79,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 24px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 30px var(--shadow);
   color: var(--text-strong);
 }
 /* Determinate build bar under the "Building graph…" label — the coarse-stage
@@ -174,6 +174,6 @@
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--shadow);
   z-index: 40;
 }

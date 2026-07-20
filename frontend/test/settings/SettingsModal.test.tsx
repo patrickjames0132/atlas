@@ -33,6 +33,7 @@ function makeConfig(): AtlasConfig {
       },
     },
     graph: { cache_ttl: 86400 },
+    ui: { default_theme: 'dark' },
     llm: {
       providers: { anthropic: { api_key: 'sk-test' } },
       agents: [

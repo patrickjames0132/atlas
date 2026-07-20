@@ -97,6 +97,16 @@ What remains configurable:
 (The default provider lives with the providers it chooses between —
 `providers.default_provider`, above — not here.)
 
+## `ui` — what a fresh browser starts with
+
+- **`default_theme: "dark"`** — the colour theme a browser with no saved
+  preference opens in. The header's ☀/☾ toggle overrides it and remembers the
+  choice locally, so this is the *default*, not a lock — the same shape of
+  setting as `providers.default_provider`. Dark is the app's native look: the
+  relation palette (gold seed, blue references, green landmarks, pink search)
+  is tuned against it, and deliberately isn't re-themed in light mode, since
+  those hues carry meaning and read on either background.
+
 ## `llm` — everything about talking to LLMs
 
 Two things live under one group because an agent is meaningless without a

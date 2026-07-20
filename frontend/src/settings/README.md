@@ -28,6 +28,10 @@ overlays).
   spinner stops there and a typed-in lower value is clamped, so a bounded
   knob can't reach the save bar looking valid. The server still validates —
   this is the second line, not the only one.
+- **General carries the browser-level defaults** — default data source
+  and colour theme — which config *seeds* and an in-app control then
+  overrides per browser (the header dropdown, the ☀/☾ toggle). Both are
+  defaults, not locks; see `ui/README.md` for the theme store's rule.
 - **Rows are data too** (`ROW_DEFS`): each row carries its section, group
   heading, label/hint text, and control renderer — one registry drives
   rendering *and* the PyCharm-style search, which reaches individual settings

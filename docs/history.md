@@ -1472,6 +1472,42 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **A light/dark mode toggle** *(v6.2.0)* — the app was dark-only. A
+      header toggle (beside settings) now switches themes, remembered per
+      browser, with a new `ui.default_theme` config setting deciding what a
+      browser with no saved choice opens in — the same shape as
+      `providers.default_provider`, and editable in the settings modal's
+      General section. **The icon shows the action, not the state** (☀ while
+      dark, ☾ while light): a single toggle labelled with its current state
+      is the one people click twice.
+      The palette was mostly ready — dark lives on `:root`, light on
+      `:root[data-theme='light']` — but the ticket's warning about *what
+      doesn't read the tokens* was the real work. **The canvas paints with
+      JS**, so it can't inherit a stylesheet: node labels and rings were
+      hardcoded near-white and the backdrop a literal `#0f1115`, i.e.
+      white-on-white text on a black rectangle in light mode. Three
+      `--canvas-*` inks plus the background now come through a
+      `useCanvasInk()` hook that re-reads on theme change (the painters are
+      inline props, so they close over fresh values next frame). Two floating
+      popovers and the controls panel + legend hardcoded a translucent *dark*
+      surface — now `--panel-float`/`--panel-float-soft`; black shadows and
+      white hover washes became `--shadow`/`--hover` across seven
+      stylesheets. **The relation palette is deliberately not themed**: gold
+      seed, blue references, green landmarks, and pink search carry meaning
+      and read on either background, so only the neutrals flip.
+      Two rounds of Patrick's browser feedback shaped the result. The first
+      light palette read as harsh, correctly: near-black ink (#11141b) on
+      off-white is ~17:1, more than double what even WCAG's strictest tier
+      asks, and borders dark enough to outline every panel. Softened toward
+      the React/Angular docs' greys (strong text #23272f, barely-there
+      borders, a desaturated accent). And the header buttons were three
+      different sizes because their geometry was *derived* — height fell out
+      of padding plus whatever line box the content produced, so a 17px
+      glyph, a bold "?", and a text label each sized their own button;
+      `.sources-toggle` now declares a 34px height with flex centring and
+      `.icon-toggle` a 34px width, taking content out of the geometry
+      entirely. *(From the `todos.md` inbox, 2026-07-19; browser-tested.)*
+
 - [x] **A settings modal — the app's config, editable in place** *(v6.1.0)* —
       there was nowhere in the UI to configure anything: every setting was a
       `config.json` hand-edit plus a server restart. The modal (⚙, top-right
