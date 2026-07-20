@@ -254,6 +254,31 @@
 
 ### AI teacher & lectures
 
+- [x] **A failed figure chip drops the source and mislabels the figure**
+      *(v6.1.1)* — a failed `show_source_figure` rendered as a bare "Tried
+      **Figure 1**", naming neither the source it reached into nor the figure
+      it actually asked for. The renderer was innocent
+      (`teacher/transcript/ChatMessage.tsx` already drew "of <title>" when
+      given one); the emitters weren't. Failure traces in
+      `agents/library_figures.py` now look the source title up from
+      `source_id` (degrading to an unnamed chip if that lookup itself fails,
+      so it can never mask the original error) and carry an **attempted**
+      label — `figure 2 on p.42` — instead of falling back to
+      `Figure {figure}`, which asserted a number the source may not use
+      (`figure` is a *page-local ordinal*, not the book's own numbering).
+      **Writing the test found a second bug:** `captions.split_label` matched
+      only dotted numbering, so chapter-hyphenated forms truncated —
+      "Figure 3-2. Two-slit interference." became label `Figure 3` with the
+      caption left starting at a stray `-2.`, i.e. the chip named a different
+      figure than the one on screen. The regex now takes hyphen/en-dash/
+      em-dash numbering, but only when digits follow immediately, so a spaced
+      "Figure 3 - A single slit" keeps its dash. Guarded by a new
+      `test/atlas/agents/test_library_figures.py` (every emit path's chip
+      contract) plus caption cases; story in `docs/bugs.md`. *(From the
+      `todos.md` inbox, 2026-07-19; browser-tested. The separate "no figures
+      extractable from the Feynman Lectures" investigation stays open — this
+      fix made its failure legible, not solved.)*
+
 - [x] **Phase 3a — AI teacher + Q&A (grounded)** *(v1.1.0)* — `teacher.py` with
       the dual Claude backend (Anthropic API **or** the `claude` CLI subscription)
       **streamed** so narration reveals beat-by-beat. `/api/lecture` (SSE) emits

@@ -18,12 +18,20 @@ from __future__ import annotations
 import re
 
 # The float's own designation at the head of its caption: a kind word, a
-# number ("3", "12.4", "A.2", "S1", "3a"), then the caption's separator
+# number ("3", "12.4", "A.2", "S1", "3a", "3-2"), then the caption's separator
 # (":" or ".") or — Algorithm captions often use neither — a space into the
 # title.
+#
+# Chapter-hyphenated numbering ("Figure 3-2", and the en/em-dash forms
+# typesetters use for it) is as common as the dotted kind — the Feynman
+# Lectures are entirely hyphenated. Matching only dots truncated those to
+# "Figure 3" *and* left the remainder starting with a stray "-2.", so the
+# chip named a different figure than the one on screen. A separator only
+# counts when digits follow it immediately: "Figure 3 - A slit" keeps its
+# dash in the caption, where it belongs.
 _LABEL_RE = re.compile(
     r"^(?P<kind>Figure|Fig\.?|Table|Algorithm)\s+"
-    r"(?P<number>(?:[A-Za-z]\.)?\d+(?:\.\d+)*[a-z]?)"
+    r"(?P<number>(?:[A-Za-z]\.)?\d+(?:[.\-\u2013\u2014]\d+)*[a-z]?)"
     r"\s*(?P<separator>[:.])?\s*"
 )
 
