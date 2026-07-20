@@ -19,6 +19,7 @@ figure strip must never 500 the whole detail panel.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import queue
 import threading
@@ -29,10 +30,11 @@ from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
 from ..agents import summarizer
-from ..integrations import arxiv, huggingface, openalex, semantic_scholar
+from ..integrations import arxiv, caps, huggingface, openalex, semantic_scholar
 from ..services import graph as graph_service
 from ..services import pdf as pdf_service
 from ..services.graph import Provider
+from ..services.graph.shape import BuildShape
 from ..storage import cache
 from .sse import sse, sse_response
 
@@ -47,6 +49,14 @@ log = logging.getLogger(__name__)
 # client can fail. Both surface to the client as a 502.
 _BUILD_ERRORS = (semantic_scholar.S2Error, openalex.OpenAlexError)
 
+#: Bounds for the user-supplied band shape. The year floor predates any paper
+#: the providers index; the band ceiling keeps a hand-typed number from spawning
+#: a hundred throttled per-year queries; the per-band ceiling is OpenAlex's page
+#: cap, which neither provider can exceed in one query.
+_MIN_BAND_YEAR = 1800
+_MAX_BANDS = 50
+_MAX_PER_BAND = 200
+
 
 def _requested_provider() -> Provider:
     """The academic-data backend to build from, parsed from the request.
@@ -59,6 +69,74 @@ def _requested_provider() -> Provider:
         ``"s2"`` or ``"openalex"``.
     """
     return graph_service.resolve_provider(request.args.get("provider"))
+
+
+def _bounded_int(arg: str, fallback: int, low: int, high: int) -> int:
+    """One clamped integer query arg, for the build-shape parser.
+
+    Args:
+        arg: The query-arg name.
+        fallback: The value to keep when the arg is absent or unparseable.
+        low: Smallest accepted value.
+        high: Largest accepted value.
+
+    Returns:
+        The parsed value clamped into ``[low, high]``, or ``fallback``.
+    """
+    raw = request.args.get(arg)
+    if raw is None:
+        return fallback
+    try:
+        return max(low, min(high, int(raw)))
+    except ValueError:
+        return fallback
+
+
+def _requested_shape() -> BuildShape:
+    """The build shape to size this request's graph with, parsed from the request.
+
+    The shape is the user's, carried by the browser, so it arrives as query args
+    rather than from config (see :mod:`atlas.services.graph.shape`). Parsed the
+    same way as the provider: **every value degrades**, never errors — a forged
+    or nonsensical arg falls back to the adaptive default or clamps into range,
+    because a bad query string should cost the user a differently-sized graph,
+    not a failed build.
+
+    Query args:
+        adaptive: Falsy (``0``/``false``/``no``) hands sizing to the user; any
+            other value (including absent) keeps the app's adaptive sizing.
+        cluster_start: The Latest bands' first year. Absent keeps the fixed span.
+        bands: How many one-year bands the fixed span covers.
+        per_band: The top-N citers each band keeps.
+
+    Returns:
+        The parsed shape. Non-adaptive args are ignored — and left at their
+        defaults — while ``adaptive`` stays on.
+    """
+    adaptive = request.args.get("adaptive", "").lower() not in ("0", "false", "no")
+    if adaptive:
+        return BuildShape()
+    # A cluster start outside the plausible publication era is a forged value,
+    # not a preference — drop it and take the fixed span, the same fallback an
+    # unplaceable tau rule lands on.
+    cluster_start: int | None = None
+    raw_start = request.args.get("cluster_start")
+    if raw_start:
+        try:
+            year = int(raw_start)
+        except ValueError:
+            year = 0
+        if _MIN_BAND_YEAR <= year <= datetime.date.today().year:
+            cluster_start = year
+    return BuildShape(
+        adaptive=False,
+        cluster_start=cluster_start,
+        # The upper bound is OpenAlex's 200-row page cap: a larger per-band ask
+        # can't be served by one provider, so it's clamped rather than honored
+        # unevenly across the two.
+        number_of_bands=_bounded_int("bands", caps.LATEST_NUMBER_OF_BANDS, 1, _MAX_BANDS),
+        nodes_per_band=_bounded_int("per_band", caps.LATEST_NODES_PER_BAND, 1, _MAX_PER_BAND),
+    )
 
 
 def _provider_name(provider: Provider) -> str:
@@ -89,6 +167,8 @@ def api_graph() -> ResponseReturnValue:
         provider: ``s2`` or ``openalex`` — which backend to build from (defaults
             to ``config.providers.default_provider``).
         refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
+        adaptive, cluster_start, bands, per_band: The build shape — how much of
+            the neighborhood to ship (see :func:`_requested_shape`).
 
     Returns:
         JSON ``{seed, nodes, edges, counts}`` on success; ``{error}`` with
@@ -101,7 +181,9 @@ def api_graph() -> ResponseReturnValue:
     provider = _requested_provider()
     refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
     try:
-        result = graph_service.build_graph(seed, provider=provider, refresh=refresh)
+        result = graph_service.build_graph(
+            seed, provider=provider, refresh=refresh, shape=_requested_shape()
+        )
     except _BUILD_ERRORS as exc:
         current_app.logger.warning("graph build failed for %s (%s): %s", seed, provider, exc)
         return jsonify({"error": f"{_provider_name(provider)} is unavailable — try again."}), 502
@@ -110,7 +192,9 @@ def api_graph() -> ResponseReturnValue:
     return jsonify(result.model_dump())
 
 
-def _build_stream(seed: str, provider: Provider, refresh: bool) -> Iterator[str]:
+def _build_stream(
+    seed: str, provider: Provider, refresh: bool, shape: BuildShape
+) -> Iterator[str]:
     """Build a seed's graph in a worker thread, streaming progress as SSE.
 
     ``build_graph`` is synchronous and reports coarse stages through a
@@ -127,6 +211,10 @@ def _build_stream(seed: str, provider: Provider, refresh: bool) -> Iterator[str]
         seed: The normalized seed reference (arXiv id / provider node id).
         provider: Which backend to build from (``s2`` / ``openalex``).
         refresh: Bypass the cached snapshot and rebuild from the provider.
+        shape: How much of the neighborhood to ship. Parsed by the *route* and
+            handed in, because this generator and its worker thread run after
+            the request context is gone — the same reason ``provider`` and
+            ``refresh`` arrive as arguments rather than being read here.
 
     Yields:
         ``progress`` frames (``{done, total, label}``), then exactly one
@@ -141,6 +229,7 @@ def _build_stream(seed: str, provider: Provider, refresh: bool) -> Iterator[str]
                 seed,
                 provider=provider,
                 refresh=refresh,
+                shape=shape,
                 on_progress=lambda done, total, label: frames.put(
                     ("progress", {"done": done, "total": total, "label": label})
                 ),
@@ -179,6 +268,8 @@ def api_graph_stream() -> ResponseReturnValue:
         provider: ``s2`` or ``openalex`` — which backend to build from (defaults
             to ``config.providers.default_provider``).
         refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
+        adaptive, cluster_start, bands, per_band: The build shape — how much of
+            the neighborhood to ship (see :func:`_requested_shape`).
 
     Returns:
         HTTP 400 (JSON) for a missing seed; otherwise an SSE stream of
@@ -191,7 +282,7 @@ def api_graph_stream() -> ResponseReturnValue:
         return jsonify({"error": "missing 'seed' arXiv id"}), 400
     provider = _requested_provider()
     refresh = request.args.get("refresh", "").lower() in ("1", "true", "yes")
-    return sse_response(_build_stream(seed, provider, refresh))
+    return sse_response(_build_stream(seed, provider, refresh, _requested_shape()))
 
 
 @bp.get("/api/paper/<path:paper_ref>")

@@ -51,8 +51,8 @@ from ...config import config
 from ...integrations import arxiv, openalex
 from ...integrations import semantic_scholar as s2
 from ...storage import cache
-from . import bands, budget
 from .model import Counts, Edge, Graph, Node, Seed
+from .shape import BuildShape
 
 log = logging.getLogger(__name__)
 
@@ -96,12 +96,16 @@ CitationSource = Literal["corpus", "live"]
 _Traversal = tuple[dict, list[dict], list[dict], list[dict], CitationSource | None]
 
 
-def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversal | None:
+def _traverse_s2(
+    seed_ref: str, report: Callable[[int, str], None], shape: BuildShape
+) -> _Traversal | None:
     """Resolve the seed and its relations through Semantic Scholar.
 
     Args:
         seed_ref: An arXiv id or a raw S2 paperId.
         report: The build-stage progress callback (``step`` 1-indexed, ``label``).
+        shape: The per-request build shape, supplying the sizing rules and band
+            dimensions this traversal injects (see :mod:`.shape`).
 
     Returns:
         The traversal payload (see :data:`_Traversal`), or None when S2 has no
@@ -145,8 +149,10 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
         # other, and computed here where the clock already lives.
         max_landmark_year=openalex.landmark_max_year(today),
         current_year=today.year,
-        landmark_budget=budget.computed_cite_limit,
-        band_start=bands.earliest_band_year,
+        landmark_budget=shape.landmark_budget(),
+        band_start=shape.band_start(),
+        number_of_bands=shape.number_of_bands,
+        nodes_per_band=shape.nodes_per_band,
     )
     citation_source: CitationSource
     if relations is not None:
@@ -168,21 +174,27 @@ def _traverse_s2(seed_ref: str, report: Callable[[int, str], None]) -> _Traversa
             seed_id,
             max_landmark_year=openalex.landmark_max_year(today),
             current_year=today.year,
-            landmark_select=budget.select_landmarks,
-            landmark_budget=budget.computed_cite_limit,
-            band_start=bands.earliest_band_year,
+            landmark_select=shape.landmark_select(),
+            landmark_budget=shape.landmark_budget(),
+            band_start=shape.band_start(),
+            number_of_bands=shape.number_of_bands,
+            nodes_per_band=shape.nodes_per_band,
         )
     landmark, latest = relations
     return seed_paper, refs, landmark, latest, citation_source
 
 
-def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Traversal | None:
+def _traverse_openalex(
+    seed_ref: str, report: Callable[[int, str], None], shape: BuildShape
+) -> _Traversal | None:
     """Resolve the seed and its relations through OpenAlex.
 
     Args:
         seed_ref: An arXiv id, or an S2-resolvable node id an OpenAlex graph
             carries (``DOI:…`` / ``ARXIV:…`` / ``W…``) when the user re-seeds.
         report: The build-stage progress callback (``step`` 1-indexed, ``label``).
+        shape: The per-request build shape, supplying the sizing rules and band
+            dimensions this traversal injects (see :mod:`.shape`).
 
     Returns:
         The traversal payload (see :data:`_Traversal`), or None when OpenAlex
@@ -209,8 +221,10 @@ def _traverse_openalex(seed_ref: str, report: Callable[[int, str], None]) -> _Tr
     # rule sizes the latest frontier (see ``bands.earliest_band_year``).
     landmark, latest = openalex.citation_relations(
         work_id,
-        band_start=bands.earliest_band_year,
-        landmark_budget=budget.computed_cite_limit,
+        band_start=shape.band_start(),
+        landmark_budget=shape.landmark_budget(),
+        number_of_bands=shape.number_of_bands,
+        nodes_per_band=shape.nodes_per_band,
     )
     # OpenAlex's own server-sorted cites: queries already return true top-cited
     # landmarks, so the corpus/live distinction doesn't apply — None.
@@ -259,6 +273,7 @@ def build_graph(
     *,
     provider: Provider | None = None,
     refresh: bool = False,
+    shape: BuildShape | None = None,
     on_progress: ProgressFn | None = None,
 ) -> Graph | None:
     """Build (or load from cache) the neighborhood graph for a seed paper.
@@ -274,6 +289,9 @@ def build_graph(
             :data:`Provider`). Defaults to ``config.providers.default_provider``.
         refresh: When True, bypass the cached snapshot and rebuild from the
             provider.
+        shape: How much of the neighborhood to ship (see :mod:`.shape`). None
+            (the default) means the adaptive shape — the app sizes itself, which
+            is what every build did before the shape was a request parameter.
         on_progress: Optional coarse-stage progress callback (see
             :data:`ProgressFn`). Fired only along the rebuild path — a cache hit
             returns before any step, so the caller sees no frames.
@@ -301,12 +319,19 @@ def build_graph(
     if not seed_ref:
         return None
     provider = provider or config.providers.default_provider
+    shape = shape or BuildShape()
 
     # --- Cache: the whole assembled snapshot, keyed by provider AND the raw seed
     # reference — an S2 graph and an OpenAlex graph for the same paper are
     # different snapshots and must not collide. Stored as JSON (model_dump), so a
     # hit costs a Graph.model_validate to rebuild the typed object.
-    cache_key = f"graph:{provider}:{seed_ref}"
+    #
+    # The shape joins the key too, or a non-adaptive build would be served the
+    # adaptive snapshot it exists to replace. Its suffix is EMPTY when adaptive
+    # (see ``BuildShape.cache_suffix``), so the default path keeps the pre-shape
+    # key byte for byte and every snapshot cached before shapes existed still
+    # hits; each distinct non-adaptive shape caches beside it, not over it.
+    cache_key = f"graph:{provider}:{seed_ref}{shape.cache_suffix()}"
     if not refresh:
         cached = cache.get(cache_key, config.graph.cache_ttl)
         if cached:
@@ -318,9 +343,9 @@ def build_graph(
     # no extra batch call to flesh them out.
     report(1, "Resolving seed paper…")
     traversal = (
-        _traverse_openalex(seed_ref, report)
+        _traverse_openalex(seed_ref, report, shape)
         if provider == "openalex"
-        else _traverse_s2(seed_ref, report)
+        else _traverse_s2(seed_ref, report, shape)
     )
     if traversal is None:  # the provider knows no paper for this reference.
         return None

@@ -10,6 +10,8 @@ graph/
   budget.py  — adaptive landmark-budget serving: predict it from the seed (the
                trained model) or measure it from a pool in hand (the density rule)
   bands.py   — adaptive latest-band serving: where a seed's Latest bands start
+  shape.py   — the per-request BuildShape: adaptive (the app sizes itself) vs.
+               user-sized, and the cache-key suffix that keeps them apart
 ```
 
 `__init__.py` re-exports `build_graph`, `Provider`, `resolve_provider`, and the
@@ -229,6 +231,26 @@ cache hit, a deliberate trade.
 
 - **The whole snapshot is cached, not the individual calls.** One cache entry per
   `(provider, seed)`, TTL'd, rather than caching each traversal separately.
+  Since v6.2.0 the **build shape** joins that key — but only when it's
+  non-adaptive. `BuildShape.cache_suffix()` returns `""` for an adaptive build,
+  so the default path's key is byte-identical to the pre-shape one and every
+  snapshot cached before shapes existed still hits; each distinct user-sized
+  shape caches *beside* the adaptive snapshot instead of clobbering it. Without
+  this, turning adaptive off would simply hand back the adaptive graph it was
+  meant to replace.
+- **Non-adaptive mode adds no branches to the traversals.** All three citation
+  paths (live S2, the S2 corpus, OpenAlex) already take their sizing rules as
+  *injected callables*, and already fall back to the flat
+  `UNBOUNDED_LANDMARK_CAP` payload guard when a rule declines. So "ship
+  everything" isn't a new code path — it's `BuildShape` injecting a budget rule
+  that always returns None (and dropping the truncated-pool SKIP selector).
+  `shape.py` holds that decision; no provider knows shapes exist.
+- **The band-shape constants resolve at call time, not in a signature default.**
+  `number_of_bands`/`nodes_per_band` default to `None` and fall back to
+  `integrations.caps` inside the function. A literal default would freeze the
+  constants' import-time values, so `caps` would stop being the live source of
+  truth (and the traversal tests that monkeypatch it would silently pass
+  against stale numbers).
 - **`arxiv.looks_arxiv` uses `fullmatch`, not `search`.** (Shared with the S2
   seed lookup — it lives in `integrations.arxiv`.) We only treat a reference as an
   arXiv id when it is *entirely* one; a paperId that happens to contain id-shaped

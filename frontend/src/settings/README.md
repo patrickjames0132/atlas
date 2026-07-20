@@ -28,6 +28,35 @@ overlays).
   spinner stops there and a typed-in lower value is clamped, so a bounded
   knob can't reach the save bar looking valid. The server still validates —
   this is the second line, not the only one.
+- **The Graph section is browser state, not the config file.** Its four rows
+  (`adaptive` plus the three band-shape numbers) read and write
+  `graph/buildShape.ts` directly and apply **immediately**, so they never
+  appear in the Save bar — the same write-through the config-file location row
+  uses, for the same reason: they aren't part of the file's contents. The
+  build shape belongs to the person exploring and changes between one build and
+  the next, so it rides on each graph request instead (see `graph/README.md`).
+  They're rendered as small components that call `useBuildShape()` themselves,
+  which is why the `RowDef.control` signature didn't need widening for
+  non-config rows.
+- **Two rebuild timings, on purpose.** The `adaptive` switch rebuilds the graph
+  **immediately** — one click is a complete intent. The three band-shape number
+  inputs rebuild on **modal close**, because they write on every keystroke and
+  rebuilding per character would hammer the provider. Neither is wired through
+  this component: `Atlas.tsx` watches the store (the switch via a `useBuildShape`
+  effect, the numbers via a `sameBuild` comparison on close), so the modal stays
+  a settings editor that knows nothing about the graph.
+- **`adaptive` is a switch, not a checkbox** (`.settings-switch`) — a real
+  checkbox stays in the markup for keyboard and screen readers, visually hidden,
+  with the track and knob painted from `:checked` / `:focus-visible`.
+- **The band fields grey out — but keep showing their values — while automatic
+  sizing is on** (`input:disabled` in `settings.css`), so it reads as "this is
+  what's in use, tunable once you switch sizing off" rather than as empty or
+  still-editable. The cluster-start field's `auto` placeholder already looked
+  muted; this brings the two number fields to match.
+- **The citations-corpus path lives under Data Providers ▸ Semantic Scholar**,
+  not a section of its own — it's an S2 setting (`storage.s2_corpus`, the offline
+  corpus the s2 provider draws Field Landmarks from), so it sits with the rest of
+  the S2 connection knobs.
 - **General carries the browser-level defaults** — default data source
   and colour theme — which config *seeds* and an in-app control then
   overrides per browser (the header dropdown, the ☀/☾ toggle). Both are

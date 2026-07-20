@@ -168,6 +168,19 @@
   border-color: var(--accent);
 }
 
+/* A disabled field still shows its value, just muted — the Latest-bands numbers
+   are greyed while automatic sizing is on, signalling "this is what's in use,
+   and you can tune it once you turn sizing off." Without this the browser's
+   default disabled text is nearly full-strength and reads as still-editable,
+   unlike the cluster-start field whose "auto" placeholder already looks muted. */
+.settings-row-control input:disabled,
+.settings-row-control select:disabled {
+  color: var(--muted);
+  background: var(--bg);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Draw our own caret: the native one sits flush against the border and
  * can't be repositioned. appearance:none removes the platform control, and
  * the inline SVG (muted grey, matching --muted) is placed with real inset. */
@@ -310,4 +323,50 @@
 
 .settings-save:hover:not(:disabled) {
   filter: brightness(1.1);
+}
+
+/* The on/off switch — used by Graph Shape's "Size graphs automatically" row.
+   A real checkbox stays in the markup (keyboard + screen readers get the
+   native control); it's visually hidden and the track/knob are drawn from it,
+   so :checked and :focus-visible both drive the painted state. */
+.settings-switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.settings-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.settings-switch-track {
+  display: block;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 120ms ease;
+}
+.settings-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+  transition: transform 120ms ease;
+}
+.settings-switch input:checked + .settings-switch-track {
+  background: var(--accent);
+}
+.settings-switch input:checked + .settings-switch-track .settings-switch-knob {
+  transform: translateX(16px);
+}
+.settings-switch input:focus-visible + .settings-switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

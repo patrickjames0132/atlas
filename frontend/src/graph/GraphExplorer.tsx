@@ -41,6 +41,7 @@ import GraphCanvas from './canvas/GraphCanvas'
 import FindBar from './controls/FindBar'
 import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
+import { useBuildShape } from './buildShape'
 import { REL_TYPES } from './theme'
 import { deriveOrigins } from './clusterForce'
 import { useDiscovery } from './hooks/useDiscovery'
@@ -115,6 +116,15 @@ export default function GraphExplorer({
   // citation-budgeted pool the backend ships — see `citationThreshold`.
   const [citeLo, setCiteLo] = useState(0)
   const [citeHi, setCiteHi] = useState(CITE_SLIDER_STEPS)
+  // Per-relation display caps: how many papers of each relation to show, most-
+  // cited first. A missing key means "all of them", which is every relation
+  // until the user drags a slider. These only exist while the build is
+  // user-sized — an adaptive build is already trimmed by the backend's own
+  // rules, and stacking a second trim on top of it is the clutter the adaptive
+  // sizing exists to avoid.
+  const [relCaps, setRelCaps] = useState<Record<string, number>>({})
+  const buildShape = useBuildShape()
+  const capsActive = !buildShape.adaptive
   const [hoverId, setHoverId] = useState<string | null>(null)
   // The local find (the floating bottom-right FindBar): spotlights on-screen
   // papers by title/author substring. Purely lexical — no API call.
@@ -292,6 +302,29 @@ export default function GraphExplorer({
    * positions/pins persist); links are copied with source/target reset to ids
    * so RFG re-resolves cleanly.
    */
+  /**
+   * Each relation's papers ranked most-cited first, as `id -> rank`, plus how
+   * many it holds — what the per-chip count sliders bound and trim against.
+   *
+   * Ranked over `base`, not the filtered view, so dragging the year slider
+   * doesn't silently renumber what "top 20 landmarks" means. Most-cited first
+   * mirrors how the backend ranks each relation, so the slider trims the tail
+   * the same way the adaptive budget would have.
+   */
+  const { relRank, relTotals } = useMemo(() => {
+    const rank = new Map<string, Map<string, number>>()
+    const totals: Record<string, number> = {}
+    if (!base) return { relRank: rank, relTotals: totals }
+    for (const type of REL_TYPES) {
+      const members = base.nodes
+        .filter((node) => !node.is_seed && node.rels.includes(type))
+        .sort((one, other) => (other.citation_count ?? 0) - (one.citation_count ?? 0))
+      rank.set(type, new Map(members.map((node, index) => [node.id, index])))
+      totals[type] = members.length
+    }
+    return { relRank: rank, relTotals: totals }
+  }, [base])
+
   const view = useMemo(() => {
     if (!base) return { nodes: [] as VNode[], links: [] as VLink[] }
     // The citation window a neighbor must fall inside (0…maxCitations = filter
@@ -338,7 +371,22 @@ export default function GraphExplorer({
       if (!linked.has(node.id)) return node.rels.some((rel) => enabled.has(rel))
       return false
     }
-    const nodes = base.nodes.filter(nodeOk)
+    const filtered = base.nodes.filter(nodeOk)
+    // PER-RELATION COUNT CAPS — the sliders that exist only while the build is
+    // user-sized (adaptive off). Non-adaptive builds ship everything up to the
+    // payload guard, so this is where the user trims it back to something
+    // readable. A node survives when it ranks inside the cap of at least ONE of
+    // its enabled relations, mirroring the reachability rule above: a paper
+    // that's both a top reference and a mid-ranked landmark keeps the slot its
+    // best relation earns it.
+    const nodes = capsActive
+      ? filtered.filter((node) => {
+          const capped = node.rels.filter((rel) => enabled.has(rel) && relCaps[rel] !== undefined)
+          // No capped relation applies (or it's the seed) — nothing to trim by.
+          if (node.is_seed || capped.length === 0) return true
+          return capped.some((rel) => (relRank.get(rel)?.get(node.id) ?? 0) < relCaps[rel])
+        })
+      : filtered
     const ids = new Set(nodes.map((node) => node.id))
     const links = base.links
       .filter((link) => linkOk(link) && ids.has(link._s) && ids.has(link._t))
@@ -347,7 +395,19 @@ export default function GraphExplorer({
     // graphVersion isn't read directly — it's a signal that base.nodes/links
     // were mutated in place (discoveries) and this must recompute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, enabled, layout, yearLo, yearHi, citeLo, citeHi, graphVersion])
+  }, [
+    base,
+    enabled,
+    layout,
+    yearLo,
+    yearHi,
+    citeLo,
+    citeHi,
+    graphVersion,
+    capsActive,
+    relCaps,
+    relRank,
+  ])
 
   // Publish the on-screen node ids so agent grounding (selectGroundingNodes)
   // tracks the visible view, not the whole shipped pool. Fires whenever the
@@ -476,6 +536,20 @@ export default function GraphExplorer({
             onLayout={setLayoutMode}
             enabled={enabled}
             onToggleType={toggleType}
+            showRelCaps={capsActive}
+            relCaps={relCaps}
+            relTotals={relTotals}
+            onRelCap={(type, cap) =>
+              setRelCaps((prev) => {
+                const next = { ...prev }
+                // At full span the cap stops existing rather than being set to
+                // the total — so a later discovery widening the relation isn't
+                // silently clipped to yesterday's count.
+                if (cap >= (relTotals[type] ?? 0)) delete next[type]
+                else next[type] = cap
+                return next
+              })
+            }
             minYear={base!.minYear}
             maxYear={base!.maxYear}
             yearLo={yearLo}

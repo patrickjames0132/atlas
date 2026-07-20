@@ -440,6 +440,8 @@ def _complete_pool_relations(
     current_year: int,
     landmark_budget: LandmarkBudgetFn,
     band_start: BandStartFn | None,
+    number_of_bands: int | None = None,
+    nodes_per_band: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """The corpus shape, served from a live pool that is the seed's whole history.
 
@@ -468,6 +470,10 @@ def _complete_pool_relations(
         landmark_budget: The STOP rule measuring the ranked pool's years.
         band_start: Optional per-seed band-start chooser; None (or a None
             answer) keeps the fixed ``number_of_bands`` span.
+        number_of_bands: That fixed span's length, in one-year bands below the
+            landmark cutoff; None reads the shared caps constant at call time.
+        nodes_per_band: The top-N most-cited citers each one-year band keeps;
+            None likewise reads the shared caps constant.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -481,7 +487,12 @@ def _complete_pool_relations(
     # A declining rule (None) falls back to the flat payload guard.
     landmark = ranked[:budget] if budget is not None else ranked[:UNBOUNDED_LANDMARK_CAP]
 
-    earliest = max_landmark_year - LATEST_NUMBER_OF_BANDS + 1
+    # Resolved here, not in the signature's default, so the module constants stay
+    # the live source of truth (a default would freeze their import-time values).
+    band_span = LATEST_NUMBER_OF_BANDS if number_of_bands is None else number_of_bands
+    per_year = LATEST_NODES_PER_BAND if nodes_per_band is None else nodes_per_band
+
+    earliest = max_landmark_year - band_span + 1
     if band_start is not None:
         adaptive = band_start(
             [year for year in (entry["node"].get("year") for entry in landmark) if year],
@@ -497,7 +508,7 @@ def _complete_pool_relations(
     shipped = {entry["node"]["id"] for entry in landmark}
     recent: list[dict] = []
     for year_entries in by_year.values():
-        recent += _select_by_influence(year_entries, LATEST_NODES_PER_BAND)
+        recent += _select_by_influence(year_entries, per_year)
     latest = [entry for entry in recent if entry["node"]["id"] not in shipped]
     latest.sort(key=_latest_order, reverse=True)
     latest.reverse()
@@ -512,6 +523,8 @@ def citation_relations(
     landmark_select: LandmarkSelectFn | None = None,
     landmark_budget: LandmarkBudgetFn | None = None,
     band_start: BandStartFn | None = None,
+    number_of_bands: int | None = None,
+    nodes_per_band: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Split a seed's citers into two relations: landmarks and the latest frontier.
 
@@ -550,6 +563,15 @@ def citation_relations(
             it a complete pool still ships the truncated shape.
         band_start: Optional Latest band-start chooser for the **complete** pool
             (see :data:`BandStartFn`).
+        number_of_bands: The **complete** pool's fixed band span below the
+            landmark cutoff, used when ``band_start`` is absent or declines.
+            None (the default) reads the shared
+            :data:`~atlas.integrations.caps.LATEST_NUMBER_OF_BANDS` at call
+            time; the settings modal's non-adaptive mode passes a number to
+            override it per request.
+        nodes_per_band: The top-N most-cited citers each one-year band of the
+            **complete** pool keeps. None (the default) likewise reads the
+            shared :data:`~atlas.integrations.caps.LATEST_NODES_PER_BAND`.
 
     Returns:
         ``(landmark_entries, latest_entries)`` — each ``[{"node", "influential"}]``.
@@ -566,6 +588,8 @@ def citation_relations(
             current_year=current_year,
             landmark_budget=landmark_budget,
             band_start=band_start,
+            number_of_bands=number_of_bands,
+            nodes_per_band=nodes_per_band,
         )
     cutoff = _latest_cutoff()
     recent = [entry for entry in pool if _is_latest(entry, cutoff)]

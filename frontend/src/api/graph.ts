@@ -3,6 +3,7 @@
  * and a paper's figures.
  */
 
+import { getBuildShape, shapeParams } from '../graph/buildShape'
 import { readSSE } from './sse'
 
 /**
@@ -132,6 +133,9 @@ export async function fetchGraph(
 ): Promise<GraphResponse> {
   const params = new URLSearchParams({ seed, provider })
   if (refresh) params.set('refresh', '1')
+  // The user's build shape rides along. An adaptive shape contributes nothing,
+  // so this URL is unchanged for the default path.
+  for (const [key, value] of shapeParams(getBuildShape())) params.set(key, value)
   const res = await fetch(`/api/graph?${params.toString()}`)
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
@@ -170,6 +174,7 @@ export async function fetchGraphStream(
 ): Promise<GraphResponse> {
   const params = new URLSearchParams({ seed, provider })
   if (refresh) params.set('refresh', '1')
+  for (const [key, value] of shapeParams(getBuildShape())) params.set(key, value)
   const res = await fetch(`/api/graph/stream?${params.toString()}`)
   let graph: GraphResponse | null = null
   let message: string | null = null

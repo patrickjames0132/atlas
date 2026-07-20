@@ -39,7 +39,7 @@ def make_graph() -> Graph:
 def test_graph_normalizes_pasted_urls_and_threads_the_provider(client, monkeypatch):
     seen = {}
 
-    def fake_build(seed, provider="s2", refresh=False):
+    def fake_build(seed, provider="s2", refresh=False, shape=None):
         seen["seed"], seen["provider"], seen["refresh"] = seed, provider, refresh
         return make_graph()
 
@@ -58,7 +58,7 @@ def test_graph_invalid_provider_falls_back_to_default(client, monkeypatch):
     """A missing / bogus provider degrades to config.providers.default_provider."""
     seen = {}
 
-    def fake_build(seed, provider="s2", refresh=False):
+    def fake_build(seed, provider="s2", refresh=False, shape=None):
         seen["provider"] = provider
         return make_graph()
 
@@ -72,17 +72,17 @@ def test_graph_error_taxonomy(client, monkeypatch):
     assert client.get("/api/graph").status_code == 400  # missing seed
 
     monkeypatch.setattr(
-        graph_routes.graph_service, "build_graph", lambda seed, provider="s2", refresh=False: None
+        graph_routes.graph_service, "build_graph", lambda seed, provider="s2", refresh=False, shape=None: None
     )
     assert client.get("/api/graph?seed=1312.5602").status_code == 404  # unknown paper
 
-    def s2_down(seed, provider="s2", refresh=False):
+    def s2_down(seed, provider="s2", refresh=False, shape=None):
         raise semantic_scholar.S2Error("rate limited")
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", s2_down)
     assert client.get("/api/graph?seed=1312.5602").status_code == 502  # S2 down
 
-    def openalex_down(seed, provider="s2", refresh=False):
+    def openalex_down(seed, provider="s2", refresh=False, shape=None):
         raise openalex.OpenAlexError("over budget")
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", openalex_down)
@@ -93,7 +93,7 @@ def test_graph_error_taxonomy(client, monkeypatch):
 
 
 def test_graph_stream_reports_progress_then_the_graph(client, monkeypatch):
-    def fake_build(seed, provider="s2", refresh=False, on_progress=None):
+    def fake_build(seed, provider="s2", refresh=False, shape=None, on_progress=None):
         # A real build fires coarse stages through on_progress before returning.
         if on_progress:
             on_progress(1, 4, "Resolving seed paper…")
@@ -117,12 +117,12 @@ def test_graph_stream_error_frames(client, monkeypatch):
     monkeypatch.setattr(
         graph_routes.graph_service,
         "build_graph",
-        lambda seed, provider="s2", refresh=False, on_progress=None: None,
+        lambda seed, provider="s2", refresh=False, shape=None, on_progress=None: None,
     )
     events = frames(client.get("/api/graph/stream?seed=1312.5602"))
     assert events[-1][0] == "error"  # unknown paper -> error frame, not 404
 
-    def s2_down(seed, provider="s2", refresh=False, on_progress=None):
+    def s2_down(seed, provider="s2", refresh=False, shape=None, on_progress=None):
         raise semantic_scholar.S2Error("rate limited")
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", s2_down)
@@ -354,3 +354,72 @@ def test_figure_proxy_is_locked_to_ar5iv(client, monkeypatch):
     assert response.status_code == 200
     assert response.data == b"\x89PNG"
     assert response.headers["Cache-Control"] == "public, max-age=86400"
+
+
+def _shape_for(client, monkeypatch, query: str):
+    """Build the graph behind ``query`` and hand back the shape the route parsed."""
+    seen = {}
+
+    def fake_build(seed, provider="s2", refresh=False, shape=None):
+        seen["shape"] = shape
+        return make_graph()
+
+    monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
+    client.get(f"/api/graph?seed=1312.5602&{query}")
+    return seen["shape"]
+
+
+def test_shape_defaults_to_adaptive(client, monkeypatch):
+    """No shape args at all — the app sizes itself, as it always did."""
+    assert _shape_for(client, monkeypatch, "").adaptive is True
+
+
+def test_adaptive_off_carries_the_users_band_shape(client, monkeypatch):
+    shape = _shape_for(
+        client, monkeypatch, "adaptive=0&cluster_start=2015&bands=8&per_band=25"
+    )
+    assert shape.adaptive is False
+    assert shape.cluster_start == 2015
+    assert shape.number_of_bands == 8
+    assert shape.nodes_per_band == 25
+
+
+def test_band_args_are_ignored_while_adaptive_is_on(client, monkeypatch):
+    """Adaptive wins outright — a stale band arg must not shape an adaptive build."""
+    shape = _shape_for(client, monkeypatch, "cluster_start=2015&bands=8&per_band=25")
+    assert shape.adaptive is True
+    assert shape.cache_suffix() == ""
+
+
+def test_garbage_shape_args_degrade_rather_than_error(client, monkeypatch):
+    """A forged query string costs a differently-sized graph, never a failed build."""
+    shape = _shape_for(
+        client, monkeypatch, "adaptive=no&cluster_start=abc&bands=xyz&per_band="
+    )
+    assert shape.adaptive is False
+    assert shape.cluster_start is None  # unparseable -> fixed span
+    assert shape.number_of_bands == graph_routes.caps.LATEST_NUMBER_OF_BANDS
+    assert shape.nodes_per_band == graph_routes.caps.LATEST_NODES_PER_BAND
+
+
+def test_out_of_range_shape_args_are_clamped(client, monkeypatch):
+    shape = _shape_for(
+        client, monkeypatch, "adaptive=0&cluster_start=1200&bands=9999&per_band=9999"
+    )
+    assert shape.cluster_start is None  # before any indexed paper -> dropped
+    assert shape.number_of_bands == graph_routes._MAX_BANDS
+    assert shape.nodes_per_band == graph_routes._MAX_PER_BAND  # OpenAlex's page cap
+
+
+def test_stream_parses_the_shape_in_the_request_context(client, monkeypatch):
+    """The worker thread outlives the request, so the route must parse it first."""
+    seen = {}
+
+    def fake_build(seed, provider="s2", refresh=False, shape=None, on_progress=None):
+        seen["shape"] = shape
+        return make_graph()
+
+    monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
+    frames(client.get("/api/graph/stream?seed=1312.5602&adaptive=0&per_band=30"))
+    assert seen["shape"].adaptive is False
+    assert seen["shape"].nodes_per_band == 30

@@ -151,7 +151,11 @@ The Vite dev server proxies `/api/*` to Flask.
    several sweeps build one cluster), **shift-click** to add/remove one, and
    **alt-click** empty (or **Clear**) to reset. Picked papers ring cyan and the
    rest dim; the teacher then grounds only in your selection. Click the
-   **Atlas** brand anytime to go home.
+   **Atlas** brand anytime to go home. By default the app **sizes each graph
+   for you** (how many landmark citers to ship, where the Latest bands start —
+   per seed); turn **"Size graphs automatically" off** in Settings ▸ Graph to
+   have it ship everything it can and size the bands yourself, and each filter
+   chip gains a **count slider** to trim how many of that relation you see.
 4. **Learn** (the 🎓 Assistant panel):
    - **Lectures** — the past → present → future arc, narrated over the
      graph **as you built it** (lectures never expand it — only the research

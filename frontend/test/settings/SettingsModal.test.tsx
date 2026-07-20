@@ -149,7 +149,7 @@ describe('SettingsModal', () => {
     expect(await screen.findByText('Minimum beats')).toBeTruthy()
     expect(screen.getByText('Maximum beats')).toBeTruthy()
     expect(screen.queryByText('Default data source')).toBeNull()
-    expect(screen.queryByText('Corpus location')).toBeNull()
+    expect(screen.queryByText('Citations corpus')).toBeNull()
   })
 
   it('agent extras edit into llm.agents, and clearing removes the override', async () => {
