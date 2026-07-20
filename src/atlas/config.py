@@ -49,59 +49,6 @@ class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class S2CorpusStorage(ConfigModel):
-    """Where the offline Semantic Scholar citations corpus lives — both halves.
-
-    Two roots rather than one, because the halves have **opposite access
-    patterns** and can want different drives:
-
-    * ``raw`` — the downloaded ``.gz`` shards (~400GB/release) plus their
-      ``download.json`` checkpoint. Written once, read once, sequentially: a
-      spinning disk does that perfectly well, and the shards are deletable the
-      moment an ingest succeeds (a re-ingest means a re-download).
-    * ``parquet`` — the ingested, queried working set (~50GB) **and the
-      ``CURRENT`` pointer**. It absorbs the ingest's ~400k partitioned writes and
-      then serves every graph build, so it wants the fast drive (measured:
-      20.6s/shard on NVMe vs 98.2s on an SMR HDD — 2.2h vs 10.6h per release).
-
-    ``parquet`` is the app's **only serving dependency**: ``CURRENT`` lives beside
-    the data it names, so a machine that only serves needs nothing but this root
-    — pull the raw drive and the corpus keeps working. ``raw`` is an operator
-    concern, needed by ``atlas corpus download``/``ingest`` alone.
-
-    Either may be null. Null ``parquet`` turns the corpus off (the s2 provider
-    falls back to the live citation endpoint); null ``raw`` just means this
-    machine doesn't download. Both may point at the same directory when one drive
-    holds everything. Same anchoring as ``data_dir``: relative → repo root,
-    absolute → as-is. **Kept outside the repo and gitignored** — it's hundreds of
-    GB. See integrations/semantic_scholar/corpus/README.md.
-    """
-
-    raw: Path | None = Field(
-        default=None,
-        description="Root for downloaded shards + download.json — `atlas corpus download` "
-        "writes here and `ingest` reads it. Null means this machine doesn't download; "
-        "serving doesn't need it. Deletable after a successful ingest.",
-    )
-    parquet: Path | None = Field(
-        default=None,
-        description="Root for the ingested Parquet + the CURRENT pointer — the app's only "
-        "serving dependency. Null turns the corpus off (live S2 citations instead).",
-    )
-
-    @field_validator("raw", "parquet")
-    @classmethod
-    def _anchor_to_repo_root(cls, path: Path | None) -> Path | None:
-        """Anchor a relative corpus root to the repo root; leave an absolute one
-        (the common case — the corpus lives on its own drive) untouched. None
-        stays None: that half is simply not configured.
-        """
-        if path is None:
-            return None
-        path = path.expanduser()
-        return path if path.is_absolute() else PROJECT_ROOT / path
-
-
 class StorageConfig(ConfigModel):
     """Where the app keeps its three SQLite databases, and the S2 corpus.
 
@@ -115,16 +62,27 @@ class StorageConfig(ConfigModel):
         description="Directory holding all three SQLite databases. A relative "
         "path is anchored to the repo root, not the process's cwd."
     )
-    s2: S2CorpusStorage = Field(
-        default_factory=S2CorpusStorage,
-        description="The offline S2 citations corpus's two roots (see S2CorpusStorage). "
-        "Omit entirely to run without a corpus.",
+    s2_corpus: Path | None = Field(
+        default=None,
+        description="Root of the offline S2 citations corpus — the downloaded .gz "
+        "shards, the ingested Parquet, and the CURRENT pointer all live under this "
+        "one directory, in per-release subtrees (releases/<id>/{raw,parquet}). "
+        "Null turns the corpus off (the s2 provider falls back to the live citation "
+        "endpoint). Kept outside the repo and gitignored — hundreds of GB; the "
+        "shards half is deletable after a successful ingest. See "
+        "integrations/semantic_scholar/corpus/README.md.",
     )
 
-    @field_validator("data_dir")
+    @field_validator("data_dir", "s2_corpus")
     @classmethod
-    def _anchor_to_repo_root(cls, path: Path) -> Path:
-        """A relative path in config.json means "relative to the repo root"."""
+    def _anchor_to_repo_root(cls, path: Path | None) -> Path | None:
+        """A relative path in config.json means "relative to the repo root".
+
+        An absolute path (the corpus's common case — its own drive) passes
+        untouched; None stays None (the corpus is simply not configured).
+        """
+        if path is None:
+            return None
         path = path.expanduser()
         return path if path.is_absolute() else PROJECT_ROOT / path
 
@@ -213,29 +171,18 @@ class OpenAlexConfig(ConfigModel):
 
 class ProvidersConfig(ConfigModel):
     """The external data APIs the graph is built from, one sub-object per
-    service.
+    service — plus which of them is the default.
 
     Groups the academic-data backbones (Semantic Scholar, OpenAlex) the same
     way ``llm.providers`` groups the LLM vendors: connection settings — keys,
     URLs, timeouts, throttles — live together, per service. Adding a data
     source later is purely additive: a new field here, no redesign.
+    ``default_provider`` lives here beside the services it chooses between,
+    not under ``graph``.
     """
 
     s2: SemanticScholarConfig
     openalex: OpenAlexConfig
-
-
-class GraphConfig(ConfigModel):
-    """The graph build's two remaining knobs — provider and cache.
-
-    Deliberately minimal: the app **sizes every relation itself** (the
-    adaptive rules in ``services/graph/budget.py`` and ``bands.py``, with the
-    shared guards and band-shape defaults in ``integrations/caps.py``), so
-    there are no per-relation count caps, no adaptive on/off toggles, and no
-    band-shape fields here — all deleted as knobs nobody turned. What
-    remains genuinely varies per deployment. See docs/configuration.md.
-    """
-
     default_provider: Literal["s2", "openalex"] = Field(
         description="Which academic-data backend a new graph is built from when the "
         "request doesn't name one — the initial state of the header provider selector. "
@@ -248,6 +195,20 @@ class GraphConfig(ConfigModel):
         "to its lower-cited arXiv-preprint stub). The user overrides this per graph from "
         "the header dropdown."
     )
+
+
+class GraphConfig(ConfigModel):
+    """The graph build's one remaining knob — the snapshot cache.
+
+    Deliberately minimal: the app **sizes every relation itself** (the
+    adaptive rules in ``services/graph/budget.py`` and ``bands.py``, with the
+    shared guards and band-shape defaults in ``integrations/caps.py``), so
+    there are no per-relation count caps, no adaptive on/off toggles, and no
+    band-shape fields here — all deleted as knobs nobody turned. The default
+    provider lives with the providers (``providers.default_provider``). See
+    docs/configuration.md.
+    """
+
     cache_ttl: NonNegativeInt = Field(
         description="Seconds a graph snapshot stays cached before rebuilding. "
         "Citation data changes slowly, so a day keeps repeat exploration instant."

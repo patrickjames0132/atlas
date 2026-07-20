@@ -2306,7 +2306,13 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       `extra="forbid"` fails startup until each machine's gitignored
       `config.json` drops to the two-key `graph` shape, and `CLAUDE.md`'s
       session-start drift check now flags keys the template has *dropped*, not
-      just added. `GraphConfig` ends at `default_provider · cache_ttl` —
+      just added. Two placement fixes rode along: `default_provider` moved from
+      `graph` to `providers` (it lives beside the services it chooses between),
+      and the corpus's two storage roots (`storage.s2.{raw,parquet}` — the
+      slow-drive/fast-drive split) recombined into one `storage.s2_corpus`
+      (one drive held both in practice; the per-release `raw/`+`parquet/`
+      subtrees were already shaped for it, so same-directory setups migrate
+      with a config edit alone). `GraphConfig` ends at `cache_ttl` alone —
       config.json is operator concerns only, and `docs/constants.md` (new)
       catalogues every code-side constant the purge decisions rest on.
       *(Patrick, 2026-07-17; browser-tested.)*

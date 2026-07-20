@@ -456,7 +456,7 @@ optional, behind a key.
       there's nowhere in the UI to configure anything; the corpus is a `config.json`
       edit plus a server restart. Add a **settings button (top-right)** opening a
       modal that can at least (a) point at the citations corpus
-      (`storage.s2.parquet` — and `.raw` if downloads are wanted) and (b) **toggle
+      (`storage.s2_corpus`) and (b) **toggle
       the corpus off**, falling back to the live S2 citation endpoint. The fallback
       already exists and is automatic when the corpus can't serve a seed; this makes
       it a *choice* — useful when the corpus is stale, mid-ingest, or suspect.

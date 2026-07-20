@@ -50,31 +50,27 @@ source.py    — the query side: CitationSource seam, DuckDBCitationSource, cita
 
 ### On-disk layout (`paths.py`)
 
-Two roots, one per half — they have opposite access patterns and can want
-different drives (`config.storage.s2.raw` / `.parquet`; point both at one
-directory if a single drive holds everything):
+One root (`config.storage.s2_corpus`), each release in its own subtree holding
+both halves (recombined 2026-07-19 from the old `s2.raw`/`s2.parquet` split —
+one drive held both in practice):
 
 ```
-<storage.s2.raw>/                      the downloads — write once, read once
-  releases/<release_id>/
-    raw/{papers,citations}/*.gz        <- downloaded shards
-    download.json                      <- per-shard download checkpoint
-
-<storage.s2.parquet>/                  what gets queried
+<storage.s2_corpus>/
   CURRENT                              <- text file: the active release_id
   releases/<release_id>/
+    raw/{papers,citations}/*.gz        <- downloaded shards (deletable after ingest)
+    download.json                      <- per-shard download checkpoint
     parquet/papers/clustered_*.parquet <- projected paper rows, globally SORTED by corpusid
     parquet/papers/_done/<shard>.ok    <- per-shard markers (shard files fold away on compaction)
     parquet/arxiv_index/*.parquet      <- arxiv_id → corpusid (small, sorted)
     parquet/citations/bucket=<N>/…     <- edges, hash-partitioned on citedcorpusid
 ```
 
-**`CURRENT` sits with the Parquet, not the shards** (v5.7.0): it names an
-*ingested* release, so it belongs beside the data it points at. The payoff is that
-the parquet root is the app's **only serving dependency** — delete the shards after
-an ingest, or unplug that drive entirely, and graph builds carry on. `raw` is
-purely an operator concern. `download.json` likewise lives with the shards it
-tracks, so discarding a raw root discards its checkpoint too, and a later
+**`CURRENT` names an *ingested* release** (a v5.7.0 decision that survives the
+single root): serving depends only on the Parquet subtrees it points at —
+delete a release's `raw/` shards after its ingest and graph builds carry on.
+`download.json` lives in the release dir beside the shards it tracks, so
+discarding a release's raw subtree discards its checkpoint too, and a later
 re-download starts clean rather than trusting a record of files that are gone.
 
 Each release is isolated so a fresh monthly pull downloads and ingests alongside
@@ -300,11 +296,9 @@ release's papers — ~10–15 minutes; watch DuckDB's progress bar — needing o
 the parquet root, so the raw shards can be long gone. Rerunning it on a
 clustered release is a fast no-op.
 
-Point `config.storage.s2.raw` and `.parquet` at drives **outside the repo** first
-(e.g. `{"raw": "E:\\s2corpus", "parquet": "D:\\s2corpus"}`, or the same directory
-twice if one drive holds everything); leave `parquet` `null` and the app just uses
-the live S2 path. `download` needs only `raw`, `activate` only `parquet`, `ingest`
-both.
+Point `config.storage.s2_corpus` at a drive **outside the repo** first (e.g.
+`"E:\\s2corpus"`); leave it `null` and the app just uses the live S2 path.
+Every corpus command reads and writes under this one root.
 
 ## Design decisions worth knowing
 

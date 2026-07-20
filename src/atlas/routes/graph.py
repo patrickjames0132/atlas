@@ -53,7 +53,7 @@ def _requested_provider() -> Provider:
 
     Reads the ``provider`` query arg (the header dropdown's choice) and validates
     it through the shared ``graph_service.resolve_provider`` — a stale/forged
-    value degrades to ``config.graph.default_provider`` rather than erroring.
+    value degrades to ``config.providers.default_provider`` rather than erroring.
 
     Returns:
         ``"s2"`` or ``"openalex"``.
@@ -87,7 +87,7 @@ def api_graph() -> ResponseReturnValue:
     Query args:
         seed: An arXiv id, a pasted abs/pdf URL, or a raw provider node id.
         provider: ``s2`` or ``openalex`` — which backend to build from (defaults
-            to ``config.graph.default_provider``).
+            to ``config.providers.default_provider``).
         refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
 
     Returns:
@@ -177,7 +177,7 @@ def api_graph_stream() -> ResponseReturnValue:
     Query args:
         seed: An arXiv id, a pasted abs/pdf URL, or a raw provider node id.
         provider: ``s2`` or ``openalex`` — which backend to build from (defaults
-            to ``config.graph.default_provider``).
+            to ``config.providers.default_provider``).
         refresh: Truthy (``1``/``true``/``yes``) bypasses the cached snapshot.
 
     Returns:
@@ -209,7 +209,7 @@ def api_paper(paper_ref: str) -> ResponseReturnValue:
 
     Query args:
         provider: ``s2`` or ``openalex`` (defaults to
-            ``config.graph.default_provider``).
+            ``config.providers.default_provider``).
 
     Returns:
         The JSON node details on success; ``{error}`` with HTTP 404 when the
@@ -319,7 +319,7 @@ def api_figures(paper_ref: str) -> Response:
 
     Query args:
         provider: ``s2`` or ``openalex`` — who to ask for the OA-PDF URL on
-            a cache miss (defaults to ``config.graph.default_provider``).
+            a cache miss (defaults to ``config.providers.default_provider``).
 
     Returns:
         JSON ``{available, figures: [{image, caption}]}``. Papers with

@@ -17,10 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from atlas.config import S2CorpusStorage, config
+from atlas.config import config
 from atlas.integrations.semantic_scholar.corpus import ingest
 from atlas.integrations.semantic_scholar.corpus.paths import (
-    parquet_root,
+    corpus_root,
     release_paths,
     write_current_release,
 )
@@ -83,15 +83,10 @@ def synthetic_corpus(monkeypatch, tmp_path):
     actual corpus. :data:`RELEASE_ID` is a plausible real release id, so it
     collides rather than landing somewhere obvious.
 
-    Separate temp roots, not one: the split is the real layout, and using one dir
-    for both would let a path bug that conflates them pass here.
-
     Returns:
         The activated release id.
     """
-    monkeypatch.setattr(config.storage, "s2", S2CorpusStorage(
-        raw=tmp_path / "s2corpus-raw", parquet=tmp_path / "s2corpus-parquet"
-    ))
+    monkeypatch.setattr(config.storage, "s2_corpus", tmp_path / "s2corpus")
     paths = release_paths(RELEASE_ID)
     # Hard guard, and not theoretical: this fixture once wrote its synthetic
     # release into the machine's real (mid-ingest) corpus, because `ingest_release`
@@ -105,5 +100,5 @@ def synthetic_corpus(monkeypatch, tmp_path):
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations000.gz", CITATIONS)
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations001.gz", CITATIONS_SECOND_BATCH)
     ingest.ingest_release(RELEASE_ID)
-    write_current_release(parquet_root(), RELEASE_ID)  # CURRENT lives with the data
+    write_current_release(corpus_root(), RELEASE_ID)  # CURRENT lives with the data
     return RELEASE_ID

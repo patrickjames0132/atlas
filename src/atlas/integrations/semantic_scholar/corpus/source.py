@@ -471,7 +471,7 @@ class DuckDBCitationSource:
 def active_source() -> DuckDBCitationSource | None:
     """The corpus source for the active release, or None when unavailable.
 
-    Reads **only** ``storage.s2.parquet`` — ``CURRENT`` lives there beside the
+    Reads ``storage.s2_corpus`` — ``CURRENT`` lives there beside the
     data it names, so serving needs nothing from the raw root (that drive can be
     absent, or its shards deleted after ingest).
 
@@ -483,7 +483,7 @@ def active_source() -> DuckDBCitationSource | None:
     Returns:
         A ready :class:`DuckDBCitationSource`, or None.
     """
-    root = corpus_paths.parquet_root()
+    root = corpus_paths.corpus_root()
     if root is None or not root.exists():
         return None
     release_id = read_current_release(root)

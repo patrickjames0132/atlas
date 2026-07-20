@@ -55,7 +55,7 @@ def test_graph_normalizes_pasted_urls_and_threads_the_provider(client, monkeypat
 
 
 def test_graph_invalid_provider_falls_back_to_default(client, monkeypatch):
-    """A missing / bogus provider degrades to config.graph.default_provider."""
+    """A missing / bogus provider degrades to config.providers.default_provider."""
     seen = {}
 
     def fake_build(seed, provider="s2", refresh=False):
@@ -63,7 +63,7 @@ def test_graph_invalid_provider_falls_back_to_default(client, monkeypatch):
         return make_graph()
 
     monkeypatch.setattr(graph_routes.graph_service, "build_graph", fake_build)
-    monkeypatch.setattr(config.graph, "default_provider", "s2")
+    monkeypatch.setattr(config.providers, "default_provider", "s2")
     client.get("/api/graph?seed=1312.5602&provider=bogus")
     assert seen["provider"] == "s2"
 

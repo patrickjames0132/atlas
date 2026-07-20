@@ -35,15 +35,18 @@ def relations(**overrides):
 
 def test_active_source_none_when_corpus_off():
     """With no corpus configured (the autouse default), there's no source."""
-    assert config.storage.s2.parquet is None
+    assert config.storage.s2_corpus is None
     assert source.active_source() is None
 
 
-def test_active_source_needs_only_the_parquet_root(synthetic_corpus, monkeypatch):
-    """Serving must not depend on the raw drive: CURRENT lives beside the Parquet,
-    so a machine whose shards are deleted (or whose download drive is absent)
-    keeps serving."""
-    monkeypatch.setattr(config.storage.s2, "raw", None)
+def test_active_source_survives_deleted_shards(synthetic_corpus):
+    """Serving must not depend on the raw shards: CURRENT lives beside the
+    Parquet, so a machine whose shards are deleted after ingest keeps serving."""
+    import shutil
+
+    from atlas.integrations.semantic_scholar.corpus.paths import release_paths
+
+    shutil.rmtree(release_paths(synthetic_corpus).raw)
     assert source.active_source() is not None
     landmark, _latest = relations()
     assert [entry["node"]["id"] for entry in landmark] == ["CorpusId:2", "CorpusId:4"]

@@ -19,7 +19,7 @@ import math
 import pytest
 from pydantic_ai import models as ai_models
 
-from atlas.config import S2CorpusStorage, config
+from atlas.config import config
 from atlas.services.sources import embeddings
 
 # Hard guard: no live LLM calls, ever. Any agent run that reaches a real model
@@ -45,7 +45,7 @@ def _isolate(monkeypatch, tmp_path):
     pointing both at its own temp dir (see that package's conftest).
     """
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
-    monkeypatch.setattr(config.storage, "s2", S2CorpusStorage())
+    monkeypatch.setattr(config.storage, "s2_corpus", None)
     monkeypatch.setattr(config.providers.s2, "min_interval", 0.0)
     monkeypatch.setattr(config.providers.openalex, "min_interval", 0.0)
 

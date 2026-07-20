@@ -16,10 +16,10 @@ from pathlib import Path
 
 import pytest
 
-from atlas.config import S2CorpusStorage, config
+from atlas.config import config
 from atlas.integrations.semantic_scholar.corpus import ingest
 from atlas.integrations.semantic_scholar.corpus.paths import (
-    parquet_root,
+    corpus_root,
     release_paths,
     write_current_release,
 )
@@ -73,7 +73,7 @@ def write_gzip_jsonl(path: Path, rows: list[dict]) -> None:
 def synthetic_corpus(monkeypatch, tmp_path):
     """Ingest the synthetic release into a temp corpus tree and activate it.
 
-    Repoints **both** corpus roots into ``tmp_path`` and hard-verifies the paths
+    Repoints the corpus root into ``tmp_path`` and hard-verifies the paths
     the ingest will actually use resolve inside it — the sibling fixture once
     wrote a synthetic release into the machine's real corpus, so the guard is
     load-bearing, not paranoia.
@@ -81,9 +81,7 @@ def synthetic_corpus(monkeypatch, tmp_path):
     Returns:
         The activated release id.
     """
-    monkeypatch.setattr(config.storage, "s2", S2CorpusStorage(
-        raw=tmp_path / "s2corpus-raw", parquet=tmp_path / "s2corpus-parquet"
-    ))
+    monkeypatch.setattr(config.storage, "s2_corpus", tmp_path / "s2corpus")
     paths = release_paths(RELEASE_ID)
     for path in (paths.raw, paths.parquet):
         assert path.is_relative_to(tmp_path), f"corpus test would write outside tmp: {path}"
@@ -98,5 +96,5 @@ def synthetic_corpus(monkeypatch, tmp_path):
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations000.gz", CITATIONS)
     write_gzip_jsonl(paths.raw_dataset("citations") / "citations001.gz", CITATIONS_SECOND_BATCH)
     ingest.ingest_release(RELEASE_ID)
-    write_current_release(parquet_root(), RELEASE_ID)
+    write_current_release(corpus_root(), RELEASE_ID)
     return RELEASE_ID

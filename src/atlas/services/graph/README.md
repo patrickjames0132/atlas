@@ -49,7 +49,7 @@ merged with `max` counts and cross-source id dedup). A single provider means one
 citation-count scale (node sizes are finally comparable across relations) and no
 cross-source identity glue. The **Similar relation was retired** from the build
 entirely (the S2 recommendations client lives on only for the researcher's
-`expand_node`). `provider` defaults to `config.graph.default_provider` when
+`expand_node`). `provider` defaults to `config.providers.default_provider` when
 omitted; `resolve_provider(raw)` is the shared validator (unknown → default) used
 by both the graph and search routes.
 
@@ -95,7 +95,7 @@ cache hit, a deliberate trade.
 ## How it works, step by step
 
 1. **Blank-guard, resolve provider, cache.** Empty seed → `None`. `provider`
-   defaults to `config.graph.default_provider`. The cache is keyed by
+   defaults to `config.providers.default_provider`. The cache is keyed by
    **`graph:<provider>:<seed_ref>`** — an S2 graph and an OpenAlex graph for the
    same paper are separate snapshots and must never collide. The *whole assembled
    snapshot* is cached (TTL `config.graph.cache_ttl`), so re-opening a paper is

@@ -95,7 +95,7 @@ the two studies' pools are comparable), the collector:
 ## Running it
 
 Needs the ingested corpus, so it runs **on the corpus machine** (the box whose
-`config.storage.s2.parquet` points at the Parquet root):
+`config.storage.s2_corpus` points at the corpus root):
 
 ```bash
 uv run python -m ml_pipelines.live_pool_validation.collect

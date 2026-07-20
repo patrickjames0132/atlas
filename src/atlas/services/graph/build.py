@@ -57,7 +57,7 @@ from .model import Counts, Edge, Graph, Node, Seed
 log = logging.getLogger(__name__)
 
 #: The academic-data providers a graph can be built from — one per graph, chosen
-#: by the caller (the header dropdown), defaulting to ``config.graph.default_provider``.
+#: by the caller (the header dropdown), defaulting to ``config.providers.default_provider``.
 Provider = Literal["s2", "openalex"]
 
 
@@ -68,7 +68,7 @@ def resolve_provider(raw: str | None) -> Provider:
     every route that keys off the provider (the graph build and the provider-
     scoped local cache search), so they can't drift on what counts as valid.
     Anything unrecognized (missing, blank, stale, or forged) degrades to
-    ``config.graph.default_provider`` rather than erroring.
+    ``config.providers.default_provider`` rather than erroring.
 
     Args:
         raw: The provider string as received (e.g. a request query arg), or None.
@@ -81,7 +81,7 @@ def resolve_provider(raw: str | None) -> Provider:
         return "s2"
     if normalized == "openalex":
         return "openalex"
-    return config.graph.default_provider
+    return config.providers.default_provider
 
 
 #: Where an s2 graph's citer relations came from — mirrors ``Graph.citation_source``.
@@ -271,7 +271,7 @@ def build_graph(
             journal paper with no arXiv id — so visual traversal never
             dead-ends.
         provider: Which academic-data backend to build from (see
-            :data:`Provider`). Defaults to ``config.graph.default_provider``.
+            :data:`Provider`). Defaults to ``config.providers.default_provider``.
         refresh: When True, bypass the cached snapshot and rebuild from the
             provider.
         on_progress: Optional coarse-stage progress callback (see
@@ -300,7 +300,7 @@ def build_graph(
     seed_ref = (seed_ref or "").strip()
     if not seed_ref:
         return None
-    provider = provider or config.graph.default_provider
+    provider = provider or config.providers.default_provider
 
     # --- Cache: the whole assembled snapshot, keyed by provider AND the raw seed
     # reference — an S2 graph and an OpenAlex graph for the same paper are

@@ -86,7 +86,7 @@ truth, not a per-feature dependency. By subsystem:
 - **Semantic Scholar client** (`integrations/semantic_scholar/`) reads
   `config.providers.s2.*` (api key, URLs, timeout, throttle interval) to build every
   HTTP request and self-throttle. Its `corpus/` sub-package reads
-  `config.storage.s2_corpus_dir` — the offline citations corpus's root (outside
+  `config.storage.s2_corpus` — the offline citations corpus's root (outside
   the repo); unset means the corpus is off and the live citer path is used.
 - **Graph assembly** (`services/graph/`) reads `config.graph.cache_ttl` to
   decide how long to trust a cached snapshot. Neighborhood size is **not**

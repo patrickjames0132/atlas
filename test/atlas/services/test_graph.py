@@ -280,8 +280,8 @@ def test_refresh_bypasses_cache(fake_s2):
 
 
 def test_defaults_to_config_provider(fake_s2, monkeypatch):
-    """An omitted provider falls back to config.graph.default_provider."""
-    monkeypatch.setattr(config.graph, "default_provider", "s2")
+    """An omitted provider falls back to config.providers.default_provider."""
+    monkeypatch.setattr(config.providers, "default_provider", "s2")
     graph = build.build_graph("1706.03762")
     assert "cite1" in {node.id for node in graph.nodes}  # took the S2 path
 
@@ -289,7 +289,7 @@ def test_defaults_to_config_provider(fake_s2, monkeypatch):
 def test_resolve_provider_validates_and_defaults(monkeypatch):
     """resolve_provider normalizes valid names and degrades anything else to the
     configured default — the one place provider strings are trusted."""
-    monkeypatch.setattr(config.graph, "default_provider", "s2")
+    monkeypatch.setattr(config.providers, "default_provider", "s2")
     assert build.resolve_provider("openalex") == "openalex"
     assert build.resolve_provider("S2") == "s2"  # case-normalized
     assert build.resolve_provider("  openalex  ") == "openalex"  # trimmed

@@ -1,39 +1,39 @@
-"""On-disk layout of the offline Semantic Scholar corpus — two roots, one per half.
+"""On-disk layout of the offline Semantic Scholar corpus — one root, per-release subtrees.
 
-The corpus has two halves with **opposite access patterns**, so they get a root
-each (``config.storage.s2.raw`` / ``config.storage.s2.parquet``). Each holds one
-subtree per monthly Datasets **release**, and owns its own state file:
+Everything lives under the single ``config.storage.s2_corpus`` root: each
+monthly Datasets **release** gets its own subtree holding both halves (the
+downloaded shards and the ingested Parquet), and the ``CURRENT`` pointer sits
+at the top:
 
-    <storage.s2.raw>/                    the downloads — write once, read once
+    <storage.s2_corpus>/
+      CURRENT                            <- text file: the active release_id
       releases/2026-07-07/
         raw/papers/*.gz                  <- downloaded JSONL.gz shards
         raw/citations/*.gz
         download.json                    <- per-shard download checkpoint
-
-    <storage.s2.parquet>/                what gets queried
-      CURRENT                            <- text file: the active release_id
-      releases/2026-07-07/
         parquet/papers/*.parquet         <- ingested, queryable
         parquet/arxiv_index/*.parquet
         parquet/citations/bucket=NNN/*.parquet
 
-**``CURRENT`` lives with the Parquet, not the shards** — it names an *ingested*
-release, so it belongs beside the data it points at. The payoff is that the
-parquet root is the app's **only serving dependency**: unplug the raw drive and
-graph builds carry on. (It lived on the raw side until v5.7.0, which meant
-serving needed both drives just to read a one-line pointer.)
+(History: the halves used to have a root each — ``storage.s2.raw`` /
+``storage.s2.parquet`` — so the write-once shards could live on a slow big
+drive while the queried Parquet got the NVMe. Recombined 2026-07-19: one
+drive holds everything in practice, and the split was config surface nobody
+used. The per-release ``raw/`` and ``parquet/`` subtrees were already shaped
+for this, so a machine whose two roots pointed at one directory migrates with
+a config edit alone. A release's ``raw/`` shards remain deletable the moment
+its ingest succeeds — a re-ingest just means a re-download.)
 
-Isolating each release means a fresh monthly pull downloads and ingests alongside
-the live one, and only flips ``CURRENT`` once it's complete. That guard has a
-known hole — re-ingesting a release ``CURRENT`` *already* points at exposes the
-half-built state live; move ``CURRENT`` aside first (see this package's README).
+Isolating each release means a fresh monthly pull downloads and ingests
+alongside the live one, and only flips ``CURRENT`` once it's complete. That
+guard has a known hole — re-ingesting a release ``CURRENT`` *already* points
+at exposes the half-built state live; move ``CURRENT`` aside first (see this
+package's README).
 
-Both roots may be the same directory when one drive holds everything; the raw
-root may be null on a machine that only serves. Every path derives from a
-:class:`ReleasePaths`, so relocating either half (a different drive, or the
-eventual S3 prefix) is a config change. Nothing here touches the network or
-DuckDB — it's pure path algebra, safe to import and call without the corpus
-present.
+Every path derives from a :class:`ReleasePaths`, so relocating the corpus (a
+different drive, or the eventual S3 prefix) is a config change. Nothing here
+touches the network or DuckDB — it's pure path algebra, safe to import and
+call without the corpus present.
 """
 
 from __future__ import annotations
@@ -50,74 +50,58 @@ from ....config import config
 DATASETS: tuple[str, ...] = ("papers", "citations")
 
 #: Filename of the pointer naming the active (fully ingested) release. Lives at
-#: the **parquet** root, beside the data it names. A plain text file so it's
+#: the corpus root, beside the data it names. A plain text file so it's
 #: trivially inspectable and editable — parking it is how you take a corpus
 #: offline without deleting anything.
 CURRENT_FILE = "CURRENT"
 
 
-def raw_root() -> Path | None:
-    """Where downloaded shards live, or None when this machine doesn't download.
+def corpus_root() -> Path | None:
+    """The corpus's one root, or None when this machine runs without a corpus.
 
     Returns:
-        ``config.storage.s2.raw`` (already anchored to the repo root if it was
-        relative), or None. Only ``download``/``ingest`` need it — serving
-        doesn't.
+        ``config.storage.s2_corpus`` (already anchored to the repo root if it
+        was relative), or None — in which case the app falls back to the live
+        S2 citation endpoint.
     """
-    return config.storage.s2.raw
-
-
-def parquet_root() -> Path | None:
-    """Where the ingested Parquet and ``CURRENT`` live — the serving root.
-
-    Returns:
-        ``config.storage.s2.parquet`` (anchored the same way), or None when the
-        corpus is off, in which case the app falls back to the live S2 citation
-        endpoint.
-    """
-    return config.storage.s2.parquet
+    return config.storage.s2_corpus
 
 
 @dataclass(frozen=True)
 class ReleasePaths:
-    """Every path within one Datasets release, across both roots.
+    """Every path within one Datasets release under the corpus root.
 
     Frozen and cheap to build — construct one per operation rather than caching
     it, so a config change (or a test's temp dir) is always honored. Prefer
-    :func:`release_paths`, which wires both roots from config.
+    :func:`release_paths`, which wires the root from config.
 
-    Each side may be absent: a serving-only machine has no ``raw_root``, and a
-    download-only one has no ``parquet_root``. Touching the paths of an
-    unconfigured half raises rather than silently inventing a location.
+    The root may be absent (a machine without a corpus); touching any path
+    then raises rather than silently inventing a location.
     """
 
     release_id: str
-    raw_root: Path | None = None
-    parquet_root: Path | None = None
+    root: Path | None = None
 
-    def _root(self, which: str, root: Path | None) -> Path:
-        """The release's subtree under one root, or a clear error when unset.
-
-        Args:
-            which: The config key to name in the error (``raw`` / ``parquet``).
-            root: The configured root, or None.
+    @property
+    def _release_dir(self) -> Path:
+        """The release's subtree, or a clear error when the corpus is unset.
 
         Returns:
             ``<root>/releases/<release_id>``.
 
         Raises:
-            ValueError: When that half isn't configured — better than quietly
-                defaulting to the other root, which is how Parquet once ended up
-                written to a drive nobody asked for.
+            ValueError: When ``config.storage.s2_corpus`` isn't set — better
+                than quietly defaulting somewhere, which is how Parquet once
+                ended up written to a drive nobody asked for.
         """
-        if root is None:
-            raise ValueError(f"config.storage.s2.{which} is not set")
-        return root / "releases" / self.release_id
+        if self.root is None:
+            raise ValueError("config.storage.s2_corpus is not set")
+        return self.root / "releases" / self.release_id
 
     @property
     def raw(self) -> Path:
         """Directory holding the downloaded, un-ingested ``.gz`` shards."""
-        return self._root("raw", self.raw_root) / "raw"
+        return self._release_dir / "raw"
 
     def raw_dataset(self, dataset: str) -> Path:
         """The raw-shard directory for one dataset (``papers`` / ``citations``)."""
@@ -126,7 +110,7 @@ class ReleasePaths:
     @property
     def parquet(self) -> Path:
         """Directory holding the ingested, queryable Parquet."""
-        return self._root("parquet", self.parquet_root) / "parquet"
+        return self._release_dir / "parquet"
 
     def parquet_dataset(self, dataset: str) -> Path:
         """The Parquet directory for one dataset (``papers`` / ``citations``)."""
@@ -136,35 +120,27 @@ class ReleasePaths:
     def download_state(self) -> Path:
         """The per-shard download checkpoint (JSON), enabling resume.
 
-        Beside the shards it tracks, so deleting a raw root discards its
-        checkpoint with it — and a later re-download starts clean rather than
-        believing shards that are gone are still on disk.
+        Beside the shards it tracks, so deleting a release's raw subtree
+        discards its checkpoint with it — and a later re-download starts clean
+        rather than believing shards that are gone are still on disk.
         """
-        return self._root("raw", self.raw_root) / "download.json"
+        return self._release_dir / "download.json"
 
 
 def release_paths(release_id: str) -> ReleasePaths:
     """One release's paths, wired from config — how callers should build them.
 
-    Reads *both* roots in one place, so no caller has to remember there are two.
-    Building :class:`ReleasePaths` by hand is easy to get subtly wrong: each root
-    defaults to None, and the half you forget raises only when something touches
-    it. Always returns paths — whether a given half is *usable* is the caller's
-    question, asked by touching it (or by checking the root directly).
-
     Args:
         release_id: The release the paths are for.
 
     Returns:
-        The release's paths across both configured roots.
+        The release's paths under the configured corpus root.
     """
-    return ReleasePaths(
-        release_id=release_id, raw_root=raw_root(), parquet_root=parquet_root()
-    )
+    return ReleasePaths(release_id=release_id, root=corpus_root())
 
 
 def current_release_file(root: Path) -> Path:
-    """The ``CURRENT`` pointer's path under a **parquet** root."""
+    """The ``CURRENT`` pointer's path under the corpus root."""
     return root / CURRENT_FILE
 
 
@@ -172,7 +148,7 @@ def read_current_release(root: Path) -> str | None:
     """The active (fully ingested) release id, or None when none is marked.
 
     Args:
-        root: The **parquet** root — ``CURRENT`` sits beside the data it names.
+        root: The corpus root — ``CURRENT`` sits beside the data it names.
 
     Returns:
         The release id in ``CURRENT``, stripped of whitespace, or None when the
@@ -189,7 +165,7 @@ def write_current_release(root: Path, release_id: str) -> None:
     """Point ``CURRENT`` at a release, marking it the one the app queries.
 
     Args:
-        root: The **parquet** root (created if missing).
+        root: The corpus root (created if missing).
         release_id: The release id to activate — written verbatim.
     """
     root.mkdir(parents=True, exist_ok=True)

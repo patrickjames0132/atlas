@@ -1,12 +1,10 @@
 {
   "storage": {
     "data_dir": "data",
-    "s2": {
-      "raw": null,
-      "parquet": null
-    }
+    "s2_corpus": null
   },
   "providers": {
+    "default_provider": "s2",
     "s2": {
       "api_key": "",
       "graph_url": "https://api.semanticscholar.org/graph/v1",
@@ -23,7 +21,6 @@
     }
   },
   "graph": {
-    "default_provider": "s2",
     "cache_ttl": 86400
   },
   "sources": {

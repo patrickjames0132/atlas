@@ -464,13 +464,12 @@ def ingest_release(
         CorpusError: When the corpus root is unset or a dataset has no downloaded
             shards to ingest.
     """
-    from .paths import parquet_root, raw_root, release_paths
+    from .paths import corpus_root, release_paths
 
     # Ingest is the one operation that needs BOTH halves: it reads shards from the
     # raw root and writes Parquet to the parquet root.
-    for key, root in (("raw", raw_root()), ("parquet", parquet_root())):
-        if root is None:
-            raise CorpusError(f"config.storage.s2.{key} is not set — nothing to ingest")
+    if corpus_root() is None:
+        raise CorpusError("config.storage.s2_corpus is not set — nothing to ingest")
     paths = release_paths(release_id)
     connection = _connect()
 
@@ -531,10 +530,10 @@ def compact_release(release_id: str) -> bool:
         CorpusError: When the parquet root is unset or the release has no
             ingested papers Parquet.
     """
-    from .paths import parquet_root, release_paths
+    from .paths import corpus_root, release_paths
 
-    if parquet_root() is None:
-        raise CorpusError("config.storage.s2.parquet is not set — no corpus to compact")
+    if corpus_root() is None:
+        raise CorpusError("config.storage.s2_corpus is not set — no corpus to compact")
     paths = release_paths(release_id)
     papers_dir = paths.parquet_dataset("papers")
     if not papers_dir.exists():

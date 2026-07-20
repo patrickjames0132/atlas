@@ -76,7 +76,7 @@ def api_search() -> ResponseReturnValue:
             resolves to exactly that paper; filters don't apply to it).
             Blank returns an empty result rather than an error.
         provider: ``s2`` or ``openalex`` — which backend to search (matches the
-            graph provider; defaults to ``config.graph.default_provider``).
+            graph provider; defaults to ``config.providers.default_provider``).
         limit: Maximum papers (default 25, clamped to 1–100).
         year_from: Earliest publication year (inclusive; optional).
         year_to: Latest publication year (inclusive; optional).
@@ -129,7 +129,7 @@ def local_search_route() -> Response:
         q: The search text. Blank returns an empty result.
         limit: Maximum hits (default 10, clamped to 1–50).
         provider: ``s2`` or ``openalex`` — only that backend's cached snapshots
-            are searched (defaults to ``config.graph.default_provider``), so a
+            are searched (defaults to ``config.providers.default_provider``), so a
             hit's "instant" badge reflects the provider actually selected.
         year_from: Earliest publication year (inclusive; optional).
         year_to: Latest publication year (inclusive; optional). No field

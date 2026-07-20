@@ -8,7 +8,7 @@ import { readSSE } from './sse'
 /**
  * The academic-data backend a graph is built from. Chosen per graph in the
  * header dropdown and sent on every graph request; the server defaults to
- * `config.graph.default_provider` when it's omitted. A graph is built from ONE
+ * `config.providers.default_provider` when it's omitted. A graph is built from ONE
  * provider end-to-end — no cross-source hybrid.
  */
 export type Provider = 's2' | 'openalex'

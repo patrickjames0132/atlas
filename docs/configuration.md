@@ -16,6 +16,12 @@ service (`providers.s2`, `providers.openalex`) — grouped the same way
 `llm.providers` groups the LLM vendors (which live separately under `llm`,
 because those are chat/tool-use credentials, not graph data sources).
 
+- **`default_provider: "s2"`** — which backend builds a graph when the request
+  doesn't name one; the initial state of the header's provider dropdown, which
+  overrides it per graph. Lives here beside the services it chooses between
+  (moved out of `graph` 2026-07-19). See `config.py` for the s2-vs-openalex
+  trade-off.
+
 ### `providers.s2` — Semantic Scholar
 
 - **`min_interval: 1.1`** — even an authenticated API key only allows ~1
@@ -36,34 +42,25 @@ because those are chat/tool-use credentials, not graph data sources).
   (id/DOI lookups are free either way — see `config.py` for the pricing
   notes, verified live 2026-07-09).
 
-## `storage.s2` — where the citations corpus lives
+## `storage.s2_corpus` — where the citations corpus lives
 
-Two roots, because the corpus's halves have **opposite access patterns**. Both
-default to `null` (corpus off — the s2 provider uses the live citation endpoint).
-See [`corpus/README.md`](../src/atlas/integrations/semantic_scholar/corpus/README.md).
-
-- **`s2.raw`** — the downloaded `.gz` shards (~400 GB/release) plus their
-  `download.json` checkpoint. Written once, read once, **sequentially** — which
-  even a 5400-RPM drive does perfectly well, so this is where a big slow disk
-  earns its keep. Deletable the moment an ingest succeeds; a re-ingest just means
-  a re-download. `null` on a machine that only serves.
-- **`s2.parquet`** — the ingested working set (~50 GB) **and the `CURRENT`
-  pointer**. It absorbs the ingest's ~400k partitioned writes and then serves every
-  graph build, so it wants the fast drive: measured on one citations shard,
-  **20.6s on NVMe vs 98.2s on an SMR HDD** — 2.2h vs 10.6h for a full release.
-  `null` turns the corpus off.
-
-**`parquet` is the app's only serving dependency.** `CURRENT` lives beside the data
-it names, so once a release is ingested you can pull the raw drive (or delete its
-shards) and graph builds carry on. `raw` is an operator concern — only
-`atlas corpus download`/`ingest` read it.
-
-Point both at the same directory when one drive holds everything; there's no
-special case for it. A typical split:
+One root for everything: the downloaded `.gz` shards (~400 GB/release, deletable
+once their ingest succeeds), the ingested Parquet working set (~50 GB), and the
+`CURRENT` pointer, each release in its own subtree. Defaults to `null` (corpus
+off — the s2 provider uses the live citation endpoint). Point it at a roomy
+drive **outside the repo**:
 
 ```json
-"s2": { "raw": "E:\\s2corpus", "parquet": "D:\\s2corpus" }
+"s2_corpus": "E:\\s2corpus"
 ```
+
+(History: this was two roots — `s2.raw` / `s2.parquet` — so the write-once
+shards could sit on a slow big drive while the queried Parquet got the NVMe;
+measured 20.6s vs 98.2s per shard, 2.2h vs 10.6h per release. Recombined
+2026-07-19: in practice one drive held both, and the split was config surface
+nobody used. If ingest speed ever matters again, the fix is a fast drive for
+the whole root.) See
+[`corpus/README.md`](../src/atlas/integrations/semantic_scholar/corpus/README.md).
 
 ## `graph` — neighborhood size
 
@@ -93,11 +90,12 @@ mode will hand this pair to the user *per request*, not through this file.)
 
 What remains configurable:
 
-- **`default_provider: "s2"`** — see `config.py`; the header dropdown
-  overrides it per graph.
 - **`cache_ttl: 86400`** (1 day) — citation graphs change slowly; a day-long
   cache keeps repeat exploration and backtracking instant without
   re-hitting S2.
+
+(The default provider lives with the providers it chooses between —
+`providers.default_provider`, above — not here.)
 
 ## `llm` — everything about talking to LLMs
 

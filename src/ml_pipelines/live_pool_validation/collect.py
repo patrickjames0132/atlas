@@ -22,7 +22,7 @@ by side:
   pool's shipped landmarks (``bands.earliest_band_year``).
 
 Runs on the machine that holds the ingested corpus (the parquet root configured
-in ``config.storage.s2.parquet``); everything but one OpenAlex id-mapping fetch
+in ``config.storage.s2_corpus``); everything but one OpenAlex id-mapping fetch
 per seed is local. Run from the repo root:
 
     uv run python -m ml_pipelines.live_pool_validation.collect
@@ -88,12 +88,12 @@ class CorpusReader:
             RuntimeError: When no ingested corpus release is active here — the
                 collector must run on the corpus machine.
         """
-        root = corpus_paths.parquet_root()
+        root = corpus_paths.corpus_root()
         release_id = read_current_release(root) if root and root.exists() else None
         if not release_id:
             raise RuntimeError(
                 "no active corpus release — run this collector on the machine whose "
-                "config.storage.s2.parquet holds the ingested corpus"
+                "config.storage.s2_corpus holds the ingested corpus"
             )
         paths = corpus_paths.release_paths(release_id)
         self.release_id = release_id

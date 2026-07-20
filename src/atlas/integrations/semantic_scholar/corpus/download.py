@@ -28,7 +28,7 @@ from typing import Callable
 
 from . import datasets
 from .datasets import CorpusError
-from .paths import DATASETS, ReleasePaths, raw_root, release_paths
+from .paths import DATASETS, ReleasePaths, corpus_root, release_paths
 
 log = logging.getLogger(__name__)
 
@@ -136,8 +136,8 @@ def download_release(
         CorpusError: When the corpus root is unconfigured, or a shard fails even
             after refreshing its URL.
     """
-    if raw_root() is None:
-        raise CorpusError("config.storage.s2.raw is not set — nowhere to download to")
+    if corpus_root() is None:
+        raise CorpusError("config.storage.s2_corpus is not set — nowhere to download to")
     paths = release_paths(release_id)
     state = _load_state(paths)
 
