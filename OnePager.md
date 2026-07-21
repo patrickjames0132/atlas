@@ -560,6 +560,17 @@ optional, behind a key.
       picks. Touches `ui/theme.ts`'s `readStored` / `applyConfiguredDefault`
       rule. *(From the `todos.md` inbox, 2026-07-20.)*
 
+- [ ] **A startup discovery feed — hottest & latest papers** — the app opens to
+      a bare search box; give it a landing **feed of papers to click into**, with
+      a **tab switch** between *Hottest* (trending / recently most-cited) and
+      *Latest* (newest) across all fields. Clicking a paper seeds its graph, the
+      same as a search hit. **The hard part is the data, not the tabs:** neither
+      S2 nor OpenAlex exposes a plain "trending" endpoint, so *Hottest across all
+      fields* needs a defined signal (e.g. recent papers ranked by
+      citation-velocity, or a curated set) and *Latest* a cross-field recency
+      query — decide the source and its caching before building the UI. *(From
+      the `todos.md` inbox, 2026-07-20.)*
+
 ### Enhancements & tech debt
 
 - [ ] **Audit every constant in `src/` for config-knob-worthiness — then decide
@@ -728,6 +739,16 @@ optional, behind a key.
       licensing work (2026-07-20) — a public, timestamped PyPI release is also
       the prior-art defense discussed there. *(Raised 2026-07-20, deferred from
       the licensing pass.)*
+- [ ] **A build / deploy / release strategy** — the release ritual is ad-hoc and
+      manual (bump `pyproject.toml` → `uv lock` → tag → push; see `CLAUDE.md`),
+      and there's no deploy story at all. Define a real one: **CI** (run
+      `uv run nox` on push/PR so the gate can't be skipped), a **repeatable
+      build** (backend wheel + bundled frontend), how a **release** is cut and
+      published, and **where/how the service is deployed**. Fold **PyPI
+      publishing** in — the concrete packaging (distribution name, frontend
+      bundling) is the separate "Publish to PyPI" item above; this is the
+      surrounding automation. Likely staged: CI first, then release automation,
+      then deploy. *(From the `todos.md` inbox, 2026-07-20.)*
 
 ### Larger phases
 
