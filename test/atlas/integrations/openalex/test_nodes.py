@@ -1,7 +1,13 @@
-"""Normalizing an OpenAlex work into the app's node shape: id resolution,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Normalizing an OpenAlex work into the app's node shape: id resolution,
 inverted-index abstracts, arXiv-id extraction, and shape parity with S2.
 
 Pure functions — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

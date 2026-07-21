@@ -1,5 +1,12 @@
-"""The app factory: health, CORS scope, the upload cap, and the SPA
-serving/fallback/unbuilt behaviors."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The app factory: health, CORS scope, the upload cap, and the SPA
+serving/fallback/unbuilt behaviors.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

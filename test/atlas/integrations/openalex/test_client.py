@@ -1,7 +1,13 @@
-"""HTTP transport & URL building: credential params, 429/5xx backoff, error
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+HTTP transport & URL building: credential params, 429/5xx backoff, error
 wrapping, and the free id-lookup path.
 
 urlopen is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

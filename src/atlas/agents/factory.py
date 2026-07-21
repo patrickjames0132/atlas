@@ -1,4 +1,7 @@
-"""Turns ``config.llm`` entries into live PydanticAI model objects.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Turns ``config.llm`` entries into live PydanticAI model objects.
 
 Each sub-agent's ``main.py`` calls ``build_model(<its id>)`` to get the model
 its ``config.llm.agents`` entry names, and passes it to its ``pydantic_ai.
@@ -10,6 +13,9 @@ variables — and this app's config rule is *no env vars*: every credential
 lives in config.json, explicitly. So the provider is constructed by hand with
 the key from ``config.llm.providers``, and the ``"provider:model"`` string is
 only ever *parsed*, never handed to PydanticAI whole.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

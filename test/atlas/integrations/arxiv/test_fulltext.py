@@ -1,6 +1,12 @@
-"""fulltext: html_to_text extraction, and the cached get_fulltext() reader.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+fulltext: html_to_text extraction, and the cached get_fulltext() reader.
 
 client.fetch_html is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

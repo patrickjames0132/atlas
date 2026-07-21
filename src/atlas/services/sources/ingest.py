@@ -1,8 +1,14 @@
-"""Ingestion: chunk a source's text, embed it locally, and store it.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Ingestion: chunk a source's text, embed it locally, and store it.
 
 ``add_source`` is the core pipeline (chunk → embed → write to ``sources`` +
 ``chunks`` + ``chunks_vec`` in one transaction); ``ingest_pdf`` / ``ingest_url``
 are thin wrappers that extract the text first.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

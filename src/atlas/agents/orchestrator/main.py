@@ -1,4 +1,7 @@
-"""The orchestrator: one entry point for every teacher workflow.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The orchestrator: one entry point for every teacher workflow.
 
 Routes call ``run(intent, ...)`` with the UI's intent hint and get back the
 full typed event stream, always terminated by ``Done`` or ``Error`` — this
@@ -22,6 +25,9 @@ engaging only for ambiguous or multi-step asks), but every current entry
 point passes a known intent, so building the Agent now would be speculative
 LLM plumbing — the same call as the query-expansion seam in Phase 3. When a
 free-form entry point exists in the UI, the model half lands here.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

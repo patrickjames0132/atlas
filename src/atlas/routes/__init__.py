@@ -1,8 +1,14 @@
-"""The Flask API surface, split into one blueprint per concern.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The Flask API surface, split into one blueprint per concern.
 
 ``app.py`` calls :func:`register_blueprints` to wire them all onto the app.
 Each route module owns its endpoints and any small per-concern helpers (SSE
 framing, arXiv-id normalization) so the app factory stays thin.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

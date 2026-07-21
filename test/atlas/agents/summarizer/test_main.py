@@ -1,6 +1,13 @@
-"""The summarizer: the TL;DR flows through from the model's structured
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The summarizer: the TL;DR flows through from the model's structured
 output, the prompt carries the title and abstract, and every failure mode
-degrades to None (the route turns that into a visible error)."""
+degrades to None (the route turns that into a visible error).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

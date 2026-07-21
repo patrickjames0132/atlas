@@ -1,4 +1,11 @@
-"""node(): normalizing a raw S2 paper object into the app's graph-node shape."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+node(): normalizing a raw S2 paper object into the app's graph-node shape.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

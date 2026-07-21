@@ -1,5 +1,12 @@
-"""Recognizing arXiv ids: ID_RE, extraction from pasted text (extract_id),
-and whole-string discrimination (looks_arxiv)."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Recognizing arXiv ids: ID_RE, extraction from pasted text (extract_id),
+and whole-string discrimination (looks_arxiv).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

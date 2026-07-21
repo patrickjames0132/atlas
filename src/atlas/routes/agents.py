@@ -1,4 +1,7 @@
-"""AI-teacher routes: every workflow streams through the agents orchestrator.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+AI-teacher routes: every workflow streams through the agents orchestrator.
 
 POST /api/lecture      -> streamed AI lecture over the visible graph
 POST /api/ask          -> the research agent, streamed over the visible graph
@@ -13,6 +16,9 @@ two in-memory stores, one per chat, persisted only on success.
 
 (This module is ``routes/agents.py``, the route face of the ``agents``
 package — a deliberate name-cousin, different full paths.)
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

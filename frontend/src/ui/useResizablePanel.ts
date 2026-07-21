@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Drag-to-resize for a right-docked side panel, with the chosen width
  * remembered across sessions (localStorage).
  *
@@ -7,6 +10,9 @@
  * it *left* widens the panel, *right* narrows it. The hook owns only the width
  * number + the pointer bookkeeping; the caller renders the panel with
  * `style={{ width }}` and drops a handle element wired to `onHandlePointerDown`.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'

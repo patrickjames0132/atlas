@@ -1,6 +1,12 @@
-"""Ungrounded free-text search: the year-range filter and search_papers itself.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Ungrounded free-text search: the year-range filter and search_papers itself.
 
 client.request is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

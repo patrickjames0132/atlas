@@ -1,7 +1,13 @@
-"""client: the huggingface_hub paper_info wrapper (fetch_paper).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+client: the huggingface_hub paper_info wrapper (fetch_paper).
 
 The HfApi handle is faked directly — no network. Covers the happy path and the
 404-as-None / non-404-reraise translation that code_links relies on.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

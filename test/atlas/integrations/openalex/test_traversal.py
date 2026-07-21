@@ -1,7 +1,13 @@
-"""Seed resolution and citer traversal: resolve_work, resolve_seed_work,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Seed resolution and citer traversal: resolve_work, resolve_seed_work,
 references, citation_relations, citations, and the title sanitizer.
 
 client.request is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

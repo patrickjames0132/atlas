@@ -1,6 +1,13 @@
-"""The tutor: live traces and discoveries while it works, streamed answer
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The tutor: live traces and discoveries while it works, streamed answer
 tokens from the structured output, cited as reads + named indices, budget
-exhaustion steering, and the library-gated source tool."""
+exhaustion steering, and the library-gated source tool.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

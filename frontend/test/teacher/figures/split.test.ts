@@ -1,7 +1,13 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The inline-figure interleaver: `<<FIG n>>` markers pair with attached
  * figures, streaming tails are held back, and invented or missing slots
  * degrade cleanly.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

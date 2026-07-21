@@ -1,10 +1,16 @@
-"""The lecturer's words and knobs: its agent id, skills, prompt, the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The lecturer's words and knobs: its agent id, skills, prompt, the
 mode-intent paragraphs, the frontier recency window, and the beat-count
 bounds. Model choice lives in its ``config.llm.agents`` entry; the knobs
 live in that entry's ``extras``, validated at load against
 ``config.LecturerExtras`` — so the values read here are already complete,
 in range, and ordered (min_beats <= max_beats). This module reads them; it
 no longer range-checks them.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

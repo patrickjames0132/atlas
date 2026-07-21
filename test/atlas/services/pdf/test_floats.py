@@ -1,8 +1,14 @@
-"""Caption-anchored float mining over synthetic, in-test PDFs.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Caption-anchored float mining over synthetic, in-test PDFs.
 
 Each test builds a tiny PDF with pymupdf itself — vector drawings, hairline
 rules, and caption text laid out like a real paper — so extraction runs the
 real geometry pipeline with zero network and zero fixture files.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

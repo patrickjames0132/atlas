@@ -1,4 +1,7 @@
-"""The offline Semantic Scholar citations corpus — S2's *real* Field-Landmarks fix.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The offline Semantic Scholar citations corpus — S2's *real* Field-Landmarks fix.
 
 S2's live citation endpoint is newest-first, unsorted, and capped at a ~10k
 offset, so a heavily-cited seed's most-cited (landmark) citers are simply
@@ -23,6 +26,9 @@ Split by concern:
 The download/ingest steps are operator actions driven by the ``atlas corpus``
 CLI; only ``source`` is on a request path. See ``README.md`` for the full
 workflow and the AWS (Airflow/S3/Athena) endgame this prototypes.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

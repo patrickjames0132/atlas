@@ -1,4 +1,14 @@
 /// <reference types="vitest/config" />
+/**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
+ * Vite + Vitest configuration — the React plugin, the dev-server proxy to the
+ * Flask API, and the test runner setup.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
+ */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

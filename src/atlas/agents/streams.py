@@ -1,4 +1,7 @@
-"""Shared plumbing for consuming a PydanticAI run synchronously, one event
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Shared plumbing for consuming a PydanticAI run synchronously, one event
 at a time.
 
 ``run_stream_events`` is async-only, but every workflow here is a sync
@@ -23,6 +26,9 @@ pool out from under the still-running streams, surfacing as ``Event loop is
 closed``. Running everything on one long-lived loop (reached from any request
 thread via ``run_coroutine_threadsafe``) fixes it: httpx multiplexes concurrent
 requests on a single loop safely.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

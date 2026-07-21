@@ -1,9 +1,15 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Shared Server-Sent-Events reader for the streaming teacher endpoints.
  *
  * The lecture / ask / ask_sources endpoints are POSTs that answer with
  * `text/event-stream`, so the browser's native EventSource (GET-only) can't
  * consume them — this hand-rolled reader decodes the frames instead.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 /**

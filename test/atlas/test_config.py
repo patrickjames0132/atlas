@@ -1,4 +1,11 @@
-"""Config sanity: the example template, validation strictness, derived paths."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Config sanity: the example template, validation strictness, derived paths.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

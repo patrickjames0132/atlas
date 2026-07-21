@@ -1,6 +1,12 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Saved sessions & workspaces (Phase 4): persist the current graph + teacher
  * transcript, then reopen it later without a Semantic Scholar rebuild.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { GraphNode, GraphEdge, Provider } from './graph'

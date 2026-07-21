@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Render an agent answer as Markdown + LaTeX. The researcher and librarian
  * both reply in Markdown (headers, bold, lists, tables) with `$…$` math and
  * inline `[n]` citation markers; this turns all three into real output:
@@ -8,6 +11,9 @@
  *     `MathText`; only answers get the fuller Markdown treatment),
  *   • `[n]` markers via `remarkCite`, made clickable when the answer's `refs`
  *     map resolves them to a graph node (glowing that one paper on click).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useMemo } from 'react'

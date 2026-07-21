@@ -1,4 +1,7 @@
-"""Saved sessions & workspaces.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Saved sessions & workspaces.
 
 Save the current **graph** (seed + every node/edge on screen, including ones
 the agent discovered/expanded/searched) together with the **teacher
@@ -11,6 +14,9 @@ cache in digest.db — saved sessions are durable user data with their own
 lifecycle, so they live in their own ``sessions.db`` (like the bring-your-
 own sources). The heavy state is JSON in the ``data`` column; a few metadata
 columns are lifted out so the list view renders without parsing every blob.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

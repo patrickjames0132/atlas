@@ -1,4 +1,7 @@
-"""Client for the Semantic Scholar Academic Graph + Recommendations APIs.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Client for the Semantic Scholar Academic Graph + Recommendations APIs.
 
 arXiv Atlas connects to S2 dynamically rather than storing a paper corpus.
 S2 is the backbone Connected Papers itself uses: it maps arXiv ids directly
@@ -30,6 +33,9 @@ Everything callers need is re-exported here, so ``from ..integrations import
 semantic_scholar as s2`` and ``s2.get_papers(...)`` etc. work exactly as if
 this were still one file. (The ``vocab`` submodule is accessed as
 ``s2.vocab.fields()``.)
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

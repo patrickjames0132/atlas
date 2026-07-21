@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * A generic scope picker: a checkbox-per-item popover where ALL checked reads
  * as "no scope" (everything) and NONE checked as "nothing" — the same
  * None/[] semantics the callers carry. Used for two scopes in the assistant
@@ -11,6 +14,9 @@
  * parent can keep the two pickers mutually exclusive — with it component-local
  * both popovers could be open at once and overlapped illegibly. Closes via
  * the ✕ in the popover header or by re-clicking the trigger.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 /** One selectable item — a source or a lecture, reduced to what the picker shows. */

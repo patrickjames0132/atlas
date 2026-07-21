@@ -1,4 +1,7 @@
-"""Semantic Scholar's fields of study — S2's coarse subject vocabulary.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Semantic Scholar's fields of study — S2's coarse subject vocabulary.
 
 S2's own ~20 top-level fields (Computer Science, Mathematics, …) — what the S2
 seed-search filter uses: ``/paper/search`` filters on exactly these
@@ -8,6 +11,9 @@ Case, matching what S2 returns on paper objects and accepts in the filter.
 
 Lives in the ``semantic_scholar`` package because it's S2's vocabulary; arXiv's
 parallel (finer) one is ``arxiv.vocab``. See the package README for details.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""Neighborhood-graph assembly (services/graph/build.py): the typed Graph model —
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Neighborhood-graph assembly (services/graph/build.py): the typed Graph model —
 single-provider traversals, within-provider dedupe, edge directions, counts, the
 provider-keyed snapshot cache, and the two provider paths (S2 / OpenAlex).
 
@@ -6,6 +9,9 @@ Provider traversals are monkeypatched with canned node dicts; the cache is real
 SQLite on the per-test temp DB (see conftest ``_isolate``). A graph is built from
 ONE provider end-to-end — there is no cross-source hybrid — so each provider gets
 its own fixture.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""The package's cached high-level API: text and floats for one PDF URL.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The package's cached high-level API: text and floats for one PDF URL.
 
 Layers ``fetch`` (the on-disk PDF cache) under ``text``/``floats`` (the
 pymupdf miners) and memoizes results in the SQLite cache, so a paper costs
@@ -14,6 +17,9 @@ Two cache keys per PDF, plus a reverse index:
   so this reverse lookup is what lets it re-fetch a pruned PDF — and its
   absence for an unknown token is what keeps the route from being an open
   proxy.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

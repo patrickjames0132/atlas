@@ -1,4 +1,7 @@
-"""Seed discovery: a live relevance search across Semantic Scholar, plus an
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Seed discovery: a live relevance search across Semantic Scholar, plus an
 instant search over the local snapshot cache.
 
 arXiv Atlas doesn't store a paper corpus, so the live "search" is a thin pass
@@ -11,6 +14,9 @@ just arXiv preprints).
 already sitting in the SQLite cache and matches papers by title/authors. It
 answers instantly and works even when Semantic Scholar is rate-limiting us — if
 you've seen a paper on a graph before, you can find it again offline.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

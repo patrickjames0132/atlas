@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The settings modal: loading the active config into a draft, dirty
  * detection + the Save/Discard bar, a rejected save surfacing the server's
  * field error in the footer, the PyCharm-style search reaching individual
  * rows, agent-extras editing, and the native-picker config-file switch.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

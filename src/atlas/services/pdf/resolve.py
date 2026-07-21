@@ -1,4 +1,7 @@
-"""Where a paper's open-access PDF lives — resolved once, cached, shared.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Where a paper's open-access PDF lives — resolved once, cached, shared.
 
 Three tiers, cheapest first:
 
@@ -11,6 +14,9 @@ Three tiers, cheapest first:
   location ``pdf_url``, both surfaced as the node dict's ``oa_pdf``), and the
   answer — including "this paper has no OA PDF" — is cached for a month so
   repeat reads and panel opens cost nothing.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

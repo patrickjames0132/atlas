@@ -1,4 +1,7 @@
-"""The per-request build shape — how much of a seed's neighborhood to ship.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The per-request build shape — how much of a seed's neighborhood to ship.
 
 Every other knob in the app is a ``config.json`` setting, read once and shared
 by every request. This one deliberately isn't: it belongs to **the user**, not
@@ -36,6 +39,9 @@ closes that: it is **empty for an adaptive build**, so the default path keeps
 today's exact key and every already-cached snapshot stays valid, and it is a
 stable signature of the four fields otherwise, so each distinct non-adaptive
 shape caches beside the adaptive one instead of clobbering it.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

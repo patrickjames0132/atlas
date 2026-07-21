@@ -1,4 +1,7 @@
-"""External-service clients: every module that talks to a remote API.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+External-service clients: every module that talks to a remote API.
 
 * ``semantic_scholar`` — the S2 Academic Graph + Recommendations client (the
   paper-data backbone). Also holds S2's fields-of-study vocabulary (``vocab``).
@@ -17,4 +20,7 @@ rate-limit etiquette, and caching keys; the ``services`` package composes them
 into domain logic. Each provider also owns its own controlled *vocabulary*
 (``arxiv.vocab`` = category codes, ``semantic_scholar.vocab`` = fields of study)
 — static/inline data, no remote call — rather than a shared taxonomy package.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """

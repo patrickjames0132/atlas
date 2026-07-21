@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The marquee node-selector: alt-drag a rectangle over the canvas to hand-pick
  * the nodes the AI teacher works over (its grounding scope). A modifier-drag,
  * not a mode — plain drag still pans the graph, so this arms only while Alt is
@@ -17,6 +20,9 @@
  * visible node's sim position to canvas-local pixels, compared against the
  * dragged rectangle (also canvas-local, measured off the wrap's bounding box —
  * the RFG canvas fills the wrap, so their top-lefts coincide).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'

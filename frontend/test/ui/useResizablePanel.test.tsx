@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The drag-to-resize hook: width seeding (default vs. stored), the
  * right-docked drag direction (leftward = wider), bound clamping, and the
  * pointer-up persist.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

@@ -1,4 +1,11 @@
-"""split_label: the float designation split off the front of a caption."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+split_label: the float designation split off the front of a caption.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

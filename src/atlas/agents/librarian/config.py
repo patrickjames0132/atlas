@@ -1,7 +1,13 @@
-"""The librarian's words and knobs: its agent id, prompt, skills, budgets,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The librarian's words and knobs: its agent id, prompt, skills, budgets,
 and the canned no-hits answer. Model choice lives in its ``config.llm.agents``
 entry; the figure budget lives in that entry's ``extras`` (same staging-area
 pattern as the researcher's).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

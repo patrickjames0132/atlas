@@ -1,7 +1,13 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The graph view-model's pure helpers: date formatting, relation priority,
  * radius scaling, node persistence stripping, count rebuilding, and the
  * pasted-arXiv-id fast path.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

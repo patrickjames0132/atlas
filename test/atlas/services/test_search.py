@@ -1,5 +1,11 @@
-"""Seed discovery (services/search.py): live S2 search (mocked) and the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Seed discovery (services/search.py): live S2 search (mocked) and the
 cache-first local search (real SQLite on the per-test temp DB).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

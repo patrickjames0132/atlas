@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The coach-mark tour: step walking, absent-target skipping, and the three
  * ways out. jsdom has no layout, so these tests build *presence* (targets in
  * the DOM) and drive the walking logic; pixel placement is a browser-pass
  * item. `checkVisibility` doesn't exist in jsdom — the component treats that
  * as visible, which is exactly what lets presence-based tests work.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useState } from 'react'

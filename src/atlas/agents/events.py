@@ -1,4 +1,7 @@
-"""The typed event stream every agent workflow emits.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The typed event stream every agent workflow emits.
 
 A workflow (a lecture, a Q&A turn, a library chat) doesn't return one value —
 it *streams*: narration arrives beat by beat, an agent's tool steps surface as
@@ -19,6 +22,9 @@ Two discriminated unions tie it together:
 ``DiscoveredNode``) so a paper an agent finds mid-answer has exactly the same
 shape as one ``build_graph`` produced — the frontend merges them into one
 canvas and can't tell the difference.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,9 +1,15 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Visual constants for the graph explorer: the relation color scheme shared by
  * nodes, edges, filter chips, badges, and the legend, plus layout geometry.
  *
  * Kept in one place so the canvas painting and the DOM chrome can never drift
  * out of sync on what "a reference" looks like.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useTheme } from '../ui/theme'

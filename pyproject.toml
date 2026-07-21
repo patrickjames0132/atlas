@@ -2,6 +2,9 @@
 name = "atlas"
 version = "6.3.0"
 description = "Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Charles Patrick James", email = "charles.patrick.james@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "flask>=3.0",

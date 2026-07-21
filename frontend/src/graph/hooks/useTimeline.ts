@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The layout physics hook — the ONE owner of the sim's d3 forces, for both
  * layouts. Timeline: pinning each node's x to its publication year, the
  * collide force that spreads a year column out, the year-axis painter, and
@@ -12,6 +15,9 @@
  * State (layout mode, pins) stays in GraphExplorer — this hook only mutates
  * the simulation's node objects and d3 forces through the shared `fgRef`,
  * exactly as the inline code it replaced did.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useRef } from 'react'

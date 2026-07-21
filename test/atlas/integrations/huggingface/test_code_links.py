@@ -1,8 +1,14 @@
-"""code_links: PaperInfo -> envelope normalization, item capping, and caching.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+code_links: PaperInfo -> envelope normalization, item capping, and caching.
 
 client.fetch_paper is faked to return lightweight stand-ins for PaperInfo and
 its ModelInfo / DatasetInfo / SpaceInfo items (SimpleNamespace — attribute
 access is all code_links needs). The autouse temp-DB fixture isolates the cache.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

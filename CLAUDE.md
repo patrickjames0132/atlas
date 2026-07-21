@@ -179,6 +179,13 @@ branch `main`.
   optional; the app runs keyless (just rate-limited on Semantic Scholar).
 - **Don't commit** `data/` (the SQLite cache) or `frontend/dist/` — both
   gitignored.
+- **Licensing:** the project is **MIT** (`LICENSE`; every source file carries a
+  copyright/`Description:`/`Authors:` header — see `docs/licensing.md`). **If
+  Patrick ever opens the project to outside contributions (a PR from anyone but
+  him, a collaborator, a `CONTRIBUTING` guide, a CLA), remind him to relicense
+  MIT → Apache-2.0 *first*** — the patent clauses matter once other contributors
+  exist, and relicensing is far cleaner before their rights enter the codebase.
+  The reasoning is settled in `docs/licensing.md`; don't re-litigate it.
 
 ## Technical notes
 

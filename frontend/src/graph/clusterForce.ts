@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The Force layout's relation clustering: a custom d3 force that pulls every
  * neighbor toward an angular sector around the seed, one sector per relation,
  * so the neighborhood reads as distinct clusters instead of one
@@ -26,6 +29,9 @@
  * Wired up (with the matching collide force and per-type link distances) in
  * `hooks/useTimeline.ts`'s `applyLayoutPhysics`, the one owner of the sim's
  * d3 forces.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { primaryRel } from './model'

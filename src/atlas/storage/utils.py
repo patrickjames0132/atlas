@@ -1,10 +1,16 @@
-"""Shared SQLite connection helper for the storage package.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Shared SQLite connection helper for the storage package.
 
 Every storage module (``cache``, ``sessions``, …) opens its database file the
 same way: make sure the data directory exists, connect with row-based
 access, create its schema if missing, and commit on a clean exit. The only
 thing that actually differs between them is which file and which schema —
 so that's the only thing each caller passes in.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

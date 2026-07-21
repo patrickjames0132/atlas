@@ -1,6 +1,12 @@
-"""categories: a paper's own arXiv category tags, labelled and cached.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+categories: a paper's own arXiv category tags, labelled and cached.
 
 categories.fetch_categories is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

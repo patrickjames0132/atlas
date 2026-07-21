@@ -1,5 +1,12 @@
-"""The typed event stream: model shapes, the two discriminated unions, and
-that discoveries stay in lockstep with the graph's own node/edge models."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The typed event stream: model shapes, the two discriminated unions, and
+that discoveries stay in lockstep with the graph's own node/edge models.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

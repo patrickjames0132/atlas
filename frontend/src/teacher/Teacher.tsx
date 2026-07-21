@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The unified assistant panel — now a slim shell. One docked side panel
  * whose capability levels up with context:
  *   • No graph, has a library → the graph-free library chat (librarian).
@@ -10,6 +13,9 @@
  * The panel is remounted per workspace epoch (keyed by the parent), so a
  * re-seed starts a fresh conversation; a restored session's transcript
  * arrives via the store, no seeding props needed.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect, useState } from 'react'

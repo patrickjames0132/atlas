@@ -1,4 +1,7 @@
-"""Shared fixtures for the arXiv Atlas test suite.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Shared fixtures for the arXiv Atlas test suite.
 
 The suite is **fully offline** — no live arXiv / Semantic Scholar / Anthropic
 calls, and no touching the real ``data/`` directory. The autouse ``_isolate``
@@ -9,6 +12,9 @@ tests swap in ``TestModel`` / ``FunctionModel`` via ``agent.override(...)``.
 ``stub_embeddings`` swaps the sentence-transformers model for a cheap
 deterministic hash embedder so the sources pipeline can be tested without
 loading torch.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

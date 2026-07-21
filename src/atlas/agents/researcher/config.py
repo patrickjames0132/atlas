@@ -1,9 +1,15 @@
-"""The researcher's words and knobs: its agent id, skills, prompt, and budgets.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The researcher's words and knobs: its agent id, skills, prompt, and budgets.
 
 Model choice lives in its ``config.llm.agents`` entry; the budgets live in
 that entry's ``extras`` (the staging area — they'll be promoted to typed
 config fields once their shape settles). Unknown extras keys fail at import
 so the staging area can't silently accumulate junk.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

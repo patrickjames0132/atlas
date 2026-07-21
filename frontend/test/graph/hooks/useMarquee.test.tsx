@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The alt-drag marquee: Alt arms the overlay, a drag commits the enclosed
  * visible nodes to the selection (screen-space hit-testing against a fake
  * `graph2ScreenCoords`), shift-drag unions onto the pick, and a negligible
  * alt-click clears it.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { createElement } from 'react'

@@ -1,4 +1,7 @@
-"""The query analyst: a one-shot micro-agent that analyzes seed-search queries.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The query analyst: a one-shot micro-agent that analyzes seed-search queries.
 
 Semantic Scholar's search is lexical, so "DQN" misses the seminal papers that
 never spell the acronym out in their title or abstract. The analyst attacks
@@ -14,6 +17,9 @@ not a teacher workflow.
 The one hard rule here is **degrade to a passthrough on any failure**: search
 can never break, slow down excepted, because the LLM hiccuped. ``analyze``
 catches everything and returns the query unchanged with no titles.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

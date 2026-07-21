@@ -1,7 +1,13 @@
-"""The sync event bridge: a single stream driven to its final result, and —
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The sync event bridge: a single stream driven to its final result, and —
 the regression — many streams driven concurrently over the one shared loop
 without an ``Event loop is closed`` (the failure that hit when several lectures
 played at once, each formerly on its own per-call loop over the shared client).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,5 +1,12 @@
-"""Day-cached S2 hops and search: relation routing, cache behavior (including
-the limit living in the key), and that S2 failures propagate untouched."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Day-cached S2 hops and search: relation routing, cache behavior (including
+the limit living in the key), and that S2 failures propagate untouched.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

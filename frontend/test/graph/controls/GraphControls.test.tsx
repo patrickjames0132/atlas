@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The controls panel's action row and count readout: the Clear button arms
  * for a hand-picked selection OR a teacher highlight (and fires the one
  * shared reset), the shared readout flips between "papers shown" and
@@ -8,6 +11,9 @@
  * layout". Plus the header's collapse-to-a-bar: the body hides (but stays
  * in the DOM for the tour's existence checks) and the tour's 'controls'
  * staging re-expands a collapsed panel.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

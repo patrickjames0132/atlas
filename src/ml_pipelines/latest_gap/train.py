@@ -1,4 +1,7 @@
-"""Fit the adaptive latest-band boundary and write the served artifact.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Fit the adaptive latest-band boundary and write the served artifact.
 
 The training stage: read the labelled corpus (``corpus.csv`` — each seed's
 shipped-landmark year distribution), then **fit the tail-edge rule's parameters**
@@ -21,6 +24,9 @@ and serving share one contract. Run from the repo root:
 
     uv run python -m ml_pipelines.latest_gap.train              # fit from committed corpus.csv
     uv run python -m ml_pipelines.latest_gap.train --refresh     # re-pull the corpus first
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

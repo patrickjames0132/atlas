@@ -1,8 +1,15 @@
-"""The lecturer: typed beats stream out with indices mapped to node ids,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The lecturer: typed beats stream out with indices mapped to node ids,
 junk beats/indices are dropped, each mode shapes the prompt, and lectures
 are illustrated — intuition reads the seed's full text and pools its own
 figures (+ library passages); history/evolution/frontier pool the story's
-landmark papers' figures and era-band their numbered list."""
+landmark papers' figures and era-band their numbered list.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

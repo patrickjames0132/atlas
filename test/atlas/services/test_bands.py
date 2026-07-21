@@ -1,9 +1,15 @@
-"""The adaptive latest-band serving path (services/graph/bands.py).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The adaptive latest-band serving path (services/graph/bands.py).
 
 Exercises the tail-edge rule: the pure density detector (:func:`bands.tail_edge`)
 and the served :func:`bands.earliest_band_year`. Behavior tests monkeypatch a
 controlled bundle so they don't drift when the model is retrained; one test loads
 the committed artifact to pin its contract shape.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

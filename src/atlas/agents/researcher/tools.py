@@ -1,4 +1,7 @@
-"""The researcher's model-callable tool surface, plus the run-state (deps) the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The researcher's model-callable tool surface, plus the run-state (deps) the
 tools share.
 
 Every tool follows the old runners' one hard rule: **failures are reported in
@@ -12,6 +15,9 @@ watches the agent work live.
 Budgets come from ``config.BUDGETS`` (the agent entry's ``extras``): a total
 step cap across all tools, plus per-tool budgets. Visited-sets and the read
 cache make repeats free instead of wasteful.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

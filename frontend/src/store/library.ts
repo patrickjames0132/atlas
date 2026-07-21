@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The uploaded source library — ONE copy of "what's in the library", shared by
  * the Sources drawer (which changes it) and the teacher panel's source-scope
  * picker (which reads it).
@@ -10,6 +13,9 @@
  * full page reload. Live state the drawer writes and the panel watches is
  * genuinely cross-cutting — exactly what the Phase 6 state directive sends to
  * the store.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'

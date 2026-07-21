@@ -1,5 +1,12 @@
-"""Graph & paper routes: id normalization at the door, the error taxonomy
-(400/404/502 vs degrade-to-unavailable), proxy rewriting, and the SSRF lock."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Graph & paper routes: id normalization at the door, the error taxonomy
+(400/404/502 vs degrade-to-unavailable), proxy rewriting, and the SSRF lock.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

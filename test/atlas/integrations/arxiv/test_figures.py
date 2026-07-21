@@ -1,6 +1,12 @@
-"""figures: extracting {image, caption} pairs from an ar5iv render, cached.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+figures: extracting {image, caption} pairs from an ar5iv render, cached.
 
 client.fetch_html is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

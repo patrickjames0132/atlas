@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The Redux store: four slices for the app's genuinely cross-cutting state,
  * everything else stays component-local (the Phase 6 state directive).
  *
@@ -10,6 +13,9 @@
  * NOT here, by design: the sim dataset `Base` (mutable, canvas-owned),
  * declutter filters, hover, selection, drawer visibility, search state —
  * each lives with the component that renders it.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { configureStore } from '@reduxjs/toolkit'

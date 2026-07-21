@@ -1,7 +1,13 @@
-"""OA-PDF URL resolution: provider lookup, month-long caching, priming.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+OA-PDF URL resolution: provider lookup, month-long caching, priming.
 
 Provider clients are monkeypatched — resolution must never touch the live
 APIs from tests.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

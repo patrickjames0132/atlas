@@ -1,7 +1,14 @@
-"""Model-input parts: skill loading, passage rendering, and history
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Model-input parts: skill loading, passage rendering, and history
 conversion. (Joining the parts into one prompt is PydanticAI's job — agents
 pass ``instructions=[SYSTEM_PROMPT, *skills]`` and it joins with blank
-lines.)"""
+lines.)
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

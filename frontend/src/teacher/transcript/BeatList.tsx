@@ -1,7 +1,15 @@
-/** The lecture beats: click one to light its papers on the graph, click the
+/**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
+ * The lecture beats: click one to light its papers on the graph, click the
  * active one again to clear. A beat may carry a real paper figure (the
  * seed's own in intuition mode, a story paper's in history/evolution) —
- * rendered inline, click to enlarge. */
+ * rendered inline, click to enlarge.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
+ */
 
 import type { AnswerFigure, Beat } from '../../api'
 import MathText from '../../notation/MathText'

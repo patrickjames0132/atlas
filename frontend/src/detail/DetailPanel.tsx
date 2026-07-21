@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The right-hand paper detail panel: relation badges, title, authors, the
  * TL;DR / abstract, its own arXiv category tags, code & artifact links
  * (Hugging Face Papers), lazily-loaded figures (ar5iv, or floats mined from
@@ -16,6 +19,9 @@
  * never load, so they never pop. Skeletons are anonymous gray shapes — no
  * section heads — because a section may turn out empty and a named header
  * that then vanishes would be its own jank.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect, useState } from 'react'

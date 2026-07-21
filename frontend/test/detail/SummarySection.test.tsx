@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The detail panel's summary section: abstract-first with a TL;DR tab, the ✦
  * variant generating on the FIRST toggle only (the one surface allowed to
  * bill), pending/error states, and no tabs when a paper has only one text.
  * Exercised through DetailPanel so the wiring from props is covered too.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

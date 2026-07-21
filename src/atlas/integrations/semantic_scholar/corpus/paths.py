@@ -1,4 +1,7 @@
-"""On-disk layout of the offline Semantic Scholar corpus — one root, per-release subtrees.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+On-disk layout of the offline Semantic Scholar corpus — one root, per-release subtrees.
 
 Everything lives under the single ``config.storage.s2_corpus`` root: each
 monthly Datasets **release** gets its own subtree holding both halves (the
@@ -34,6 +37,9 @@ Every path derives from a :class:`ReleasePaths`, so relocating the corpus (a
 different drive, or the eventual S3 prefix) is a config change. Nothing here
 touches the network or DuckDB — it's pure path algebra, safe to import and
 call without the corpus present.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

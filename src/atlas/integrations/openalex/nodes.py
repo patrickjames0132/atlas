@@ -1,4 +1,7 @@
-"""Normalizing a raw OpenAlex *work* into the app's graph-node shape — the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Normalizing a raw OpenAlex *work* into the app's graph-node shape — the
 OpenAlex twin of ``semantic_scholar/nodes.py``, producing the **same** node dict
 so the graph, teacher, and frontend consume one shape regardless of source.
 
@@ -16,6 +19,9 @@ Two OpenAlex-specific translations happen here, both flagged by the spike:
 * **Abstracts** arrive as an inverted index (``{word: [positions]}``), not
   plain text — :func:`reconstruct_abstract` rebuilds the string. Neighbor
   traversals skip it (hydrated lazily on click, like S2's ``NEIGHBOR_FIELDS``).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

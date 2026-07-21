@@ -1,4 +1,7 @@
-"""Normalize a paper's Hugging Face ``PaperInfo`` into the detail-panel envelope.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Normalize a paper's Hugging Face ``PaperInfo`` into the detail-panel envelope.
 
 ``client.fetch_paper`` hands back a typed ``PaperInfo`` (or None for a miss); we
 flatten it into a small ``{available, github, models, datasets, spaces, totals,
@@ -12,6 +15,9 @@ items are typed, the normalization here is plain attribute access — no
 defensive dict-digging. The only rough edge is ``num_total_spaces``: the
 library normalizes the models/datasets totals but leaves the spaces total under
 the raw ``numTotalSpaces`` key, so we look under both names.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""Ungrounded free-text search across OpenAlex — the OpenAlex twin of
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Ungrounded free-text search across OpenAlex — the OpenAlex twin of
 ``semantic_scholar/search.py``.
 
 When the user picks **OpenAlex** as the graph provider, seed discovery searches
@@ -6,6 +9,9 @@ here instead of S2. OpenAlex's ``search=`` parameter runs a relevance search ove
 title + abstract + fulltext, returning works ranked by ``relevance_score`` (the
 default sort when ``search=`` is present), which is exactly what a "find me a
 paper to drop on the canvas" search wants.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

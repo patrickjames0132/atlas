@@ -1,5 +1,11 @@
-"""The query side: seed resolution, citation-sorted landmarks, the latest bands,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The query side: seed resolution, citation-sorted landmarks, the latest bands,
 and graceful fallback when the corpus is absent.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

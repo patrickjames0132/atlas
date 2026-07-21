@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The scope picker's popover is controlled (`open`/`onOpenChange`) so the
  * assistant header can keep its two pickers mutually exclusive — these tests
  * pin the controlled contract: the popover renders only when told to, the
  * trigger reports a toggle, and the header ✕ reports a close.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

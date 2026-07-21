@@ -1,5 +1,11 @@
-"""Free-text OpenAlex search: the ``search=`` relevance query, its year-window
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Free-text OpenAlex search: the ``search=`` relevance query, its year-window
 date filter, and node normalization. ``client.request`` is faked — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

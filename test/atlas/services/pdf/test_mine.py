@@ -1,8 +1,14 @@
-"""The cached mining API: memoized text/floats, token registry, render path.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The cached mining API: memoized text/floats, token registry, render path.
 
 The fetch layer is faked with a synthetic on-disk PDF, so these tests cover
 exactly the caching/orchestration contract — one download + one mining pass
 per PDF, misses cached, tokens resolvable, unknown tokens refused.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

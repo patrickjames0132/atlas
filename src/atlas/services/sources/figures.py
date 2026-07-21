@@ -1,4 +1,7 @@
-"""Figures out of the user's own uploaded PDFs — the library twin of
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Figures out of the user's own uploaded PDFs — the library twin of
 ``services/pdf``'s open-access mining.
 
 Since v5.28.0 an uploaded PDF's original file is kept beside its indexed text
@@ -12,6 +15,9 @@ What differs from the OA pipeline is only addressing: no URL, no download —
 the file is local and owned by us, keyed by source id. URL sources and
 sources ingested before the file was kept have no PDF on disk and degrade to
 "no figures", never an error.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

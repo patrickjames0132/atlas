@@ -1,10 +1,16 @@
-"""Flask app factory for arXiv Atlas.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Flask app factory for arXiv Atlas.
 
 The API surface lives in ``routes/`` — one blueprint per concern (graph,
 search, agents, sources, sessions). This module just builds the app, wires
 those blueprints on, and (in production) serves the built React frontend.
 
 See ``routes/README.md`` for the endpoint list.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

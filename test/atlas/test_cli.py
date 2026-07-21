@@ -1,7 +1,14 @@
-"""The atlas CLI: ingest dispatch + clean SourceError messages, the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The atlas CLI: ingest dispatch + clean SourceError messages, the
 list/forget library commands, and `serve`'s host/port override plumbing
 (the actual serve blocks on a real server, so only the pass-through is
-tested)."""
+tested).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

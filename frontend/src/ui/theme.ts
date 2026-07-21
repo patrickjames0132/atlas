@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The app's light/dark theme: a tiny module-level store, not a context.
  *
  * Two very different consumers need the current theme — the header's toggle
@@ -11,6 +14,9 @@
  * light is a `:root[data-theme='light']` override. This module only decides
  * *which* is active by stamping `data-theme` on the document element — so
  * adding a themed color is a stylesheet edit, not a TypeScript one.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useSyncExternalStore } from 'react'

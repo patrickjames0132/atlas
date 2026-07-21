@@ -1,4 +1,7 @@
-"""Serving the adaptive landmark budget — how many landmark citers a seed ships.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Serving the adaptive landmark budget — how many landmark citers a seed ships.
 
 Every term used here — landmark, pool, reachable, truncated, label, age origin,
 and the two rules below — is defined once, with this same worked example, in
@@ -79,6 +82,9 @@ the derivation.
 The model artifact is loaded once and memoized (:func:`load_model`); a missing or
 unreadable artifact degrades gracefully to no prediction. Since v5.13.0 no graph
 build depends on it — only the pipelines do.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

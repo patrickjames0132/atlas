@@ -1,6 +1,12 @@
-"""HTTP transport: 429 backoff, error wrapping, and id quoting.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+HTTP transport: 429 backoff, error wrapping, and id quoting.
 
 urlopen is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

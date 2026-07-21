@@ -1,5 +1,12 @@
-"""Agent routes: typed-input validation at the door, uniform event->SSE
-serialization, history persistence rules, and the two separate chat stores."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Agent routes: typed-input validation at the door, uniform event->SSE
+serialization, history persistence rules, and the two separate chat stores.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

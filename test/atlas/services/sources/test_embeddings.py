@@ -1,9 +1,15 @@
-"""Device selection and graceful degradation in the local embedder (sources/embeddings.py).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Device selection and graceful degradation in the local embedder (sources/embeddings.py).
 
 Offline — no torch, no model download. ``sentence_transformers`` is injected into
 ``sys.modules`` as a fake, because ``_load_model`` imports it lazily *inside* the
 function; that keeps these tests fast and lets them assert exactly which device
 the real code asks for.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

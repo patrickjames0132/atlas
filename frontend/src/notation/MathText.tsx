@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Render a string with its LaTeX math ($…$, $$…$$, \(…\), \[…\]) typeset by
  * KaTeX and everything else as plain text. Use this anywhere paper text reaches
  * an HTML surface — detail panel, lecture beats, chat answers, search hits — so
@@ -6,6 +9,9 @@
  *
  * KaTeX renders to HTML, so this only works in the DOM. Graph node labels are
  * painted on a canvas; they use {@link latexToUnicode} instead.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useMemo } from 'react'

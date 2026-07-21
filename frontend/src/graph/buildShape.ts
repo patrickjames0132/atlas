@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The build shape — how much of a seed's neighborhood the backend ships.
  *
  * A module-level store behind `useSyncExternalStore`, the same shape as
@@ -22,6 +25,9 @@
  * `adaptive` is the headline. ON (the default) means the app sizes itself and
  * the other three fields are inert — the backend ignores them, and the controls
  * hide the per-chip count sliders. OFF hands sizing to the user.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useSyncExternalStore } from 'react'

@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The workspace slice's node-selection reducers and grounding scope: setting /
  * adding / toggling / clearing the hand-picked selection (with dedupe), and the
  * `selectGroundingNodes` intersection semantics — a non-empty selection narrows
  * grounding to `selected ∩ visible`, while discoveries are always kept.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

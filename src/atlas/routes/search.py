@@ -1,4 +1,7 @@
-"""Seed-search routes: a live relevance search across the selected provider (with
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Seed-search routes: a live relevance search across the selected provider (with
 optional date/field filters), an instant search over the local snapshot
 cache, and the field vocabularies that power the search filter picker.
 
@@ -7,6 +10,9 @@ GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=&analyst=
 GET /api/local_search?q=&provider=&limit=&year_from=&year_to=
                                  -> instant seed search over the local cache
 GET /api/taxonomy/<provider>     -> a provider's field vocabulary (s2 / openalex)
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The discovery merge's origin tracking (the expansion-satellite half of the
  * v5.24.0 layout work): a discovery whose anchor edge lands on a NON-seed
  * node records that node as its `_origin` (the cluster force gathers it
  * there), a seed-anchored or ungrounded discovery records none — and in
  * Timeline, satellites band outward in y past their origin instead of
  * landing inside the settled columns.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

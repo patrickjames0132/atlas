@@ -1,9 +1,15 @@
-"""Hybrid retrieval (sources/retrieval.py): FTS5 lexical + vector KNN fused via RRF.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Hybrid retrieval (sources/retrieval.py): FTS5 lexical + vector KNN fused via RRF.
 
 Offline — no embedding model, no network. The pure-function tests cover the FTS5
 query sanitizer and the RRF fusion; the integration tests drive the real
 ``sources.search`` over a temp library with the vector side stubbed off, so they
 exercise the lexical + fusion path end-to-end (triggers keep FTS5 in sync).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,5 +1,11 @@
-"""Source ingestion (sources/ingest.py): the full ingest→search pipeline on
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Source ingestion (sources/ingest.py): the full ingest→search pipeline on
 stubbed embeddings, plus scope semantics across multiple sources.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

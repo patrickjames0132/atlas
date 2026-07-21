@@ -1,10 +1,16 @@
-"""The live-pool-validation collector (src/ml_pipelines/live_pool_validation): offline checks.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The live-pool-validation collector (src/ml_pipelines/live_pool_validation): offline checks.
 
 Fully offline — the corpus queries run against the synthetic ingested release
 (``conftest.synthetic_corpus``), and the pure ``pool_metrics`` is driven
 directly. The OpenAlex id-mapping step is NOT exercised here (it's one throttled
 live call per seed); its output shape is what ``resolve_seeds`` consumes, so the
 resolution tests feed that shape by hand.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

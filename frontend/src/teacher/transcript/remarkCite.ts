@@ -1,10 +1,16 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * A remark plugin that turns inline citation markers — `[7]` — in answer prose
  * into a custom `citeref` element the Markdown renderer maps to a clickable
  * chip. It only rewrites the marker's shape; whether a given `[n]` actually
  * resolves to a paper (and so becomes clickable) is decided at render time from
  * the answer's `refs` map. Runs on mdast text nodes, so markers inside inline
  * code or math (which parse as other node types) are left untouched.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { Root, Text } from 'mdast'

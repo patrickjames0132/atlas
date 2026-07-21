@@ -1,4 +1,7 @@
-"""Bring-your-own sources: the user's persistent, semantically-searchable
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Bring-your-own sources: the user's persistent, semantically-searchable
 library of their own material — uploaded PDFs/books and fetched web pages.
 
 Each source is extracted to text, split into overlapping chunks (page-aware for
@@ -25,6 +28,9 @@ Modules:
 
 The public API is re-exported here, so callers use ``sources.ingest_pdf(...)`` /
 ``sources.search(...)`` without reaching into the submodules.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

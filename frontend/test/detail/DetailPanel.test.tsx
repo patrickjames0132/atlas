@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The detail panel's joint loading gate: while ANY of the node's fetches
  * (summary hydration, arXiv tags, code links, figures) is still in flight,
  * every loadable section holds its place with an anonymous skeleton — even
@@ -7,6 +10,9 @@
  * paint once the last answer arrives (empty sections simply don't appear).
  * Non-arXiv papers never fetch the arXiv-keyed extras, so only summary
  * hydration can gate them.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it } from 'vitest'

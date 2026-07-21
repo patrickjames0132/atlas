@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The transcript slice: the teacher's conversation — chat turns and lecture
  * beats. The teacher panel dispatches as streams arrive; Save selects it;
  * restore repopulates it.
@@ -7,6 +10,9 @@
  * the transcript used to live in Teacher.tsx with a live duplicate hoisted
  * into Atlas purely so Save could read it. Now there is exactly one copy,
  * owned by neither component.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { createSlice } from '@reduxjs/toolkit'

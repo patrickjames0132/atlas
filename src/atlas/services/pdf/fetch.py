@@ -1,4 +1,7 @@
-"""Download an open-access PDF into the on-disk cache, once.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Download an open-access PDF into the on-disk cache, once.
 
 PDFs are orders of magnitude bigger than the JSON this app otherwise moves,
 so they get their own cache: real files under ``data_dir/oa_pdfs`` (not rows
@@ -11,6 +14,9 @@ Downloads are defensive by design: the size cap aborts mid-stream (a
 Content-Length header can lie or be absent), and the ``%PDF`` magic check
 rejects the HTML login/consent pages some publishers serve where a PDF was
 promised.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

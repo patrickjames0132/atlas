@@ -1,4 +1,7 @@
-"""Resumable downloader for the bulk Datasets shards.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Resumable downloader for the bulk Datasets shards.
 
 The full corpus is ~300 GB across ~450 gzipped shards (citations ≈ 390 files,
 papers ≈ 60), so a download runs for hours-to-days and *will* be interrupted.
@@ -15,6 +18,9 @@ This module makes that survivable:
 Deliberately stdlib-only (``urllib``), matching the rest of the S2 client — no
 new HTTP dependency for a job that's just streamed GETs with a ``Range`` header.
 Invoked by the ``atlas corpus download`` CLI; not on any request path.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""Pre-commit hook: no single-letter identifiers, in ``.py`` and ``.ipynb`` alike.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Pre-commit hook: no single-letter identifiers, in ``.py`` and ``.ipynb`` alike.
 
 Mechanizes the CLAUDE.md naming convention — every binding is named for what
 it holds (``node`` not ``n``, ``query`` not ``q``). Ruff has no
@@ -18,6 +21,9 @@ Python (e.g. IPython magics) is skipped — ruff's own rules still cover it.
 
 Usage: ``python bin/check_identifiers.py FILE [FILE ...]`` (pre-commit passes
 the staged files). Exits 1 if any violation is found.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

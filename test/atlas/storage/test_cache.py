@@ -1,5 +1,11 @@
-"""storage.cache: the shared TTL key/JSON-blob cache backing every fetch of
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+storage.cache: the shared TTL key/JSON-blob cache backing every fetch of
 graph snapshots, ar5iv text/figures, and HF code links.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""On-demand paper TL;DRs: one plain-language sentence written from a
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+On-demand paper TL;DRs: one plain-language sentence written from a
 paper's title + abstract, for papers whose provider ships none (every
 OpenAlex paper; the S2 papers S2 never summarized).
 
@@ -8,6 +11,9 @@ OpenAlex paper; the S2 papers S2 never summarized).
 
 ``summarize`` is re-exported here — callers use
 ``summarizer.summarize(...)`` without reaching into submodules.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

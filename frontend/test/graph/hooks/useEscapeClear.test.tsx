@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The Esc-to-clear binding: Escape fires the reset, any other key doesn't,
  * and a focused form control (typing Esc in the search box means "leave the
  * box") swallows it.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it, vi } from 'vitest'

@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The collapsible find control: a 🔍 toggle that expands into the input pill
  * on click, stays pinned open while a query is live, reports typing/hits, and
  * collapses again when cleared — with Esc inside the box clearing the query
  * first (never bubbling into a graph-wide reset).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -1,4 +1,7 @@
-"""Day-cached, provider-aware traversal for agent workflows: one hop of
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Day-cached, provider-aware traversal for agent workflows: one hop of
 references / citations / similar work, and a free-text paper search.
 
 This is the cached, agent-tuned layer over the ``integrations`` traversal
@@ -16,6 +19,9 @@ overlap — weaker, but the closest analogue).
 
 Plumbing, not tools: no model ever calls these directly. The researcher's tools
 wrap them with budgets, visited-sets, and numbering.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

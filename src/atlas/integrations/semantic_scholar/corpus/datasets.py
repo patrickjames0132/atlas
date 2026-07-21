@@ -1,4 +1,7 @@
-"""Client for the Semantic Scholar **Datasets** API — the bulk-release index.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Client for the Semantic Scholar **Datasets** API — the bulk-release index.
 
 Distinct from the Academic Graph client (``..client``): the Datasets API is a
 different host, needs the api key for the per-dataset file listing, and throttles
@@ -16,6 +19,9 @@ Two endpoints matter:
 
 Nothing here downloads shard *bytes* (that's ``download.py``); this module only
 talks to the JSON index.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

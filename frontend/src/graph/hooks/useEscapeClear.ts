@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Bind Escape to one "unhighlight everything" gesture.
  *
  * Highlights arrive from many places — a lecture beat, a chat answer, an
@@ -8,6 +11,9 @@
  * "leave the box", not "darken the graph" — the Tour sets the precedent), and
  * the caller is expected to skip overlay states it owns (the figure lightbox
  * and the tour both bind their own Esc-to-close).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect } from 'react'

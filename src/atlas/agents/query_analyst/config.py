@@ -1,5 +1,11 @@
-"""The query analyst's words and knobs: its agent id, system prompt, and
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The query analyst's words and knobs: its agent id, system prompt, and
 skills. Model choice and tunables live in its ``config.llm.agents`` entry.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,8 +1,14 @@
-"""Text extraction + chunking (sources/extract.py): chunk_text and extract_pdf.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Text extraction + chunking (sources/extract.py): chunk_text and extract_pdf.
 
 Real PDFs are built in-memory with pymupdf — the same library ingestion uses —
 so ``extract_pdf`` and the scanned-PDF rejection run against genuine documents,
 offline.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

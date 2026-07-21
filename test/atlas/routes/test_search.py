@@ -1,5 +1,12 @@
-"""Seed-search routes: filter parsing/validation, the blank-query and clamp
-edges, error philosophies (502 vs never-error), and the taxonomy providers."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Seed-search routes: filter parsing/validation, the blank-query and clamp
+edges, error philosophies (502 vs never-error), and the taxonomy providers.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

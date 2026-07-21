@@ -1,4 +1,7 @@
-"""Turns app data into model input, shared by every sub-agent: skill loading,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Turns app data into model input, shared by every sub-agent: skill loading,
 retrieved passages rendered for a prompt, and route-layer conversation turns
 converted to PydanticAI message history.
 
@@ -8,6 +11,9 @@ joins it with blank lines itself; this module only supplies the parts.
 
 (Named ``prompts`` rather than ``skills`` — that name belongs to the
 ``skills/`` directory this module reads from.)
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

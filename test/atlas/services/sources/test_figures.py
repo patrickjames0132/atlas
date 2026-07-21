@@ -1,8 +1,14 @@
-"""Library figure mining (sources/figures.py): manifest from a stored PDF,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Library figure mining (sources/figures.py): manifest from a stored PDF,
 cached misses for sources without a file, and on-demand rendering.
 
 The stored PDF is synthesized with pymupdf directly at ``store.pdf_path`` —
 no ingestion needed, since mining only cares about the file.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

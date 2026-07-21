@@ -1,4 +1,7 @@
-"""The settings routes: read the active config file, write it back validated,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The settings routes: read the active config file, write it back validated,
 and repoint the app at a different file — the settings modal's backend.
 
 Every test runs against a temp config file (the module-level ``CONFIG_PATH`` /
@@ -6,6 +9,9 @@ Every test runs against a temp config file (the module-level ``CONFIG_PATH`` /
 ``config`` object's fields are snapshotted and restored around each test —
 ``reload_config`` mutates it in place, which would otherwise bleed one test's
 written values into the next (and clobber ``_isolate``'s temp ``data_dir``).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

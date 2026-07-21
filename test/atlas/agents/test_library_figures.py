@@ -1,9 +1,15 @@
-"""The shared ``show_source_figure`` core (agents/library_figures.py).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The shared ``show_source_figure`` core (agents/library_figures.py).
 
 Focused on what the **trace chip** ends up saying, since that's what the user
 reads when an attach fails: which source was reached into, and what was
 actually asked for. The resolver and the store are faked — this is about the
 events the helper emits, not about mining.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,6 +1,12 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The canvas-only LaTeX → Unicode approximation for node labels: delimiters
  * stripped, Greek and scripts mapped, everything unmappable left readable.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

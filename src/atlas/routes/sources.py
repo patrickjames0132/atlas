@@ -1,4 +1,7 @@
-"""Bring-your-own sources routes: the user's local semantic library.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Bring-your-own sources routes: the user's local semantic library.
 
 GET  /api/sources       -> list the user's local semantic library
 POST /api/sources       -> ingest a PDF upload or a {url}, streaming progress
@@ -11,6 +14,9 @@ source record) or ``error``. Two tiers of error, on purpose: ``SourceError``
 text is written for users by the ingestion layer ("no extractable text — is
 it scanned?") and goes to the client verbatim; anything unexpected is a
 canned message with details in the log only.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

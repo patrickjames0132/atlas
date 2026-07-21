@@ -1,10 +1,16 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The AI teacher: streaming lecture, agentic Q&A, and offline library chat.
  * Each is a `text/event-stream` POST decoded through the shared readSSE.
  *
  * (Named `agents` to match the backend's `routes/agents.py` and the `agents`
  * package behind it — every stream here is a workflow of the agents
  * orchestrator.)
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { readSSE } from './sse'

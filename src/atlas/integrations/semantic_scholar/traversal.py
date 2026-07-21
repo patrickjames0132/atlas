@@ -1,5 +1,11 @@
-"""Hydrating known papers and walking the citation graph from a seed:
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Hydrating known papers and walking the citation graph from a seed:
 batch detail lookup, references, citations, and similarity recommendations.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

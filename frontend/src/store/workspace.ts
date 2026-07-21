@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The workspace slice: the loaded graph, the agent's discoveries, the layout
  * choice, and the load/restore/save thunks — the cross-cutting core that the
  * canvas renders, the teacher grounds in, and Save serializes.
@@ -7,6 +10,9 @@
  * arrays (plain JSON). The mutable sim dataset (`Base`) is derived FROM this
  * state canvas-side and never enters the store — react-force-graph mutates
  * its objects, the exact opposite of what Redux state may be.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { createAsyncThunk, createSelector, createSlice } from '@reduxjs/toolkit'

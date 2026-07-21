@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The highlight slice: which papers the teacher is currently talking about
  * (the active beat's nodes, or an answer's cited papers). The teacher writes
  * it; the canvas glows them. Stored as an array (serializable); the canvas
  * selects it as a memoized Set.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { createSelector, createSlice } from '@reduxjs/toolkit'

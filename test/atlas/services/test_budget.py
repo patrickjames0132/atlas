@@ -1,4 +1,7 @@
-"""The adaptive landmark-budget serving paths (services/graph/budget.py).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The adaptive landmark-budget serving paths (services/graph/budget.py).
 
 The ways to size a seed's landmark band, all pinned here (see
 ``docs/landmark-vocabulary.md`` for the vocabulary):
@@ -16,6 +19,9 @@ The ways to size a seed's landmark band, all pinned here (see
   mapping, so a retrain that moves the worked-example seeds trips them. The
   reference year is pinned (not ``today``) so the age-based pins stay stable
   as the clock advances.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

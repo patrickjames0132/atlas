@@ -1,4 +1,7 @@
-"""Fixtures for the live-pool-validation collector tests: a synthetic corpus.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Fixtures for the live-pool-validation collector tests: a synthetic corpus.
 
 Same approach as ``test/atlas/integrations/semantic_scholar/corpus/conftest.py``
 (tiny gzipped JSONL shards → real ingest → activate, all inside ``tmp_path``),
@@ -6,6 +9,9 @@ but with a citer set built for THIS study's questions: a seed with citers spread
 across years (so truncation actually changes the oldest reachable year), a
 DOI-only seed (the papers-table resolution route), and an overlapping second
 edge batch (the upstream duplication the reader must collapse).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

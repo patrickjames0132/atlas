@@ -1,7 +1,13 @@
-"""The OA-PDF fetcher: download, magic/size defenses, disk cache, LRU prune.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The OA-PDF fetcher: download, magic/size defenses, disk cache, LRU prune.
 
 All network is faked by monkeypatching ``urllib.request.urlopen`` — a
 download that actually escapes to the network would hang the offline suite.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

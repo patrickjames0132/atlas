@@ -1,4 +1,7 @@
-"""The summarizer: a one-shot micro-agent that writes a TL;DR from an abstract.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The summarizer: a one-shot micro-agent that writes a TL;DR from an abstract.
 
 Semantic Scholar ships its own model-written TLDRs; OpenAlex has no
 equivalent, and even S2 lacks one for plenty of papers — so the detail
@@ -11,6 +14,9 @@ see ``routes/graph.py::api_paper_tldr``.
 Like the query analyst, failure degrades instead of raising: ``summarize``
 returns None on any error (no key, network down, rate limit), and the route
 turns that into an honest HTTP error — the abstract is still right there.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

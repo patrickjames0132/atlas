@@ -1,10 +1,16 @@
-"""The per-request build shape: which rules each mode injects, and its cache key.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The per-request build shape: which rules each mode injects, and its cache key.
 
 The behavioral claims worth pinning are that **adaptive mode is byte-identical
 to the pre-shape app** (same rules, same cache key — so existing snapshots still
 hit) and that **non-adaptive mode declines every adaptive rule**, which is how it
 reaches the traversals' flat payload-guard fallback without any traversal
 learning about shapes.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

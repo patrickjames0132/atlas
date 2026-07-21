@@ -1,4 +1,7 @@
-"""The shared heart of the two ``show_source_figure`` tools.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The shared heart of the two ``show_source_figure`` tools.
 
 The researcher (graph Q&A) and the librarian (graph-free library chat) both
 let the model attach a figure from the user's uploaded PDFs, addressed the
@@ -8,6 +11,9 @@ budget checks is identical — resolve the address against the mined manifest
 assign the next ``<<FIG n>>`` slot, emit the ``FigureTrace``/``Figure``
 events — so it lives here once, against a small structural protocol both
 deps classes already satisfy.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

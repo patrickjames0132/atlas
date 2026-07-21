@@ -1,8 +1,14 @@
-"""Ungrounded free-text search across all of Semantic Scholar.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Ungrounded free-text search across all of Semantic Scholar.
 
 Unlike references/citations/recommendations this has no source paper — so it
 reaches recent or topical work that citation & similarity hops (lineage- and
 embedding-biased) can't.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

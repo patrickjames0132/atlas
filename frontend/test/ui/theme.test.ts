@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The theme store: what it defaults to, what it persists, and what it stamps
  * on the document (the attribute every themed CSS rule hangs off).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

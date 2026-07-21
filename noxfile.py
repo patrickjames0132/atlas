@@ -1,4 +1,7 @@
-"""Quality gate for arXiv Atlas — run every check with ``uv run nox``.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Quality gate for arXiv Atlas — run every check with ``uv run nox``.
 
 Five sessions, all run by default: ``precommit`` (pre-commit hooks, incl. ruff
 and the frontend's prettier/oxlint), ``mypy`` (type checks), ``tests``
@@ -12,6 +15,9 @@ session-start ``bin/setup`` installs it).
 Trivy is an external binary (not a Python package); the ``security`` session
 skips itself cleanly when ``trivy`` isn't on PATH (as ``vitest`` does without
 npm), so ``uv run nox`` stays green on machines that don't have it installed.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

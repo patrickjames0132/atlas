@@ -1,10 +1,16 @@
-"""The latest-gap training pipeline (src/ml_pipelines/latest_gap): rule fit + serialize.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The latest-gap training pipeline (src/ml_pipelines/latest_gap): rule fit + serialize.
 
 Fully offline — no OpenAlex calls. The visible-gap metric and the robustness fit
 run on a tiny synthetic corpus so the pipeline (score → misdate-robustness → tau
 → serializable bundle) is exercised without the committed data or the network.
 The served rule's behavior is pinned separately in
 ``test/atlas/services/test_bands.py``.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

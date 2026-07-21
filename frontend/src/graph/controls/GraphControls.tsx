@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The declutter panel over the graph: layout toggle (Force / Timeline),
  * relation filter chips, the dual-knob year range slider, the dual-knob
  * citation-count window slider, the visible-count readout, and the pin/fit
@@ -9,6 +12,9 @@
  * Purely presentational — all state lives in GraphExplorer; this just renders
  * it and fires the callbacks. The one exception is the collapsed flag, which
  * is local like the find control's own open/closed: nothing else reads it.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect, useState } from 'react'

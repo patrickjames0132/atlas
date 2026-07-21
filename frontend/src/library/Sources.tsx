@@ -1,16 +1,23 @@
+/**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
+ * The Sources drawer: manage the user's local semantic library — upload PDFs /
+ * books (several at once, embedded in parallel) or paste a URL, list what's
+ * loaded, remove sources. The library is global and persistent; the AI teacher
+ * searches it during Q&A (Phase 3d). The list itself lives in the library
+ * slice — every mutation here re-loads it THROUGH the store, so the teacher
+ * panel's source-scope picker updates the moment an upload lands (it used to
+ * need a page reload).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
+ */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deleteSource, ingestUrl, uploadSource } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { loadLibrary, selectLibrary } from '../store/library'
 import './sources.css'
-
-// The Sources drawer: manage the user's local semantic library — upload PDFs /
-// books (several at once, embedded in parallel) or paste a URL, list what's
-// loaded, remove sources. The library is global and persistent; the AI teacher
-// searches it during Q&A (Phase 3d). The list itself lives in the library
-// slice — every mutation here re-loads it THROUGH the store, so the teacher
-// panel's source-scope picker updates the moment an upload lands (it used to
-// need a page reload).
 
 /** One file in an in-flight upload batch, tracked for per-file progress.
  * `pct` is embedding progress 0–1 (undefined until the first progress frame —

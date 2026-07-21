@@ -1,4 +1,7 @@
-"""Serving the adaptive latest-band boundary — closing the landmark→latest gap.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Serving the adaptive latest-band boundary — closing the landmark→latest gap.
 
 Every term here — landmark, band, tail edge, ``tau``, ``max_span`` — is defined
 once, with worked examples, in ``docs/landmark-vocabulary.md``; the sibling
@@ -41,6 +44,9 @@ Unlike the sibling ``budget`` model, the boundary is a property of each seed's
 landmark *distribution*, not of its age/citations (a feature regression on those
 was tried and fails — see ``research/latest_gap``), so the served input is the
 fetched landmark-year list, not a seed feature vector.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

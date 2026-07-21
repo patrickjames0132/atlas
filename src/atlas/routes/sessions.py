@@ -1,10 +1,16 @@
-"""Saved-session routes: save the current workspace (graph + teacher
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Saved-session routes: save the current workspace (graph + teacher
 transcript) and reopen it later without rebuilding the graph.
 
 GET  /api/sessions       -> list saved sessions (metadata only)
 POST /api/sessions       -> save the current workspace (new, or overwrite by id)
 GET  /api/sessions/<id>  -> full saved session to restore
 DEL  /api/sessions/<id>  -> delete a saved session
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

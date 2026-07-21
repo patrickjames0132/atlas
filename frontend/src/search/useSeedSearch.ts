@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Seed-search state for the explorer: the query box, the optional search
  * options (date/field filters + the query-analyst switch), cache-first local
  * hits, live Semantic Scholar hits, and the in-flight / failure flags HitList
@@ -7,6 +10,9 @@
  * The two searches race deliberately: local hits resolve near-instantly and
  * render while the live search is still in flight (or failing, when we're
  * rate-limited).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useState } from 'react'

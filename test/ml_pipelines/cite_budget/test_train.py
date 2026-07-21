@@ -1,4 +1,7 @@
-"""The cite-budget training pipeline (src/ml_pipelines/cite_budget): contracts + offline fit.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The cite-budget training pipeline (src/ml_pipelines/cite_budget): contracts + offline fit.
 
 Fully offline — no OpenAlex calls. The fit runs on a tiny synthetic corpus so the
 pipeline (feature matrix → LinearRegression → serializable bundle) is exercised
@@ -8,6 +11,9 @@ Both halves of the model's contract — the features AND the density label — a
 app's (``atlas.services.graph.budget``), so their own behavior is pinned in
 ``test/atlas/services/test_budget.py``. What's checked here is that this pipeline
 really uses them rather than a private copy that could drift.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

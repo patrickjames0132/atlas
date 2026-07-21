@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * One chat turn: the library-retrieval summary (graph-free mode), the
  * researcher's trace chips, the prose interleaved with its `<<FIG n>>` figures,
  * and the cited-papers footer. Clickable when the answer carries citations —
  * clicking re-lights the papers it was grounded in.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { AnswerFigure, ChatMsg, TraceEvent } from '../../api'

@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Seed search: find a paper to drop into the graph — live across Semantic
  * Scholar, or instantly from the local snapshot cache — with optional
  * search options on the live search (date / field-of-study filters and the
  * query-analyst on/off switch).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { GraphNode, Provider } from './graph'

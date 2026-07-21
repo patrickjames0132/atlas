@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The color legend never explains marks that aren't on screen: the four
  * relation entries are static, the two agent entries appear on first use.
  * (Similar was retired from the seed-graph build in v5.0.0 — no legend entry.)
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

@@ -1,7 +1,13 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The figure interleaver: pairing `<<FIG n>>` markers in streamed prose with
  * the figures the researcher attached, so images render inline exactly where the
  * model placed them.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { AnswerFigure } from '../../api'

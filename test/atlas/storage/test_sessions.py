@@ -1,4 +1,11 @@
-"""storage.sessions: the durable saved-workspace store (graph + transcript)."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+storage.sessions: the durable saved-workspace store (graph + transcript).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

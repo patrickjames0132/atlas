@@ -1,9 +1,15 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Bring-your-own sources: the user's local semantic library.
  *
  * Sources are PDFs or web pages ingested server-side (chunked + embedded into
  * a sqlite-vec index) that the teacher can semantically search. Ingestion
  * streams SSE progress frames — embedding is where the time goes.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { readSSE } from './sse'

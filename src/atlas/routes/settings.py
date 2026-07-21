@@ -1,4 +1,7 @@
-"""Read and write the app's settings — the settings modal's backend.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Read and write the app's settings — the settings modal's backend.
 
 The modal is a **config-file editor**: it displays the active config file's
 values and writes edits back to that same file, so the file stays the single
@@ -34,6 +37,9 @@ source of truth (hand-edits and modal edits are the same thing). Endpoints:
 The raw file JSON (not ``model_dump``) is what GET returns and PUT accepts,
 so values round-trip byte-for-byte and the modal never has to understand
 Pydantic's serialized forms.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

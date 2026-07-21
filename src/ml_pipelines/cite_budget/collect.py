@@ -1,4 +1,7 @@
-"""Pull a stratified corpus of seed papers + their citer-year distributions.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Pull a stratified corpus of seed papers + their citer-year distributions.
 
 The data-collection stage of the adaptive-``cite_limit`` pipeline (see this
 package's README, and ``docs/landmark-vocabulary.md`` for every term below). For
@@ -22,6 +25,9 @@ Run from the repo root (reuses the app's throttled OpenAlex client):
 Writes ``src/ml_pipelines/cite_budget/corpus.csv`` (committed, so training is reproducible
 without a re-pull). ``train.py`` calls :func:`collect` directly when asked to
 refresh. OpenAlex results shift slowly, so a re-run reproduces a similar corpus.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

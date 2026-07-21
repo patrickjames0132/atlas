@@ -1,4 +1,7 @@
-"""Splitting a float's own label ("Figure 12.4") off the front of its caption.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Splitting a float's own label ("Figure 12.4") off the front of its caption.
 
 Mined and ar5iv captions arrive as one string — ``"Figure 12.4: The forward
 view. …"`` — but the UI wants the two halves separately: the label goes in
@@ -11,6 +14,9 @@ Not every caption carries a label (a web figure, a caption the miner
 truncated oddly) — ``split_label`` then returns ``None`` and the frontend
 falls back to numbering attachments in answer order ("Figure 1", "Figure 2"
 by slot).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

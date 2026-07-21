@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * A reusable, data-driven coach-mark tour: dims the screen, spotlights one
  * target element at a time, and anchors an explainer bubble beside it, with
  * Back / Next, a step counter, a title that doubles as a jump-to-any-stop
@@ -10,6 +13,9 @@
  * currently hidden — are skipped, so one step list can describe optional UI
  * (a slider that only renders on multi-year graphs, a panel that may be
  * collapsed) without the tour ever pointing at a blank spot.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'

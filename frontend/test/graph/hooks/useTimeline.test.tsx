@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Timeline x-placement: a paper sits at its year plus a month fraction, so it
  * lands *between* the yearly gridlines rather than on them.
  *
@@ -8,6 +11,9 @@
  * and drew them as a vertical bar skewered through the seed. They're filtered out
  * of the Timeline view now (GraphExplorer's `nodeOk`), so nothing should place
  * them there any more.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

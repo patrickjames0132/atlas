@@ -1,10 +1,16 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The seed-search results panel: cache-first local hits render immediately,
  * live hits from the selected provider (Semantic Scholar / OpenAlex) stream in
  * under them (deduped against the local ones), and clicking any hit loads its
  * graph. Both the cache section and the live section are labeled with the active
  * provider, so it's clear which backend the results come from. When the query
  * named a paper the analyst recognized, its verified match leads the live list.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { GraphNode, LocalHit } from '../api'

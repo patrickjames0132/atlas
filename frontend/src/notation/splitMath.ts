@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Split a string into ordered text and math segments so the surrounding UI can
  * render the text plainly and hand each math run to KaTeX.
  *
@@ -14,6 +17,9 @@
  * closing `$` must not be immediately followed by a digit. Currency runs fail all
  * three and fall back to text. Unclosed delimiters (common mid-stream while an
  * answer is still typing) also fall back to text, so nothing crashes.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 /** One run of the input: literal text, or a math expression for KaTeX. */

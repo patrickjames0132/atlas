@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
-// jsdom for localStorage — the store persists there, and the read-back path
-// (including the corrupt-blob fallbacks) is most of what's worth testing.
+/**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
+ * jsdom for localStorage — the store persists there, and the read-back path
+ * (including the corrupt-blob fallbacks) is most of what's worth testing.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
+ */
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import {

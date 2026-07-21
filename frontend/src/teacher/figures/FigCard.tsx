@@ -1,4 +1,12 @@
-/** One attached figure: proxied image + caption, click to enlarge. */
+/**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
+ * One attached figure: proxied image + caption, click to enlarge.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
+ */
 
 import type { AnswerFigure } from '../../api'
 import MathText from '../../notation/MathText'

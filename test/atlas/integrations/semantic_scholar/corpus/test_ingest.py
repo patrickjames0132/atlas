@@ -1,5 +1,11 @@
-"""Ingest: the arXiv index, the citation hash-partitioning, papers clustering
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Ingest: the arXiv index, the citation hash-partitioning, papers clustering
 (compaction, its crash-safe swap, the legacy migration), and idempotent reruns.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

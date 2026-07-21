@@ -1,4 +1,7 @@
-"""Collect the live-pool validation corpus: simulated truncated pools vs. the models.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Collect the live-pool validation corpus: simulated truncated pools vs. the models.
 
 The data-collection stage of the live-pool validation study (see this package's
 README; ``docs/landmark-vocabulary.md`` defines every term below). For every seed
@@ -30,6 +33,9 @@ per seed is local. Run from the repo root:
 Writes ``corpus.csv`` beside this module (committed after a run, so the analysis
 notebook is reproducible without the corpus machine). ``research/
 live_pool_validation/analyze.ipynb`` is the verdict.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

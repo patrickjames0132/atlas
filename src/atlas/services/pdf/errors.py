@@ -1,9 +1,15 @@
-"""The one error type this package raises.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The one error type this package raises.
 
 Split into its own module (mirroring ``services/sources/errors.py``) so any
 submodule can raise it without import cycles, and so callers can catch one
 exception type for every way PDF mining can fail — download refused, file too
 big, not actually a PDF, unparseable.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

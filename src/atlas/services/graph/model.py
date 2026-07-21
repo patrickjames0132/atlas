@@ -1,9 +1,15 @@
-"""The typed domain models the services produce — currently the graph objects.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The typed domain models the services produce — currently the graph objects.
 
 Split out of ``graph.py`` so the *shape* of a graph (this file) reads separately
 from the assembly logic that builds it. ``build_graph`` returns a ``Graph``;
 callers that need JSON serialize with ``model_dump()`` / ``model_dump_json()``,
 and the cache stores/re-validates the same models.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

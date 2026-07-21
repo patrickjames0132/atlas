@@ -1,6 +1,12 @@
-"""client: the shared ar5iv HTTP fetch, image proxy fetch, and host allowlist.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+client: the shared ar5iv HTTP fetch, image proxy fetch, and host allowlist.
 
 urlopen is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,11 @@
-"""semantic_scholar.vocab: the S2 fields-of-study vocabulary (fields + valid_fields)."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+semantic_scholar.vocab: the S2 fields-of-study vocabulary (fields + valid_fields).
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

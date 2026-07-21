@@ -1,4 +1,7 @@
-"""Hybrid retrieval over the sources library: semantic KNN fused with lexical BM25.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Hybrid retrieval over the sources library: semantic KNN fused with lexical BM25.
 
 Two rankers run over the same chunks — a semantic one (sqlite-vec cosine KNN over
 the embeddings) and a lexical one (FTS5 BM25 over the raw text) — and their
@@ -8,6 +11,9 @@ count. See the package README for what FTS5 and RRF are and why we use both.
 Everything degrades gracefully: with FTS5 missing (or hybrid off) it's pure
 vector search; with the embedder missing it's lexical-only; with neither it
 returns ``[]``.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

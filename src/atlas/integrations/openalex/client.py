@@ -1,4 +1,7 @@
-"""HTTP transport for OpenAlex: throttling, retries, URL building, and the one
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+HTTP transport for OpenAlex: throttling, retries, URL building, and the one
 error type this whole package raises.
 
 Rate-limit / pricing strategy (verified against the live API, 2026-07-09):
@@ -14,6 +17,9 @@ Rate-limit / pricing strategy (verified against the live API, 2026-07-09):
 
 Like the ``semantic_scholar`` client, nothing here uses a third-party HTTP
 dependency — stdlib ``urllib`` keeps the client tiny and the deploy simple.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

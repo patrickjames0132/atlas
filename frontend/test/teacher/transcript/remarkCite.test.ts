@@ -1,7 +1,13 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The citation remark plugin: `[n]` markers in mdast text nodes become
  * `citeref` elements; everything that isn't a plain-text marker is left
  * untouched (resolvability is the renderer's job, not the plugin's).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

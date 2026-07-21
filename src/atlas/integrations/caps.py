@@ -1,4 +1,7 @@
-"""The cross-provider sizing constants every citation traversal shares.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The cross-provider sizing constants every citation traversal shares.
 
 None of these is a config knob, on purpose (the per-relation count caps and
 band-shape fields were deleted as knobs nobody turned — the app sizes its
@@ -29,6 +32,9 @@ modal's non-adaptive mode hands this pair to the user, who sends them per
 request (see ``services/graph/shape.py``). Each traversal resolves them at
 *call time* rather than in a signature default, so these constants stay the
 live source of truth for every build that doesn't override them.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 UNBOUNDED_LANDMARK_CAP = 500

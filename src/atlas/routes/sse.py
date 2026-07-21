@@ -1,4 +1,7 @@
-"""Server-Sent-Events plumbing, shared by every streaming route (the agent
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Server-Sent-Events plumbing, shared by every streaming route (the agent
 endpoints and source ingestion).
 
 One trap worth knowing for any route that uses these: SSE generators run
@@ -6,6 +9,9 @@ during response iteration, AFTER the request/app context is gone — touching
 ``request`` or ``current_app`` inside one raises ``RuntimeError`` and kills
 the stream. Parse the request and use a module logger before/outside the
 generator.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The settings modal's backend: read the active config file, write it back
  * validated, and repoint the app at a different file. The modal is a
  * config-file editor — the file stays the single source of truth, and the
  * server applies accepted writes to the running app without a restart.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 /**

@@ -1,7 +1,13 @@
-"""Batch hydration and citation-graph traversal: get_papers/get_paper,
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Batch hydration and citation-graph traversal: get_papers/get_paper,
 references, citations, recommendations.
 
 client.request is faked directly — no network.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

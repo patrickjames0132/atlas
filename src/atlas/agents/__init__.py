@@ -1,4 +1,7 @@
-"""The AI teacher as a crew of agents: an orchestrator delegating to focused
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The AI teacher as a crew of agents: an orchestrator delegating to focused
 sub-agents, every workflow streaming typed events.
 
 Layout rule: the package root is the shared directory — ``events`` (the typed
@@ -8,6 +11,9 @@ every agent; each sub-package *is* an agent. Sub-agents aren't imported here —
 building one constructs its model, so consumers import exactly the agent they
 need (``from ..agents import query_analyst``). See README.md for the full
 architecture and the workflow definitions.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,6 +1,12 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The paper neighborhood graph — nodes, edges, single-paper detail hydration,
  * and a paper's figures.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { getBuildShape, shapeParams } from '../graph/buildShape'

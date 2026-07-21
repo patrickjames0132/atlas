@@ -1,4 +1,7 @@
-"""Resolving a seed to its OpenAlex work and walking its citers — the OpenAlex
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Resolving a seed to its OpenAlex work and walking its citers — the OpenAlex
 half of the hybrid graph build.
 
 This is the payoff of the 2026-07-09 spike: a seed's citers come from
@@ -21,6 +24,9 @@ OpenAlex dating is coarse (many works are year-only, defaulted to ``01-01``) —
 an exact rolling window silently drops recent-year citers. Nodes come out
 already S2-resolvable (see ``nodes.py``), so the existing paper routes hydrate
 their TL;DRs and re-seed them unchanged.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

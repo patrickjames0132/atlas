@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * AnswerMarkdown's clickable `[n]` citations, end to end (render → resolve →
  * click). The focus is the combined-marker case (`[14, 29]`): it must render
  * one chip per index, each resolving to its own paper and spotlighting it.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

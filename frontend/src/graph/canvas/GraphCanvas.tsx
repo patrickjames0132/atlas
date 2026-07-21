@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The ForceGraph2D wrapper: all canvas painting for the explorer — node
  * fills by relation, the dim/highlight/pin/selection rings, dashed
  * "discovered" markers, node labels, edge colors/arrows, and pointer areas.
@@ -8,6 +11,9 @@
  * The one rule this component must respect is object identity — `data` is
  * the live view whose nodes RFG mutates (x/y/fx/fy), so nothing here may
  * copy or recreate them.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import ForceGraph2DImport from 'react-force-graph-2d'

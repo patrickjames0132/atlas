@@ -1,4 +1,7 @@
-"""Assemble a paper's neighborhood graph from a single, user-chosen provider.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Assemble a paper's neighborhood graph from a single, user-chosen provider.
 
 Given a seed paper, build a Connected-Papers-style graph: the seed plus its
 references (papers it cites — its intellectual ancestors) and its citations
@@ -39,6 +42,9 @@ This module is the domain core of the app — ``routes/graph.py``'s ``/api/graph
 is a thin wrapper over ``build_graph`` — so it's commented heavily; the
 edge-direction rules in particular are load-bearing (they encode which way a
 citation points) and easy to get subtly wrong.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

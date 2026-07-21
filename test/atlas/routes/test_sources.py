@@ -1,6 +1,13 @@
-"""Sources routes: the list + availability flag, progress-streaming
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Sources routes: the list + availability flag, progress-streaming
 ingestion with its two-tier error contract, temp-file hygiene, and
-idempotent delete."""
+idempotent delete.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

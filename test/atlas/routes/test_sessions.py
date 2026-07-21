@@ -1,5 +1,12 @@
-"""Saved-session routes: the save/list/get/delete round trip against the
-real store (on the per-test temp DB), plus the validation and error edges."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Saved-session routes: the save/list/get/delete round trip against the
+real store (on the per-test temp DB), plus the validation and error edges.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

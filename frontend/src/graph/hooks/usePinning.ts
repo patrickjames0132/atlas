@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Pin state for the explorer: which nodes the user has fixed in place, plus
  * the drag / toggle / release handlers that set and clear fx/fy on the live
  * simulation nodes.
@@ -6,6 +9,9 @@
  * Timeline-aware throughout: in Timeline mode a node's x always stays pinned
  * to its date column — dragging only sets its height, and releasing restores
  * the column pin rather than freeing the node entirely.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useState } from 'react'

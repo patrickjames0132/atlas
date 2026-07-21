@@ -1,4 +1,7 @@
-"""Fetch a paper's OWN per-id metadata from arXiv's export API — its category
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Fetch a paper's OWN per-id metadata from arXiv's export API — its category
 tags and its title.
 
 Semantic Scholar gives us abstracts and TL;DRs but not a paper's arXiv category
@@ -17,6 +20,9 @@ published paper's canonical OpenAlex record isn't aliased to it — e.g. AIAYN).
 Not every id resolves — a malformed or since-withdrawn id comes back as a feed
 with no ``<entry>`` at all (HTTP 200, not 404); that's ``available: False``,
 same as ar5iv's own "no render" miss, and cached the same way.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

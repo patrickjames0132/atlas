@@ -1,4 +1,7 @@
-"""A thin TTL cache for dynamically-fetched artifacts (graph snapshots, ar5iv
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+A thin TTL cache for dynamically-fetched artifacts (graph snapshots, ar5iv
 full text and figures, Hugging Face code links).
 
 arXiv Atlas deliberately does NOT store a paper corpus — millions of papers
@@ -12,6 +15,9 @@ with when it was written, but nothing in this module decides what counts as
 stale. Each caller passes its own ``max_age`` to ``get()`` — a graph
 snapshot and an ar5iv figure have very different TTLs, and both share this
 one table.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

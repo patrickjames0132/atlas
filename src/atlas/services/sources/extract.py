@@ -1,8 +1,14 @@
-"""Turn a raw source into clean, chunked text ready to embed.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Turn a raw source into clean, chunked text ready to embed.
 
 Two extractors — ``extract_pdf`` (pymupdf, page-aware) and ``fetch_url`` (a web
 page reduced to readable text) — plus ``chunk_text``, which splits extracted
 text into the overlapping windows the embedder indexes.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

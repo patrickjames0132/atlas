@@ -1,4 +1,7 @@
-"""Caption-anchored float mining: a PDF's figures, tables, and algorithms.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Caption-anchored float mining: a PDF's figures, tables, and algorithms.
 
 A paper PDF carries no semantic markup — just text, embedded images, and
 vector drawings — so "the paper's figures" have to be reconstructed from
@@ -35,6 +38,9 @@ Beware one pymupdf trap (cost this module a debugging session in the spike):
 a hairline rule is an EMPTY rect (zero height), and ``Rect.__or__`` silently
 ignores empty operands — rule spans are therefore built from raw
 coordinates, never with ``|``.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,7 @@
-"""Fixtures for the offline citations-corpus tests: a tiny synthetic release.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Fixtures for the offline citations-corpus tests: a tiny synthetic release.
 
 No network and no real Datasets pull — a handful of ``papers``/``citations``
 records are written as gzipped JSONL shards, ingested to a temp corpus dir, and
@@ -6,6 +9,9 @@ activated, exactly as the real ``atlas corpus download`` + ``ingest`` would. The
 seed is "Attention Is All You Need" (arXiv ``1706.03762``, corpus id 1); its
 citers are BERT (80k cites), GPT-3 (50k), and one paper published within the
 recent window — enough to assert citation-sorted landmarks and the latest split.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

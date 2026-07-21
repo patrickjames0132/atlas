@@ -1,4 +1,7 @@
-"""Pull a paper's figures + captions from its ar5iv HTML render.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Pull a paper's figures + captions from its ar5iv HTML render.
 
 Semantic Scholar gives us abstracts and TL;DRs but not a paper's figures. ar5iv
 (https://ar5iv.org) renders arXiv LaTeX to HTML whose ``<figure>`` elements carry
@@ -23,6 +26,9 @@ Images are served to the browser via a same-origin proxy (``client.fetch_image``
 + ``client.is_ar5iv_url``, wired up by the ``/api/figure_proxy`` route) so we
 don't depend on ar5iv allowing hotlinks and never expose an open proxy — only
 the ar5iv host is fetchable.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

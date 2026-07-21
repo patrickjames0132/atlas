@@ -1,5 +1,12 @@
-"""The config-entry -> PydanticAI-model factory: id lookup, model-string
-parsing, and explicit (non-env-var) credentials."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The config-entry -> PydanticAI-model factory: id lookup, model-string
+parsing, and explicit (non-env-var) credentials.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

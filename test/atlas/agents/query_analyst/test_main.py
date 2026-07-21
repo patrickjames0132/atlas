@@ -1,5 +1,12 @@
-"""The query analyst: expansion and title recall flow through from the
-model's structured output, and every failure mode degrades to a passthrough."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The query analyst: expansion and title recall flow through from the
+model's structured output, and every failure mode degrades to a passthrough.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

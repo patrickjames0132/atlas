@@ -1,4 +1,7 @@
-"""Everything the app derives directly from arXiv itself.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Everything the app derives directly from arXiv itself.
 
 Four things live here, all arXiv-specific and all for arXiv papers only:
 
@@ -28,6 +31,9 @@ separate ``arxiv_client`` package. That package (arXiv *search*) was retired in
 favour of Semantic Scholar search and deleted, along with the PyPI ``arxiv``
 dependency it was the only user of — so ``ID_RE`` moved here rather than
 disappearing with it.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

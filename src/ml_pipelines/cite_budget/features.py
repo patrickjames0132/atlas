@@ -1,4 +1,7 @@
-"""The model's label — the STOP rule — plus the notebook's cap grid.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The model's label — the STOP rule — plus the notebook's cap grid.
 
 Both halves of this model's contract are the **app's**, imported from
 ``atlas.services.graph.budget`` and re-exported here for the pipeline's use:
@@ -18,6 +21,9 @@ hand nothing has to collapse to a scalar. The rule therefore moved into
 ``budget.py`` beside the features, and training reads it back from there. One
 definition, no train/serve skew — the same arrangement the features have always
 had.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

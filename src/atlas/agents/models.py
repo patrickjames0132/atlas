@@ -1,4 +1,7 @@
-"""Shared vocabulary for the agents package: the workflow intents, the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Shared vocabulary for the agents package: the workflow intents, the
 lecture modes, and the played-lecture context the researcher receives.
 
 They live at the package root (not inside the orchestrator's or lecturer's
@@ -7,6 +10,9 @@ routes construct them, the orchestrator dispatches on them, and workflows
 receive them. ``StrEnum`` so members compare and serialize as their wire
 strings (``Intent.RESEARCH == "research"``), which keeps the HTTP layer and
 the ``MODE_INTENTS`` prompt table oblivious to the enum-ness.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

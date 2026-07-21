@@ -1,5 +1,12 @@
-"""The librarian: retrieval trace first, grounded streamed answer, the
-no-hits path, and scope/history forwarding."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The librarian: retrieval trace first, grounded streamed answer, the
+no-hits path, and scope/history forwarding.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

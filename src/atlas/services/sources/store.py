@@ -1,4 +1,7 @@
-"""The sources store: SQLite schema, connection setup, and source-record CRUD.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The sources store: SQLite schema, connection setup, and source-record CRUD.
 
 Two data tables — ``sources`` (one row per uploaded doc) and ``chunks`` (its
 text pieces) — plus two search indexes over the chunks that live alongside them:
@@ -13,6 +16,9 @@ text pieces) — plus two search indexes over the chunks that live alongside the
 This is deliberately its own connection helper rather than the shared
 ``storage.connect`` — it needs per-connection extension loading, capability
 probing, and conditional table creation that the generic helper doesn't do.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

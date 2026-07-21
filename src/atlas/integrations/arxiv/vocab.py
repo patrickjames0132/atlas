@@ -1,4 +1,7 @@
-"""The arXiv category taxonomy — arXiv's fine-grained subject vocabulary.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The arXiv category taxonomy — arXiv's fine-grained subject vocabulary.
 
 The ~155 arXiv category codes (``cs.LG``, ``math.PR``, …) with their display
 names (``cs.LG`` → "Machine Learning"), sourced from
@@ -11,6 +14,9 @@ vocabulary is ``semantic_scholar.vocab``.
 (The area-tree ``groups()`` and ``valid_codes()`` accessors were removed in
 v5.1.0 — they fed the retired arXiv-category *search filter*; only per-paper
 tag labelling remains.)
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

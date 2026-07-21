@@ -1,5 +1,11 @@
-"""openalex.vocab: the 26 top-level OpenAlex fields (id + name), for the
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+openalex.vocab: the 26 top-level OpenAlex fields (id + name), for the
 seed-search filter picker.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

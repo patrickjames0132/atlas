@@ -1,6 +1,12 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The math splitter: delimited LaTeX becomes math segments, prose (including
  * currency dollar signs and mid-stream unclosed delimiters) stays text.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

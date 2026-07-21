@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The graph exploration area: the canvas, its controls, the legend, and the
  * detail panel (plus its figure lightbox) — plus every piece of state only
  * they read (the `base` sim dataset, declutter filters, hover, selection,
@@ -14,6 +17,9 @@
  *
  * `children` renders inside the canvas wrap — the shell drops its overlays
  * (hit list, loading/error/hint) there without this component knowing them.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

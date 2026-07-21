@@ -1,4 +1,7 @@
-"""CLI entry point for Atlas (the ``atlas`` console script).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+CLI entry point for Atlas (the ``atlas`` console script).
 
 Usage:
     uv run atlas serve                  # start the API + Atlas frontend
@@ -7,6 +10,9 @@ Usage:
 
 Every command imports lazily so ``--help`` (and each command) never pays
 the import cost of the parts it doesn't touch.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

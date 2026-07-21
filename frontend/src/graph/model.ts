@@ -1,7 +1,13 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The explorer's view-model types and pure helpers: how API nodes become live
  * simulation nodes, and the small derivations (radius, primary relation,
  * date formatting) shared by the canvas and the DOM panels.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { GraphEdge, GraphNode, GraphResponse } from '../api'

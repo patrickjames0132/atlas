@@ -1,4 +1,7 @@
-"""Full paper text from ar5iv, for the agentic teacher to read into context.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Full paper text from ar5iv, for the agentic teacher to read into context.
 
 Semantic Scholar gives abstracts + TL;DRs; when the Q&A agent needs specifics
 (methods, results, numbers) it reads the full text. We reuse the ar5iv fetch that
@@ -13,6 +16,9 @@ Equations survive: ar5iv carries each formula's source LaTeX in the MathML
 ``alttext``, and the reader lifts it inline as ``$…$`` / ``$$…$$`` (``keep_math``)
 so a reader — the researcher, and the seed-reading intuition lecture — can quote a
 paper's actual math, which the frontend renders with KaTeX.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

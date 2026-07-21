@@ -1,4 +1,7 @@
-"""Turn the downloaded JSONL.gz shards into queryable Parquet, via DuckDB.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Turn the downloaded JSONL.gz shards into queryable Parquet, via DuckDB.
 
 DuckDB does the whole transform — it reads gzipped JSONL and writes Parquet
 natively, so there's no pandas/pyarrow step. Two datasets, two layouts, each
@@ -33,6 +36,9 @@ process ages (~3x across the first full release — per *process*, not per
 connection, tree, or shard size; see the constant's docs and docs/bugs.md),
 so the shard loop runs in a single-worker pool whose child is periodically
 replaced, holding every shard near cold-start speed.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

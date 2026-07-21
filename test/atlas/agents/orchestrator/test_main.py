@@ -1,5 +1,12 @@
-"""The dispatcher: intent routing (lectures are pure delegation — they never
-expand the graph) and the Done/Error termination contract."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The dispatcher: intent routing (lectures are pure delegation — they never
+expand the graph) and the Done/Error termination contract.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

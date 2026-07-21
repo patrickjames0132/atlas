@@ -1,10 +1,16 @@
-"""The librarian's tool surface: its run-state (deps) and show_source_figure.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The librarian's tool surface: its run-state (deps) and show_source_figure.
 
 One tool, deliberately: the librarian stays the lightweight retrieve-then-
 answer path — no graph, no searches — but since v5.28.0 it can attach real
 figures from the user's uploaded PDFs, the same way the researcher does. The
 tool follows the researchers' one hard rule: **failures are reported in the
 tool-result text, never raised** — steerable information, not a dead answer.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

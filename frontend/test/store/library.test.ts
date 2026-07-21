@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The library slice: one shared copy of the uploaded sources, written by the
  * Sources drawer's reloads and read live by the teacher's source-scope picker
  * — the staleness fix's contract is simply that a fulfilled load lands in the
  * state both surfaces watch.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

@@ -1,4 +1,7 @@
-"""Graph & paper routes: the neighborhood graph for a seed, single-paper
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Graph & paper routes: the neighborhood graph for a seed, single-paper
 detail hydration, and a paper's figures (proxied from ar5iv).
 
 GET /api/graph?seed=&refresh=      -> neighborhood graph for a seed paper
@@ -15,6 +18,9 @@ Two failure philosophies live here, on purpose: the *load-bearing* endpoints
 (graph, paper) map failures to real HTTP errors (400/404/502), while the
 panel *niceties* (figures, code) degrade to ``available: false`` — a missing
 figure strip must never 500 the whole detail panel.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

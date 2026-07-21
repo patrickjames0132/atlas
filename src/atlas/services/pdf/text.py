@@ -1,10 +1,16 @@
-"""Readable body text straight out of a PDF file.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Readable body text straight out of a PDF file.
 
 The pymupdf twin of the ar5iv reader (``integrations/arxiv/fulltext.py``) for
 papers that only exist as PDFs. Quality is honest-but-lower: a PDF has no
 semantic markup, so headers/footers ride along and equations come out as
 whatever Unicode the font encoded — good enough to ground an answer in a
 paper's methods and numbers, which is the researcher's use case.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

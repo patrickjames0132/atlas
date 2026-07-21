@@ -1,4 +1,7 @@
-"""The lecturer: a streamed lecture over the visible graph, in typed beats.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The lecturer: a streamed lecture over the visible graph, in typed beats.
 
 The model produces a ``list[LectureBeat]`` as structured output — heading,
 one tight narration paragraph, and the numbered-list indices to light up.
@@ -24,6 +27,9 @@ grounds in the seed's **full text** (ar5iv, equations kept as LaTeX — it
 reads the paper and teaches it in chapters) and retrieved library passages.
 No tools involved — all fetched (cached) before the run. Model failures
 propagate — the caller ends the event stream with ``Error``.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

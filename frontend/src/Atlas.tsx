@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Atlas — the shell. Composes the header, the drawers, the graph explorer,
  * and the teacher panel; owns only what it alone renders: drawer visibility,
  * the library count, the seed-search instance (its three render sites — the
@@ -10,6 +13,9 @@
  * highlight ids. The old Atlas's transcript-duplicating refs and remount
  * plumbing died with that move — the teacher remounts per workspace epoch,
  * and Save reads the store, not a hoisted copy.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'

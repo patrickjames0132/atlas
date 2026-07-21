@@ -1,8 +1,14 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Selection state for the explorer: which node is open in the detail panel,
  * its lazily-hydrated details (abstract/TL;DR), its lazily-fetched figures,
  * code links, and arXiv category tags, and the click handler that both
  * selects and (on a quick double-click) re-seeds the graph.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

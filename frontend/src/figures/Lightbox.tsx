@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The full-screen figure lightbox (click anywhere or Escape to close).
  *
  * Shared by two unrelated callers — the teacher's agent-cited answer figures
@@ -6,6 +9,9 @@
  * (neither is), hence promoted out of `teacher/figures/` to this root-level
  * folder per the frontend's hybrid structure rule (multi-consumer components
  * live at the root, not nested in whichever feature built them first).
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect } from 'react'

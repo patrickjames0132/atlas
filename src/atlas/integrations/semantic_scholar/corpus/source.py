@@ -1,4 +1,7 @@
-"""Query the offline corpus for a seed's citers — the real Field-Landmarks fix.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Query the offline corpus for a seed's citers — the real Field-Landmarks fix.
 
 This is the payoff of the whole pipeline: because the corpus holds *every*
 citation edge with the citers' own citation counts, a seed's landmark citers can
@@ -32,6 +35,9 @@ flatten the year distribution the tau rule reads, pinning 56 of 58 seeds to a
 one-year band). So switching a graph to the corpus changes *which* citers appear —
 now the true top-cited across all history — and now also *where the frontier
 starts*: per-seed, rather than a flat twelve months.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

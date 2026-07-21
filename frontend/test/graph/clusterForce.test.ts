@@ -1,7 +1,13 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The Force layout's relation clustering: sector directions (references pull
  * west, landmarks east-up, latest east-down), √population orbits, seed and
  * unknown-relation exemptions, and re-initialization picking up discoveries.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

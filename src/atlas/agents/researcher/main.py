@@ -1,4 +1,7 @@
-"""The researcher: agentic Q&A over the graph — read, expand, search, then answer.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The researcher: agentic Q&A over the graph — read, expand, search, then answer.
 
 The flagship workflow. The model gets tools (``tools.py``) and a run-state
 deps object; it investigates until it has enough, then produces a structured
@@ -13,6 +16,9 @@ time on a private event loop, draining the deps event queue (traces,
 discoveries, figures pushed by tools) between run events and decoding the
 final answer's streamed tool-call args into ``Token`` deltas via partial
 JSON parsing.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

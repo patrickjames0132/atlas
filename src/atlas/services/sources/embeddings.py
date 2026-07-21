@@ -1,4 +1,7 @@
-"""Local text embeddings for semantic search, via sentence-transformers.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Local text embeddings for semantic search, via sentence-transformers.
 
 The model is loaded lazily and cached process-wide the first time an embedding is
 actually needed, so importing this module never pays the (large) torch import +
@@ -14,6 +17,9 @@ default "auto", i.e. sentence-transformers' own detection, which lands on the
 GPU when torch has a CUDA build. Ingest is where that matters: it embeds
 thousands of chunks in batches, while a single query embedding is dominated by
 overhead either way.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

@@ -1,4 +1,11 @@
-"""The corpus's single-root on-disk layout and the CURRENT-release pointer."""
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The corpus's single-root on-disk layout and the CURRENT-release pointer.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
+"""
 
 from __future__ import annotations
 

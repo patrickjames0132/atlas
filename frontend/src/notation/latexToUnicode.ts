@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Best-effort LaTeX → Unicode for graph node titles, which are painted on a
  * canvas (`ctx.fillText`) where KaTeX/HTML can't reach. This is an
  * approximation, not a renderer: it strips the math delimiters, maps Greek
@@ -8,6 +11,9 @@
  *
  * HTML surfaces get real KaTeX via {@link MathText}; this is the canvas-only
  * fallback.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 /** LaTeX control words for Greek letters and a few common math symbols. */

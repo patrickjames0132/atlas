@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The tour step lists: data only — the walking/spotlighting lives in
  * `Tour.tsx`; the `data-tour` attributes these selectors point at are planted
  * where each control renders (`search/Search.tsx`,
@@ -13,6 +16,9 @@
  * year/citation sliders only render when the graph spans a range, the detail
  * panel needs a selected paper, the lecture grid needs the assistant open),
  * so each list describes its phase's *maximal* tour.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { TourStep } from './Tour'

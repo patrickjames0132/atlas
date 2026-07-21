@@ -1,4 +1,7 @@
-"""Hugging Face Papers — a paper's code & artifact links.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Hugging Face Papers — a paper's code & artifact links.
 
 Papers with Code sunset into Hugging Face Papers, so HF is now the place that
 maps an arXiv id to runnable implementations: a community-linked GitHub repo
@@ -15,6 +18,9 @@ into a small envelope for the detail panel's "code & artifacts" section:
 A single-service, single-shape client — smaller than the ar5iv/
 semantic_scholar packages, but split the same way (transport vs. domain) so
 the ``integrations`` packages all read alike.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

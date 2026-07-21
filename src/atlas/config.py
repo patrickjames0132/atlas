@@ -1,4 +1,7 @@
-"""Central configuration for arXiv Atlas, loaded from config.json.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Central configuration for arXiv Atlas, loaded from config.json.
 
 Every tunable — paths, API keys, model names, agent definitions — lives in
 one JSON file at the repo root, parsed by Pydantic into the nested
@@ -19,6 +22,9 @@ fixture points ``config.storage.data_dir`` at a per-test temp directory
 and zeroes ``config.providers.s2.min_interval`` so tests never touch real data or
 sleep. Keep field lookups late (``config.x.y`` at call time, not a
 module-level ``from ... import y``) so those overrides are seen.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

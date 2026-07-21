@@ -1,4 +1,7 @@
-"""HTTP transport for Semantic Scholar: throttling, retries, and the one
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+HTTP transport for Semantic Scholar: throttling, retries, and the one
 error type this whole package raises.
 
 Rate-limit strategy (learned from a spike against the live API):
@@ -11,6 +14,9 @@ Rate-limit strategy (learned from a spike against the live API):
 
 Nothing here uses a third-party HTTP dependency — stdlib ``urllib`` keeps
 the client tiny and the deploy simple.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

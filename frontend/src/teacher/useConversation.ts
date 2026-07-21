@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The conversation engine: drives the three agent streams and dispatches
  * their events into the store (transcript, highlights, discoveries), while
  * owning the panel-local run state — which lecture modes are loading, the
@@ -9,6 +12,9 @@
  * The split of responsibilities is the Phase 6 state directive: everything
  * the canvas or Save needs goes through the store; everything only this
  * panel renders stays right here.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'

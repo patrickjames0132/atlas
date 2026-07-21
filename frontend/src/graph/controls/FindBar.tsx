@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The find control — a round 🔍 button pinned to the graph area's bottom-right
  * corner that expands into a rounded input pill on click (Google-Maps style,
  * Patrick's pick after the always-open pill read as floating in no-man's
@@ -13,6 +16,9 @@
  * hand-picked scope (the marquee's additive machinery) and clears the
  * find, so find → select → ask is three gestures. Both affordances stay:
  * the link is discoverable, Enter is fast.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useState } from 'react'

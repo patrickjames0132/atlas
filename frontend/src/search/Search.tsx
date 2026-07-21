@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The seed-search form: the query box + Explore button, plus the optional
  * (never required) pre-submit search options — a publication-year window, a
  * field-of-study picker fed by the backend's S2 vocabulary endpoint, and the
@@ -8,6 +11,9 @@
  * results (HitList) and state (useSeedSearch) live alongside it here. Option
  * state lives in useSeedSearch (via Atlas) so runSearch reads it directly;
  * this component only renders and edits it.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect, useState } from 'react'

@@ -1,4 +1,7 @@
-"""OpenAlex's top-level fields — its coarse subject vocabulary for the seed-search
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+OpenAlex's top-level fields — its coarse subject vocabulary for the seed-search
 filter (the OpenAlex counterpart of ``semantic_scholar.vocab``).
 
 OpenAlex classifies works with a four-level topic hierarchy (domain → field →
@@ -11,6 +14,9 @@ enough to inline (no data file, no live ``/fields`` call).
 Unlike S2's fields (where the display name *is* the filter value), an OpenAlex
 field has a distinct **id** (sent to the API) and **name** (shown to the user), so
 this vocabulary is id→name pairs.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

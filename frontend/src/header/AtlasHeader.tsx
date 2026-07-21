@@ -1,10 +1,16 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The top bar container: brand, the seed-search form (composed from
  * search/Search), the current seed's title, and the drawer toggles
  * (Library / Assistant / Sessions).
  *
  * Purely presentational — search state and drawer visibility live in Atlas
  * and pass through as props.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import type { FormEvent } from 'react'

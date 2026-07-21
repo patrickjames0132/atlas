@@ -1,4 +1,7 @@
-"""Neighborhood-graph assembly and its typed models.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Neighborhood-graph assembly and its typed models.
 
 * ``build``  — ``build_graph``: the assembly logic (single-provider traversals,
   dedupe, typed edges, cached). ``Provider`` names the backends it can build from.
@@ -7,6 +10,9 @@
 
 Both are re-exported here, so callers use ``graph.build_graph(...)`` /
 ``graph.Graph`` without reaching into the submodules.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

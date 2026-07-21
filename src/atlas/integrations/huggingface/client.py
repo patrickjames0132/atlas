@@ -1,4 +1,7 @@
-"""Thin wrapper over the official ``huggingface_hub`` client for one call.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Thin wrapper over the official ``huggingface_hub`` client for one call.
 
 We only need ``HfApi.paper_info(arxiv_id)`` — HF's ``/api/papers/{id}`` endpoint
 wrapped in a typed ``PaperInfo`` (linked models/datasets/Spaces, their totals,
@@ -8,6 +11,9 @@ this module is just: hold one ``HfApi`` instance, and translate a 404 into a
 
 ``huggingface_hub`` is already in the dependency tree via ``sentence-transformers``;
 we depend on it explicitly rather than leaning on that transitively.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

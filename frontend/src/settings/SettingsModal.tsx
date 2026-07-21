@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The settings modal — a config-file editor in the style of Claude Desktop's
  * settings: a left sidebar (search + grouped nav) and a right content pane of
  * label-left / control-right rows.
@@ -16,6 +19,9 @@
  * button that opens the OS file chooser via the backend — a browser's own
  * picker never reveals absolute paths); a missing default config.json is
  * auto-created from the example server-side.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useState } from 'react'

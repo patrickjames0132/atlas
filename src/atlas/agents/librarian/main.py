@@ -1,4 +1,7 @@
-"""The librarian: graph-free RAG chat over the user's own uploaded library.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+The librarian: graph-free RAG chat over the user's own uploaded library.
 
 Retrieve-then-answer: the most relevant passages are fetched
 deterministically (hybrid FTS5 + vector search) *before* the model is
@@ -22,6 +25,9 @@ final result, which is the house pattern.
 Empty retrieval is an answer, not an error: a friendly no-hits line streams
 back without the model ever running. Real failures (model, database)
 propagate — the caller ends the event stream with ``Error``.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

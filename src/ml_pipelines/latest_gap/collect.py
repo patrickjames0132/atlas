@@ -1,4 +1,7 @@
-"""Pull each corpus seed's landmark-era citer-year distribution from OpenAlex.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Pull each corpus seed's landmark-era citer-year distribution from OpenAlex.
 
 The data-collection stage of the ``latest_gap`` pipeline (see this package's
 README). The study asks: *where does a seed's landmark cluster tail off?* — so
@@ -20,6 +23,9 @@ Run from the repo root (reuses the app's throttled OpenAlex client):
 Writes ``src/ml_pipelines/latest_gap/corpus.csv`` (committed, so training is
 reproducible without a re-pull). ``train.py`` calls :func:`collect` directly
 when asked to refresh.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

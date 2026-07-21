@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * Mid-conversation graph growth: the papers the AI teacher pulls in via its
  * expand_node / search_papers tools (and the history lecture's backward
  * walk), merged into the live graph without disturbing the simulation.
@@ -15,6 +18,9 @@
  * origin instead of absorbing it into the seed's relation sectors. In
  * Timeline (x date-pinned), satellites band outward in y past their origin
  * instead. Ungrounded/seed-anchored discoveries keep the old behavior.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useState } from 'react'

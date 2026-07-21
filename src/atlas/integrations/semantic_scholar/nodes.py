@@ -1,9 +1,15 @@
-"""Normalizing a raw Semantic Scholar paper object into the app's graph-node
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Normalizing a raw Semantic Scholar paper object into the app's graph-node
 shape — the single place that shape is defined.
 
 Every S2 response — batch hydration, references, citations, recommendations,
 search — funnels through ``node()``. Everything downstream (graph assembly,
 the teacher, the frontend) consumes the dict it produces.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

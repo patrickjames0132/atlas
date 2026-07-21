@@ -1,4 +1,7 @@
-"""Fit the adaptive landmark-budget model and write the served artifact.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Fit the adaptive landmark-budget model and write the served artifact.
 
 The training stage: read the labelled corpus (``corpus.csv``), build the feature
 matrix through the app's own :func:`atlas.services.graph.budget.compute_features`
@@ -16,6 +19,9 @@ This reproduces the research notebook's fit as a repeatable job (the notebook in
 
 The chosen model form (plain-age linear over sqrt-age) and the density label are
 justified in the notebook and this package's README; here we just fit and ship.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

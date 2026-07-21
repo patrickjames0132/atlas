@@ -1,8 +1,14 @@
-"""Shared HTTP transport for ar5iv (arXiv's LaTeX→HTML renderer).
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+Shared HTTP transport for ar5iv (arXiv's LaTeX→HTML renderer).
 
 ``figures.py`` and ``fulltext.py`` each extract something different from the
 same ar5iv HTML render, so the raw fetch (and its cache TTL) live here once
 instead of one module reaching into the other's internals.
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

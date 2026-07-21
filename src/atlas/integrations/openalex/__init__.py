@@ -1,4 +1,7 @@
-"""``integrations.openalex`` — the hybrid citation backbone.
+"""Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+
+Description:
+``integrations.openalex`` — the hybrid citation backbone.
 
 Since v4.0.0 OpenAlex supplies the graph's **citation** relation (landmark +
 latest): a server-sorted ``cites:`` query returns a seed's most-cited citers
@@ -12,6 +15,9 @@ Public API mirrors ``semantic_scholar``'s shape so a caller reads the same:
     from ..integrations import openalex
     work = openalex.resolve_work(arxiv_id=..., title=..., year=...)
     landmark, latest = openalex.citation_relations(openalex.bare_work_id(work))
+
+Authors:
+Charles Patrick James <charles.patrick.james@gmail.com>
 """
 
 from __future__ import annotations

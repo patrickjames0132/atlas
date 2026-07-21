@@ -1,9 +1,15 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The transcript slice's lecture-caching reducers: playing a mode caches its
  * beats (tagged by mode, so parallel background streams fill the right slot),
  * switching modes keeps every cache slot, and show/hide/drop move the visible
  * mode without losing (or, for a drop, deliberately losing) beats. Clearing the
  * chat leaves the lectures alone.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { describe, expect, it } from 'vitest'

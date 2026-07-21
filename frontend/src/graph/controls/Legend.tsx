@@ -1,6 +1,12 @@
 /**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
  * The color legend under the graph. The two teacher-related entries only
  * appear once the agent has actually discovered papers mid-conversation.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { REL_COLOR } from '../theme'

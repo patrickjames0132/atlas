@@ -1,13 +1,20 @@
+/**
+ * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+ *
+ * Description:
+ * The Sessions drawer (Phase 4): save the current workspace — the graph as it
+ * stands (every node/edge, including the ones the agent discovered) plus the
+ * teacher transcript — and reopen a saved one later without rebuilding it from
+ * Semantic Scholar. Listing/deleting is handled here; saving and restoring are
+ * the parent's job (it holds the live graph + chat), reached via onSave/onOpen.
+ *
+ * Authors:
+ * Charles Patrick James <charles.patrick.james@gmail.com>
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { deleteSession, listSessions, type SavedSessionMeta } from '../api'
 import '../library/sources.css'
 import './sessions.css'
-
-// The Sessions drawer (Phase 4): save the current workspace — the graph as it
-// stands (every node/edge, including the ones the agent discovered) plus the
-// teacher transcript — and reopen a saved one later without rebuilding it from
-// Semantic Scholar. Listing/deleting is handled here; saving and restoring are
-// the parent's job (it holds the live graph + chat), reached via onSave/onOpen.
 
 /**
  * A saved session's timestamp as a short human date.
