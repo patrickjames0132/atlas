@@ -1,11 +1,12 @@
 # Atlas — One-Pager
 
-> **Status:** v5.7.0 · living document · The core loop has shipped: the
-> provider-selectable citation graph (Semantic Scholar or OpenAlex, with an
-> optional offline S2 citations corpus for honest all-history landmarks), the
-> AI teacher (four relation-scoped lectures + an agentic researcher with
-> graph- and library-reach), the local semantic library, and saved sessions &
-> workspaces.
+> **Status:** v6.3.0 · living document · MIT-licensed. The core loop has
+> shipped: the provider-selectable citation graph (Semantic Scholar or
+> OpenAlex, with an optional offline S2 citations corpus for honest
+> all-history landmarks), the AI teacher (four relation-scoped lectures + an
+> agentic researcher with graph- and library-reach), the local semantic
+> library, saved sessions & workspaces, and an in-app settings modal — with
+> light/dark theming and per-request graph sizing (adaptive or user-tuned).
 >
 > This file holds the product vision and the working roadmap — the **Backlog**
 > below is the open work. The full shipped history (every item's story +
@@ -17,7 +18,7 @@
 
 ## Vision
 
-**arXiv Atlas** turns a research paper into an explorable *map* and puts an AI
+**Atlas** turns a research paper into an explorable *map* and puts an AI
 teacher beside it. Drop in a paper (say *Attention Is All You Need*) and Atlas
 renders a **Connected-Papers-style interactive graph** of how it links to the
 literature — the papers it built on, the papers it spawned, and its nearest
@@ -245,37 +246,6 @@ optional, behind a key.
 
 ### Citations & graph data
 
-- [ ] **Budget-cap the Similar nodes with a trained model** *(mooted — Similar was
-      dropped from the graph in v5.0.0; keep only if a future ticket re-adds it)* —
-      the *Similar*
-      relation ships a flat `similar_limit` count, the same one-size problem the
-      landmark budget solved for citations (v4.5.0). Give it its own budget
-      model: cap how many SPECTER2 neighbors to show per seed, trained the same
-      way as `cite_budget` (a new `ml_pipelines/<study>/` producing a loadable
-      artifact the app calls at serve time, degrading gracefully). Decide the
-      right label/signal for "how many similar papers are worth showing" (density
-      of similarity scores? a drop-off / knee in the ranked similarity? seed
-      features?) during the study. Mirrors the `cite_budget` / `latest_gap`
-      pattern. *(From the `todos.md` inbox, 2026-07-10.)*
-- [ ] **The live path can only see the recent sliver — the fix is the corpus, not
-      a better estimator** — *(the residue of the live-path age-origin ticket,
-      which `live_pool_validation` answered on 2026-07-17: see
-      [docs/history.md](docs/history.md). The design's steps 2 and 4 are dead; this
-      is what its measurements left behind.)* The study put a number on how little
-      the live S2 fallback can see: across 18 truncated seeds the full-history
-      landmark budget is a median **1.8×** the one computable from the reachable
-      pool, and the tail is savage — VMD **12 vs 166** (13.8×), KEGG 13 vs 131,
-      Random Forests 15 vs 114. *Attention Is All You Need*'s newest 9,000 citers
-      **all fall in one year**, so the live path can see no history of it at all.
-      Nothing on the live path fixes this: it isn't an estimation error, it's
-      missing data, and the exactly-computed answer is exact about a sliver. The
-      `select_up_to_cap_per_year` band is the honest response (it ships what the
-      window holds without implying the window is the history), and the real repair
-      is the **offline corpus**, already built. So this is less a ticket than a
-      standing reason not to invest further in live-path landmark sizing — and an
-      argument for surfacing provenance in the UI, since the same seed can
-      legitimately show a 14×-different landmark band depending on the data source.
-      *(Patrick's design, 2026-07-16; measured and resolved 2026-07-17.)*
 - [ ] **Spike: is the SKIP rule what we actually want?** — Patrick's ask
       (2026-07-17), from the conversation that retired the budget model. Since
       v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
@@ -390,14 +360,6 @@ optional, behind a key.
       supplement when the latest pool comes back suspiciously thin (the
       fallback is currently all-or-nothing on seed resolution). *(From the
       `todos.md` inbox, 2026-07-09; findings 2026-07-10.)*
-- [ ] **Search nodes as a graph filter chip** — topic-search hits (the pink
-      `search` relation from the researcher's `search_papers` tool) are
-      currently **always shown** with no filter chip of their own (see the
-      `enabled` set in `GraphExplorer.tsx`, seeded with `[...REL_TYPES,
-      'search']`, and `GraphControls` renders chips only for `REL_TYPES`).
-      Give them their own toggle alongside references / citations / similar so
-      the user can hide/show them like any other relation. *(From the
-      `todos.md` inbox, 2026-07-07.)*
 - [ ] **Search cache refresh override** — seed-search results are served from
       the whole-result cache (v2.0.0) with no way to bypass a stale entry; add
       a refresh/override button to the search surface, mirroring the graph's
@@ -475,7 +437,6 @@ optional, behind a key.
   distinguishes genuine landmark **recovery** from just a prettier Similar
   relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
-
 ### UI & rendering polish
 
 - [ ] **Settings modal — the corpus vs. live-citations toggle** — the
@@ -493,11 +454,15 @@ optional, behind a key.
       serving the wrong old snapshot. *(From the `todos.md` inbox, 2026-07-16;
       scoped 2026-07-19; adaptive half shipped 2026-07-20.)*
 
-- [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered papers
-      (dashed ring, from `expand_node`/`search_papers`) and search papers have no filter control;
-      add a chip (like the relation chips) to show/hide the whole discovered set
-      at once, so a busy post-Q&A graph can collapse back to the built
-      neighborhood. *(From the `todos.md` inbox, 2026-07-14.)*
+- [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered
+      papers (dashed ring, from `expand_node`/`search_papers`) and topic-search
+      hits (the pink `search` relation) have no filter control — both are
+      **always shown**: `GraphExplorer.tsx` seeds the `enabled` set with
+      `[...REL_TYPES, 'search', 'similar']`, and `GraphControls` renders chips
+      only for `REL_TYPES`. Give them their own toggle(s) alongside the relation
+      chips so a busy post-Q&A graph can collapse back to the built neighborhood.
+      *(From the `todos.md` inbox, 2026-07-14; absorbs the former "search nodes
+      as a filter chip" ticket, 2026-07-07.)*
 - [ ] **Rework the `search` node treatment (overlap → grounded, dual-relation
       detail)** — the parked "do we even want a distinct pink `search` relation?"
       question, shaped: when a topic-search hit is **also** a citation/reference
@@ -509,8 +474,6 @@ optional, behind a key.
       edge-less node, plus multi-relation detail badges (the panel already dedupes
       badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
       v5.2.0 edge-less-node filter fix.)*
-
-
 
 - [ ] **Responsive layout + a collapsible icon side rail (mobile-friendly)** —
       the frontend assumes a wide desktop window; resizing squeezes the
@@ -578,10 +541,10 @@ optional, behind a key.
       module-level constants (`NBUCKETS`, `_RANK_POOL`, `_MAX_OFFSET`,
       `PER_YEAR_CAP`, `_LATEST_WINDOW_MONTHS`, `UNBOUNDED_LANDMARK_CAP`, the
       retrieval/chunking numbers, agent extras defaults, …) asking of each:
-      should this be a `config.json` knob? The audit needs the lesson of the
-      count-caps ticket above as its filter — that ticket exists because knobs
-      nobody turns are *deletion* candidates, so "could be configurable" is not
-      the bar; "someone would actually turn it, and turning it is safe" is.
+      should this be a `config.json` knob? The audit needs the lesson the
+      v6.0.0 count-caps purge taught as its filter — knobs nobody turns are
+      *deletion* candidates, so "could be configurable" is not the bar;
+      "someone would actually turn it, and turning it is safe" is.
       Fitted constants (`PER_YEAR_CAP`, `tau`/`max_span`) and API-reality
       constants (`_MAX_OFFSET` is what S2 serves, `NBUCKETS` is baked into the
       ingested corpus layout) probably stay code. **Part two, a separate pass
@@ -610,16 +573,6 @@ optional, behind a key.
       Worth pairing with the fact that the pipelines' **collectors** have no test
       coverage at all for the same reason — they call live APIs. *(Found while
       renaming the budget vocabulary, 2026-07-16.)*
-- [ ] **Drop the `recs_pool` config knob (hardcode `all-cs`)** — the S2
-      *Similar* recommendations pool is a `Literal["all-cs", "recent"]` config
-      option (`config.providers.s2.recs_pool`), but `config.py` and
-      `docs/configuration.md` both say it **must stay `all-cs`** — `"recent"`
-      returns nothing for older seeds, so no real graph ever wants it. Like the
-      retired per-relation count caps, it's a dead knob: remove the config field
-      and hardcode `from=all-cs` at the recommendations call site
-      (`integrations/semantic_scholar`), deleting the now-moot "why it must stay
-      all-cs" config/docs notes. Confirm nothing else reads it first. *(From the
-      `todos.md` inbox, 2026-07-11.)*
 - [ ] **Rename `digest.db` → `cache.db`** — the ephemeral graph-snapshot store
       is still named `digest.db`, a leftover from the retired daily-digest era;
       it's really the 1-day graph/artifact **cache** now. Rename the file (and
@@ -628,24 +581,6 @@ optional, behind a key.
       name matches what it holds. A cosmetic rename — old `digest.db` files can be
       left to age out or deleted, since it's a regenerable cache. *(From the
       `todos.md` inbox, 2026-07-11.)*
-- [ ] **Drop the retired per-relation count caps from config** — remove
-      `graph.ref_limit`, `graph.cite_limit`, `graph.adaptive_cite_limit`,
-      `graph.latest_limit`, and `graph.similar_limit` from `config.json` /
-      `config.example.json` and the Pydantic `graph` config. Resolved plan (per
-      Patrick, 2026-07-10):
-  - **`cite_limit` + `adaptive_cite_limit`** → gone: the **computed STOP rule
-    always determines the cite limit** (since v5.13.0 on every path — the model
-    that used to predict it is retired) — no toggle, no config ceiling. The rule
-    owns its own upper bound (`UNBOUNDED_LANDMARK_CAP` as the payload guard,
-    `services/graph/budget.py`) rather than clamping to a config `cite_limit`.
-  - **`ref_limit`** → gone: **show all references** (no cap).
-  - **`latest_limit`** → gone: Latest Publications is already **banded by year**
-    (`latest_band_years` × `latest_per_year`), so the flat cap is redundant.
-  - **`similar_limit`** → **staged behind** the *Budget-cap the Similar nodes with
-    a trained model* ticket (under Citations & graph data): that ticket replaces
-    the flat `similar_limit` with a trained per-seed budget, so remove the config
-    key as part of / after it, not before. *(From the `todos.md` inbox,
-    2026-07-10.)*
 - [ ] **Fold the retired predictor into `ml_pipelines` (or retire it fully)** —
       since v5.13.0 `budget.predicted_budget` / `load_model` / `MODEL_PATH` are
       app-side code (`services/graph/budget.py`) whose only callers are
@@ -660,9 +595,9 @@ optional, behind a key.
       serving rule now), or decide the `latest_gap` corpus should be re-collected
       against the *computed* budget and delete the predictor outright. Blocked
       on neither; just don't do it silently — the model coming back (a future
-      provider that genuinely can't compute) is the one reason to wait. Pairs
-      with the count-caps ticket above (both are "what does the model's absence
-      let us delete?"). *(Patrick, 2026-07-17, spotting the near-dead code in
+      provider that genuinely can't compute) is the one reason to wait. Same
+      family as the v6.0.0 count-caps purge — "what does the model's absence let
+      us delete?" *(Patrick, 2026-07-17, spotting the near-dead code in
       review.)*
 - [ ] **Swap the hand-rolled `urllib` clients for `httpx`** — S2, arXiv
       (`client`/`fulltext`/`figures`), and OpenAlex all hand-roll stdlib
@@ -758,7 +693,6 @@ optional, behind a key.
       ElevenLabs optional, `/api/lecture/audio`.
 - [ ] **Phase 7 — Polished media (optional)** — `autocontent.py` behind
       `AUTOCONTENT_API_KEY`; "Generate visuals" button.
-
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
