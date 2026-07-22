@@ -18,6 +18,11 @@ src/ml_pipelines/
                    artifact remains the label's derivation record and a
                    latest_gap-collector dependency)
   latest_gap/    — the adaptive latest-band boundary (bands.earliest_band_year)
+  landmark_threshold/ — the citation predicate that replaces the whole STOP/SKIP/
+                   band machinery (docs/citation-threshold.md): fits T[age], S(seed)
+                   and FLOOR so is_landmark() reads one citer, never the pool. Two
+                   curves — the S2 half (collect_s2/train_s2) fit from the corpus;
+                   the OpenAlex half pending
   live_pool_validation/ — validation only: both models measured against the live
                    S2 path's truncated pools, simulated from the offline corpus
 ```

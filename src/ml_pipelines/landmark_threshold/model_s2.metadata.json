@@ -1,0 +1,87 @@
+{
+  "provider": "s2",
+  "form": "cited_by >= max(floor, a*(age+1)^p * (seed_cited_by/median_seed)^beta)",
+  "a": 38.1218,
+  "p": 0.8026,
+  "beta": 0.6608,
+  "floor": 9.6351,
+  "median_seed": 2002.0,
+  "age_max": 30,
+  "as_of_year": 2026,
+  "target_band": [
+    20,
+    40
+  ],
+  "n_seeds": 1502,
+  "achieved_spread": {
+    "n_seeds": 1502,
+    "target_band": [
+      20,
+      40
+    ],
+    "in_band_frac": 0.316,
+    "fair_success_frac": 0.316,
+    "reachable_frac": 1.0,
+    "count_percentiles": {
+      "5": 7.0,
+      "25": 20.0,
+      "50": 35.0,
+      "75": 59.8,
+      "95": 135.0
+    },
+    "by_seed_size": {
+      "cites~1e2": {
+        "n_seeds": 645,
+        "median_landmarks": 35.0,
+        "in_band_frac": 0.389,
+        "example_low_cites": 100
+      },
+      "cites~1e3": {
+        "n_seeds": 482,
+        "median_landmarks": 41.5,
+        "in_band_frac": 0.274,
+        "example_low_cites": 1000
+      },
+      "cites~1e4": {
+        "n_seeds": 371,
+        "median_landmarks": 30.0,
+        "in_band_frac": 0.245,
+        "example_low_cites": 10000
+      },
+      "cites~1e5": {
+        "n_seeds": 4,
+        "median_landmarks": 77.5,
+        "in_band_frac": 0.25,
+        "example_low_cites": 100000
+      }
+    },
+    "worked_examples": {
+      "Hawking Radiation": {
+        "seed_year": 1974,
+        "seed_cited_by": 5143,
+        "landmarks": 26,
+        "max_possible": 3714
+      },
+      "DQN": {
+        "seed_year": 2013,
+        "seed_cited_by": 13792,
+        "landmarks": 94,
+        "max_possible": 9715
+      },
+      "QMIX": {
+        "seed_year": 2018,
+        "seed_cited_by": 2046,
+        "landmarks": 56,
+        "max_possible": 1440
+      },
+      "Attention Is All You Need": {
+        "seed_year": 2017,
+        "seed_cited_by": 183110,
+        "landmarks": 137,
+        "max_possible": 119672
+      }
+    }
+  },
+  "trained_at": "2026-07-21T15:21:36+00:00",
+  "numpy_version": "2.5.0"
+}

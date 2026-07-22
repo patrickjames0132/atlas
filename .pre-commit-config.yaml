@@ -12,6 +12,13 @@ repos:
         exclude: ^frontend/tsconfig.*\.json$
       - id: check-merge-conflict
       - id: check-added-large-files
+        # Keeps the default 500 KB guard everywhere except the one file that has
+        # earned an exemption: the landmark-threshold fitting corpus (~6 MB
+        # gzipped, from 67 MB). It is committed so the fit reproduces off the
+        # corpus machine, and it can't be shrunk further without throwing away
+        # sample density the 20–40 band question needs — see that package's
+        # README ("Why the corpus is gzipped").
+        exclude: ^src/ml_pipelines/landmark_threshold/corpus_s2\.csv\.gz$
       - id: end-of-file-fixer
       - id: trailing-whitespace
 
