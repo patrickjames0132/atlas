@@ -138,7 +138,7 @@ the paper.
 
 **per-year cap** (`PER_YEAR_CAP = 12`) — how many same-year citers a landmark
 view tolerates before that year reads as a pile-up. One constant behind both
-rules. Fit by sweep, not hand-picked (`research/cite_budget/`).
+rules. Fit by sweep, not hand-picked.
 
 **`number_of_ranked_citers_before_a_single_year_overflows`** — Rule 1 above. The
 STOP rule. Returns a count. Two jobs: the trained model's **training label**
@@ -271,9 +271,7 @@ The worst word in the codebase. Always disambiguate:
 | `tail_edge`, `tau`, `max_span`, `band_start`, `MIN_LANDMARK_YEARS` | `src/atlas/services/graph/bands.py` |
 | `REACHABLE_CITERS`, `_MAX_OFFSET` | `src/atlas/integrations/semantic_scholar/traversal.py` |
 | `UNBOUNDED_LANDMARK_CAP` (500) | `src/atlas/integrations/openalex/` |
-| The label corpus + the fitted model | `src/ml_pipelines/cite_budget/` |
-| The fitted `tau` / `max_span` | `src/ml_pipelines/latest_gap/` |
-| The truncated-pool study | `src/ml_pipelines/live_pool_validation/` |
+| The fitted `tau` / `max_span` (now inlined as `TAU` / `MAX_SPAN`) | `src/atlas/services/graph/bands.py` |
 
 ## A note on older names
 

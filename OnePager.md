@@ -257,12 +257,16 @@ optional, behind a key.
       `max_span`); the adaptive switch is deleted
       and the sliders come back permanently as display-only trimming;
       `PER_YEAR_CAP` is demoted from semantics to a default slider position; and
-      "Field Landmarks" becomes just "Landmarks". **The full design, both wrong
-      turns, all four decisions, the data findings, and the phased build plan
-      are in [docs/citation-threshold.md](docs/citation-threshold.md) — read it
-      first.** Phases 0–1 (collect + fit) must run on the **Windows** machine,
+      "Field Landmarks" becomes just "Landmarks". **The design was fully
+      specified and reached Phase 1 (collect + fit) on the `citation-threshold`
+      branch, where the fit found the 20–40 landmark band is *unreachable* by
+      this predicate family — so the effort is superseded by the 2026-07-22
+      research restart (`research-reset`), and its design doc
+      (`docs/citation-threshold.md`) was retired in that scrub.** The branch and
+      its fitted S2 corpus sample survive for reference. Original ticket text
+      follows. Phases 0–1 (collect + fit) had to run on the **Windows** machine,
       which has the offline citations corpus; the fitted artifact is git-tracked
-      so it travels back. **Fully specified — no open questions.** Provider
+      so it travels back. Provider
       calibration takes two separately fitted curves (S2 and OpenAlex citation
       counts disagree, and the narrow band leaves no slack for a correction
       factor); the fit targets **20–40 landmarks** per seed, chosen as a
@@ -274,9 +278,9 @@ optional, behind a key.
       2026-07-20** by the threshold-predicate ticket above, which generalizes
       this spike's own option (3), "SKIP with a citation floor", into an
       age-adjusted, seed-scaled floor applied to every path. Kept for its
-      success criterion, which the new design should still be measured against
-      (see [docs/citation-threshold.md](docs/citation-threshold.md) →
-      "Relationship to the spike"). Original text follows. — Patrick's ask
+      success criterion, which any future design should still be measured
+      against (the citation-threshold design that generalized this spike was
+      retired in the 2026-07-22 research reset). Original text follows. — Patrick's ask
       (2026-07-17), from the conversation that retired the budget model. Since
       v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
       hyper-cited seed, on a machine with no corpus. Everything else prefixes by

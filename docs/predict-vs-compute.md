@@ -82,12 +82,12 @@ ships the corpus shape outright (STOP-prefix landmarks, tau-banded Latest)
 instead of the sliver's SKIP-banding and rolling window
 (`semantic_scholar.traversal._complete_pool_relations`).
 
-The model is retired from serving, not deleted: `predicted_budget` and the
-artifact remain for `ml_pipelines` (the `latest_gap` collector) and as the
-label's derivation record. The principle survives its own example — *predict
-only what you can't observe* — with the amendment that "what you can't
-observe" must be checked against what the rule actually reads, not against the
-size of the pool it's defined over.
+The model was retired from serving in v5.13.0, and its code and artifact were
+removed entirely in the 2026-07-22 research reset (the whole `ml_pipelines/` +
+`research/` apparatus was torn out to restart the research effort). What survives
+is the principle, not the model: *predict only what you can't observe* — with the
+amendment that "what you can't observe" must be checked against what the rule
+actually reads, not against the size of the pool it's defined over.
 
 ## Why Latest is banded, not predicted
 
@@ -107,11 +107,12 @@ Two reasons, one structural, one measured:
 - **The pure-model version was tried and failed.** The `latest_gap` study
   (v4.6.0) fit a regression on seed age + log-citations to predict the Latest
   band start and scored **negative cross-validated R²** — "seed features
-  can't predict the boundary" is a written finding
-  (`research/latest_gap/analyze.ipynb`). What won was a rule with two
-  *learned constants*: `tau=0.25` / `max_span=7` were fit offline on
-  misdate-robustness, and `bands.earliest_band_year` runs the rule exactly on
-  the actual landmark year distribution at serve time.
+  can't predict the boundary" was the study's written finding (the `latest_gap`
+  study, removed in the 2026-07-22 research reset). What won was a rule with two
+  *learned constants*: `tau=0.25` / `max_span=7`, fit offline on
+  misdate-robustness and now inlined as `bands.TAU` / `bands.MAX_SPAN`;
+  `bands.earliest_band_year` runs the rule exactly on the actual landmark year
+  distribution at serve time.
 
 ## The house pattern
 
@@ -140,5 +141,5 @@ data-driven and, where the distribution is local, strictly more accurate.
 - [`landmark-vocabulary.md`](landmark-vocabulary.md) — every term used above,
   defined once with worked examples.
 - `src/atlas/services/graph/budget.py` (`select_landmarks`, `PER_YEAR_CAP`,
-  `compute_features`) and `bands.py` (`earliest_band_year`) — the two rules
-  as shipped.
+  `computed_cite_limit`) and `bands.py` (`earliest_band_year`, `TAU`,
+  `max_span`) — the two rules as shipped.

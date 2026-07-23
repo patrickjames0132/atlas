@@ -77,7 +77,7 @@ per seed by the STOP/SKIP rules in `services/graph/budget.py` (terms in
 [`landmark-vocabulary.md`](landmark-vocabulary.md), history in
 [`predict-vs-compute.md`](predict-vs-compute.md)), and the Latest bands start
 at the **density tail edge** of the seed's landmark cluster (the fitted tau
-rule in `services/graph/bands.py`; see `src/ml_pipelines/latest_gap/README.md`).
+rule in `services/graph/bands.py`, using the inlined `bands.TAU` / `bands.MAX_SPAN`).
 The recommendations candidate pool is a call parameter now too
 (`s2.recommendations(..., pool=)`, defaulting to `"all-cs"` in code — S2's
 `"recent"` pool returns zero hits for seeds older than a year or two).
