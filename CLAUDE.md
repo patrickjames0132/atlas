@@ -94,6 +94,17 @@ the Flask test client cover almost everything. When a problem genuinely needs
 the live app (e.g. a bug only reproducible in the real browser), ask Patrick
 before launching it; he'll usually allow it when it's really needed.
 
+## Research & analysis work
+
+For any research, analysis, model-fitting, constant-tuning, corpus study, or
+"derive a rule from the data" task, **invoke the `research` skill**
+(`.claude/skills/research/SKILL.md`) *before* writing analysis code or explaining a
+finding. It defines the fixed cycle — frame + build intuition → hypothesis →
+experiment → results → decision → productionize — and an explicit list of things
+not to do (born from a session that did them). The order is the point: build
+shared understanding first, test only a stated hypothesis, and productionize only
+what's decided-solved.
+
 ## The `todos.md` inbox
 
 Patrick brainstorms on the fly while I'm building, so `todos.md` at the repo root
