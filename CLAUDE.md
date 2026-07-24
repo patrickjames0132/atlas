@@ -3,6 +3,12 @@
 Instructions for Claude Code when working in `~/PyCharmProjects/atlas`. Read this first;
 it captures how we collaborate so you don't have to re-derive it each session.
 
+> **A note on the name below.** This agreement refers to whoever's driving the
+> repo generically as **"the developer."** Cloned this to work on it yourself?
+> Replace "the developer" throughout with your own name — the workflows and
+> skills are meant to be shared, but the collaboration reads better when it's
+> personal.
+
 ## What this project is
 
 **arXiv Atlas** — a Connected-Papers-style interactive citation/similarity graph
@@ -65,8 +71,8 @@ For each feature, follow this cycle:
    frontend; verify backend changes with a quick script or the Flask test client.
    Run the whole quality gate — backend *and* frontend — with **`uv run nox`**
    (see below) before handing off.
-2. **Hand off for testing** — Patrick tests it **in the browser himself** first.
-   Give him specific things to check. **Do NOT commit until he approves.**
+2. **Hand off for testing** — the developer tests it **in the browser themselves**
+   first. Give them specific things to check. **Do NOT commit until they approve.**
 3. On approval, **update the docs**: `README.md`, plus the OnePager/history
    split — **move the shipped item's entry out of `OnePager.md`'s Backlog and
    into `docs/history.md`'s matching theme section**, ticked `[x]` and keeping
@@ -85,14 +91,14 @@ For each feature, follow this cycle:
    then tag and push in lockstep. The feature branch can be deleted once merged.
 
 Don't skip ahead: no committing before the browser test, no starting the next
-phase without a green light. Patrick is hands-on and likes to eyeball UX before
-it's locked in.
+phase without a green light. The developer is hands-on and likes to eyeball UX
+before it's locked in.
 
-**Browser automation (Claude in Chrome) is ask-first.** Driving Patrick's
+**Browser automation (Claude in Chrome) is ask-first.** Driving the developer's
 browser is slow, so don't reach for it by default — tests, quick scripts, and
 the Flask test client cover almost everything. When a problem genuinely needs
-the live app (e.g. a bug only reproducible in the real browser), ask Patrick
-before launching it; he'll usually allow it when it's really needed.
+the live app (e.g. a bug only reproducible in the real browser), ask the developer
+before launching it; they'll usually allow it when it's really needed.
 
 ## Research & analysis work
 
@@ -107,9 +113,9 @@ what's decided-solved.
 
 ## The `todos.md` inbox
 
-Patrick brainstorms on the fly while I'm building, so `todos.md` at the repo root
-is a scratch **inbox** — not a durable list. When he points me at it (or brings
-it up at the start of a session), I:
+The developer brainstorms on the fly while I'm building, so `todos.md` at the repo
+root is a scratch **inbox** — not a durable list. When they point me at it (or
+bring it up at the start of a session), I:
 
 1. **File** each item into `OnePager.md`'s Backlog — into the theme section
    where it fits ("Enhancements & tech debt", "UI & rendering polish", …) so
@@ -192,8 +198,8 @@ branch `main`.
   gitignored.
 - **Licensing:** the project is **MIT** (`LICENSE`; every source file carries a
   copyright/`Description:`/`Authors:` header — see `docs/licensing.md`). **If
-  Patrick ever opens the project to outside contributions (a PR from anyone but
-  him, a collaborator, a `CONTRIBUTING` guide, a CLA), remind him to relicense
+  the developer ever opens the project to outside contributions (a PR from anyone
+  but them, a collaborator, a `CONTRIBUTING` guide, a CLA), remind them to relicense
   MIT → Apache-2.0 *first*** — the patent clauses matter once other contributors
   exist, and relicensing is far cleaner before their rights enter the codebase.
   The reasoning is settled in `docs/licensing.md`; don't re-litigate it.
