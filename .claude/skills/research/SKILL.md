@@ -11,8 +11,8 @@ description: >
 # The research process
 
 This skill governs how research and analysis are done in Atlas. It exists because
-research done badly is worse than none: a finding Patrick can't follow is one he
-can't check, and a conclusion pulled from thin air is one nobody can trust. The
+research done badly is worse than none: a finding the researcher can't follow is
+one they can't check, and a conclusion pulled from thin air is one nobody can trust. The
 process below is built to prevent that.
 
 > **The cycle runs in a fixed order:** frame + build intuition → hypothesis →
@@ -26,7 +26,7 @@ process below is built to prevent that.
 ## The research cycle
 
 > **Every step is back-and-forth.** Present what you have, ask what you're unsure
-> of, and wait for Patrick's response before moving to the next — the shared
+> of, and wait for the researcher's response before moving to the next — the shared
 > understanding is built *in* the exchange, not delivered at the end of it.
 
 Six steps. Steps 1–5 are a loop; step 6 is the exit taken only once the problem
@@ -51,8 +51,8 @@ What we're actually solving, in plain language, plus a shared mental model of
 *why* — before any analysis code. Framing and intuition are one step: you can't
 build intuition for a problem you haven't framed, and you haven't really framed it
 until the intuition is mutual. This is where the ground-up explanation discipline
-lives (see **What not to do**). You are done with this step when Patrick can
-restate the problem and the rough shape of the answer in his own words — not
+lives (see **What not to do**). You are done with this step when the researcher can
+restate the problem and the rough shape of the answer in their own words — not
 before.
 
 **The step's output is a written formal problem statement**, recorded in the
@@ -109,7 +109,7 @@ Given the results, is the problem solved?
 - **Needs more evidence** — the framing holds but this hypothesis was wrong or
   incomplete → loop back to **step 2**.
 
-This is a genuine fork and usually Patrick's call. Surface it explicitly; don't
+This is a genuine fork and usually the researcher's call. Surface it explicitly; don't
 slide past it into more code.
 
 ### 6. Productionize
@@ -228,8 +228,8 @@ A plot in a research notebook is an argument; it has to stand on its own.
 ## ⚠️ What NOT to do — MANDATORY
 
 These are not hypotheticals. Every one happened in the session that created this
-skill (2026-07-22, the citation-threshold analysis), and each lost Patrick or
-wasted his time. Read them as hard rules, not suggestions. Notice that most are
+skill (2026-07-22, the citation-threshold analysis), and each lost the researcher
+or wasted their time. Read them as hard rules, not suggestions. Notice that most are
 the same underlying mistake — running ahead of the shared understanding.
 
 ### 1. Do not invent jargon or private metaphors
@@ -252,21 +252,21 @@ then use it consistently — that's a definition, not a metaphor.
 
 **What I did:** cited *"max interval stabbing, which dualizes"* and the
 interval-stabbing argument as though they were shared ground — named a technique
-Patrick had never seen and leaned on it in the same breath.
+the researcher had never seen and leaned on it in the same breath.
 
 **Why it's bad:** an argument that rests on machinery the reader doesn't have
 isn't an argument to them — it's an appeal to authority. It can't be followed,
-questioned, or trusted. Patrick explicitly wants to understand the mathematics,
-not be handed conclusions stamped with a theorem's name.
+questioned, or trusted. The researcher explicitly wants to understand the
+mathematics, not be handed conclusions stamped with a theorem's name.
 
 **Do instead:** before invoking a named concept, equation, or technique, **check
-the familiarity ledger** — the `patrick-concept-familiarity` memory, a running
-record of what Patrick has and hasn't heard of.
+the familiarity ledger** — the `concept-familiarity` memory, a running
+record of what the researcher has and hasn't heard of.
 
 - **Listed as familiar** → use it, name it, move on. Don't re-ask.
 - **Listed as unfamiliar** → do a proper ground-up background review to build the
   intuition *before* using it in an argument.
-- **Not listed** → ask Patrick once whether he's seen it, act on the answer, and
+- **Not listed** → ask the researcher once whether they've seen it, act on the answer, and
   **record it in the ledger** so you never ask again.
 
 The ledger exists precisely so this doesn't become a question every experiment —
@@ -284,7 +284,7 @@ formalism they don't yet see the point of, hoping it'll pay off. Comprehension
 comes from assembling the pieces, not from being shown the finished assembly and
 told where each piece went.
 
-**Do instead:** explain it **like Patrick is five, first.** Start from something
+**Do instead:** explain it **as if to a five-year-old, first.** Start from something
 obviously true and small. Add one idea at a time, each building on the last,
 checking the ground is solid before the next step. The formal statement is where
 you *arrive*, not where you begin. (This is the standing feedback saved as the
@@ -294,7 +294,7 @@ you *arrive*, not where you begin. (This is the standing feedback saved as the
 
 **What I did:** started running scripts — random-restart searches, ceiling
 reproductions — while the *why* was still only in my head. Produced numbers before
-Patrick and I agreed on what question they answered.
+the researcher and I agreed on what question they answered.
 
 **Why it's bad:** an experiment is only meaningful against a hypothesis. Run it
 first and the output is just numbers with no frame; the reader can't tell a
@@ -315,7 +315,7 @@ asserting it *before* that.)
 
 **Why it's bad:** committed prose — even my own from an earlier session — is a
 *claim*, not a verified result. Relaying it as fact launders an unchecked number
-into a decision input. Patrick was about to pick a target band off figures I
+into a decision input. The researcher was about to pick a target band off figures I
 hadn't confirmed.
 
 **Do instead:** before a number drives a decision, reproduce it from the data
