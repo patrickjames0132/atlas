@@ -333,6 +333,7 @@ export const GRAPH_TOUR: TourStep[] = [
       'the papers you’ve selected — or in every visible paper when you haven’t picked ' +
       'any. It reads them in full, hops the graph, searches the literature and your ' +
       'uploaded library, then answers with numbered citations (click one to light up ' +
-      'the paper behind it). New papers it finds join the map with dashed rings.',
+      'the paper behind it). New papers it finds join the map with dashed rings. ' +
+      'Press Enter to send; ⇧ Shift+Enter starts a new line for longer questions.',
   },
 ]

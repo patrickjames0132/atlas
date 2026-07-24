@@ -18,8 +18,8 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { useEffect, useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties, FormEvent, KeyboardEvent } from 'react'
 import { LECTURE_TITLES, type AnswerFigure, type LectureMode } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { loadLibrary, selectLibrary } from '../store/library'
@@ -89,6 +89,7 @@ export default function Teacher({
   const activeModeMeta = MODES.find((mode) => mode.key === activeMode) ?? null
 
   const [input, setInput] = useState('')
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   // The uploaded library, powering the source-scope picker (shown at more than
   // one source). Read LIVE from the library slice — the Sources drawer reloads
   // the slice on every upload/delete, so the picker appears the moment a
@@ -135,13 +136,40 @@ export default function Teacher({
   const lectureScope = playedModes.filter((mode) => !excludedLectures.includes(mode))
   const lectureItems = playedModes.map((mode) => ({ id: mode, title: LECTURE_TITLES[mode] }))
 
-  const onAsk = (event: FormEvent) => {
-    event.preventDefault()
+  const submitQuestion = () => {
     const question = input.trim()
     if (!question || asking) return
     setInput('')
     ask(question, scopeArg, lectureScope)
   }
+
+  const onAsk = (event: FormEvent) => {
+    event.preventDefault()
+    submitQuestion()
+  }
+
+  // The ask box is a textarea so long questions wrap and stay readable. Keep
+  // the chat convention: Enter sends, Shift+Enter drops a newline (letting a
+  // question run multiple lines without hitting the Ask button).
+  const onInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      submitQuestion()
+    }
+  }
+
+  // Grow the textarea to fit its content (up to the CSS max-height, past which
+  // it scrolls): reset to auto so it can shrink back, then match scrollHeight.
+  // Runs on every input change, including the reset to '' after a submit.
+  // A collapsed panel is display:none, so a first mount there measures
+  // scrollHeight 0 — skip that, leaving height:auto (the CSS min-height floors
+  // it to one line) rather than pinning it to a clipped 0px until the next keystroke.
+  useEffect(() => {
+    const field = inputRef.current
+    if (!field) return
+    field.style.height = 'auto'
+    if (field.scrollHeight > 0) field.style.height = `${field.scrollHeight}px`
+  }, [input])
 
   // The one-line "Answers also draw on …" note above the ask bar: lectures and
   // sources share it (space is tight), each part naming its picker's icon.
@@ -371,9 +399,12 @@ export default function Teacher({
         <p className="ask-context-note">Answers also draw on {askContextParts.join(' · ')}.</p>
       )}
       <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
-        <input
+        <textarea
+          ref={inputRef}
           value={input}
           onChange={(event) => setInput(event.target.value)}
+          onKeyDown={onInputKeyDown}
+          rows={1}
           placeholder={hasGraph ? 'Ask about the papers on screen…' : 'Ask your books and PDFs…'}
           aria-label="Ask the assistant a question"
         />

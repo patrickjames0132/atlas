@@ -1472,6 +1472,23 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Wrap text in the research chat input** *(v6.5.0)* — the ask box was a
+      single-line `<input>`, so longer questions scrolled sideways and were hard
+      to read while composing. It's now an **auto-growing `<textarea>`** that
+      wraps and grows with the content up to a ~140px cap (then scrolls),
+      snapping back to one line after a send. **Enter sends; ⇧ Shift+Enter drops
+      a newline** (the standard chat gesture), and the Ask button stays pinned to
+      the bottom line. A JS `scrollHeight` measure drives the height over a
+      `min-height` one-line floor — the floor also saves the first mount inside
+      the *collapsed* (`display:none`) panel, where a hidden element measures
+      `scrollHeight: 0` and would otherwise pin the box to a clipped zero height
+      until the next keystroke. The tour's ask step gained an "Enter to send;
+      Shift+Enter for a new line" line so the in-app help tracks the new gesture.
+      *(From the `todos.md` inbox, 2026-07-19.)*
+- [x] **Larger tour jump caret** *(v6.5.0)* — the ▾ on a tour bubble's title
+      (its jump-to-any-stop affordance, `tour/tour.css`) was easy to miss at
+      11px; bumped to 15px so it reads as the interactive dropdown it is.
+      *(2026-07-24.)*
 - [x] **Settings modal stage 2 — the adaptive sizing switch & per-chip count
       sliders** *(v6.3.0)* — the graph-*shaping* half of the settings-modal
       ticket (the modal itself shipped in v6.1.0). A new **Graph** section

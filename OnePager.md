@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v6.3.0 · living document · MIT-licensed. The core loop has
+> **Status:** v6.5.0 · living document · MIT-licensed. The core loop has
 > shipped: the provider-selectable citation graph (Semantic Scholar or
 > OpenAlex, with an optional offline S2 citations corpus for honest
 > all-history landmarks), the AI teacher (four relation-scoped lectures + an
@@ -552,13 +552,6 @@ optional, behind a key.
       for research-paper link references so it stands out. The one difference:
       it's a highlight only — clicking shouldn't do anything, since there's no
       node/page to jump to. *(From the `todos.md` inbox, 2026-07-19.)*
-
-- [ ] **Wrap text in the research chat input** — the chat box keeps what you
-      type on a single line, so longer questions scroll horizontally and are
-      hard to follow while composing. Make the input wrap (likely a
-      `<textarea>`/auto-growing input instead of a single-line field) so a
-      multi-line question stays readable. *(From the `todos.md` inbox,
-      2026-07-19.)*
 
 - [ ] **Light-mode relation colors — darker & higher-contrast** — the v6.2.0
       light/dark toggle deliberately left the *relation* palette unthemed (gold

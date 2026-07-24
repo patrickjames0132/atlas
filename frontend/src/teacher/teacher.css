@@ -659,8 +659,11 @@
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid var(--border);
+  /* The textarea grows upward as it wraps; keep the Ask button pinned to the
+     bottom line rather than centred against a tall input. */
+  align-items: flex-end;
 }
-.teacher-ask input {
+.teacher-ask textarea {
   flex: 1;
   min-width: 0;
   padding: 9px 12px;
@@ -669,8 +672,21 @@
   background: var(--bg);
   color: var(--text-strong);
   font-size: 13px;
+  /* Match the surrounding UI — textareas default to a monospace stack. */
+  font-family: inherit;
+  line-height: 1.4;
+  /* JS sizes the height to the content (see Teacher.tsx); cap the growth here
+     and scroll past it. resize:none because the auto-grow owns the height. The
+     min-height floors it to exactly one line (1.4em line + 18px padding + 2px
+     border, border-box) so it never clips — including before the first measure. */
+  min-height: calc(1.4em + 20px);
+  max-height: 140px;
+  overflow-y: auto;
+  resize: none;
+  box-sizing: border-box;
+  display: block;
 }
-.teacher-ask input:focus {
+.teacher-ask textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
