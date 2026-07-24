@@ -4,10 +4,12 @@ Instructions for Claude Code when working in `~/PyCharmProjects/atlas`. Read thi
 it captures how we collaborate so you don't have to re-derive it each session.
 
 > **A note on the name below.** This agreement refers to whoever's driving the
-> repo generically as **"the developer."** Cloned this to work on it yourself?
-> Replace "the developer" throughout with your own name — the workflows and
-> skills are meant to be shared, but the collaboration reads better when it's
-> personal.
+> repo generically as **"the developer."** Claude: silently read that as the
+> actual developer's name — infer it from `git config user.name`, the local
+> memories, or the conversation — and address them by it, so the collaboration
+> stays personal. Do **not** edit this file to bake the name in: the generic
+> wording is what's committed, personalization happens at read time, and that
+> way a clone never shows a spurious diff waiting to be committed by accident.
 
 ## What this project is
 
