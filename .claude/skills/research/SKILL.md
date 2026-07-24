@@ -55,6 +55,18 @@ lives (see **What not to do**). You are done with this step when Patrick can
 restate the problem and the rough shape of the answer in his own words — not
 before.
 
+**The step's output is a written formal problem statement**, recorded in the
+research log before any hypothesis is proposed. Plain language still, but precise
+about scope: what we are trying to solve, what counts as a solution, what is
+deliberately *out* of scope, and what a valid answer may look like — **including
+the degenerate ones**. (On landmark selection, "zero landmarks is a valid answer"
+looked like a minor clarification and turned out to eliminate an entire family of
+rules, before any data was touched.) Write it down because it is what **step 5
+measures against**: *solved* means this statement is satisfied. When it isn't, the
+statement is also what tells you which way to loop — a hypothesis that failed on
+its own terms sends you back to step 2, while a statement that no longer describes
+the real problem sends you back here.
+
 ### 2. Hypothesis
 
 A single, testable claim about what's true, specific enough that an experiment
@@ -154,8 +166,10 @@ It's the one document someone can read to understand what we did and why. It
 tracks, and is written **as we go**, not at the end (it *is* the working document,
 the way `OnePager.md` is for features):
 
-- **Problem framing & intuition** (step 1) — what we're solving, in plain
-  language, and the mental model. **Including re-framings:** when a decision sends
+- **Problem framing & intuition** (step 1) — the **formal problem statement**
+  (see step 1: scope, what counts as a solution, what a valid answer may look
+  like), plus the mental model that led to it in plain
+  language. **Including re-framings:** when a decision sends
   us back to step 1, the README keeps the old framing and *why it changed*, not
   just the latest one. The history is the point.
 - **Hypotheses, experiments, results** (steps 2–4) — ideally a running table, so
