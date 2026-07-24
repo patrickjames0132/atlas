@@ -25,6 +25,10 @@ process below is built to prevent that.
 
 ## The research cycle
 
+> **Every step is back-and-forth.** Present what you have, ask what you're unsure
+> of, and wait for Patrick's response before moving to the next — the shared
+> understanding is built *in* the exchange, not delivered at the end of it.
+
 Six steps. Steps 1–5 are a loop; step 6 is the exit taken only once the problem
 is genuinely solved. Most work goes around 1–5 more than once before it earns
 step 6.
@@ -57,6 +61,15 @@ A single, testable claim about what's true, specific enough that an experiment
 could refute it. *"A per-citer citation threshold can hold most seeds inside a
 20–40 landmark band"* is a hypothesis; *"let's look at the data"* is not. Write it
 down, so the results in step 4 have something concrete to confirm or reject.
+
+**Start with the simplest hypothesis that could be true — Occam's razor.** Begin
+with the fewest moving parts (one variable, not four; a straight line before a
+curve) and add complexity only once a result shows it's needed. This is not
+laziness, it's diagnostics: a simple hypothesis that fails tells you exactly which
+assumption broke, where a complex one that fails tells you nothing, because you
+can't see which part was wrong. The same goes for the experiment in step 3 — run
+the smallest thing that could settle the question, not the most thorough thing you
+could build.
 
 ### 3. Experiment
 
