@@ -16,6 +16,32 @@ in this log is carried over from it.
 
 ## Step 1 — Framing and intuition ✅ settled 2026-07-23
 
+### Formal problem statement
+
+> Given a seed paper and the set of papers citing it, decide for **each citer
+> independently** whether it is a **landmark** — a paper whose citation count is
+> far above what a paper of its age would normally reach — so that the resulting
+> set conveys **how the field developed over time**.
+
+**A solution is** a rule that:
+
+1. reads a single citer, together with the expectation it is measured against, and
+   returns landmark / not-landmark;
+2. **never consults the ranking of the rest of the pool** (see "the structural
+   consequence" below);
+3. is graded correct against Patrick's hand labels;
+4. is permitted to return **zero** landmarks for a seed, and expected to for
+   sufficiently new ones.
+
+**Out of scope.** How many nodes finally render — display-layer trimming owns
+volume, this rule owns the judgment. Likewise the other relations (latest,
+similar, references) and anything to do with graph layout.
+
+**Open by design.** Whether the expectation is built from the citer's age alone,
+or also from the seed and the field, is *not* fixed by this statement — it is what
+the hypotheses test. We start with age alone (Occam) and add terms only if the
+labels demand it.
+
 ### The problem in plain language
 
 Atlas draws a seed paper in the middle of a map and surrounds it with its
@@ -106,9 +132,17 @@ Following the skill's Occam's razor rule: start with the fewest moving parts and
 add complexity only when a result demands it. **Age only to begin with**; field
 enters only if the labels show age is insufficient (Patrick, 2026-07-23).
 
+**The accepted cost of starting age-only.** The framing lists three axes a raw
+count fails on — time, seed, field — and hypothesis 1 addresses only the first. So
+if it fails we will not immediately know whether the *age* expectation was wrong
+or whether the missing *seed* term was what broke it. Patrick accepted that trade
+explicitly (2026-07-23): if hypothesis 1 leaves the problem statement unsatisfied,
+we loop back to step 2 and test whether seed scaling improves the grades, rather
+than trying to buy that certainty up front with a more complex first hypothesis.
+
 | # | Hypothesis | Experiment | Result | Decision |
 |---|---|---|---|---|
-| 1 | *(proposed)* A citer's citation count relative to **an age-based expectation alone** separates Patrick's landmark labels from his non-landmark labels. | Fit the expectation curve from citation count vs. age; score labelled citers against it; measure separation. | — | — |
+| 1 | *(agreed 2026-07-23)* A citer's citation count relative to **an age-based expectation alone** separates Patrick's landmark labels from his non-landmark labels. | Fit the expectation curve from citation count vs. age; score labelled citers against it; measure separation. | — | — |
 | 2 | *(planned)* Landmark vs non-landmark is a **natural grouping**, not a line through a continuum. | Cluster labelled citers in the age/count feature space; silhouette score. | — | — |
 | 3 | *(planned)* **Self-supervised labels** (citers heavily cited by the seed's other citers) agree with Patrick's labels. | Compute intra-pool citation counts; compare against the hand labels. | — | — |
 | 4 | *(planned)* Claude's independent labels agree with Patrick's. | Label the same seeds blind; measure agreement. | — | — |
