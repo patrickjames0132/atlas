@@ -128,6 +128,30 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
+- [ ] **Make inline library-source citations first-class — resolvable and
+      clickable-to-page** — an answer that cites the student's uploaded material
+      writes a plain-prose locator like *"(Reinforcement Learning: An
+      Introduction, p.460)"* that renders as dead text. It can't be made
+      clickable from the frontend, because the prose carries no structured
+      reference — only a title the model has freely reworded (abbreviated,
+      prettified, or the raw slug). Bring source citations to **parity with paper
+      `[n]` citations** (which resolve to a node id, stream a `refs` map, and glow
+      the paper on click): emit a **structured source reference — source id +
+      page — on the answer stream**, and render it as a highlighted, clickable
+      marker that opens that source at that page via the existing
+      `show_source_figure` / PDF-viewer plumbing. **Prerequisite cleanup — the
+      prompts disagree on the citation format:** the librarian persona tags
+      passages `[Title, p.N]` (brackets, `agents/librarian/config.py`) while
+      `agents/skills/citation-discipline.md` instructs `(Title, p.243)` (parens)
+      — and its fake example *"(Deep Learning, p.243)"* leaks into every system
+      prompt though no such source exists (the tour's "Chat with your books" step,
+      `tour/steps.ts`, echoes the same example). Standardize **one** format across
+      librarian + researcher + citation-discipline (and the tour example) so
+      detection is exact. Note the **page-less** case (a web source with no page)
+      needs a fallback. **Supersedes** the frontend prose-highlight bandaid, built
+      and then removed 2026-07-24 in favor of doing this correctly — the highlight
+      can never be clickable without the structured reference this ticket adds.
+      *(From #2 of the 2026-07-24 front-end quick-wins pass.)*
 - [ ] **Say whether the researcher may answer from its own knowledge — right now
       the prompt leans "no"** — the ask was to confirm the researcher blends its
       own LLM knowledge with the papers. It isn't *forbidden* (the result's `cited`
