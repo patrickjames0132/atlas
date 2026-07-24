@@ -10,6 +10,14 @@ description: >
 
 # The research process
 
+> **A note on the name.** This skill refers to whoever's driving the research
+> generically as **"the researcher."** Claude: silently read that as the actual
+> person's name — infer it from `git config user.name`, the local memories, or
+> the conversation — and address them by it. Do **not** edit this file to bake
+> the name in: the generic wording is what's committed, personalization happens
+> at read time, and that way a clone never shows a spurious diff waiting to be
+> committed by accident.
+
 This skill governs how research and analysis are done in Atlas. It exists because
 research done badly is worse than none: a finding the researcher can't follow is
 one they can't check, and a conclusion pulled from thin air is one nobody can trust. The
