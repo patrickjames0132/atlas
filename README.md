@@ -128,9 +128,9 @@ The Vite dev server proxies `/api/*` to Flask.
    the real citer pool** (an old classic maps out large, a young hot paper stays
    tight — the STOP rule in `services/graph/budget.py`); **Latest Publications**
    (light green) is the recent frontier — recent citers, per-year banded for even
-   coverage, with the band's **start sized per-seed by a trained model**
+   coverage, with the band's **start sized per-seed from fitted constants**
    so an old classic's bands widen back to meet its landmark cluster instead of
-   leaving a gap (see `src/ml_pipelines/latest_gap/`) — as a filterable relation of
+   leaving a gap (see `services/graph/bands.py`) — as a filterable relation of
    its own. (Every term here — *landmark*, *band*, *tail edge*, the sizing
    rules — is defined once, with a worked example, in
    [docs/landmark-vocabulary.md](docs/landmark-vocabulary.md).) Node size =

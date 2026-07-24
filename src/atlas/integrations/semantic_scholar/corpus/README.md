@@ -250,7 +250,7 @@ the release that left the model serving OpenAlex alone; v5.13.0 finished the
 job — the same rule being prefix-local means OpenAlex can compute it from one
 ranked page, and the model serves no path at all. See
 [`docs/predict-vs-compute.md`](../../../../../docs/predict-vs-compute.md)'s
-epilogue and `ml_pipelines/live_pool_validation`'s verdict.)
+epilogue, and the truncated-pool validation study's verdict.)
 
 **The answer is still a count, and the band still a prefix** — the same shape the
 model predicted, and the same shape OpenAlex ships. Only its provenance changed,

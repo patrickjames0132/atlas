@@ -63,10 +63,10 @@ than S2, and (see below) provides no link from the preprint record to its VoR.
 
 ## Findings (measured against the live APIs, 2026-07-12)
 
-All numbers below come from the companion notebook,
-[`research/citation_coverage/analyze.ipynb`](../research/citation_coverage/analyze.ipynb)
-(its [README](../research/citation_coverage/README.md) covers the caveats and
-how to re-run). Counts drift over time; the *patterns* are the point.
+All numbers below were measured against the live APIs on 2026-07-12 by a companion
+study (`research/citation_coverage/`, since removed in the 2026-07-22 research
+reset — the measurements are preserved here). Counts drift over time; the
+*patterns* are the point.
 
 ### 1. Coverage: OA undercounts ML, not physics
 
@@ -267,9 +267,7 @@ frontier — where OA lag bites hardest), it's a visible regression.
   papers — the preprint-native worst case. Vision/NLP giants are too large to
   pull cleanly, though their coverage numbers (§1) undercount similarly.
 
-The raw comparisons live in
-[`research/citation_coverage/analyze.ipynb`](../research/citation_coverage/analyze.ipynb) —
-re-runnable against the live APIs (slowly; see the study's
-[README](../research/citation_coverage/README.md)). See also the
-OpenAlex-single-source tradeoff notes and the v5.0.0 Similar-relation removal
-in [`history.md`](history.md).
+The raw comparisons lived in the `research/citation_coverage/` study (removed in
+the 2026-07-22 research reset; recoverable from git history if the exact figures
+are needed again). See also the OpenAlex-single-source tradeoff notes and the
+v5.0.0 Similar-relation removal in [`history.md`](history.md).

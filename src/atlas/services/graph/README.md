@@ -145,13 +145,12 @@ cache hit, a deliberate trade.
      **prefix** — which there is all one era (DQN's reachable pool starts 2019,
      not 2013).
 
-   A third route — **Predicted**, the offline-trained `cite_budget` model
-   (`src/ml_pipelines/cite_budget/model.joblib`) — served OpenAlex until
-   v5.13.0, on the premise that a remote server-sorted query needs its `limit`
-   *before* any citer is in hand. The premise fell to the STOP rule's
-   prefix-locality (it never reads past the first year to overflow, and the
-   sort puts that prefix on page one), so OpenAlex now computes exactly too;
-   `budget.predicted_budget` and the artifact remain for the `ml_pipelines`.
+   A third route — **Predicted**, an offline-trained regressor over the seed's
+   age and citation count — served OpenAlex until v5.13.0, on the premise that a
+   remote server-sorted query needs its `limit` *before* any citer is in hand.
+   The premise fell to the STOP rule's prefix-locality (it never reads past the
+   first year to overflow, and the sort puts that prefix on page one), so
+   OpenAlex now computes exactly too, and the predictor has since been removed.
    See `docs/predict-vs-compute.md`'s epilogue.
 
      The difference between the two rules is one word — what happens when a citer
@@ -170,8 +169,8 @@ cache hit, a deliberate trade.
      over the cap" invariant; which is honest depends on the pool — SKIP keeps a
      truncated sliver's sparse years, while on a whole-history ranking the STOP
      prefix *is* the landmark band and tau-banded Latest closes the gap instead.
-     STOP is also the retired model's training **label** (a regression label has
-     to be a scalar) — see
+     STOP was also the retired regressor's training **label** (a regression label
+     has to be a scalar) — see
      [`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md).
 
      Undated citers are **dropped**, not banded: a landmark is the claim
@@ -180,22 +179,18 @@ cache hit, a deliberate trade.
      earlier cut did) ships a guaranteed `PER_YEAR_CAP` of what are mostly
      PDF-extraction stubs, all on one x, drawing a vertical bar through the seed.
 
-   See `budget.py`'s module docstring and `src/ml_pipelines/cite_budget/README.md`.
-   Both selectors carry a **config-free core** (`select_up_to_cap_per_year`,
-   `predicted_budget`) so pipelines can run the exact serving rule without the local
-   `config.json` — `live_pool_validation` measures both over simulated truncated
-   pools.
+   See `budget.py`'s module docstring. Both selectors carry a **config-free
+   core** (`select_up_to_cap_per_year`, `computed_cite_limit`) so the exact
+   serving rule can be run over simulated pools without the local
+   `config.json`.
 
    The **latest bands adapt** too (always on, like the budget): `bands.py`
-   places the band start at the **density tail edge** of the landmark cluster (a
-   second offline model, `src/ml_pipelines/latest_gap/model.joblib`), closing the
-   gap for an old seed and keeping a tight frontier for a young one, falling
-   back to the fixed `caps.LATEST_NUMBER_OF_BANDS` span when the model can't
-   load or the seed has too few dated landmarks. `build.py` injects
-   `bands.earliest_band_year` as the OpenAlex `band_start` callable so
-   `integrations` stays below `services` in the import order (config-free, so
-   the validation pipeline runs the same function). See
-   `src/ml_pipelines/latest_gap/README.md`.
+   places the band start at the **density tail edge** of the landmark cluster
+   (using the fitted `bands.TAU` / `bands.MAX_SPAN`), closing the gap for an old
+   seed and keeping a tight frontier for a young one, falling back to the fixed
+   `caps.LATEST_NUMBER_OF_BANDS` span when the seed has too few dated landmarks.
+   `build.py` injects `bands.earliest_band_year` as the OpenAlex `band_start`
+   callable so `integrations` stays below `services` in the import order.
 
 4. **Dedupe + relation accumulation.** The `add_neighbor()` closure merges
    neighbors into one node table — keyed by raw id, with identity resolved through
@@ -292,10 +287,7 @@ fetched), the live fallback `budget.select_landmarks` (band it, since a prefix o
 truncated pool strands the recent years), and both take the flat
 `UNBOUNDED_LANDMARK_CAP` payload guard (`integrations/caps.py`) only as a ceiling.
 
-The adaptive budget's own tests live in **`test_budget.py`** — both routes: the
-predicted one (loading the committed model, pinning the worked examples /
-fallbacks) and the computed one (the two pure rules and the trim built on them).
-The latest-band
-serving tests are in **`test_bands.py`**. The training pipelines that produce both
-models have their own offline tests under `test/ml_pipelines/`, which pin that
-training uses the app's feature *and* label contracts rather than private copies.
+The adaptive budget's own tests live in **`test_budget.py`** — the two pure rules
+and the trim built on them. The latest-band serving tests are in
+**`test_bands.py`**, which pins the fitted constants' contract and monkeypatches
+controlled values for the behavior assertions.

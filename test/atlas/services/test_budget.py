@@ -3,22 +3,14 @@
 Description:
 The adaptive landmark-budget serving paths (services/graph/budget.py).
 
-The ways to size a seed's landmark band, all pinned here (see
-``docs/landmark-vocabulary.md`` for the vocabulary):
+The two ways to size a seed's landmark band, both pinned here (see
+``docs/landmark-vocabulary.md`` for the vocabulary). Both are pure rules over a
+ranked citer-year list, with no artifact involved:
 
-* **Computed** — the two pure rules, no artifact involved:
-  ``number_of_ranked_citers_before_a_single_year_overflows`` (the STOP rule —
-  the serving rule for every whole-history pool via ``computed_cite_limit``,
-  and the retired model's training label) and ``select_up_to_cap_per_year`` /
-  ``select_landmarks`` (the SKIP rule and the truncated-live-pool trim built
-  on it).
-* **Predicted** (``predicted_budget``) — the *trained model*, retired from
-  serving in v5.13.0 but still the ``latest_gap`` collector's dependency and
-  the label's derivation record: these load the committed
-  ``src/ml_pipelines/cite_budget/model.joblib`` and assert the seed → budget
-  mapping, so a retrain that moves the worked-example seeds trips them. The
-  reference year is pinned (not ``today``) so the age-based pins stay stable
-  as the clock advances.
+* ``number_of_ranked_citers_before_a_single_year_overflows`` — the STOP rule, the
+  serving rule for every whole-history pool via ``computed_cite_limit``.
+* ``select_up_to_cap_per_year`` / ``select_landmarks`` — the SKIP rule, and the
+  truncated-live-pool trim built on it.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -26,17 +18,10 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-import math
 from collections import Counter
-
-import pytest
 
 from atlas.integrations.caps import UNBOUNDED_LANDMARK_CAP
 from atlas.services.graph import budget
-
-# Fix the age reference so pins don't drift with the wall clock; the
-# worked-example seeds' real publication years are used against it.
-AS_OF = 2026
 
 # The STOP rule under its documented shorthand — the real name is deliberately
 # long, and spelling it out at every assertion buries what is being asserted.
@@ -44,84 +29,12 @@ AS_OF = 2026
 stop_rule = budget.number_of_ranked_citers_before_a_single_year_overflows
 
 
-@pytest.fixture(autouse=True)
-def _fresh_model_cache():
-    """Reset the memoized model around each test (one may swap load_model)."""
-    budget._reset_model_cache()
-    yield
-    budget._reset_model_cache()
-
-
-def limit(year: int, citation_count: int, ceiling: int | None = None) -> int | None:
-    """The model's budget for a seed published in ``year`` with ``citation_count``."""
-    return budget.predicted_budget(year, citation_count, as_of_year=AS_OF, ceiling=ceiling)
-
-
-class TestComputeFeatures:
-    """The shared feature contract (training and serving both call this)."""
-
-    def test_feature_order_and_values(self):
-        # [age, log10(cites + 1)] in FEATURE_NAMES order.
-        features = budget.compute_features(2016, 999, as_of_year=AS_OF)
-        assert budget.FEATURE_NAMES == ("age", "log_cites")
-        assert features == [10.0, pytest.approx(math.log10(1000))]
-
-    def test_future_dated_seed_floors_age_at_zero(self):
-        # OpenAlex sometimes mis-dates a paper into the future — age can't go < 0.
-        assert budget.compute_features(AS_OF + 3, 100, as_of_year=AS_OF)[0] == 0.0
-
-
-class TestLoadModel:
-    """The committed artifact loads and satisfies the serving contract."""
-
-    def test_bundle_shape(self):
-        bundle = budget.load_model()
-        assert bundle is not None
-        assert tuple(bundle["feature_names"]) == budget.FEATURE_NAMES
-        assert isinstance(bundle["floor"], int)
-        assert hasattr(bundle["model"], "predict")
-
-
-class TestPredictedBudget:
-    """Seed → clamped budget, via the trained model (retired from serving; the
-    ``latest_gap`` collector still depends on these exact mappings)."""
-
-    def test_anchor_seeds_match_the_trained_model(self):
-        # The four working anchors — the same predictions the notebook and the
-        # metadata.json coefficients produce (AIAYN carries OpenAlex's 2025
-        # mis-dating, which is exactly what the deployed model must handle).
-        assert limit(1975, 12_959) == 160  # Hawking Radiation
-        assert limit(2015, 30_115) == 60   # DQN
-        assert limit(2018, 352) == 41      # QMIX
-        assert limit(2025, 6_583) == 30    # Attention Is All You Need
-
-    def test_older_seed_earns_a_larger_budget(self):
-        # Age carries the signal (r≈0.84): hold citations fixed, older wins.
-        assert limit(1986, 5_000) > limit(2021, 5_000)
-
-    def test_budget_never_exceeds_the_ceiling(self):
-        # An old, well-cited seed predicts above the ceiling — clamps to it.
-        assert limit(1975, 12_959, ceiling=40) == 40
-
-    def test_budget_never_drops_below_the_floor(self):
-        floor = budget.load_model()["floor"]
-        # A brand-new, uncited seed floors at the model's floor, not below.
-        assert limit(AS_OF, 0) == floor
-
-    def test_unloadable_model_predicts_nothing(self, monkeypatch):
-        # A missing/broken artifact must degrade to None, not crash the caller.
-        monkeypatch.setattr(budget, "load_model", lambda: None)
-        assert limit(1975, 5_000) is None
-
-
 class TestStopRule:
     """The STOP rule — how deep into the ranking you get before a year overflows.
 
     The serving rule for every whole-history pool (via ``computed_cite_limit``,
-    below) AND the retired model's **training label**
-    (``test/ml_pipelines/cite_budget/test_train.py`` pins that training and the
-    app share this one function). What a *truncated* live pool ships instead is
-    the SKIP rule below.
+    below), and formerly the retired regressor's **training label**. What a
+    *truncated* live pool ships instead is the SKIP rule below.
     """
 
     def test_stops_when_a_year_exceeds_the_cap(self):
@@ -163,11 +76,6 @@ class TestComputedCiteLimit:
     def test_spread_pool_ships_whole_under_the_guard(self):
         # Below the guard nothing clamps: the STOP count is the answer.
         assert budget.computed_cite_limit(list(range(1990, 2020))) == 30
-
-    def test_needs_no_model_artifact(self, monkeypatch):
-        # Computing must not depend on the trained bundle at all.
-        monkeypatch.setattr(budget, "load_model", lambda: None)
-        assert budget.computed_cite_limit([2025] * 500) == budget.PER_YEAR_CAP
 
 
 class TestSkipRule:
@@ -227,14 +135,6 @@ class TestSkipRule:
         keep = budget.select_landmarks(hawking_span)
         assert len(keep) == UNBOUNDED_LANDMARK_CAP
         assert keep == sorted(keep)  # a prefix of the citation-ranked selection
-        # ...and the two sizings agree on the same guard.
-        assert budget.predicted_budget(1975, 10_825, as_of_year=2026) <= (
-            UNBOUNDED_LANDMARK_CAP)
-
-    def test_needs_no_model_artifact(self, monkeypatch):
-        # The selection path must not depend on the trained bundle at all.
-        monkeypatch.setattr(budget, "load_model", lambda: None)
-        assert len(budget.select_landmarks([2025] * 400)) == budget.PER_YEAR_CAP
 
     def test_empty_pool_ships_nothing(self):
         assert budget.select_landmarks([]) == []

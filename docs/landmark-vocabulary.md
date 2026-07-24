@@ -102,8 +102,8 @@ what to ship. Whether there *is* a pool is the hinge the whole design turns on
 | live S2, **complete** (list ends before the ceiling — most seeds) | **Yes** — the pool is the whole history | **compute** N *(since v5.13.0)* | a prefix |
 | live S2, **truncated** (the ceiling cut it off) | **Yes** — but it's a recency sliver | **compute** the selection | banded |
 
-So the trained model now serves **no path at all** — retired v5.13.0, kept for
-the pipelines and as the label's derivation record (see
+So the trained model now serves **no path at all** — retired v5.13.0, and its
+code deleted in the 2026-07-22 research reset (see
 [`predict-vs-compute.md`](predict-vs-compute.md)'s epilogue).
 
 Note the last column moves independently of the middle one. *Predict vs compute* is
@@ -138,13 +138,13 @@ the paper.
 
 **per-year cap** (`PER_YEAR_CAP = 12`) — how many same-year citers a landmark
 view tolerates before that year reads as a pile-up. One constant behind both
-rules. Fit by sweep, not hand-picked (`research/cite_budget/`).
+rules. Fit by sweep, not hand-picked.
 
 **`number_of_ranked_citers_before_a_single_year_overflows`** — Rule 1 above. The
-STOP rule. Returns a count. Two jobs: the trained model's **training label**
-(its original role — a regression label has to be a scalar), and, via
-`computed_cite_limit`, the **serving rule for every whole-history pool** (the
-corpus since v5.11.0; OpenAlex and complete live S2 pools since v5.13.0).
+STOP rule. Returns a count. Originally the retired model's **training label** (a
+regression label has to be a scalar); now, via `computed_cite_limit`, only the
+**serving rule for every whole-history pool** (the corpus since v5.11.0; OpenAlex
+and complete live S2 pools since v5.13.0).
 Formerly `density_budget`, and written **`n*`** throughout the older notes.
 
 **`select_up_to_cap_per_year`** — Rule 2 above. The SKIP rule. Returns indices.
@@ -164,48 +164,35 @@ pool computes Rule 1 instead). Formerly `density_selection_rule`.
 
 ---
 
-## The model side
+## The model side (retired)
 
-**label** — the machine-learning sense: the ground-truth value a model is
-trained to reproduce. Rule 1's output is the label. It is a **prefix that stops**
-purely because a regression target has to be a single number, and the better rule
-(Rule 2) returns a list. That's the whole reason a rule everyone agrees is worse
-still exists.
+The landmark budget was once sized by a **trained model**. It was retired from
+serving (v5.13.0) and its code deleted entirely in the 2026-07-22 research reset
+(see [`predict-vs-compute.md`](predict-vs-compute.md)). These terms survive here
+only because older entries, the "three senses of anchor" below, and `history.md`
+still reference them:
 
-**feature** — a model input. There are exactly two (`FEATURE_NAMES`):
+- **label** — a model's ground-truth training target. Rule 1's scalar output was
+  that label — a regression target has to be a single number, which is the whole
+  reason a rule everyone agrees is worse than Rule 2 ever existed. Rule 1 is now
+  simply the serving rule for whole-history pools; the label role is history.
+- **feature** — the model's two inputs (`FEATURE_NAMES`): `age` (years from the
+  **age origin** to now) and `log_cites` (`log10(seed citations + 1)`).
+- **age origin** — *which paper's year `age` was measured from*: the seed's own
+  year (what the model trained on) vs. the oldest reachable citer (proposed for
+  truncated pools, which don't span the seed→now gap — DQN reads as a dense
+  7-year history, not a 13-year classic). Older notes call the second
+  **"re-anchoring"**; prefer "age origin" ("anchor" is overloaded three ways,
+  below).
+- **`predicted_budget`** (formerly `model_budget`) and **`adaptive_cite_limit`**
+  — the model's serving call and its config toggle; both deleted (v5.13.0 / the
+  v6.0.0 config purge).
 
-- `age` — years from the **age origin** (below) to now, floored at 0.
-- `log_cites` — `log10(the seed's citation count + 1)`.
-
-**`predicted_budget`** — runs the trained model's `.predict()` on those two
-features and clamps the result. Config-free. Formerly `model_budget`.
-
-**`adaptive_cite_limit`** — historically, the app-facing wrapper that read the
-`graph.adaptive_cite_limit` toggle and called `predicted_budget`; **deleted in
-v5.13.0** when the model retired from serving (see
-[`predict-vs-compute.md`](predict-vs-compute.md)'s epilogue). The config key of
-the same name outlived it as a gate on the computed and selected rules, until
-the **v6.0.0 config purge** deleted it too — sizing is always adaptive now.
-
-**age origin** — *which paper's year the `age` feature is measured from.* Two
-choices, and the distinction is the whole subject of the `live_pool_validation`
-study:
-
-- **from the seed** (`predicted_budget_age_from_seed`) — the seed's own
-  publication year. What the model was trained on.
-- **from the oldest reachable citer**
-  (`predicted_budget_age_from_oldest_citer`) — the oldest year present in the
-  truncated pool. Proposed because a truncated pool doesn't span the seed→now
-  gap the seed-anchored feature describes: DQN reads as a dense 7-year history,
-  not a 13-year classic.
-
-Older notes call the second option **"re-anchoring"**. Prefer "age origin" —
-"anchor" is overloaded three ways (below).
-
-**exact / computable** vs **predicted** — "exact" means *computed by running the
-rule over a real pool*, as opposed to estimated by the model. It is a claim about
-the arithmetic, **not** about the pool being representative. On a truncated pool
-both can be true at once: exactly computed, and about the wrong slice.
+**exact / computable** vs **predicted** — a distinction that mattered while both
+existed. "Exact" (still live) means *computed by running the rule over a real
+pool*, not estimated by the model; a claim about the arithmetic, **not** about the
+pool being representative — on a truncated pool a count can be exactly computed and
+still about the wrong slice.
 
 ---
 
@@ -255,8 +242,8 @@ The worst word in the codebase. Always disambiguate:
    Hawking Radiation, DQN, QMIX, *Attention Is All You Need* — kept so a
    number that looks absurd gets caught before any aggregate hides it. In the
    corpora this is the **`is_worked_example`** column (formerly `is_anchor`).
-2. **The age origin.** Where the model's `age` feature is measured from (above).
-   Older notes say "re-anchoring". This has **nothing** to do with sense 1.
+2. **The age origin.** Where the retired model's `age` feature was measured from
+   (above). Older notes say "re-anchoring". This has **nothing** to do with sense 1.
 3. **Force-graph node pinning.** Pure homonym, frontend only
    (`frontend/src/graph/hooks/`) — fixing a node's position on the canvas.
    Nothing to do with citers, budgets, or models.
@@ -267,13 +254,11 @@ The worst word in the codebase. Always disambiguate:
 
 | Term | Defined in |
 | --- | --- |
-| Rule 1, Rule 2, `PER_YEAR_CAP`, `predicted_budget`, `computed_cite_limit`, `select_landmarks`, features | `src/atlas/services/graph/budget.py` |
+| Rule 1, Rule 2, `PER_YEAR_CAP`, `computed_cite_limit`, `select_landmarks` | `src/atlas/services/graph/budget.py` |
 | `tail_edge`, `tau`, `max_span`, `band_start`, `MIN_LANDMARK_YEARS` | `src/atlas/services/graph/bands.py` |
 | `REACHABLE_CITERS`, `_MAX_OFFSET` | `src/atlas/integrations/semantic_scholar/traversal.py` |
 | `UNBOUNDED_LANDMARK_CAP` (500) | `src/atlas/integrations/openalex/` |
-| The label corpus + the fitted model | `src/ml_pipelines/cite_budget/` |
-| The fitted `tau` / `max_span` | `src/ml_pipelines/latest_gap/` |
-| The truncated-pool study | `src/ml_pipelines/live_pool_validation/` |
+| The fitted `tau` / `max_span` (now inlined as `TAU` / `MAX_SPAN`) | `src/atlas/services/graph/bands.py` |
 
 ## A note on older names
 

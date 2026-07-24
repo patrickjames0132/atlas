@@ -339,7 +339,7 @@ def test_corpus_computes_its_budget_instead_of_predicting(fake_s2, monkeypatch):
     """The corpus measures its landmark band; it does not consult the model.
 
     It used to predict, on the reasoning that a count must go into its
-    citation-sorted query up front. Measured (``ml_pipelines/live_pool_validation``),
+    citation-sorted query up front. Measured on a 58-seed validation corpus,
     that LIMIT bought 0.9% — 22.08s for 63 citers vs 22.28s for all 28,732 of DQN's
     — because the scan, dedupe and 200M-row join dominate either way. So it gets
     ``computed_cite_limit``; the source's own payload guard is the ceiling for

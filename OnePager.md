@@ -246,37 +246,42 @@ optional, behind a key.
 
 ### Citations & graph data
 
-- [ ] **Replace every citation rule with one threshold predicate** — Patrick's
-      epiphany (2026-07-20). Rip out the STOP rule, the SKIP rule, truncated vs
-      full history, and adaptive vs non-adaptive, and replace all of them with a
-      single per-citer predicate:
-      `citer.cited_by >= max(FLOOR, T[now - citer.year] * S(seed.cited_by))`.
-      A predicate reads one citer and never the pool, so it is order-free by
-      construction — which is *why* one rule can serve every scenario. Latest
-      Publications becomes the complement (deleting `bands.py`, `tau`,
-      `max_span`, and `ml_pipelines/latest_gap`); the adaptive switch is deleted
-      and the sliders come back permanently as display-only trimming;
-      `PER_YEAR_CAP` is demoted from semantics to a default slider position; and
-      "Field Landmarks" becomes just "Landmarks". **The full design, both wrong
-      turns, all four decisions, the data findings, and the phased build plan
-      are in [docs/citation-threshold.md](docs/citation-threshold.md) — read it
-      first.** Phases 0–1 (collect + fit) must run on the **Windows** machine,
-      which has the offline citations corpus; the fitted artifact is git-tracked
-      so it travels back. **Fully specified — no open questions.** Provider
-      calibration takes two separately fitted curves (S2 and OpenAlex citation
-      counts disagree, and the narrow band leaves no slack for a correction
-      factor); the fit targets **20–40 landmarks** per seed, chosen as a
-      *composition* ratio against the default slider rather than to match
-      today's ~76, because the threshold no longer controls volume — the
-      sliders do; and `S(median seed) = 1` is pinned per curve.
-      *(Filed 2026-07-20.)*
+- [ ] **Replace the STOP/SKIP citation rules with a citation-threshold predicate**
+      — the standing goal (Patrick, 2026-07-20). Rip out the STOP rule, the SKIP
+      rule, truncated-vs-full-history, and adaptive-vs-non-adaptive, and replace
+      all of them with a single **per-citer predicate** — something shaped like
+      `is_landmark(citer) = citer.cited_by >= threshold(citer, seed)` — that reads
+      one citer and never the pool, so it is order-free and provider-independent
+      by construction. That collapses five behaviors to one, pushes the filter
+      into the query (OpenAlex `cited_by_count:>N`, a corpus `WHERE`), and turns
+      truncation into a caveat instead of a code path. Latest Publications becomes
+      the complement; the sliders return as display-only trimming; `PER_YEAR_CAP`
+      demotes from semantics to a default slider position; "Field Landmarks"
+      becomes "Landmarks".
+
+      **Restarting from scratch under the `research` process** (`.claude/skills/research`).
+      A first fully-specified formulation
+      (`citer.cited_by >= max(FLOOR, T[age] · S(seed))`, fit for a 20–40 landmark
+      band) reached Phase 1 on the `citation-threshold` branch and was retired —
+      but its **key finding must carry forward so we don't rediscover it the hard
+      way:** a pool-independent predicate can *center* the landmark count but
+      cannot *pin* it per seed. The required per-seed multiplier scatters ~1.9–2.5×
+      around anything seed size predicts, while a 20–40 band is only ~1.65× wide →
+      ~35% max in-band, an exhaustively-proven ceiling for that model family
+      (independently reproduced). The lesson: a **count guarantee belongs in the
+      display layer** (the sliders), not the predicate — the predicate owns the
+      Landmark/Latest *split*, the sliders own *volume*. The `citation-threshold`
+      branch survives with its fitted S2 corpus sample (1,502 seeds) for
+      reference; fitting still runs on the **Windows** box (offline corpus),
+      artifact travels back via git.
+      *(Goal filed 2026-07-20; restarted 2026-07-23.)*
 - [ ] ~~**Spike: is the SKIP rule what we actually want?**~~ — **superseded
       2026-07-20** by the threshold-predicate ticket above, which generalizes
       this spike's own option (3), "SKIP with a citation floor", into an
       age-adjusted, seed-scaled floor applied to every path. Kept for its
-      success criterion, which the new design should still be measured against
-      (see [docs/citation-threshold.md](docs/citation-threshold.md) →
-      "Relationship to the spike"). Original text follows. — Patrick's ask
+      success criterion, which any future design should still be measured
+      against (see the citation-threshold ticket above, now restarting from
+      scratch under the research process). Original text follows. — Patrick's ask
       (2026-07-17), from the conversation that retired the budget model. Since
       v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
       hyper-cited seed, on a machine with no corpus. Everything else prefixes by
@@ -458,7 +463,7 @@ optional, behind a key.
   reuses the recommendations API, which that ticket keeps wired for the
   researcher anyway.)
 
-  **The experiment (extends `research/citation_coverage/`).** Same seeds
+  **The experiment.** Same seeds
   (Attention, GPT-3, QMIX, DQN + a physics control like Hawking): pull SPECTER
   neighbors re-ranked by citations, then measure against (a) our shipped OA
   landmark set, (b) S2's true top-cited citers where pullable (the <9k-citer RL
@@ -566,6 +571,19 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Scrub the STOP/SKIP docs & memories once citation-thresholding supersedes
+      them** — a deliberately-deferred cleanup, **gated on** the "Replace the
+      STOP/SKIP citation rules with a citation-threshold predicate" ticket
+      (Citations & graph data) actually landing. While STOP/SKIP still ship, their
+      docs stay accurate and must remain. The moment the predicate replaces them,
+      a large body of material goes dead at once and should be revised in one
+      pass: `docs/landmark-vocabulary.md` (STOP/SKIP/tau/anchor — most of it),
+      `docs/predict-vs-compute.md` (its whole regime table is about the rules
+      being replaced), the STOP/SKIP/tau rows in `docs/constants.md`, the relevant
+      `docs/configuration.md` prose, and the STOP/SKIP-era memories. `history.md`
+      and `bugs.md` stay **verbatim** as always. (The 2026-07-22/23 research-reset
+      scrub already retired the *model/pipeline* material; this ticket is the
+      *rules* half, which couldn't go until the rules do.) *(Filed 2026-07-23.)*
 - [ ] **Audit every constant in `src/` for config-knob-worthiness — then decide
       which knobs belong in the UI instead** — a systematic pass over the
       module-level constants (`NBUCKETS`, `_RANK_POOL`, `_MAX_OFFSET`,
@@ -585,24 +603,24 @@ optional, behind a key.
       holds operator concerns (paths, keys, ports), the modal holds user
       preferences, and code holds fitted or structural constants. *(From the
       `todos.md` inbox, 2026-07-17.)*
-- [ ] **Gate the research notebooks — nothing executes them, so they rot
-      silently** — two of the three (`research/cite_budget`, `research/latest_gap`)
-      had been un-executable since the src-layout migration and nobody noticed,
-      because no nox session runs a notebook (see `docs/bugs.md` → "Two of the
-      three research notebooks had been un-executable for weeks"). `precommit`
-      lints notebook *identifiers*, which makes them feel covered while their
-      actual correctness is checked by no one; a committed output is a claim, and
-      claims were going stale invisibly. **Proposal:** a `notebooks` nox session
-      running `jupyter nbconvert --execute` over `research/*/analyze.ipynb`.
-      **The design question that stops this being a one-liner:** all three
-      currently read *committed* corpora and are offline and cheap (~seconds), so
-      today it's free — but the gate must never become a thing that hits a live
-      API or needs the corpus machine, and a future notebook might want either.
-      So the session needs a rule for what's includable (offline, committed inputs
-      only) and a way for a notebook to opt out, rather than globbing everything.
-      Worth pairing with the fact that the pipelines' **collectors** have no test
-      coverage at all for the same reason — they call live APIs. *(Found while
-      renaming the budget vocabulary, 2026-07-16.)*
+- [ ] **Gate research notebooks — nothing executes them, so they rot silently**
+      — a committed notebook output is a *claim*, and nothing checks it. Under the
+      old (now-deleted) `research/` layout, two of three notebooks had been
+      un-executable since the src-layout migration and nobody noticed, because no
+      nox session runs a notebook; `precommit` lints notebook *identifiers*, which
+      makes them feel covered while their correctness is checked by no one (see
+      `docs/bugs.md` → "Two of the three research notebooks had been un-executable
+      for weeks"). **Carry this forward into the rebuilt research** (the
+      `research-reset` restart): whatever notebook lives beside a fitted artifact
+      needs a `notebooks` nox session running `jupyter nbconvert --execute` over
+      it. **The design question that stops it being a one-liner:** the gate must
+      never hit a live API or need the corpus machine, so it needs a rule for
+      what's includable (offline, committed inputs only) and a per-notebook opt-out
+      rather than globbing everything — and the pipelines' **collectors** (which
+      call live APIs) stay uncovered for the same reason. Fold this into the
+      research-rule decision before rebuilding the pipeline plumbing. *(Found while
+      renaming the budget vocabulary, 2026-07-16; re-scoped for the restart
+      2026-07-22.)*
 - [ ] **Rename `digest.db` → `cache.db`** — the ephemeral graph-snapshot store
       is still named `digest.db`, a leftover from the retired daily-digest era;
       it's really the 1-day graph/artifact **cache** now. Rename the file (and
@@ -611,24 +629,6 @@ optional, behind a key.
       name matches what it holds. A cosmetic rename — old `digest.db` files can be
       left to age out or deleted, since it's a regenerable cache. *(From the
       `todos.md` inbox, 2026-07-11.)*
-- [ ] **Fold the retired predictor into `ml_pipelines` (or retire it fully)** —
-      since v5.13.0 `budget.predicted_budget` / `load_model` / `MODEL_PATH` are
-      app-side code (`services/graph/budget.py`) whose only callers are
-      pipelines: `latest_gap/collect.py` (trims citer-year distributions the way
-      v5.12-era builds did, so its committed corpus stays reproducible) and
-      `live_pool_validation/collect.py` (both age-origin columns). That respects
-      the dependency rule (pipelines import the app, never the reverse — the
-      `compute_features` precedent), but "app code with no app callers" is worth
-      resolving deliberately: either move the predictor + artifact loading into
-      `ml_pipelines/cite_budget` (churns the `latest_gap` collector's provenance
-      story; `compute_features`/the STOP label stay app-side — the label is the
-      serving rule now), or decide the `latest_gap` corpus should be re-collected
-      against the *computed* budget and delete the predictor outright. Blocked
-      on neither; just don't do it silently — the model coming back (a future
-      provider that genuinely can't compute) is the one reason to wait. Same
-      family as the v6.0.0 count-caps purge — "what does the model's absence let
-      us delete?" *(Patrick, 2026-07-17, spotting the near-dead code in
-      review.)*
 - [ ] **Swap the hand-rolled `urllib` clients for `httpx`** — S2, arXiv
       (`client`/`fulltext`/`figures`), and OpenAlex all hand-roll stdlib
       `urllib` (manual `Request`/`urlencode`/`HTTPError` plumbing); only HF uses

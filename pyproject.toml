@@ -1,6 +1,6 @@
 [project]
 name = "atlas"
-version = "6.3.0"
+version = "6.4.0"
 description = "Atlas — an interactive citation/similarity graph explorer with an AI teacher that narrates a field's history over the graph."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -78,17 +78,6 @@ dev = [
     # pinned `uvx` env instead (see .pre-commit-config.yaml) — like ruff, a tool
     # not a dependency.
 ]
-# Offline analysis notebooks in research/ — opt-in via `uv run --group research`
-# (not part of the default sync; the app never imports these). scikit-learn /
-# joblib / numpy are runtime deps now (the app loads the trained model), so they
-# aren't repeated here — only the notebook-only libs are.
-research = [
-    "pandas>=2.2",
-    "matplotlib>=3.9",
-    "ipykernel>=6.29",
-    "nbconvert>=7.16",
-]
-
 # --- quality tooling (all driven by `uv run nox`) ---
 
 [tool.mypy]
@@ -107,11 +96,9 @@ explicit_package_bases = true
 check_untyped_defs = true
 
 [tool.pytest.ini_options]
-# Tests live in test/, mirroring src/atlas/ (and test/ml_pipelines/ mirrors the
-# src/ml_pipelines/ training pipeline). The app package comes from the editable
-# install (src-layout); pythonpath is belt-and-braces for running pytest outside
-# a synced uv env — "src" covers both the app (``atlas``) and the training
-# pipelines (``ml_pipelines``), which now live side by side under src/.
+# Tests live in test/, mirroring src/atlas/. The app package comes from the
+# editable install (src-layout); pythonpath is belt-and-braces for running pytest
+# outside a synced uv env.
 testpaths = ["test"]
 pythonpath = ["src"]
 # Test dirs have no __init__.py, so as source packages keep splitting into

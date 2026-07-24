@@ -58,30 +58,18 @@ Which rule a path *can* use is dictated by what pool it holds, not by taste:
   before the trim, but when the offset ceiling cut it off, that pool is a recency
   sliver with no all-history ranking to prefix: a prefix strands the recent years,
   so it bands (SKIP) instead.
-* **Predict a count** (:func:`predicted_budget`) — **retired from serving
-  (v5.13.0).** The trained model existed for OpenAlex on the premise that
-  computing there would mean dragging the whole pool across the network (~30k
-  citers for DQN) just to size a trim — but STOP's prefix-locality breaks the
-  premise: the number is computable from the one page the predicted path was
-  already fetching, without the model's ~21-citer per-seed error. The predictor
-  and artifact remain for the pipelines (``latest_gap``'s collector trims
-  citer-year distributions with it) and as the label's training-time story.
+A third option — **predicting** the count from the seed's age and citation count
+with a trained regressor — was retired from serving in v5.13.0 and its code
+removed since. It existed for OpenAlex, on the premise that computing there meant
+dragging the whole pool across the network (~30k citers for DQN) just to size a
+trim. STOP's prefix-locality broke that premise: the number is computable from the
+one page the predicted path was already fetching, without the model's ~21-citer
+per-seed error.
 
 Why whole-history pools prefix where truncated ones band is the subtlest thing
 here — :func:`computed_cite_limit` argues it. Short version: a prefix of a
 *whole-history* ranking is exactly what "Field Landmark" means, and Latest widens
 back to meet it; a prefix of a *truncated* one is just the recent past twice over.
-
-Serving and training share :func:`compute_features` and :data:`PER_YEAR_CAP`, and
-the label (:func:`number_of_ranked_citers_before_a_single_year_overflows`) is
-defined here beside the model it belongs to — one definition each, no train/serve
-skew. The *training* half lives beside the artifact in
-``src/ml_pipelines/cite_budget``, which imports both from here; see its README for
-the derivation.
-
-The model artifact is loaded once and memoized (:func:`load_model`); a missing or
-unreadable artifact degrades gracefully to no prediction. Since v5.13.0 no graph
-build depends on it — only the pipelines do.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -90,33 +78,17 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 from __future__ import annotations
 
 import logging
-import math
 from collections import Counter
 from collections.abc import Sequence
-from functools import lru_cache
-from typing import Any
 
-import joblib
-
-from ...config import PROJECT_ROOT
 from ...integrations.caps import UNBOUNDED_LANDMARK_CAP
 
 log = logging.getLogger(__name__)
 
-#: The trained-model artifact, written by ``src/ml_pipelines/cite_budget/train.py``
-#: beside it. A joblib bundle: ``{"model": <sklearn estimator>, "feature_names",
-#: "floor", ...}``.
-MODEL_PATH = PROJECT_ROOT / "src" / "ml_pipelines" / "cite_budget" / "model.joblib"
-
-#: The feature contract — the order the estimator was trained on. Training reads
-#: this same constant, so the serving vector can't drift from the fitted one.
-FEATURE_NAMES = ("age", "log_cites")
-
 #: The per-year density cap ``K``: how many same-year papers a landmark view
-#: tolerates before that year reads as a pile-up. The research notebook swept K
-#: and settled on 12. Training labels the corpus with it and records it in the
-#: artifact's ``per_year_cap``; the live-fallback trim applies it directly — one
-#: constant behind both, like :data:`FEATURE_NAMES`.
+#: tolerates before that year reads as a pile-up. **Fitted**, not hand-picked — a
+#: parameter sweep over a labelled corpus settled on 12. The rules below apply it
+#: directly; refit rather than nudge it.
 PER_YEAR_CAP = 12
 
 
@@ -148,17 +120,14 @@ def number_of_ranked_citers_before_a_single_year_overflows(
     until deep into the list and the number is large. Same top citers, very
     different answer — that gap is the temporal clutter this quantifies.
 
-    **Two jobs, one function.** It is the trained model's training label — what
-    ``.predict()`` regressed on, kept scalar because a regression label has to
-    be — and, since the compute paths took over (corpus v5.11.0; everywhere
-    v5.13.0), it is also the serving rule :func:`computed_cite_limit` executes
-    over every whole-history pool. It stops rather than skipping full buckets
-    and walking on (as :func:`select_up_to_cap_per_year` does) because a prefix
-    is what a whole-history ranking honestly ships; on a *truncated* pool the
-    stop is the wrong move — see this module's docstring for the 29-vs-84
-    measurement on DQN. Defined here beside the model rather than in the
-    pipeline (``ml_pipelines.cite_budget`` imports it, as it does
-    :func:`compute_features`).
+    Originally this was the retired regressor's training label — kept scalar
+    because a regression label has to be. Since the compute paths took over
+    (corpus v5.11.0; everywhere v5.13.0) it is the serving rule
+    :func:`computed_cite_limit` executes over every whole-history pool. It stops
+    rather than skipping full buckets and walking on (as
+    :func:`select_up_to_cap_per_year` does) because a prefix is what a
+    whole-history ranking honestly ships; on a *truncated* pool the stop is the
+    wrong move — see this module's docstring for the 29-vs-84 measurement on DQN.
 
     An undated citer is admitted without contributing to any bucket — it can't
     crowd a year it isn't in. Training passes an all-dated list (its collector
@@ -184,95 +153,6 @@ def number_of_ranked_citers_before_a_single_year_overflows(
     return len(citer_years)
 
 
-def compute_features(year: int, citation_count: int, *, as_of_year: int) -> list[float]:
-    """Build the model's feature vector for one seed, in :data:`FEATURE_NAMES` order.
-
-    Shared by training (over the corpus) and serving (per graph build) so the
-    two never disagree on what a feature means.
-
-    Args:
-        year: The seed's publication year.
-        citation_count: The seed's total citation count.
-        as_of_year: The reference year age is measured from (today's year at
-            serving time; the collection year during training).
-
-    Returns:
-        ``[age, log10(citation_count + 1)]`` — ``age`` floored at 0 (guards a
-        seed OpenAlex mis-dates into the future).
-    """
-    age = max(as_of_year - year, 0)
-    log_cites = math.log10(citation_count + 1)
-    return [float(age), log_cites]
-
-
-@lru_cache(maxsize=1)
-def load_model() -> dict[str, Any] | None:
-    """Load and memoize the trained-model bundle, or None when unavailable.
-
-    A missing or unreadable artifact is logged and returns None so the caller
-    degrades to no prediction — nothing may fail just because the model hasn't
-    been trained on this machine.
-
-    Returns:
-        The joblib bundle (``model`` estimator plus ``feature_names``, ``floor``,
-        and training metadata), or None when the artifact can't be loaded.
-    """
-    if not MODEL_PATH.exists():
-        log.warning("cite-budget model missing at %s; no prediction available", MODEL_PATH)
-        return None
-    try:
-        bundle: dict[str, Any] = joblib.load(MODEL_PATH)
-    except Exception as error:  # a corrupt/incompatible artifact must not crash the caller
-        log.warning("cite-budget model failed to load (%s); no prediction available", error)
-        return None
-    if tuple(bundle.get("feature_names", ())) != FEATURE_NAMES:
-        log.warning("cite-budget model feature mismatch %s; no prediction available",
-                    bundle.get("feature_names"))
-        return None
-    return bundle
-
-
-def _reset_model_cache() -> None:
-    """Clear the memoized model (tests that swap the artifact call this).
-
-    Tolerant of ``load_model`` having been monkeypatched to a plain function
-    (which has no ``cache_clear``), so test teardown can call it unconditionally.
-    """
-    cache_clear = getattr(load_model, "cache_clear", None)
-    if cache_clear is not None:
-        cache_clear()
-
-
-def predicted_budget(year: int, citation_count: int, *, as_of_year: int,
-                 ceiling: int | None = None) -> int | None:
-    """Predict and clamp one seed's landmark budget — the raw model call, config-free.
-
-    **No serving path calls this since v5.13.0** (every build-time pool is now
-    in hand enough to compute the label directly — see the module docstring).
-    It remains for the ``latest_gap`` corpus collector, which must trim
-    citer-year distributions exactly the way the v5.12-era builds did, without
-    depending on the local ``config.json``.
-
-    Args:
-        year: The seed's publication year.
-        citation_count: The seed's total citation count.
-        as_of_year: The year to measure the seed's age from.
-        ceiling: The clamp ceiling; None uses the traversals' unbounded landmark
-            cap.
-
-    Returns:
-        The clamped budget, or None when the model artifact isn't loadable.
-    """
-    bundle = load_model()
-    if bundle is None:
-        return None
-    if ceiling is None:
-        ceiling = UNBOUNDED_LANDMARK_CAP
-    features = compute_features(year, citation_count, as_of_year=as_of_year)
-    predicted = float(bundle["model"].predict([features])[0])
-    return min(max(round(predicted), int(bundle["floor"])), ceiling)
-
-
 def computed_cite_limit(citer_years: Sequence[int | None]) -> int:
     """The landmark ship count, **computed** from the pool rather than predicted.
 
@@ -280,11 +160,11 @@ def computed_cite_limit(citer_years: Sequence[int | None]) -> int:
     the **offline S2 corpus**, **OpenAlex** (via the one-page probe), and a
     **complete live S2 pool**. It runs the STOP rule
     (:func:`number_of_ranked_citers_before_a_single_year_overflows`) over the real
-    years instead of estimating it from two seed features. The retired model's
-    training label *is* this number, so this is the model's own answer with the
-    estimation error taken out: across the 58-seed ``live_pool_validation`` corpus
-    the two distributions are near-identical (predicted mean 76.5, computed mean
-    75.9) but the model was ~21 out on any given seed.
+    years instead of estimating it from two seed features. The retired regressor's
+    training label *is* this number, so this is that model's own answer with the
+    estimation error taken out: measured across a 58-seed validation corpus the two
+    distributions were near-identical (predicted mean 76.5, computed mean 75.9),
+    but the model was ~21 out on any given seed.
 
     **Why a count here and a selection (:func:`select_landmarks`) on truncated
     live pools** — different pools want different rules:
@@ -404,8 +284,7 @@ def select_up_to_cap_per_year(citer_years: Sequence[int | None],
     answer" lesson (see this module's docstring, and the 18-month hole the STOP
     rule left on DQN).
 
-    Factored out of :func:`select_landmarks` (the :func:`predicted_budget`
-    precedent) so the ``live_pool_validation`` study can run the exact serving rule
+    Factored out of :func:`select_landmarks` so the exact serving rule can be run
     over simulated pools without depending on the local ``config.json``.
 
     Args:

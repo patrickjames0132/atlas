@@ -30,7 +30,7 @@ symmetry was the wrong one to keep: the live path is a **recency sliver** and ba
 its landmarks because it has no all-history ranking to prefix; the corpus and
 OpenAlex both hold whole histories and can place an honest frontier. Two of three
 paths now agree, and the odd one out is the one that structurally cannot join them
-(``ml_pipelines/live_pool_validation``'s verdict measured why: banded landmarks
+(a truncated-pool validation study measured why: banded landmarks
 flatten the year distribution the tau rule reads, pinning 56 of 58 seeds to a
 one-year band). So switching a graph to the corpus changes *which* citers appear —
 now the true top-cited across all history — and now also *where the frontier
@@ -543,8 +543,8 @@ def citation_relations(
     prefix. The live fallback bands its landmarks (a truncated pool has no
     all-history ranking to prefix), which flattens every year to the cap, which
     collapses tau's ``tau × peak`` threshold and pins the boundary to the newest
-    year on 56 of 58 seeds. Measured in ``ml_pipelines/live_pool_validation``; the
-    argument is that study's verdict.
+    year on 56 of 58 seeds — measured across a 58-seed validation corpus, whose
+    verdict this argument carries.
 
     Args:
         seed_paper: The normalized seed node (its ``arxiv_id`` drives resolution).

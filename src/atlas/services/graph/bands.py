@@ -32,18 +32,16 @@ the count threshold, where a min/max would jump straight to them. There's no
 "only widen" clamp: a young seed whose landmarks already reach the present starts
 its bands at that recent edge (a tight, current frontier), not at a fixed span.
 
-``tau`` and ``max_span`` are **not** hand-tuned constants: they're fit/chosen on a
-labelled OpenAlex corpus by ``src/ml_pipelines/latest_gap`` and shipped in the model
-artifact (``src/ml_pipelines/latest_gap/model.joblib``). This module is the *serving*
-half — it loads that artifact and applies the rule; the *tail-edge rule itself*
-(:func:`tail_edge`) is imported by training too, so there's one contract and no
-train/serve skew. A missing or unreadable artifact degrades gracefully to the
-fixed ``number_of_bands`` span rather than failing a graph build.
+``tau`` and ``max_span`` are **fitted, not hand-tuned**: chosen on a labelled
+64-seed OpenAlex corpus (2026-07-11) and, until that offline pipeline was removed,
+shipped in a model artifact this module loaded at build time. The fitted values are
+now inlined below as :data:`TAU` and :data:`MAX_SPAN` — same numbers, same rule,
+one less moving part. Treat them as measurements: refit if the boundary ever needs
+revisiting rather than nudging them by hand.
 
-Unlike the sibling ``budget`` model, the boundary is a property of each seed's
-landmark *distribution*, not of its age/citations (a feature regression on those
-was tried and fails — see ``research/latest_gap``), so the served input is the
-fetched landmark-year list, not a seed feature vector.
+The boundary is a property of each seed's landmark *distribution*, not of its
+age/citations (a feature regression on those was tried and fails), so the input is
+the fetched landmark-year list, not a seed feature vector.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -53,24 +51,18 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from functools import lru_cache
-from typing import Any
-
-import joblib
-
-from ...config import PROJECT_ROOT
 
 log = logging.getLogger(__name__)
 
-#: The trained-model artifact, written by ``src/ml_pipelines/latest_gap/train.py``
-#: beside it. A joblib bundle: ``{"rule": <RULE_NAME>, "tau", "max_span", ...}``.
-MODEL_PATH = PROJECT_ROOT / "src" / "ml_pipelines" / "latest_gap" / "model.joblib"
+#: The fraction of the peak year's landmark count a year must still reach to count
+#: as part of the dense cluster. **Fitted** on a labelled 64-seed OpenAlex corpus
+#: (2026-07-11), which measured 94 landmark→latest gap-years closed at a misdate
+#: movement of 0.016.
+TAU = 0.25
 
-#: The rule contract — the boundary logic the artifact's ``tau``/``max_span`` were
-#: fit for. Training records the same string, so a served artifact whose rule
-#: doesn't match this module's :func:`tail_edge` is rejected (like the ``budget``
-#: model's ``FEATURE_NAMES`` guard).
-RULE_NAME = "landmark-density-tail"
+#: How far back before the landmark cutoff a band start may reach, at most — the
+#: query-cost cap, fitted alongside :data:`TAU` (mean 6.45 bands per seed, max 9).
+MAX_SPAN = 7
 
 #: Below this many dated landmark years the density edge is too noisy to trust —
 #: the seed falls back to the fixed span (a young seed with a handful of citers
@@ -99,10 +91,6 @@ def tail_edge(landmark_years: list[int], tau: float) -> int:
 
         => 2017
 
-    The rule is shared by serving (here) and training
-    (``src/ml_pipelines/latest_gap``), so the two can't disagree on what the
-    boundary means.
-
     Scale-free — the threshold is relative to this seed's *own* peak, so it works
     for a 30-landmark seed and a 160-landmark one alike — and robust to a handful
     of misdated citers: two outliers can't clear the count threshold, where a
@@ -125,59 +113,20 @@ def tail_edge(landmark_years: list[int], tau: float) -> int:
     return min(landmark_years)
 
 
-@lru_cache(maxsize=1)
-def load_model() -> dict[str, Any] | None:
-    """Load and memoize the trained-boundary bundle, or None when unavailable.
-
-    A missing, unreadable, or wrong-rule artifact is logged and returns None so
-    the caller falls back to the fixed ``number_of_bands`` span — a graph
-    build must never fail just because this model hasn't been trained yet.
-
-    Returns:
-        The joblib bundle (``tau`` and ``max_span`` plus training metadata), or
-        None when the artifact can't be loaded or its rule doesn't match.
-    """
-    if not MODEL_PATH.exists():
-        log.warning("latest-gap model missing at %s; using fixed number_of_bands", MODEL_PATH)
-        return None
-    try:
-        bundle: dict[str, Any] = joblib.load(MODEL_PATH)
-    except Exception as error:  # a corrupt/incompatible artifact must not crash a build
-        log.warning("latest-gap model failed to load (%s); using fixed number_of_bands", error)
-        return None
-    if bundle.get("rule") != RULE_NAME:
-        log.warning("latest-gap model rule mismatch %s; using fixed number_of_bands",
-                    bundle.get("rule"))
-        return None
-    return bundle
-
-
-def _reset_model_cache() -> None:
-    """Clear the memoized model (tests that swap the artifact call this).
-
-    Tolerant of ``load_model`` having been monkeypatched to a plain function
-    (which has no ``cache_clear``), so test teardown can call it unconditionally.
-    """
-    cache_clear = getattr(load_model, "cache_clear", None)
-    if cache_clear is not None:
-        cache_clear()
-
-
 def earliest_band_year(landmark_years: list[int], landmark_max_year: int) -> int | None:
     """The first year the per-year Latest bands should cover, adapted per seed.
 
-    Applies the tail-edge rule with the artifact's fitted ``tau``/``max_span``:
+    Applies the tail-edge rule with the fitted :data:`TAU` and :data:`MAX_SPAN`:
     start the bands where the landmark cluster's density falls off
-    (:func:`tail_edge`), floored so the start reaches back at most ``max_span``
-    years before the landmark cutoff (bounded query cost). No "only widen" clamp
-    — a young seed whose cluster edge is recent starts its bands there. Always
-    on (there is no toggle — banding is how the app sizes itself); config-free,
-    so the ``live_pool_validation`` study places band starts over simulated
-    pools with exactly the serving rule.
+    (:func:`tail_edge`), floored so the start reaches back at most
+    :data:`MAX_SPAN` years before the landmark cutoff (bounded query cost). No
+    "only widen" clamp — a young seed whose cluster edge is recent starts its
+    bands there. Always on (there is no toggle — banding is how the app sizes
+    itself) and config-free.
 
     Falls back (returns None → the caller keeps the fixed ``number_of_bands``
-    span) when the artifact isn't loadable or the seed has too few dated
-    landmark years to place a trustworthy boundary.
+    span) when the seed has too few dated landmark years to place a trustworthy
+    boundary.
 
     Args:
         landmark_years: Publication years of the seed's *shipped* landmark
@@ -191,11 +140,8 @@ def earliest_band_year(landmark_years: list[int], landmark_max_year: int) -> int
     dated = [year for year in landmark_years if year]
     if len(dated) < MIN_LANDMARK_YEARS:
         return None
-    bundle = load_model()
-    if bundle is None:
-        return None
-    edge = tail_edge(dated, float(bundle["tau"]))
-    floor = landmark_max_year - int(bundle["max_span"]) + 1
+    edge = tail_edge(dated, TAU)
+    floor = landmark_max_year - MAX_SPAN + 1
     band_start = max(edge, floor)  # cap query cost; the density edge is the primary pick
     log.info(
         "adaptive latest band starts %d (density edge %d, floor %d) from %d landmark years",

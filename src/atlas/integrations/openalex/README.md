@@ -85,7 +85,7 @@ count is still ≥ `tau` of the peak year's). Its return is used directly
 (closing the gap) or later for a young one (a tight recent frontier). It's a
 *parameter*, not an import, so `integrations` stays below `services` in the
 dependency order; `None` (the default) keeps the fixed `number_of_bands` span.
-See `services/graph/bands.py` and `src/ml_pipelines/latest_gap`; **tail edge**,
+See `services/graph/bands.py`; **tail edge**,
 **band**, **landmark** and the rest of the vocabulary are defined once in
 [`docs/landmark-vocabulary.md`](../../../../docs/landmark-vocabulary.md).
 
