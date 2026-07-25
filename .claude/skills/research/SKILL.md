@@ -20,9 +20,9 @@ description: >
 > at read time, and that way a clone never shows a spurious diff waiting to be
 > committed by accident.
 
-This skill governs how research and analysis are done. It treats research as 
-**open-ended understanding, not a deliverable**. There is no problem to declare 
-*solved* - only more to learn. The process below is built around both.
+This skill governs how research and analysis are done. It treats research as
+**open-ended understanding - not a deliverable**. There is no problem to declare
+*solved* - only more to learn. The process below is built around that.
 
 **Research is open-ended; it is not a march to a solution.** We frame the problem once
 and build the intuition (step 1), then explore it through **workstreams**:
@@ -40,10 +40,10 @@ keep each workstream's log growing.
 > of, and wait for the researcher's response before moving to the next. A shared
 > understanding is built *in* the exchange - not delivered at the end of it.
 
-The **problem** is framed once. This is step 1, and it acts as the umbrella over all workstreams. 
-Each **workstream** is a vertical that emerges under the umbrella; it acts as a theme that ties 
+The **problem** is framed once. This is step 1, and it acts as the umbrella over all workstreams.
+Each **workstream** is a vertical that emerges under the umbrella; it acts as a theme that ties
 back into the problem as a whole (step 2). Each workstream then runs the **hypothesis → experiment →
-results** loop (steps 2a–2c) open-ended. There is no step after that: no *decision* that closes the 
+results** loop (steps 2a–2c) open-ended. There is no step after that: no *decision* that closes the
 problem, no *productionize*. Workstreams emerge freely as you explore, and at any time you can pick
 a different one and push its frontier out another hypothesis.
 
@@ -70,7 +70,7 @@ What we're actually exploring, in plain language, plus a shared mental model of
 *why* — before any analysis code. Framing and intuition are one step: you can't
 build intuition for a problem you haven't framed, and you haven't really framed it
 until the intuition is mutual. This is where the ground-up explanation discipline
-lives (see **What not to do**). You are done with this step when the researcher can
+lives (see **What NOT to do**). You are done with this step when the researcher can
 restate the problem and the rough shape of the answer in their own words — not
 before.
 
@@ -81,8 +81,8 @@ and what a valid answer to a question about it may look like — **including the
 degenerate ones** (a degenerate answer that reads like a footnote can reshape the
 whole problem: noticing that *"the empty result is a valid answer"* may quietly
 eliminate an entire family of approaches, before any data is touched). The
-statement is the umbrella every workstream hangs off. It isn't frozen: as a 
-workstream deepens your understanding, you may sharpen or re-frame it — keeping 
+statement is the umbrella every workstream hangs off. It isn't frozen: as a
+workstream deepens your understanding, you may sharpen or re-frame it — keeping
 the old framing and *why it changed*, because the history of how the problem
 itself came into focus is part of what you're learning.
 
@@ -108,17 +108,16 @@ reject.
 **Start with the simplest hypothesis that could be true — Occam's razor.** Begin
 with the fewest moving parts (e.g., one variable - not four; a straight line before a
 curve) and add complexity only once a result shows it's needed. A simple hypothesis
-that fails tells you exactly which assumption broke, where a complex one that fails 
-is harder to diagnose, because it is more difficult to tell which part was wrong.
+that fails tells you exactly which assumption broke, where a complex one that fails
+is harder to diagnose — you can't tell which part was wrong.
 
 ### 2b. Experiment
 
 Run something to test the hypothesis: a query, a fit, a simulation. Say up front
 what it tests and what each possible outcome would mean. Keep it honest: carry the
 worked examples through, report the whole spread rather than a flattering
-headline, and reproduce any number before you lean on it. Mind the cost: live
-API throttling and large scans of data (which are slow); compute and data access 
-aren't free.
+headline, and reproduce any number before you lean on it. Mind the cost: live APIs
+throttle, large scans are slow, and compute and data access aren't free.
 
 ### 2c. Results
 
@@ -137,13 +136,13 @@ that isn't a question this process asks. What a result gives you is the next
 question: another hypothesis to add to this workstream (back to step 2a), a new
 workstream the finding suggests (a fresh step 2), or a reason to re-frame this
 workstream (step 2) or even the umbrella (step 1). Pick whichever frontier you
-want to push next, the work is breadth-first across the problem, and the problem
+want to push next. The work is breadth-first across the problem, and the problem
 is never finished, only better understood.
 
 **A workstream's loops don't have to build on each other.** The next hypothesis
 can extend or refine the last, but it can equally be a *brand-new* claim that
-just shares the workstream's theme. It can have nothing to do with what the previous 
-loop tested. A workstream isn't one deepening argument; it's a **knowledge base**, 
+just shares the workstream's theme. It can have nothing to do with what the previous
+loop tested. A workstream isn't one deepening argument; it's a **knowledge base**,
 and its README is the collected record of every hypothesis → experiment → result it
 has run - independent threads included. What matters is that they're *all*
 documented there, growing the workstream's understanding.
@@ -207,8 +206,8 @@ level, and the right amount of detail lives at each:
   emerge.
 - **Workstream README** (`<workstream>/README.md`) — the **workstream's framing**:
   a theme and how it fits the larger problem at the top. Then, a **concise** running
-  table collecting its loops (this is the workstream's **knowledge base**). This table 
-  should contain every hypothesis/experiment/result tried, and whether or not they build 
+  table collecting its loops (this is the workstream's **knowledge base**). This table
+  should contain every hypothesis/experiment/result tried, and whether or not they build
   on one another. Be clear and to the point here. The detail lives one level down. For example:
 
   | # | Hypothesis | Experiment | Results | What we learned |
