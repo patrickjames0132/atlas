@@ -20,36 +20,32 @@ description: >
 > at read time, and that way a clone never shows a spurious diff waiting to be
 > committed by accident.
 
-This skill governs how research and analysis are done. It exists because
-research done badly is worse than none: a finding the researcher can't follow is
-one they can't check, and a conclusion pulled from thin air is one nobody can
-trust. And it treats research as **open-ended understanding - not a deliverable**. 
-There is no problem to declare *solved*, only more to learn. The process below is
-built around both.
+This skill governs how research and analysis are done. It treats research as 
+**open-ended understanding, not a deliverable**. There is no problem to declare 
+*solved* - only more to learn. The process below is built around both.
 
-**Research is open-ended and not a march to a solution.** Frame the problem once
-and build the intuition (step 1), then explore it through **workstreams** —
+**Research is open-ended; it is not a march to a solution.** We frame the problem once
+and build the intuition (step 1), then explore it through **workstreams**:
 parallel lines of inquiry that emerge as you go. Each workstream is framed with
 its own theme (step 2) and then runs a never-ending loop of **hypothesis →
 experiment → results** (steps 2a–2c). You push whichever frontier you like
 next - a breadth-first search across the problem space. Nothing is ever *solved*; every result
-is just something newly learned and logged where it accrues. Build shared
-understanding *first*, in plain language, test only a stated hypothesis, and
+is just something newly learned and logged where it accrues. We build a shared
+understanding *first* in plain language, test only a stated hypothesis, and
 keep each workstream's log growing.
 
 ## The shape of the work
 
 > **Every step is back-and-forth.** Present what you have, ask what you're unsure
-> of, and wait for the researcher's response before moving to the next — the shared
+> of, and wait for the researcher's response before moving to the next. A shared
 > understanding is built *in* the exchange - not delivered at the end of it.
 
-The **problem** is framed once — step 1, the umbrella. Each **workstream** that
-emerges under it gets its own lighter framing — a theme, and the intuition for how
-it fits the whole (step 2) — and then runs the **hypothesis → experiment →
-results** loop (steps 2a–2c) open-ended. There is no step after that: no
-*decision* that closes the problem, no *productionize*. Workstreams emerge freely
-as you explore, and at any time you can pick a different one and push its frontier
-out another hypothesis.
+The **problem** is framed once. This is step 1, and it acts as the umbrella over all workstreams. 
+Each **workstream** is a vertical that emerges under the umbrella; it acts as a theme that ties 
+back into the problem as a whole (step 2). Each workstream then runs the **hypothesis → experiment →
+results** loop (steps 2a–2c) open-ended. There is no step after that: no *decision* that closes the 
+problem, no *productionize*. Workstreams emerge freely as you explore, and at any time you can pick
+a different one and push its frontier out another hypothesis.
 
 ```
 1. Frame the PROBLEM + build intuition          ← once; the umbrella
@@ -82,59 +78,56 @@ before.
 problem's README before any hypothesis is proposed. Plain language still, but
 precise about scope: what we are exploring, what is deliberately *out* of scope,
 and what a valid answer to a question about it may look like — **including the
-degenerate ones**. (A degenerate answer that reads like a footnote can reshape the
+degenerate ones** (a degenerate answer that reads like a footnote can reshape the
 whole problem: noticing that *"the empty result is a valid answer"* may quietly
-eliminate an entire family of approaches, before any data is touched.) The
-statement is the umbrella every
-workstream hangs off. It isn't frozen: as a workstream deepens your understanding,
-you may sharpen or re-frame it — keep the old framing and *why it changed*, because
-the history of how the problem itself came into focus is part of what you're
-learning.
+eliminate an entire family of approaches, before any data is touched). The
+statement is the umbrella every workstream hangs off. It isn't frozen: as a 
+workstream deepens your understanding, you may sharpen or re-frame it — keeping 
+the old framing and *why it changed*, because the history of how the problem
+itself came into focus is part of what you're learning.
 
 ### 2. Frame the workstream and build the intuition
 
-A workstream is one angle on the problem — a line of inquiry that emerges as you
-explore, not something laid out in advance. Before its first hypothesis, give it a
+A workstream is one angle on the problem; it's a line of inquiry that emerges as you
+explore - not something laid out in advance. Before its first hypothesis, give it a
 lighter version of what step 1 gave the problem: a **theme or idea** naming what
 this workstream is *about*, and the intuition for **how it fits into the larger
-problem**. It doesn't need a formal statement the way step 1 does — but it needs
-more than a label: you should be able to say, in a sentence or two, what question
+problem**. It doesn't need a formal statement the way step 1 does, but it needs
+more than a label. You should be able to say, in a sentence or two, what question
 this workstream is circling and why it earns a thread of its own. Record it at the
 top of the workstream's README, and every hypothesis (step 2a onward) hangs off it.
 
 ### 2a. Hypothesis
 
-Within a workstream, a single, testable claim about what's true, specific enough
+Within a workstream, a single, testable claim about what's true - specific enough
 that an experiment could refute it. *"A single threshold on one feature separates
 most of the cases correctly"* is a hypothesis; *"let's look at the data"* is not.
 Write it down, so the results in step 2c have something concrete to confirm or
 reject.
 
 **Start with the simplest hypothesis that could be true — Occam's razor.** Begin
-with the fewest moving parts (one variable - not four; a straight line before a
-curve) and add complexity only once a result shows it's needed. This is not
-laziness, it's diagnostics: a simple hypothesis that fails tells you exactly which
-assumption broke, where a complex one that fails tells you nothing, because you
-can't see which part was wrong. The same goes for the experiment in step 2b — run
-the smallest thing that could settle the question - not the most thorough thing you
-could build.
+with the fewest moving parts (e.g., one variable - not four; a straight line before a
+curve) and add complexity only once a result shows it's needed. A simple hypothesis
+that fails tells you exactly which assumption broke, where a complex one that fails 
+is harder to diagnose, because it is more difficult to tell which part was wrong.
 
 ### 2b. Experiment
 
-Run something to test the hypothesis — a query, a fit, a simulation. Say up front
+Run something to test the hypothesis: a query, a fit, a simulation. Say up front
 what it tests and what each possible outcome would mean. Keep it honest: carry the
 worked examples through, report the whole spread rather than a flattering
-headline, and reproduce any number before you lean on it. Mind the cost — live
-APIs throttle, large scans are slow, and compute and data access aren't free.
+headline, and reproduce any number before you lean on it. Mind the cost: live
+API throttling and large scans of data (which are slow); compute and data access 
+aren't free.
 
 ### 2c. Results
 
 What the experiment actually showed, and whether it confirms or rejects the
-hypothesis. **Interpret — don't just state numbers:** say what each figure *means*
+hypothesis. **Interpret (don't just state) the numbers:** say what each figure *means*
 and how it connects back to the intuition from steps 1–2. A number without an
 interpretation is noise. A rejected hypothesis is a real result — often the more
 useful one. Whatever it shows, it's a **new learning** - not a verdict on the
-problem: record it in this loop's README and add a row to the workstream's table,
+problem. Record it in this loop's README and add a row to the workstream's table,
 so the understanding accrues where the next hypothesis will build on it.
 
 ### The loop never closes
@@ -144,17 +137,16 @@ that isn't a question this process asks. What a result gives you is the next
 question: another hypothesis to add to this workstream (back to step 2a), a new
 workstream the finding suggests (a fresh step 2), or a reason to re-frame this
 workstream (step 2) or even the umbrella (step 1). Pick whichever frontier you
-want to push next — the work is breadth-first across the problem, and the problem
+want to push next, the work is breadth-first across the problem, and the problem
 is never finished, only better understood.
 
 **A workstream's loops don't have to build on each other.** The next hypothesis
-can extend or refine the last — but it can equally be a *brand-new* claim that
-just shares the workstream's theme, with nothing to do with what the previous loop
-tested. A workstream isn't one deepening argument; it's a **knowledge base**, and
-its README is the collected record of every hypothesis → experiment → result it
-has run, independent threads included. What matters is that they're *all*
-documented there, growing the workstream's understanding — not that each one
-supersedes the one before.
+can extend or refine the last, but it can equally be a *brand-new* claim that
+just shares the workstream's theme. It can have nothing to do with what the previous 
+loop tested. A workstream isn't one deepening argument; it's a **knowledge base**, 
+and its README is the collected record of every hypothesis → experiment → result it
+has run - independent threads included. What matters is that they're *all*
+documented there, growing the workstream's understanding.
 
 **Productionization is deliberately out of scope.** Turning something you've
 learned into shipped code — a fitted model, a rule in `src/` — is a separate
@@ -163,12 +155,12 @@ understanding.
 
 ## Standards and house patterns
 
-Research code is still code — it holds to the repo's conventions, plus a few
-specific to notebooks and plots. This section is self-contained: it doesn't assume
+Research code is still code; it holds to the repo's conventions, plus a few
+specific to notebooks and plots. This section is self-contained; it doesn't assume
 you've read `CLAUDE.md`, though the code rules deliberately match it.
 
 **Reach for whatever library fits the work.** numpy, pandas, scikit-learn, torch,
-and the rest are all fair game — there is no dependency-minimalism rule in research
+and the rest are all fair game. There is no dependency-minimalism rule in research
 code, unlike production code. The seaborn preference under **Plots and visuals**
 (below) is specifically about *visualization*, not a limit on the analysis itself.
 
@@ -197,32 +189,32 @@ research/
 ```
 
 **One loop, one package.** Each loop directory holds a single
-hypothesis→experiment→result and the notebook(s) that ran it — name it for the
+hypothesis→experiment→result and the notebook(s) that ran it. Name it for the
 claim it tests, and number the loops so the reading order within a workstream is
-obvious. A loop is self-contained: a rerun of one doesn't drag the others.
+obvious. A loop is self-contained; a rerun of one doesn't drag the others.
 
 ### The READMEs are the research log — three altitudes
 
 Documentation is the point of the whole exercise — it's where the understanding
-accumulates — and it's written **as you go**, not at the end (each README *is* a
+accumulates. It's written **as you go**, not at the end (each README *is* a
 working document, updated as understanding grows). There's a README at each
 level, and the right amount of detail lives at each:
 
-- **Problem README** (`<problem>/README.md`) — the **framing**: the formal problem
+- **Problem README** (`<problem>/README.md`) — the **problem's framing**: the formal problem
   statement (scope, what's out, what a valid answer may look like, degenerate
   cases) and the plain-language intuition behind it (step 1). Keep re-framings
   here with *why* they changed. Plus a short index of the workstreams as they
   emerge.
-- **Workstream README** (`<workstream>/README.md`) — the workstream's **framing**
-  (step 2: its theme, and how it fits the larger problem) at the top, then a
-  **concise** running table collecting its loops — the workstream's **knowledge
-  base**, every hypothesis it has tried, whether or not they build on one another.
-  Clear and to the point here. The detail lives one level down. For example:
+- **Workstream README** (`<workstream>/README.md`) — the **workstream's framing**:
+  a theme and how it fits the larger problem at the top. Then, a **concise** running
+  table collecting its loops (this is the workstream's **knowledge base**). This table 
+  should contain every hypothesis/experiment/result tried, and whether or not they build 
+  on one another. Be clear and to the point here. The detail lives one level down. For example:
 
-  | # | Hypothesis | Experiment | What we learned |
-  |---|---|---|---|
-  | 1 | A single threshold on one feature separates most cases | Fit the threshold, report accuracy across the set | 62% separated against a ~70% ceiling for one-feature rules — one feature can't reach the target here |
-  | 2 | … | … | … |
+  | # | Hypothesis | Experiment | Results | What we learned |
+  |---|---|---|---|---|
+  | 1 | A single threshold on one feature separates most cases | Fit the threshold, report accuracy across the set | 62% separated, against a ~70% ceiling for one-feature rules | One feature can't reach the target here |
+  | 2 | … | … | … | … |
 
 - **Loop README** (`<loop>/README.md`) — **one loop in full detail**: the
   hypothesis stated plainly (step 2a), the experiment written out (step 2b — what
@@ -231,8 +223,7 @@ level, and the right amount of detail lives at each:
   the executable proof.
 
 The thread reads top-down when you want the shape (problem → workstreams → the
-table of what each taught) and bottom-up when you want the proof (a loop's README
-+ its notebook).
+table of what each taught) and bottom-up when you want the proof (a loop's README + its notebook).
 
 ### Notebook code quality — the same bar as the rest of the repo
 
