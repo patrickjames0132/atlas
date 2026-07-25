@@ -80,8 +80,13 @@ precise about scope: what we are exploring, what is deliberately *out* of scope,
 and what a valid answer to a question about it may look like — **including the
 degenerate ones** (a degenerate answer that reads like a footnote can reshape the
 whole problem: noticing that *"the empty result is a valid answer"* may quietly
-eliminate an entire family of approaches, before any data is touched). The
-statement is the umbrella every workstream hangs off. It isn't frozen: as a
+eliminate an entire family of approaches, before any data is touched). And it
+**states the assumptions straight up, as part of the statement**: every belief
+about the domain the framing leans on — written as a checkable claim, not
+slipped in as fact. Each assumption is a candidate workstream (verifying one is
+a perfectly good line of inquiry), and an assumption that *fails* re-frames the
+problem — which you can only notice if it was written down where the framing
+rests on it. The statement is the umbrella every workstream hangs off. It isn't frozen: as a
 workstream deepens your understanding, you may sharpen or re-frame it — keeping
 the old framing and *why it changed*, because the history of how the problem
 itself came into focus is part of what you're learning.
@@ -200,10 +205,10 @@ working document, updated as understanding grows). There's a README at each
 level, and the right amount of detail lives at each:
 
 - **Problem README** (`<problem>/README.md`) — the **problem's framing**: the formal problem
-  statement (scope, what's out, what a valid answer may look like, degenerate
-  cases) and the plain-language intuition behind it (step 1). Keep re-framings
-  here with *why* they changed. Plus a short index of the workstreams as they
-  emerge.
+  statement (scope, what's out, the stated assumptions, what a valid answer may
+  look like, degenerate cases) and the plain-language intuition behind it
+  (step 1). Keep re-framings here with *why* they changed. Plus a short index
+  of the workstreams as they emerge.
 - **Workstream README** (`<workstream>/README.md`) — the **workstream's framing**:
   a theme and how it fits the larger problem at the top. Then, a **concise** running
   table collecting its loops (this is the workstream's **knowledge base**). This table
