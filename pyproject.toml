@@ -66,6 +66,19 @@ explicit = true
 torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
 
 [dependency-groups]
+# Research/analysis toolchain (notebooks under research/): headless notebook
+# execution (ipykernel + nbclient + nbconvert; jupyter-core supplies the
+# `jupyter` CLI) and the analysis staples the research skill standardizes on
+# (seaborn-over-matplotlib plotting, pandas frames). Restored 2026-07-25 after
+# the research reset scrubbed the old group; add heavier tools (scikit-learn,
+# torch extras) only when a loop actually needs them.
+research = [
+    "ipykernel>=6.29",
+    "nbclient>=0.10",
+    "nbconvert>=7.16",
+    "pandas>=2.2",
+    "seaborn>=0.13",
+]
 dev = [
     "nox>=2024.4",
     "mypy>=1.11",
