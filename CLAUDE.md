@@ -63,9 +63,14 @@ file follows.
 For each feature, follow this cycle:
 
 0. **Branch off `main` for a major feature** — before starting a substantial
-   feature/ticket, cut a fresh branch from an up-to-date `main`
-   (`git switch -c <short-feature-name> main`). All the work below happens on
-   that branch, keeping `main` clean and tidy. **Skip the branch for lightweight,
+   feature/ticket, cut a fresh branch from an up-to-date `main`, named
+   **`feature/<short-name>`** (`git switch -c feature/<short-name> main`). All
+   the work below happens on that branch, keeping `main` clean and tidy.
+   (Research problems get the same treatment against the `research` trunk —
+   **`problem/<short-name>`** — see "Research & analysis work".) **Working
+   branches live locally by default: don't push them to origin.** The
+   deliberate exception is when the developer explicitly wants one on their
+   other machine, and says so. **Skip the branch for lightweight,
    doc-only changes** — updating READMEs, other markdown, `CLAUDE.md`,
    `OnePager.md`, or `docs/` (e.g. filing `todos.md`, moving a shipped item to
    `docs/history.md`) — those commit straight to `main`.
@@ -110,8 +115,11 @@ loops), the notebooks, *and the `research` skill itself*
 (`.claude/skills/research/SKILL.md` — deliberately absent from `main`). For
 any research, analysis, model-fitting, constant-tuning, corpus study, or
 "derive a rule from the data" task: **switch to the `research` branch** (or a
-branch off it — research feature branches merge into `research`, never into
-`main`), and **invoke the `research` skill there** *before* writing analysis
+**`problem/<short-name>`** branch off it — the research trunk mirrors the main
+line's workflow: problem branches merge back into `research`, never into
+`main`, and live locally by default like feature branches, pushed to origin
+only when the developer wants one on their other machine), and **invoke the
+`research` skill there** *before* writing analysis
 code or explaining a finding. The skill defines the shape of the work — frame
 + build intuition *once*, then open-ended workstreams that each loop
 hypothesis → experiment → results — and an explicit list of things not to do.
