@@ -1,0 +1,157 @@
+seed,citer_corpusid,label,provenance
+Attention Is All You Need,235458009,landmark,recalled
+Attention Is All You Need,52967399,landmark,recalled
+Playing Atari with Deep Reinforcement Learning,16326763,landmark,recalled
+Playing Atari with Deep Reinforcement Learning,6208256,landmark,recalled
+Playing Atari with Deep Reinforcement Learning,19135734,landmark,recalled
+AlexNet,206594692,landmark,recalled
+Attention Is All You Need,250607566,not,sampled
+Attention Is All You Need,277856775,not,sampled
+Attention Is All You Need,272880737,not,sampled
+Attention Is All You Need,248056924,not,sampled
+Attention Is All You Need,282850161,not,sampled
+Attention Is All You Need,259931492,not,sampled
+Attention Is All You Need,271064389,not,sampled
+Attention Is All You Need,234820932,not,sampled
+Attention Is All You Need,252782897,not,sampled
+Attention Is All You Need,278193103,not,sampled
+Attention Is All You Need,257260254,not,sampled
+Attention Is All You Need,239009592,not,sampled
+Attention Is All You Need,231929242,not,sampled
+Attention Is All You Need,218470275,not,sampled
+Attention Is All You Need,271798081,not,sampled
+Playing Atari with Deep Reinforcement Learning,279241741,not,sampled
+Playing Atari with Deep Reinforcement Learning,266236087,not,sampled
+Playing Atari with Deep Reinforcement Learning,249848024,not,sampled
+Playing Atari with Deep Reinforcement Learning,259763775,not,sampled
+Playing Atari with Deep Reinforcement Learning,252709799,not,sampled
+Playing Atari with Deep Reinforcement Learning,258222331,not,sampled
+Playing Atari with Deep Reinforcement Learning,270976865,not,sampled
+Playing Atari with Deep Reinforcement Learning,254096289,not,sampled
+Playing Atari with Deep Reinforcement Learning,69423750,not,sampled
+Playing Atari with Deep Reinforcement Learning,260912346,not,sampled
+Playing Atari with Deep Reinforcement Learning,286171022,not,sampled
+Playing Atari with Deep Reinforcement Learning,234977442,not,sampled
+Playing Atari with Deep Reinforcement Learning,267271691,not,sampled
+Playing Atari with Deep Reinforcement Learning,255598991,not,sampled
+Playing Atari with Deep Reinforcement Learning,281969797,not,sampled
+Correlated Q-Learning,12288426,not,sampled
+Correlated Q-Learning,114377557,not,sampled
+Correlated Q-Learning,15145618,not,sampled
+Correlated Q-Learning,213073236,not,sampled
+Correlated Q-Learning,33416514,not,sampled
+Correlated Q-Learning,7496856,not,sampled
+Correlated Q-Learning,1463444,not,sampled
+Correlated Q-Learning,14836942,not,sampled
+Correlated Q-Learning,201263433,not,sampled
+Correlated Q-Learning,218889300,not,sampled
+Correlated Q-Learning,265177212,not,sampled
+Correlated Q-Learning,14387613,not,sampled
+Correlated Q-Learning,206794869,not,sampled
+Correlated Q-Learning,265384166,not,sampled
+Correlated Q-Learning,252907284,not,sampled
+AlexNet,250607566,not,sampled
+AlexNet,214017872,not,sampled
+AlexNet,259931492,not,sampled
+AlexNet,278193103,not,sampled
+AlexNet,208006500,not,sampled
+AlexNet,268047861,not,sampled
+AlexNet,182802582,not,sampled
+AlexNet,284740925,not,sampled
+AlexNet,277741319,not,sampled
+AlexNet,257636502,not,sampled
+AlexNet,239671927,not,sampled
+AlexNet,213145706,not,sampled
+AlexNet,279514418,not,sampled
+AlexNet,198161414,not,sampled
+AlexNet,32265455,not,sampled
+Black Hole Explosions?,120369454,unsure,sampled
+Black Hole Explosions?,119187306,unsure,sampled
+Black Hole Explosions?,56420676,unsure,sampled
+Black Hole Explosions?,207848101,unsure,sampled
+Black Hole Explosions?,245335140,unsure,sampled
+Black Hole Explosions?,274776530,unsure,sampled
+Black Hole Explosions?,204904768,unsure,sampled
+Black Hole Explosions?,119069225,unsure,sampled
+Black Hole Explosions?,283672476,unsure,sampled
+Black Hole Explosions?,126289838,unsure,sampled
+Black Hole Explosions?,281036016,unsure,sampled
+Black Hole Explosions?,257482525,unsure,sampled
+Black Hole Explosions?,277824259,unsure,sampled
+Black Hole Explosions?,237541168,unsure,sampled
+Black Hole Explosions?,58889102,unsure,sampled
+Q-Learning,225486313,not,sampled
+Q-Learning,67736790,not,sampled
+Q-Learning,31681721,not,sampled
+Q-Learning,281699178,not,sampled
+Q-Learning,1472007,not,sampled
+Q-Learning,246411351,not,sampled
+Q-Learning,258222331,not,sampled
+Q-Learning,268286800,not,sampled
+Q-Learning,210023826,not,sampled
+Q-Learning,260912346,not,sampled
+Q-Learning,258833032,not,sampled
+Q-Learning,268978564,not,sampled
+Q-Learning,234977442,not,sampled
+Q-Learning,225028756,not,sampled
+Q-Learning,9897079,not,sampled
+Long Short-Term Memory,273821673,not,sampled
+Long Short-Term Memory,283847587,not,sampled
+Long Short-Term Memory,248056924,not,sampled
+Long Short-Term Memory,203360948,not,sampled
+Long Short-Term Memory,92987530,not,sampled
+Long Short-Term Memory,247973699,not,sampled
+Long Short-Term Memory,257513368,not,sampled
+Long Short-Term Memory,228098131,not,sampled
+Long Short-Term Memory,257605912,not,sampled
+Long Short-Term Memory,257800628,not,sampled
+Long Short-Term Memory,233686667,not,sampled
+Long Short-Term Memory,254559827,not,sampled
+Long Short-Term Memory,283938730,not,sampled
+Long Short-Term Memory,280576026,not,sampled
+Long Short-Term Memory,268990277,not,sampled
+YOLO,278012917,not,sampled
+YOLO,282419912,not,sampled
+YOLO,251480548,not,sampled
+YOLO,266236087,not,sampled
+YOLO,278193103,not,sampled
+YOLO,254043744,not,sampled
+YOLO,286134911,not,sampled
+YOLO,277635500,not,sampled
+YOLO,207758436,not,sampled
+YOLO,271633260,not,sampled
+YOLO,273676632,not,sampled
+YOLO,274810162,not,sampled
+YOLO,224909296,not,sampled
+YOLO,279987044,not,sampled
+YOLO,3801228,not,sampled
+ViT,250607566,not,sampled
+ViT,272764497,not,sampled
+ViT,267312132,not,sampled
+ViT,252782897,not,sampled
+ViT,237260132,not,sampled
+ViT,272339892,not,sampled
+ViT,249848024,not,sampled
+ViT,285802861,not,sampled
+ViT,273025619,not,sampled
+ViT,283102647,not,sampled
+ViT,284860449,not,sampled
+ViT,281725265,not,sampled
+ViT,285175827,not,sampled
+ViT,278454593,not,sampled
+ViT,271935865,not,sampled
+QMIX,249267437,not,sampled
+QMIX,268095733,not,sampled
+QMIX,288256139,not,sampled
+QMIX,286614284,not,sampled
+QMIX,247935456,not,sampled
+QMIX,248119011,not,sampled
+QMIX,274422791,not,sampled
+QMIX,258121919,not,sampled
+QMIX,257530032,not,sampled
+QMIX,254823606,not,sampled
+QMIX,239885635,not,sampled
+QMIX,280000247,not,sampled
+QMIX,260499783,not,sampled
+QMIX,248454926,not,sampled
+QMIX,236322738,not,sampled

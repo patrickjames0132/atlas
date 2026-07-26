@@ -126,8 +126,43 @@ to 180,306 (AIAYN) — a ~380× spread across just ten seeds. First concrete
 sight of the famous-seed skew declared above, and a preview of assumption A3's
 "different citation worlds."
 
-### Part (a) — the unsure rate: pending
+### Part (a) — labeling was decisive; the instrument's calibration is now the question
 
-The blind sheet (`labeling-sheet.csv`: 150 rows, 15 per seed, uniform by
-id-hash, counts hidden) awaits the researcher's labels — `landmark` / `not` /
-`unsure`, from recognition only.
+The researcher reviewed all 150 sampled rows (2026-07-25) and recognized none.
+Per the pinned semantics that gave: **135 within-field `not`, 15 out-of-field
+`unsure`** (Hawking's citers), zero within-field hesitation — nominally
+confirming "crisp enough to label decisively" — and **zero landmarks in the
+uniform draw**.
+
+**The base rate this measures:** 0 recognized landmarks in 135 uniform
+within-field draws. If landmarks made up even 2% of a citer pool, a zero-hit
+draw of 135 would happen only ~6.5% of the time (0.98¹³⁵ ≈ 0.065) — so on this
+evidence, recognizable landmarks are at most a couple percent of a pool and
+plausibly well under 1%. The tail any single-citer rule hunts is needle-thin,
+and the anchor's positives-per-pool confirm it: 6 verified landmarks against
+pools of 13k–180k citers.
+
+**Declared immediately after labeling — a caveat that softens the negatives:**
+the researcher flagged that their AI/ML grounding is coursework-deep, not
+research-deep (a taught master's, no thesis, limited time in the literature),
+so the recognition instrument behind the `not` labels may be weaker than the
+pinned semantics assumed. Honest reading: `not` here means *"not recognized by
+a textbook-trained practitioner"* — evidence of obscurity, but not proof of
+non-landmark-ness. The anchor's negatives carry this caveat until checked.
+
+**The proposed check — additional raters:** the researcher suggested having
+coworkers who are deeper in the field label the same sheet, blind, under the
+same rules. That would (1) hunt for landmarks the first pass missed and
+(2) measure inter-rater agreement, turning instrument calibration from a worry
+into a number. Natural candidate for this workstream's next loop.
+
+### Verdict
+
+- **Part (a)** — labeling was decisive (zero within-field unsures), but the
+  loop surfaced that decisiveness and *calibration* are different things, and
+  calibration is now the open question.
+- **Part (b)** — partially rejected: a third of recalled positives weren't
+  citers (lineage-not-citation conflations).
+- **The anchor exists** (`anchor.csv`: 6 `landmark` / 135 `not` / 15 `unsure`,
+  with provenance) and is usable under its declared limits; the negatives are
+  provisional pending a rater check.
