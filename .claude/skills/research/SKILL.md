@@ -77,21 +77,35 @@ they've genuinely engaged with counts just as well. What doesn't count is
 silence — don't roll forward on an unacknowledged framing.
 
 **The step's output is a written formal problem statement**, recorded in the
-problem's README before any hypothesis is proposed. Plain language still, but
-precise about scope: what we are exploring, what is deliberately *out* of scope,
-and what a valid answer to a question about it may look like — **including the
-degenerate ones** (a degenerate answer that reads like a footnote can reshape the
-whole problem: noticing that *"the empty result is a valid answer"* may quietly
-eliminate an entire family of approaches, before any data is touched). And it
-**states the assumptions straight up, as part of the statement**: every belief
-about the domain the framing leans on — written as a checkable claim, not
-slipped in as fact. Each assumption is a candidate workstream (verifying one is
-a perfectly good line of inquiry), and an assumption that *fails* re-frames the
-problem — which you can only notice if it was written down where the framing
-rests on it. The statement is the umbrella every workstream hangs off. It isn't frozen: as a
-workstream deepens your understanding, you may sharpen or re-frame it — keeping
-the old framing and *why it changed*, because the history of how the problem
-itself came into focus is part of what you're learning.
+problem's README before any hypothesis is proposed. **Keep the statement itself
+as simple as possible** — Occam governs framings just as it governs hypotheses
+(step 2a): the statement proper is the fewest plain words that pin down what
+we're deciding or exploring. Every qualification lives in its own README
+section *around* the statement, not inside it, and those sections are part of
+the step's output:
+
+- **Unknowns — its own section.** The things the problem itself leaves
+  undefined: an operational definition with no ground truth, a quantity nobody
+  has measured. Name each one explicitly. An unknown can be bigger than any
+  workstream — resolving one may be where the research has to start — and an
+  *unnamed* unknown is how a framing quietly assumes its own answer.
+- **Assumptions — its own section.** Every belief about the domain the framing
+  leans on — written as a checkable claim, not slipped in as fact. Each
+  assumption is a candidate workstream (verifying one is a perfectly good line
+  of inquiry), and an assumption that *fails* re-frames the problem — which you
+  can only notice if it was written down where the framing rests on it.
+- **Scope and valid answers.** What is deliberately *out* of scope, and what a
+  valid answer to a question about it may look like — **including the
+  degenerate ones** (a degenerate answer that reads like a footnote can reshape
+  the whole problem: noticing that *"the empty result is a valid answer"* may
+  quietly eliminate an entire family of approaches, before any data is touched).
+
+The statement is the umbrella every workstream hangs off. It isn't frozen —
+**coming back to re-frame is a standing step, always on the table**, not an
+exception: when a workstream deepens your understanding, an unknown resolves,
+or an assumption falls, sharpen or re-frame the statement — keeping the old
+framing and *why it changed*, because the history of how the problem itself
+came into focus is part of what you're learning.
 
 ### 2. Frame the workstream and build the intuition
 
@@ -206,11 +220,12 @@ accumulates. It's written **as you go**, not at the end (each README *is* a
 working document, updated as understanding grows). There's a README at each
 level, and the right amount of detail lives at each:
 
-- **Problem README** (`<problem>/README.md`) — the **problem's framing**: the formal problem
-  statement (scope, what's out, the stated assumptions, what a valid answer may
-  look like, degenerate cases) and the plain-language intuition behind it
-  (step 1). Keep re-framings here with *why* they changed. Plus a short index
-  of the workstreams as they emerge.
+- **Problem README** (`<problem>/README.md`) — the **problem's framing**: the
+  formal problem statement (kept minimal) with its surrounding sections — the
+  named unknowns, the stated assumptions, scope/what's out, and what a valid
+  answer may look like including degenerate cases — plus the plain-language
+  intuition behind it (step 1). Keep re-framings here with *why* they changed,
+  and a short index of the workstreams as they emerge.
 - **Workstream README** (`<workstream>/README.md`) — the **workstream's framing**:
   a theme and how it fits the larger problem at the top. Then, a **concise** running
   table collecting its loops (this is the workstream's **knowledge base**). This table
