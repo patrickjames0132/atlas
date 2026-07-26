@@ -6,14 +6,9 @@ deliberately without reference to any earlier attempt at this question.
 ## The problem statement
 
 For a **seed paper** and any of its **citers**, decide whether that citer is a
-**landmark** — a paper that matters in its own right. We *start* from the
-simplest shape such a judgment could take: one citer in, one yes/no out, using
-only what can be read off that citer and the seed in isolation — no ranking
-within the citer pool, no dependence on which provider returned it or in what
-order. That is the opening move (the fewest moving parts, per Occam), **not a
-constraint baked into the problem**: if the data says a sound judgment needs
-more context than one citer carries, that is a finding, and the problem widens
-to admit it.
+**landmark** — a paper that matters in its own right.
+
+## Unknowns — named upfront
 
 The problem has two unknowns, and they are not the same size:
 
