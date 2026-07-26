@@ -61,9 +61,54 @@ Stated by the researcher up front (2026-07-25), before any labels existed:
   unrepresented *by construction*. Anything a later loop validates against
   this anchor is validated **for AI/ML only** — cross-field generalization is
   an assumption the anchor cannot test (recorded as A4 in the problem README).
+- **The seeds skew famous.** Memorable seeds are, almost by definition,
+  majorly-cited ones — so the anchor over-represents huge citer pools and
+  under-represents obscure seeds (noted by the researcher mid-collection,
+  2026-07-25). Only Correlated Q-Learning and QMIX sit below the blockbuster
+  tier, so they carry outsized weight for any later question about whether a
+  definition transfers to quiet seeds — and conclusions about the obscure-seed
+  regime mostly can't come from this anchor at all.
 
 ## Results
 
-Pending — awaiting the seed list and recall-first names (steps 1–2, which only
-the researcher can produce), then the corpus verification and blind sheet
-(steps 3–4).
+### Part (b) — recall verification: 6 of 9 recalled citers are real citers
+
+Run 2026-07-25 against corpus release 2026-07-07 (the notebook beside this
+README is the executable proof). Verified in-pool: LoRA and BERT citing
+*Attention Is All You Need*; DDPG, Double DQN, and Rainbow citing *Playing
+Atari*; ResNet citing AlexNet.
+
+The three misses share one shape — **human recall tracks influence lineage,
+not reference lists**:
+
+- **Sparsely-Gated MoE ← AIAYN** — impossible as a citer: the corpus dates MoE
+  2017-01-23 and AIAYN 2017-06-12, so MoE sits in the Transformer's *ancestry*.
+  Recall reversed the direction of influence.
+- **AIAYN ← AlexNet** — no citation edge in the corpus. An association by
+  shared fame and era; the Transformer's lineage runs through NLP, not through
+  AlexNet's reference list.
+- **PPO ← Playing Atari** — no edge, and direction can't explain it (PPO is
+  2017-07-20, four years later). Either PPO genuinely doesn't cite the 2013
+  workshop paper (plausibly citing later DQN-era work instead), the corpus is
+  missing the edge, or memory again linked lineage rather than citation. Open
+  sub-question.
+
+**What this means for the anchor:** recall positives are unusable unverified —
+a third of them were false *as citations* while arguably true *as influence*.
+The verification step is load-bearing, not paranoia. The six verified
+positives enter the anchor; the three misses are excluded from it but kept
+here as data about how recall behaves — and as an early hint that "matters in
+its own right" (influence) and "cites the seed" are related but **not
+identical** notions, which the problem framing may eventually have to care
+about.
+
+**Also observed:** distinct-citer pool sizes span 476 (Correlated Q-Learning)
+to 180,306 (AIAYN) — a ~380× spread across just ten seeds. First concrete
+sight of the famous-seed skew declared above, and a preview of assumption A3's
+"different citation worlds."
+
+### Part (a) — the unsure rate: pending
+
+The blind sheet (`labeling-sheet.csv`: 150 rows, 15 per seed, uniform by
+id-hash, counts hidden) awaits the researcher's labels — `landmark` / `not` /
+`unsure`, from recognition only.

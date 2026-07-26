@@ -35,4 +35,4 @@ problem README).
 
 | # | Hypothesis | Experiment | Results | What we learned |
 |---|---|---|---|---|
-| [01](01_hand-labeled-anchor/README.md) | Landmark-ness is crisp enough for a person to label decisively (few unsures; recalled names really are citers) | Blind, recall-first labeling of 10–12 known seeds; counts hidden throughout; uniform-random negatives | *in progress* | |
+| [01](01_hand-labeled-anchor/README.md) | Landmark-ness is crisp enough for a person to label decisively (few unsures; recalled names really are citers) | Blind, recall-first labeling of 10 known seeds; counts hidden throughout; uniform-random negatives | Recall hit-rate 6/9 — all three misses are lineage-not-citation conflations (one directionally impossible); pool sizes span 476–180k (~380×); blind labeling of 150 sampled citers pending | Recall positives must be corpus-verified before use; human "landmark memory" tracks influence, not reference lists |
