@@ -104,15 +104,25 @@ before launching it; they'll usually allow it when it's really needed.
 
 ## Research & analysis work
 
-For any research, analysis, model-fitting, constant-tuning, corpus study, or
-"derive a rule from the data" task, **invoke the `research` skill**
-(`.claude/skills/research/SKILL.md`) *before* writing analysis code or explaining a
-finding. It defines the shape of the work — frame + build intuition *once*, then
-open-ended **workstreams** that each loop hypothesis → experiment → results (no
-*decision*, no *productionize*: research is for understanding, nothing is
-"solved") — and an explicit list of things not to do (born from a session that
-did them). The order still matters: build shared understanding first, and test
-only a stated hypothesis.
+Research lives on the long-lived **`research` branch** (spun off `main`,
+2026-07-25), not on `main`: the `research/` tree (problems → workstreams →
+loops), the notebooks, *and the `research` skill itself*
+(`.claude/skills/research/SKILL.md` — deliberately absent from `main`). For
+any research, analysis, model-fitting, constant-tuning, corpus study, or
+"derive a rule from the data" task: **switch to the `research` branch** (or a
+branch off it — research feature branches merge into `research`, never into
+`main`), and **invoke the `research` skill there** *before* writing analysis
+code or explaining a finding. The skill defines the shape of the work — frame
++ build intuition *once*, then open-ended workstreams that each loop
+hypothesis → experiment → results — and an explicit list of things not to do.
+Build shared understanding first, and test only a stated hypothesis.
+
+One mechanical caveat: because the skill is absent from `main`, a later
+`git merge main` into `research` will try to **delete** the skill (and any
+other research-branch-only file `main` later touches). After syncing
+`research` with `main`, verify `.claude/skills/research/` survived — restore
+it with `git checkout research -- .claude/skills/research` if the merge
+dropped it.
 
 ## The `todos.md` inbox
 
