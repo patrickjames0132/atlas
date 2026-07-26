@@ -1,0 +1,35 @@
+# Workstream: defining landmark papers
+
+**Theme.** What is a landmark, operationally? This workstream attacks the
+problem's unknown #1 directly: before any threshold can be studied, "landmark"
+needs a meaning that doesn't collapse into circularity ("landmark = highly
+cited, and look — citation counts find landmarks"). Every other workstream this
+problem will ever have measures *against* some notion of landmark-ness; this
+workstream is where candidate notions are proposed and stress-tested.
+
+**The anchor.** The workstream's external ground truth is a **hand-labeled
+set**: the researcher labels the landmarks among the citers of 10–12 seed
+papers they know deeply, *without seeing citation counts* — so the labels
+encode human judgment of influence, not an echo of the metric under study.
+Every candidate definition earns credibility by agreement with this set (and
+loses it by disagreement someone can articulate).
+
+**Candidate angles** — each a source of hypotheses for this workstream's loops:
+
+- **Supervised agreement** — a candidate definition's picks vs. the hand
+  labels: precision/recall against human judgment.
+- **Declared definition** — "exceptional citation record for its context (age,
+  field's world)" made quantitatively precise, with its consequences measured
+  rather than assumed.
+- **Self-supervised endorsement** — a citer judged by its *own* citers: does
+  having large citers downstream of you separate landmarks better than your
+  raw count does?
+- **Unsupervised structure** — does the citer pool cluster naturally (e.g.
+  clustering with silhouette scoring) into a "landmark-shaped" group without
+  any labels, or is the pool one smooth continuum?
+
+## Loops
+
+| # | Hypothesis | Experiment | Results | What we learned |
+|---|---|---|---|---|
+| — | *none yet* | | | |

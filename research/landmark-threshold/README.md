@@ -72,4 +72,8 @@ Degenerate answers are valid answers, and worth watching for from day one:
 
 ## Workstreams
 
-None yet — they emerge as we explore. Index them here as they open.
+- **[defining-landmark-papers](defining-landmark-papers/README.md)** — attacks
+  unknown #1: what "landmark" means, operationally. Anchored by a hand-labeled
+  set (the researcher labels landmarks among 10–12 well-known seeds' citers,
+  blind to citation counts); candidate definitions — declared, self-supervised,
+  unsupervised — are stress-tested against it. Opened 2026-07-25.
