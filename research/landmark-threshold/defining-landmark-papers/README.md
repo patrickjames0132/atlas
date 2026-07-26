@@ -32,4 +32,4 @@ loses it by disagreement someone can articulate).
 
 | # | Hypothesis | Experiment | Results | What we learned |
 |---|---|---|---|---|
-| — | *none yet* | | | |
+| [01](01_hand-labeled-anchor/README.md) | Landmark-ness is crisp enough for a person to label decisively (few unsures; recalled names really are citers) | Blind, recall-first labeling of 10–12 known seeds; counts hidden throughout; uniform-random negatives | *in progress* | |
