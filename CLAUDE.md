@@ -63,9 +63,14 @@ file follows.
 For each feature, follow this cycle:
 
 0. **Branch off `main` for a major feature** — before starting a substantial
-   feature/ticket, cut a fresh branch from an up-to-date `main`
-   (`git switch -c <short-feature-name> main`). All the work below happens on
-   that branch, keeping `main` clean and tidy. **Skip the branch for lightweight,
+   feature/ticket, cut a fresh branch from an up-to-date `main`, named
+   **`feature/<short-name>`** (`git switch -c feature/<short-name> main`). All
+   the work below happens on that branch, keeping `main` clean and tidy.
+   (Research problems get the same treatment against the `research` trunk —
+   **`problem/<short-name>`** — see "Research & analysis work".) **Working
+   branches live locally by default: don't push them to origin.** The
+   deliberate exception is when the developer explicitly wants one on their
+   other machine, and says so. **Skip the branch for lightweight,
    doc-only changes** — updating READMEs, other markdown, `CLAUDE.md`,
    `OnePager.md`, or `docs/` (e.g. filing `todos.md`, moving a shipped item to
    `docs/history.md`) — those commit straight to `main`.
@@ -113,6 +118,15 @@ open-ended **workstreams** that each loop hypothesis → experiment → results 
 "solved") — and an explicit list of things not to do (born from a session that
 did them). The order still matters: build shared understanding first, and test
 only a stated hypothesis.
+
+Research has its own trunk, mirroring the main line's workflow: the long-lived
+**`research` branch** (spun off `main` 2026-07-25; lives on origin) is to
+research what `main` is to features. A new research problem or line item gets
+its own branch off an up-to-date `research`, named **`problem/<short-name>`**
+(`git switch -c problem/<short-name> research`); all its commits happen there,
+and on approval it **merges back into `research` — never into `main`**. Like
+feature branches, problem branches live locally by default; push one to origin
+only when the developer explicitly asks to have it on their other machine.
 
 ## The `todos.md` inbox
 
