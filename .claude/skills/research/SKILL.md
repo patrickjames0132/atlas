@@ -70,9 +70,11 @@ What we're actually exploring, in plain language, plus a shared mental model of
 *why* — before any analysis code. Framing and intuition are one step: you can't
 build intuition for a problem you haven't framed, and you haven't really framed it
 until the intuition is mutual. This is where the ground-up explanation discipline
-lives (see **What NOT to do**). You are done with this step when the researcher can
-restate the problem and the rough shape of the answer in their own words — not
-before.
+lives (see **What NOT to do**). You are done with this step when the researcher
+confirms the shared understanding: a restating in their own words is the
+strongest signal, but an explicit "yes, that's the problem" on a statement
+they've genuinely engaged with counts just as well. What doesn't count is
+silence — don't roll forward on an unacknowledged framing.
 
 **The step's output is a written formal problem statement**, recorded in the
 problem's README before any hypothesis is proposed. Plain language still, but
