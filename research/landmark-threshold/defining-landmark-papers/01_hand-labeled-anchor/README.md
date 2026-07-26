@@ -41,6 +41,25 @@ citation counts are shown at any point**, and positives come from memory
    metric) is drawn from the seed's remaining citers and presented blind —
    title, authors, year, venue, abstract; no counts. The researcher labels
    each: **landmark / not / unsure**. The unsure rate is part (a).
+
+   **Label semantics** (pinned 2026-07-25, when the first sheet turned out to
+   be almost entirely unrecognized papers — exactly what a uniform draw from
+   a citer pool *should* produce):
+
+   - `landmark` — actual recognition of the paper as one that matters.
+   - `not` — "I don't recognize this, **and** it's from a field where I would
+     recognize a landmark." Within the researcher's own field, non-recognition
+     is the instrument working: a paper nobody who knows the field has heard
+     of is, under this problem's framing of landmark, not one. This is a
+     reading, not a guess.
+   - `unsure` — "I can't judge this": chiefly papers outside the researcher's
+     competence (e.g. physics citers of Hawking), where non-recognition
+     carries no information; also genuine torn cases.
+
+   **Guessing from title plausibility is prohibited** — it would measure how
+   grand a title sounds, not influence, and launder that heuristic in as
+   ground truth. A sheet that comes back overwhelmingly `not` is itself a
+   quantitative result: the base rate of landmarks in a uniform citer draw.
 5. **The anchor dataset.** All labels land in a CSV beside this loop's
    notebook: seed id, citer id, label, and how the row entered (recalled vs.
    sampled) — that provenance column matters, because recalled positives and
