@@ -46,6 +46,22 @@ citation counts are shown at any point**, and positives come from memory
    sampled) — that provenance column matters, because recalled positives and
    sampled positives were produced under different conditions.
 
+## Known limitations of the anchor — declared before labeling began
+
+Stated by the researcher up front (2026-07-25), before any labels existed:
+
+- **Recall is sparse.** The researcher hasn't been reading papers closely for
+  a while; recalled positives per seed will be few, possibly zero for some
+  seeds. Consequences: the recall hit-rate (hypothesis part b) will be a
+  coarse estimate, and the blind-sampled labels (step 4) carry more of the
+  anchor's weight than originally sketched. Sparse-but-honest beats padded —
+  a seed with zero recalled landmarks stays in, recorded as exactly that.
+- **The anchor is AI/ML-biased.** Seeds and judgments come from the fields the
+  researcher actually knows; physics, math, and the rest of arXiv are
+  unrepresented *by construction*. Anything a later loop validates against
+  this anchor is validated **for AI/ML only** — cross-field generalization is
+  an assumption the anchor cannot test (recorded as A4 in the problem README).
+
 ## Results
 
 Pending — awaiting the seed list and recall-first names (steps 1–2, which only

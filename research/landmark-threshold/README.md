@@ -38,6 +38,13 @@ each is a candidate workstream, and if one fails, the problem re-frames.
   can be extraordinary among one seed's citers and unremarkable among
   another's. Some observable of the seed carries information about which world
   it lives in.
+- **A4 — Landmark-ness behaves the same across fields.** What we learn about
+  it in AI/ML transfers to physics, math, and the rest of arXiv. Flagged
+  rather than believed: the hand-labeled anchor (workstream
+  `defining-landmark-papers`) is AI/ML-only *by construction* — the
+  researcher's expertise lives there — so this assumption is **untestable
+  with the current anchor** and stays open until some future evidence source
+  exists.
 
 ## Out of scope
 

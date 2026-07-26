@@ -12,7 +12,10 @@ set**: the researcher labels the landmarks among the citers of 10–12 seed
 papers they know deeply, *without seeing citation counts* — so the labels
 encode human judgment of influence, not an echo of the metric under study.
 Every candidate definition earns credibility by agreement with this set (and
-loses it by disagreement someone can articulate).
+loses it by disagreement someone can articulate). The anchor is **AI/ML-only
+by construction** — the researcher's expertise lives there — so agreement with
+it validates a definition for AI/ML, and nothing further (assumption A4 in the
+problem README).
 
 **Candidate angles** — each a source of hypotheses for this workstream's loops:
 
