@@ -1,0 +1,31 @@
+citer_corpusid,title,seeds,nominee
+254043744,DAMO-YOLO : A Report on Real-Time Object Detection Design,YOLO,True
+267312132,GEM: Boost Simple Network for Glass Surface Segmentation via Segment Anything Model and Data Synthesis,ViT,False
+277856775,Explainable Scene Understanding with Qualitative Representations and Graph Neural Networks,Attention Is All You Need,False
+278193103,"Advancements in maize leaf disease detection, segmentation and classification: A review",Attention Is All You Need; AlexNet; YOLO,False
+266236087,Robotic Grasping Based on Deep Learning: A Survey,Playing Atari with Deep Reinforcement Learning; YOLO,False
+283847587,Pixel-scale satellite forecasting of cyanobacteria in Florida lakes.,Long Short-Term Memory,False
+218470275,TransOMCS: From Linguistic Graphs to Commonsense Knowledge,Attention Is All You Need,True
+251480548,FH-YOLOv4 with Constrained Aspect Ratio Loss for Video Face Detection and Public Safety,YOLO,False
+282419912,Lightweight and Improved PCBA Welding Defect Detection Algorithm of YOLOv8n,YOLO,False
+278012917,Decision support for the identification of testate amoebae in microscopy images to detect peat presence in horticultural substrates,YOLO,False
+271064389,Enhancing Low-Resource NMT with a Multilingual Encoder and Knowledge Distillation: A Case Study,Attention Is All You Need,False
+214017872,AUTOMATIC LUNG CANCER DETECTION USING ARTIFICIAL AUTOMATIC LUNG CANCER DETECTION USING ARTIFICIAL INTELLIGENCE INTELLIGENCE,AlexNet,False
+206794869,A Comprehensive Survey of Multiagent Reinforcement Learning,Correlated Q-Learning,True
+92987530,Diagnostic classification and symbolic guidance to understand and improve recurrent neural networks,Long Short-Term Memory,False
+257260254,Bioacoustic augmentation of Orcas using TransGAN,Attention Is All You Need,False
+259931492,An attention-based multiscale transformer network for remote sensing image change detection,Attention Is All You Need; AlexNet,False
+248056924,Incorporating rich syntax information in Grammatical Error Correction,Attention Is All You Need; Long Short-Term Memory,False
+272764497,Online Multi-camera People Tracking with Spatial-temporal Mechanism and Anchor-feature Hierarchical Clustering,ViT,False
+203360948,Learning Long Temporal Sequences in Spiking Networks by Multiplexing Neural Oscillations,Long Short-Term Memory,False
+234820932,PTANet: Triple Attention Network for point cloud semantic segmentation,Attention Is All You Need,False
+273821673,Geometry of naturalistic object representations in recurrent neural network models of working memory,Long Short-Term Memory,False
+279241741,Toward Understanding Latent Model Learning in MuZero: A Case Study in Linear Quadratic Gaussian Control,Playing Atari with Deep Reinforcement Learning,False
+252782897,Two-Stream Transformer for Multi-Label Image Classification,Attention Is All You Need; ViT,False
+1472007,On the Convergence of Optimistic Policy Iteration,Q-Learning,True
+225486313,Adaptive scheduling for assembly job shop with uncertain assembly times based on dual Q-learning,Q-Learning,False
+247973699,Learning a library of Physical Interactions for Social Robots Erklärung zur Abschlussarbeit gemäß §22 Abs. 7 und §23 Abs. 7 APB der TU Darmstadt List of,Long Short-Term Memory,False
+272880737,Text2CAD: Generating Sequential CAD Models from Beginner-to-Expert Level Text Prompts,Attention Is All You Need,False
+282850161,Uncrewed Aerial Vehicle (UAV)-Based High-Throughput Phenotyping of Maize Silage Yield and Nutritive Values Using Multi-Sensory Feature Fusion and Multi-Task Learning with Attention Mechanism,Attention Is All You Need,False
+250607566,Parameterization of Cross-token Relations with Relative Positional Encoding for Vision MLP,Attention Is All You Need; AlexNet; ViT,False
+237260132,VAE-CE: Visual Contrastive Explanation using Disentangled VAEs,ViT,False
