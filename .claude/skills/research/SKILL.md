@@ -132,6 +132,14 @@ curve) and add complexity only once a result shows it's needed. A simple hypothe
 that fails tells you exactly which assumption broke, where a complex one that fails
 is harder to diagnose — you can't tell which part was wrong.
 
+**A hypothesis that builds on earlier loops says so, with links.** Building on
+previous work is never required — see "the loop never closes" — but when a
+hypothesis *does* grow out of one or more earlier hypotheses, experiments, or
+results (from its own workstream or another), its loop README must reference
+each of them explicitly, as links to the loop directories or READMEs it builds
+on. The chain of reasoning has to be traceable from the README alone, without
+reconstructing it from commit history or memory.
+
 ### 2b. Experiment
 
 Run something to test the hypothesis: a query, a fit, a simulation. Say up front
@@ -166,7 +174,9 @@ just shares the workstream's theme. It can have nothing to do with what the prev
 loop tested. A workstream isn't one deepening argument; it's a **knowledge base**,
 and its README is the collected record of every hypothesis → experiment → result it
 has run - independent threads included. What matters is that they're *all*
-documented there, growing the workstream's understanding.
+documented there, growing the workstream's understanding. And when a loop *does*
+build on earlier ones, its README links them (step 2a) — independence is allowed,
+unstated dependence is not.
 
 **Productionization is deliberately out of scope.** Turning something you've
 learned into shipped code — a fitted model, a rule in `src/` — is a separate
@@ -238,9 +248,10 @@ level, and the right amount of detail lives at each:
   | 2 | … | … | … | … |
 
 - **Loop README** (`<loop>/README.md`) — **one loop in full detail**: the
-  hypothesis stated plainly (step 2a), the experiment written out (step 2b — what
-  it runs, what each outcome would mean), and the results — interpreted, not just
-  numbers (step 2c). This is where verbosity belongs. The notebook beside it holds
+  hypothesis stated plainly (step 2a) — with links to any earlier loops it
+  builds on — the experiment written out (step 2b — what it runs, what each
+  outcome would mean), and the results — interpreted, not just numbers
+  (step 2c). This is where verbosity belongs. The notebook beside it holds
   the executable proof.
 
 The thread reads top-down when you want the shape (problem → workstreams → the
