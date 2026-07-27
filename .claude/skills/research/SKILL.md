@@ -132,13 +132,21 @@ curve) and add complexity only once a result shows it's needed. A simple hypothe
 that fails tells you exactly which assumption broke, where a complex one that fails
 is harder to diagnose — you can't tell which part was wrong.
 
-**A hypothesis that builds on earlier loops says so, with links.** Building on
-previous work is never required — see "the loop never closes" — but when a
-hypothesis *does* grow out of one or more earlier hypotheses, experiments, or
-results (from its own workstream or another), its loop README must reference
-each of them explicitly, as links to the loop directories or READMEs it builds
-on. The chain of reasoning has to be traceable from the README alone, without
-reconstructing it from commit history or memory.
+**A hypothesis that builds on earlier loops says so — in its own "Builds on"
+section.** Building on previous work is never required — see "the loop never
+closes" — but when a hypothesis *does* grow out of one or more earlier
+hypotheses, experiments, or results (from its own workstream or another), its
+loop README carries a dedicated **Builds on** section ahead of the hypothesis:
+a table with one row per loop built on —
+
+| Hypothesis | Formal statement | How this loop builds on it | Ref |
+|---|---|---|---|
+| the referenced hypothesis' name | its formal statement, as its own loop stated it | what this loop takes from it — a result extended, an instrument replaced, a question inherited | link to that loop's README |
+
+The chain of reasoning has to be traceable from the README alone, without
+reconstructing it from commit history or memory — and restating the referenced
+hypothesis *verbatim* keeps the new loop honest about what exactly it's
+building on.
 
 ### 2b. Experiment
 
@@ -175,8 +183,8 @@ loop tested. A workstream isn't one deepening argument; it's a **knowledge base*
 and its README is the collected record of every hypothesis → experiment → result it
 has run - independent threads included. What matters is that they're *all*
 documented there, growing the workstream's understanding. And when a loop *does*
-build on earlier ones, its README links them (step 2a) — independence is allowed,
-unstated dependence is not.
+build on earlier ones, its README declares them in a **Builds on** table
+(step 2a) — independence is allowed, unstated dependence is not.
 
 **Productionization is deliberately out of scope.** Turning something you've
 learned into shipped code — a fitted model, a rule in `src/` — is a separate
@@ -247,12 +255,12 @@ level, and the right amount of detail lives at each:
   | 1 | A single threshold on one feature separates most cases | Fit the threshold, report accuracy across the set | 62% separated, against a ~70% ceiling for one-feature rules | One feature can't reach the target here |
   | 2 | … | … | … | … |
 
-- **Loop README** (`<loop>/README.md`) — **one loop in full detail**: the
-  hypothesis stated plainly (step 2a) — with links to any earlier loops it
-  builds on — the experiment written out (step 2b — what it runs, what each
-  outcome would mean), and the results — interpreted, not just numbers
-  (step 2c). This is where verbosity belongs. The notebook beside it holds
-  the executable proof.
+- **Loop README** (`<loop>/README.md`) — **one loop in full detail**: a
+  **Builds on** table when the hypothesis grows out of earlier loops
+  (step 2a), the hypothesis stated plainly (step 2a), the experiment written
+  out (step 2b — what it runs, what each outcome would mean), and the
+  results — interpreted, not just numbers (step 2c). This is where verbosity
+  belongs. The notebook beside it holds the executable proof.
 
 The thread reads top-down when you want the shape (problem → workstreams → the
 table of what each taught) and bottom-up when you want the proof (a loop's README + its notebook).
