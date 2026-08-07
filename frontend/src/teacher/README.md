@@ -2,7 +2,7 @@
 
 The unified assistant panel — the old 743-line `Teacher.tsx` split along
 its real seams. One docked panel whose capability levels up with context:
-no graph + a library → the graph-free library chat (the librarian); graph
+no graph → the graph-free chat (the researcher, seedless); graph
 open → lecture buttons + agentic Q&A (the lecturer and researcher).
 
 ```

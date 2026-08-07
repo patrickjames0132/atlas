@@ -33,8 +33,9 @@ import {
   lectureStarted,
   refsSet,
   sourceRefsSet,
+  provenanceSet,
+  paperRefsSet,
   lectureSourcesSet,
-  retrieveSet,
   tokenAppended,
   traceAdded,
   turnStarted,
@@ -394,6 +395,8 @@ export function useConversation() {
               },
               onFigure: (figure) => dispatch(figureAdded(figure)),
               onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
+              onProvenance: (provenance) => dispatch(provenanceSet(provenance)),
+              onPaperRefs: (refs) => dispatch(paperRefsSet(refs)),
               onCited: (ids) => {
                 highlight(ids)
                 // Mark this answer active, like a beat lights up on arrival.
@@ -407,13 +410,15 @@ export function useConversation() {
           // Answer complete: freeze the `[n]` → node-id map onto the turn.
           dispatch(refsSet(resolveRefs(answerText, numberedIds)))
         } else {
-          // No graph: the librarian — answer straight from the library.
+          // No graph: the same researcher, seedless — it reaches for the
+          // library (and S2) through its tools instead of a numbered graph.
           await streamAskSources(
             { question, session_id: sessionId.current, source_ids: sourceIds },
             {
               signal: ctrl.signal,
-              onRetrieve: (retrieval) => dispatch(retrieveSet(retrieval)),
               onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
+              onProvenance: (provenance) => dispatch(provenanceSet(provenance)),
+              onPaperRefs: (refs) => dispatch(paperRefsSet(refs)),
               onTrace: (trace) => dispatch(traceAdded(trace)),
               onFigure: (figure) => dispatch(figureAdded(figure)),
               onToken: (token) => dispatch(tokenAppended(token)),

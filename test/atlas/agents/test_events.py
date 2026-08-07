@@ -63,8 +63,8 @@ def test_trace_union_discriminates_by_action():
     )
     assert isinstance(trace, events.ExpandTrace)
     assert trace.found is None  # optional: absent on failure traces
-    trace = TRACE.validate_python({"action": "retrieval", "found": 2, "sources": ["Deep Learning"]})
-    assert isinstance(trace, events.RetrievalTrace)
+    trace = TRACE.validate_python({"action": "search_sources", "ok": True, "query": "momentum"})
+    assert isinstance(trace, events.SourceSearchTrace)
 
 
 def test_traces_nest_inside_the_event_union():

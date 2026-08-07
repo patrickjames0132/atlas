@@ -16,6 +16,7 @@ import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import { splitAnswer } from '../figures/split'
 import AnswerMarkdown from './AnswerMarkdown'
+import { provenanceLine } from './provenance'
 
 /**
  * Why a failed search never turned anything up, in plain words — "the budget
@@ -180,6 +181,7 @@ export default function ChatMessage({
                     text={part}
                     refs={message.refs}
                     sourceRefs={message.sourceRefs}
+                    paperRefs={message.paperRefs}
                     onRefClick={onRefClick}
                   />
                 ) : (
@@ -204,9 +206,19 @@ export default function ChatMessage({
           </>
         )
       })()}
-      {message.cited && message.cited.length > 0 && (
-        <div className="chat-cited">grounded in {message.cited.length} paper(s) ✦</div>
-      )}
+      {(() => {
+        // The grounding line replaces the old cited-papers footer: same job,
+        // but it counts what the answer actually cited (sources included) and
+        // is honest when nothing grounded it. Old saves have no provenance —
+        // fall back to the footer they were rendered with.
+        if (!message.provenance) {
+          return message.cited && message.cited.length > 0 ? (
+            <div className="chat-cited">grounded in {message.cited.length} paper(s) ✦</div>
+          ) : null
+        }
+        const line = provenanceLine(message.provenance)
+        return line ? <div className="chat-cited">{line} ✦</div> : null
+      })()}
     </div>
   )
 }

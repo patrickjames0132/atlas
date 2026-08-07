@@ -65,7 +65,7 @@ the caption-anchored extractor built for open-access papers
 caches a **figure manifest** per source (kind, page, caption, region — no
 pixels; see `docs/pdf-mining.md` for why) and renders entries on demand for
 `/api/sources/<id>/figure/<n>`. That's what the `show_source_figure` tools —
-the researcher's and the librarian's, one shared core in
+the researcher's, one core in
 `agents/library_figures.py` — serve into answers. URL sources and uploads
 from before v5.28.0 have no stored file and report "no figures", never an
 error.

@@ -69,8 +69,13 @@ def scripted(*turns, seen: dict | None = None) -> FunctionModel:
     return FunctionModel(stream_function=stream)
 
 
-def final(text: str, cited: list[int]) -> tuple[str, list[str]]:
-    return ("final_result", [json.dumps({"text": text, "cited": cited})])
+def final(text: str, cited: list[int], kind: str = "answered") -> tuple[str, list[str]]:
+    """One scripted final_result call.
+
+    ``kind`` defaults to ``answered``; the tests that exercise the
+    look-before-you-answer guard set it explicitly.
+    """
+    return ("final_result", [json.dumps({"kind": kind, "text": text, "cited": cited})])
 
 
 def run(model, monkeypatch, library=None, **kwargs) -> list:
@@ -79,15 +84,44 @@ def run(model, monkeypatch, library=None, **kwargs) -> list:
         return list(researcher.answer("why does this work?", SEED, NODES, **kwargs))
 
 
+def cited_of(out: list) -> events.Cited:
+    """The run's single Cited event.
+
+    Args:
+        out: The event stream the run produced.
+
+    Returns:
+        The Cited event.
+    """
+    return next(event for event in out if isinstance(event, events.Cited))
+
+
+def provenance_of(out: list) -> events.Provenance:
+    """The run's single Provenance event.
+
+    Args:
+        out: The event stream the run produced.
+
+    Returns:
+        The Provenance event.
+    """
+    return next(event for event in out if isinstance(event, events.Provenance))
+
+
 def test_answer_streams_token_deltas_and_maps_cited(monkeypatch):
     model = scripted(
-        [("final_result", ['{"text": "Momentum smooths', ' updates.", "cited": [2]}'])]
+        [
+            (
+                "final_result",
+                ['{"kind": "answered", "text": "Momentum smooths', ' updates.", "cited": [2]}'],
+            )
+        ]
     )
     out = run(model, monkeypatch)
     tokens = [event for event in out if isinstance(event, events.Token)]
     assert "".join(token.text for token in tokens) == "Momentum smooths updates."
     assert len(tokens) >= 2  # streamed as the args JSON grew, not one lump
-    assert out[-1] == events.Cited(node_ids=["node02"])
+    assert cited_of(out) == events.Cited(node_ids=["node02"])
 
 
 def test_read_traces_live_and_joins_cited(monkeypatch):
@@ -104,7 +138,7 @@ def test_read_traces_live_and_joins_cited(monkeypatch):
     returns = [part for part in seen["turns"][1][-1].parts if part.part_kind == "tool-return"]
     assert "TL;DR: Q converges." in returns[0].content
     # Cited = the paper actually read first, then the one it named.
-    assert out[-1] == events.Cited(node_ids=["node02", "node03"])
+    assert cited_of(out) == events.Cited(node_ids=["node02", "node03"])
 
 
 def test_expand_discovers_numbers_and_directs_edges(monkeypatch):
@@ -137,7 +171,7 @@ def test_expand_discovers_numbers_and_directs_edges(monkeypatch):
         ("seed01", "node03", "reference"),
     ]
     # Only reads record citations; the model named [4] -> the discovered paper.
-    assert out[-1] == events.Cited(node_ids=["anc01"])
+    assert cited_of(out) == events.Cited(node_ids=["anc01"])
 
 
 def test_expand_uses_the_selected_provider(monkeypatch):
@@ -164,7 +198,7 @@ def test_search_sources_offered_only_with_a_library(monkeypatch):
         ([{"id": "s1", "title": "Deep Learning", "kind": "pdf", "pages": 800}], True),
     ]:
         seen: dict = {}
-        model = scripted([final("ok", [])], seen=seen)
+        model = scripted([final("ok", [], kind="conversational")], seen=seen)
         run(model, monkeypatch, library=library)
         assert ("search_sources" in seen["tools"]) is expected
 
@@ -310,6 +344,7 @@ def test_show_source_figure_attaches_a_library_figure(monkeypatch):
     )
     library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
     model = scripted(
+        [("search_sources", ['{"query": "x"}'])],
         [("show_source_figure", ['{"source": 1, "page": 12}'])],
         [final("See the book's figure. <<FIG 1>>", [])],
     )
@@ -343,6 +378,7 @@ def test_show_source_figure_wrong_page_reports_figure_pages(monkeypatch):
     library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
     seen: dict = {}
     model = scripted(
+        [("search_sources", ['{"query": "x"}'])],
         [("show_source_figure", ['{"source": 1, "page": 5}'])],
         [final("No figure then.", [])],
         seen=seen,
@@ -356,12 +392,12 @@ def test_show_source_figure_wrong_page_reports_figure_pages(monkeypatch):
 def test_show_source_figure_gated_on_the_library(monkeypatch):
     """No library, no tool — same prepare gate as search_sources."""
     seen: dict = {}
-    model = scripted([final("done", [])], seen=seen)
+    model = scripted([final("done", [], kind="conversational")], seen=seen)
     run(model, monkeypatch, library=None)
     assert "show_source_figure" not in seen["tools"]
 
     seen_with: dict = {}
-    model = scripted([final("done", [])], seen=seen_with)
+    model = scripted([final("done", [], kind="conversational")], seen=seen_with)
     run(model, monkeypatch, library=[{"id": "s", "title": "T", "kind": "pdf", "pages": 1}])
     assert "show_source_figure" in seen_with["tools"]
 
@@ -374,7 +410,7 @@ def test_library_index_precedes_the_prose(monkeypatch):
         {"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300},
         {"id": "src2", "title": "A Web Page", "kind": "url"},
     ]
-    model = scripted([final("Grounded [S1, p.12].", [])])
+    model = scripted([final("Grounded [S1, p.12].", [], kind="conversational")])
     out = run(model, monkeypatch, library=library)
     assert out[0] == events.SourceRefs(
         refs={
@@ -392,7 +428,11 @@ def test_no_library_index_without_a_library(monkeypatch):
 def test_prompt_numbers_the_library_and_hides_ids(monkeypatch):
     seen: dict = {}
     library = [{"id": "src-hex-id", "title": "My Textbook", "kind": "pdf", "pages": 300}]
-    run(scripted([final("ok", [])], seen=seen), monkeypatch, library=library)
+    run(
+        scripted([final("ok", [], kind="conversational")], seen=seen),
+        monkeypatch,
+        library=library,
+    )
     prompt = seen["turns"][0][-1].parts[-1].content
     assert '[S1] "My Textbook" (300pp)' in prompt
     # The id is what the model must never see — an index is the only token it
@@ -406,7 +446,10 @@ def test_out_of_range_source_number_comes_back_as_text(monkeypatch):
     library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
     model = scripted(
         [("search_sources", ['{"query": "momentum", "source": 9}'])],
-        [final("Couldn't find it.", [])],
+        # The bad index never reached retrieval, so the guard is still unmet —
+        # the model lands this turn conversationally rather than claiming an
+        # answer it never looked for.
+        [final("Couldn't find it.", [], kind="conversational")],
     )
     out = run(model, monkeypatch, library=library)
     trace = next(
@@ -415,3 +458,135 @@ def test_out_of_range_source_number_comes_back_as_text(monkeypatch):
         if isinstance(event, events.SourceSearchTrace) and not event.ok
     )
     assert trace.query == "momentum"
+
+
+# --- look before you answer -------------------------------------------------
+#
+# The guard that replaces the librarian's grounding-by-construction. When
+# retrieval ran before the model, it could not answer without the passages;
+# as a tool it can skip them and answer from memory, which a student would
+# reasonably mistake for their own book talking.
+
+LIBRARY = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
+
+
+def test_answering_without_searching_an_available_library_is_retried(monkeypatch):
+    monkeypatch.setattr(researcher.tools.retrieval, "search", lambda query, **kwargs: [])
+    model = scripted(
+        [final("Momentum smooths updates.", [])],  # skipped the library
+        [("search_sources", ['{"query": "momentum"}'])],  # bounced, so it looks
+        [final("Your library has nothing on it, but: momentum smooths.", [])],
+    )
+    out = run(model, monkeypatch, library=LIBRARY)
+    prose = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert prose == "Your library has nothing on it, but: momentum smooths."
+    assert provenance_of(out).searches == 1
+
+
+def test_the_retried_answer_never_reaches_the_stream(monkeypatch):
+    """The rejected attempt must not stream and then be replaced on screen —
+    prose is withheld until the attempt is known-good (see `_doomed`)."""
+    monkeypatch.setattr(researcher.tools.retrieval, "search", lambda query, **kwargs: [])
+    model = scripted(
+        [final("WRONG: answered from memory.", [])],
+        [("search_sources", ['{"query": "q"}'])],
+        [final("Right answer.", [])],
+    )
+    out = run(model, monkeypatch, library=LIBRARY)
+    prose = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert "WRONG" not in prose
+    assert prose == "Right answer."
+
+
+def test_an_empty_search_satisfies_the_guard(monkeypatch):
+    """The rule is that the library was *consulted*, not that it helped —
+    otherwise an empty library would make every answer unreachable."""
+    monkeypatch.setattr(researcher.tools.retrieval, "search", lambda query, **kwargs: [])
+    model = scripted(
+        [("search_sources", ['{"query": "momentum"}'])],
+        [final("Nothing in your library covers it.", [])],
+    )
+    out = run(model, monkeypatch, library=LIBRARY)
+    assert "Nothing in your library" in "".join(
+        event.text for event in out if isinstance(event, events.Token)
+    )
+    provenance = provenance_of(out)
+    assert provenance.searches == 1 and provenance.passages == 0
+
+
+def test_a_conversational_turn_never_searches(monkeypatch):
+    """Saying hello is not a research question. This is the whole point of the
+    ticket: the librarian searched the student's books to answer "hi"."""
+
+    def explode(query, **kwargs):
+        raise AssertionError("a greeting must not search the library")
+
+    monkeypatch.setattr(researcher.tools.retrieval, "search", explode)
+    model = scripted([final("Hi! What are you working on?", [], kind="conversational")])
+    out = run(model, monkeypatch, library=LIBRARY)
+    assert not any(isinstance(event, events.SourceSearchTrace) for event in out)
+    assert provenance_of(out).searches == 0
+
+
+def test_no_library_means_no_guard(monkeypatch):
+    """Nothing to look in — search_sources isn't even registered."""
+    model = scripted([final("From what I know: momentum smooths.", [])])
+    out = run(model, monkeypatch, library=None)
+    assert provenance_of(out) == events.Provenance(
+        had_library=False, searches=0, passages=0, cited_sources=0, cited_papers=0
+    )
+
+
+# --- graph-free mode --------------------------------------------------------
+
+
+def test_answers_with_no_seed_or_nodes(monkeypatch):
+    """The path the librarian used to own — the researcher with an empty
+    numbered list."""
+    seen: dict = {}
+    model = scripted([final("Happy to help.", [], kind="conversational")], seen=seen)
+    monkeypatch.setattr(researcher.main.store, "list_sources", lambda: [])
+    with researcher.agent.override(model=model):
+        out = list(researcher.answer("what can you do?"))
+    prose = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert prose == "Happy to help."
+    prompt = seen["turns"][0][-1].parts[-1].content
+    assert "No citation graph is open" in prompt
+    assert "SEED paper" not in prompt
+
+
+def test_provenance_counts_what_the_prose_cites(monkeypatch):
+    monkeypatch.setattr(
+        researcher.tools.retrieval,
+        "search",
+        lambda query, **kwargs: [
+            {"source_id": "src1", "source_title": "My Textbook", "page": 12, "text": "Momentum."}
+        ],
+    )
+    model = scripted(
+        [("search_sources", ['{"query": "momentum"}'])],
+        [final("Your book covers it [S1, p.12], and so does [1].", [1])],
+    )
+    out = run(model, monkeypatch, library=LIBRARY)
+    provenance = provenance_of(out)
+    assert provenance.had_library is True
+    assert provenance.searches == 1 and provenance.passages == 1
+    # Counted off the finished prose, not the model's say-so.
+    assert provenance.cited_sources == 1
+    assert provenance.cited_papers == 1
+
+
+def test_paper_refs_resolve_the_markers_the_prose_used(monkeypatch):
+    """With no graph the frontend holds no numbered list, so [n] can only be
+    resolved server-side — otherwise it renders as dead text."""
+    model = scripted([final("As shown in [2], and [9] is out of range.", [])])
+    out = run(model, monkeypatch)
+    refs = next(event for event in out if isinstance(event, events.PaperRefs)).refs
+    assert set(refs) == {"2"}  # the hallucinated index is dropped
+    assert refs["2"].node_id == "node02"
+    assert refs["2"].title == "Q-learning"
+
+
+def test_no_paper_refs_when_the_prose_cites_nothing(monkeypatch):
+    out = run(scripted([final("No papers needed.", [])]), monkeypatch)
+    assert not any(isinstance(event, events.PaperRefs) for event in out)

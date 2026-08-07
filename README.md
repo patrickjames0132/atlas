@@ -189,8 +189,12 @@ The Vite dev server proxies `/api/*` to Flask.
      to re-light them all. A claim drawn from **your own uploaded sources** is
      attributed with its real title and page, resolved server-side rather than
      written out by the model.
-   - **No graph open?** The same panel is a chat straight over your uploaded
-     library, cited by source and page.
+     Underneath each answer, a line says what actually grounded it — your
+     sources, papers, or the model's own background knowledge — computed from
+     what the agent did, not from what it claims.
+   - **No graph open?** The same panel is the same agent, seedless: it searches
+     your library through its tools rather than being handed passages, so a
+     greeting stays a greeting and a real question gets looked up first.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
 6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.

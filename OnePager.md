@@ -150,103 +150,38 @@ optional, behind a key.
       built and then removed 2026-07-24 — that highlight could never be
       clickable without the structured reference v6.6.0 added.
       *(From #2 of the 2026-07-24 front-end quick-wins pass.)*
-- [ ] **Retire the librarian: one researcher, retrieval as a tool, honest
-      provenance** — a consolidation of three tickets that turned out to be the
-      same design question (*"the librarian searches even when I say hi"*,
-      *"say whether the researcher may answer from its own knowledge"*, and
-      *"graph-less research mode"* — all three deleted in favor of this entry,
-      2026-08-06). Agreed with Patrick in discussion; **no rename** — the merged
-      agent stays `researcher` (a `teacher`/`tutor` rename was considered and
-      dropped: enough change here already, and `frontend/src/teacher/` is the
-      umbrella for the whole teaching surface, lecture UI included, so the names
-      wouldn't have lined up as cleanly as they look).
-
-      **The problem.** `librarian/main.py`'s `answer()` calls `sources.search()`
-      unconditionally as its first statement, before the model is engaged at
-      all. Say "hi" and hybrid FTS5 + vector search runs anyway: it either
-      returns arbitrary nearest neighbors (the model answers a greeting out of
-      whatever surfaced) or returns nothing and the greeting is met with the
-      canned `NO_HITS_ANSWER`. No prompt change can fix it — the model never
-      gets a say. Worse in the ordinary case: the retrieval query *is* the raw
-      user question, so a follow-up like *"what about the second one?"* is sent
-      to the index verbatim.
-
-      **The shape.** The librarian is already a strict subset of the researcher
-      — same passage retrieval, same figure tool, same event bridge, same
-      structured-output pattern; the only real difference is *when* retrieval
-      fires. The researcher already owns the tool this needs:
-      `search_sources(query, source_id)` (`researcher/tools.py:581`), with a
-      budget, a `SourceSearchTrace` event, a user-pinned scope override, and the
-      errors-as-text discipline. So this is a lift, not a rewrite — the same move
-      v5.28.0 made with `show_source_figure`. Once retrieval is a tool there is
-      no librarian left: it's the researcher with an empty graph, so the package
-      goes and graph-less chat falls out for free. Keeping two packages past
-      that point just duplicates prompt drift, which is already biting (see the
-      citation-format split in the ticket above).
-
-      **Enforcement — don't lose grounding-by-construction.** Today the model
-      *cannot* answer without passages in front of it. Make retrieval a tool and
-      it can skip the library and answer from memory, and the student will
-      reasonably believe it came from their book. The repo has direct evidence
-      this is a live risk: the agent already skips `show_figure` even when
-      explicitly asked (see the proactive-figures ticket below), so prompting
-      harder is the approach already known to fail. Do it structurally instead:
-      a **turn-level discriminator on the output — `conversational` |
-      `answered`** — with a PydanticAI output validator raising `ModelRetry`
-      when an `answered` turn came back with no `search_sources` call in the
-      run. The rule is *a search was attempted*, not *hits came back*, so it
-      stays enforceable when the library genuinely has nothing.
-
-      **Parametric knowledge: allowed, and the ordering matters.** Recall should
-      be permitted — background a source *assumes* (what a Bellman equation is,
-      on-policy vs off-policy) is exactly what a student needs and exactly what
-      no cited page states; a strict grounding rule doesn't make that answer
-      safer, only absent. But **"fall back only when sources can't answer" is
-      the wrong rule** — it fails on the case Patrick most cares about. If a book
-      is outdated the book *does* answer, so retrieval succeeds, fallback never
-      fires, and the stale answer ships with no signal. Strict fallback can only
-      trigger when a source is silent, never when it's wrong. So put the
-      enforcement on **looking**, not on ordering the prose: always search before
-      a substantive answer; answer from sources where they speak; add recall
-      where they don't; flag disagreement when noticed. The guard Patrick wanted
-      survives — recall can never *quietly substitute* for material we have,
-      because the search always ran. (For "my book is stale" specifically,
-      `search_papers` against S2 is the better instrument than recall — the model
-      has a cutoff of its own.)
-
-      **Provenance is per-claim and derived, not a third enum value.** A third
-      `parametric` case was considered and rejected: real teaching answers are
-      *mixed* (the book supplies the PPO objective, recall supplies the
-      advantage-estimate background it assumes), so a turn-level provenance label
-      misreports the common case in both directions. Keep the enum for
-      *enforcement* only, and compute provenance from what actually happened —
-      did `search_sources` run, did it return hits, did the answer emit source
-      refs — all checkable server-side, unlike a model's self-report of where its
-      own knowledge came from. The UI then shows a per-turn summary
-      (sources / mixed / recall) plus per-claim attribution.
-
-      **Ordering — the blocker cleared in v6.6.0.** Derived provenance needs
-      citations to be machine-detectable, which they weren't while a library
-      citation was prose the model reworded freely. That shipped: markers are
-      structured (`[Sn, p.N]` → source id, resolved server-side and streamed as
-      `SourceRefs`), and the citation format is standardized across librarian +
-      researcher + lecturer + `citation-discipline.md`. **This ticket is now
-      unblocked and is the next one to build.** Still true: `cited` is a
-      per-*answer* list, so per-claim linking is new work on the paper side too —
-      only the lecturer has per-marker refs (`Beat.refs`, `events.py`).
-
-      **Knock-on.** A third "reach" tool in play sharpens the still-open
-      **search vs. expand** boundary ticket below — that stays separate, but its
-      decision rule now has to cover `search_sources` alongside `expand_node`
-      and `search_papers`. Also verify the frontend degrades cleanly when a turn
-      carries no retrieval summary (`ChatMessage.tsx` renders the line only when
-      one is present) and that the `RetrievalTrace` → `SourceSearchTrace` shift
-      reads sensibly in the transcript — `api/agents.ts:303` already handles both
-      trace flavors.
+- [ ] **Does the researcher ever actually use recall, or does it just search?**
+      — the open question left by v6.7.0, and deliberately left open. The
+      library rule is *structural* (`_must_have_looked` bounces an answer that
+      skipped an available library — the model gets no say), but the
+      graph-free preference for background knowledge over `search_papers` is
+      only **words in a prompt**, and searching is the reflexively safe move
+      for a research agent. Patrick's read (2026-08-06): *"I don't really see
+      the agent ever using its own recall if it can just search S2."* Probably
+      right. Counter-evidence: this repo's agent *under*-calls tools rather
+      than over-calling (it skips `show_figure` when asked outright — the very
+      reason the library guard had to be structural), so it may not reach for
+      S2 as eagerly as expected.
+      **This is now measurable rather than arguable**, which is why it shipped
+      soft: the `Provenance` event records per turn whether the agent searched
+      and what it cited, so a turn with `searches > 0` and `cited_papers == 0`
+      is a recall answer. Watch the grounding line over real use before
+      changing anything. **If it does over-search, the fix is one hook**:
+      `search_papers` is a plain `Tool`, but `search_sources` already
+      demonstrates the pattern — a `prepare=` hook returning `None` withholds
+      a tool, so `return tool_def if ctx.deps.nodes else None` makes
+      graph-free chat strictly library + recall. (That was the third option
+      when this was decided; Patrick chose to watch first.)
+      *(Filed 2026-08-06, out of the librarian-retirement browser round.)*
 - [ ] **Reconcile when the researcher should search vs. expand** — the agent has
       two "reach beyond the graph" tools with fuzzy boundaries: `expand_node`
       (a lineage hop — references/citations/similar of a paper *on* the graph) and
-      `search_papers` (free-text, off-graph). Their prompt guidance overlaps, so
+      `search_papers` (free-text, off-graph). **Now three**, since v6.7.0 made
+      `search_sources` (the user's own library) a first-class reach on every
+      turn rather than a pre-answer retrieval — so the decision rule has to
+      cover all three, and the library one is the only one with a hard rule
+      already attached (it must run before a substantive answer).
+      Their prompt guidance overlaps, so
       the model sometimes searches when a hop would be tighter (or vice versa),
       wasting budget and pulling noisier nodes. Sharpen the tool descriptions /
       skill prompt on the decision rule (expand = "trace a known paper's

@@ -22,6 +22,72 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A rejected answer streamed to the screen before the guard could reject it
+
+*Caught while designing the look-before-you-answer guard (2026-08-06), before
+it ever shipped — the design worked and the plumbing around it didn't.*
+
+- **Symptom.** With the output validator in place, an answer that skipped the
+  library got bounced and retried correctly — but the **rejected** prose had
+  already streamed into the chat bubble, so the student watched a complete
+  answer appear and then be replaced by a different one. Worse, the two could
+  disagree: the first was the from-memory answer the guard exists to prevent.
+- **Root cause.** A timing assumption that only breaks once something can
+  reject an answer. PydanticAI output validators run **after** the output tool
+  call completes, but the researcher streams prose *out of that same tool
+  call's partial JSON* (`streams.partial_text`) so the answer appears as it's
+  written. Nothing was wrong with either half; they simply can't both be true
+  — by the time the validator can say no, every token is already on the wire.
+  The retry then made it worse: a second output tool call resets `args_buffer`
+  but not `emitted`, so the new answer's tokens are sliced against the old
+  one's length.
+- **Fix.** Evaluate the guard's condition *while* the args stream and withhold
+  prose until the attempt is known-good — `_doomed` in `researcher/main.py`,
+  checked before any `Token` is yielded. It reads `kind` out of the partial
+  JSON, which is safe on a single character because the two values disagree at
+  the first: **a**nswered vs **c**onversational. An empty read means the field
+  hasn't arrived, so it holds rather than guessing.
+- **Lesson / guard.** *Streaming implies acceptance* — the pre-check and the
+  validator evaluate the identical predicate, and no tool runs between them to
+  change the answer, so anything that reaches the user is guaranteed to
+  survive. Any future output validator has to extend `_doomed` too, or it
+  reintroduces exactly this. Guarded by
+  `test_the_retried_answer_never_reaches_the_stream`, which asserts the
+  rejected text never appears in the token stream.
+
+### Paper citations went dead the moment the graph did
+
+*Found by Patrick browser-testing the librarian retirement (2026-08-06) — the
+same bug, in the same shape, as the one fixed a version earlier for library
+sources.*
+
+- **Symptom.** In graph-free chat, an answer that cited papers rendered its
+  `[n]` markers as inert grey text. Not merely unclickable: there was **no way
+  to learn what paper `[1]` was**, so the answer looked sourced while naming
+  nothing.
+- **Root cause.** The `[n]` protocol carries an unstated assumption — that the
+  frontend holds the same numbered list the model was shown. True with a graph
+  open (it *is* the visible nodes, so `useConversation` resolves markers
+  itself). False without one: every paper arrives mid-answer as a `Discovery`,
+  and the graph-free stream had no `onDiscovery` handler and never dispatched
+  `refsSet`, so `message.refs` stayed undefined and every marker fell through
+  `AnswerMarkdown`'s unresolved-marker branch. The assumption had simply never
+  been false before — until v6.7.0 let the researcher run with no graph.
+- **Fix.** The same shape as the v6.6.0 fix for library citations: when the
+  frontend can't resolve a marker, the **backend streams the resolution**. A
+  `PaperRefs` event (`prompts.paper_refs`) carries title + URL for the markers
+  the finished prose actually used, and `AnswerMarkdown`'s `citeref` falls back
+  to it — rendering the real title, linked to the paper — whenever the graph
+  chip isn't available.
+- **Lesson / guard.** This is the second instance of one root pattern: *a
+  citation whose resolution lives only on one side of the wire dies whenever
+  that side is absent.* Sources hit it in v6.6.0, papers in v6.7.0. Any new
+  citation flavor should ship its resolution with it rather than assuming the
+  frontend can reconstruct one. Guarded on both sides:
+  `test_paper_refs_resolve_the_markers_the_prose_used` (backend) and the
+  no-graph rendering cases in `AnswerMarkdown.test.tsx`, including that the
+  graph chip still wins when a graph *is* open.
+
 ### A failed figure chip named the wrong figure, in a book that numbers with hyphens
 
 *Found by Patrick browser-testing the librarian (2026-07-19): a failed figure

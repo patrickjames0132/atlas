@@ -14,6 +14,8 @@ import type {
   AnswerFigure,
   Beat,
   LectureMode,
+  PaperRef,
+  ProvenanceEvent,
   RetrieveEvent,
   SourceRef,
   TraceEvent,
@@ -47,6 +49,19 @@ export interface ChatMsg {
    * lives in the marker (`[S2, p.460]`), so this map is complete up front.
    */
   sourceRefs?: Record<string, SourceRef>
+  /**
+   * What grounded this answer — whether the library was searched, what it
+   * returned, what the prose cites. Absent on turns from before v6.7.0 and on
+   * user turns; the transcript then shows no grounding line at all.
+   */
+  provenance?: ProvenanceEvent
+  /**
+   * `[n]` index → the paper it names, with title and URL. Only needed when
+   * the frontend can't resolve the marker itself (graph-free turns, where
+   * `refs` is empty because no numbered list was ever held). Absent on turns
+   * from before v6.7.0.
+   */
+  paperRefs?: Record<string, PaperRef>
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
   /** Figures the agent pulled into this answer (assistant turns only). */

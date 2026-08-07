@@ -5,7 +5,7 @@ AI-teacher routes: every workflow streams through the agents orchestrator.
 
 POST /api/lecture      -> streamed AI lecture over the visible graph
 POST /api/ask          -> the research agent, streamed over the visible graph
-POST /api/ask_sources  -> streamed chat answered purely from the local library
+POST /api/ask_sources  -> streamed chat with no graph open (library + search)
 
 Each endpoint validates the request, builds typed inputs, and hands off to
 ``orchestrator.run(intent, ...)``; the typed event stream comes back as SSE
@@ -290,20 +290,21 @@ def api_ask() -> ResponseReturnValue:
 def api_ask_sources() -> ResponseReturnValue:
     """Answer a question purely from the user's local library, streamed as SSE.
 
-    The offline library chat — no graph required, and no availability gate:
-    retrieval self-degrades (lexical-only without the embedder), and an
-    empty library gets the librarian's friendly no-hits answer rather than
-    a refusal. History is keyed by ``session_id`` in its own store.
+    The graph-free chat — the same researcher as ``/api/ask``, run with no
+    seed and no numbered papers, so it reaches for the library (and, if it
+    needs to, Semantic Scholar) through its tools rather than having
+    passages pushed at it. History is keyed by ``session_id`` in its own
+    store, kept separate from the graph chat's.
 
     Body:
         ``{question, session_id, source_ids?}`` — ``source_ids`` scopes
         retrieval to a subset of sources.
 
     Returns:
-        An SSE stream: one retrieval ``trace`` frame, then ``token`` prose —
-        interleaved with figure ``trace``/``figure`` frames when the
-        librarian attaches a figure from an uploaded PDF — then ``done`` or
-        ``error``. HTTP 400 when the question is missing.
+        An SSE stream: a ``source_refs`` frame when a library is in play,
+        ``trace`` frames as the agent searches, ``token`` prose interleaved
+        with any ``figure`` frames, then ``cited`` + ``provenance``, then
+        ``done`` or ``error``. HTTP 400 when the question is missing.
     """
     payload = request.get_json(silent=True) or {}
     question = (payload.get("question") or "").strip()
@@ -316,7 +317,7 @@ def api_ask_sources() -> ResponseReturnValue:
     return sse_response(
         _relay(
             orchestrator.run(
-                Intent.LIBRARIAN, question=question, history=history, source_ids=source_ids
+                Intent.RESEARCH, question=question, history=history, source_ids=source_ids
             ),
             store=_SOURCES_SESSIONS,
             session_id=session_id,

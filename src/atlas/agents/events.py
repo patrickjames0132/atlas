@@ -181,6 +181,76 @@ class SourceRefs(BaseModel):
     refs: dict[str, SourceRef]
 
 
+class PaperRef(BaseModel):
+    """One numbered paper an answer cites, resolved to something readable.
+
+    The frontend normally resolves ``[n]`` itself — it holds the same
+    numbered grounding list the model was shown. That breaks in graph-free
+    mode, where every paper arrives mid-answer from ``search_papers`` and
+    there is no canvas to merge it into: the marker would render as dead
+    text with no way to learn what paper ``[1]`` even was. ``title``/``url``
+    make the citation readable and reachable without a graph.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    node_id: str
+    title: str
+    #: The paper's landing page (Semantic Scholar / arXiv / publisher), for a
+    #: citation that can't point at a graph node. May be empty.
+    url: str
+
+
+class PaperRefs(BaseModel):
+    """The papers an answer's ``[n]`` markers point at, keyed by index.
+
+    Emitted after the prose (unlike ``SourceRefs``, which precedes it): the
+    map covers only the markers the finished answer actually used, and the
+    numbered list is still growing while the agent works.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["paper_refs"] = "paper_refs"
+    refs: dict[str, PaperRef]
+
+
+class Provenance(BaseModel):
+    """Where an answer's knowledge actually came from — observed, not claimed.
+
+    Every field is a fact the server watched happen: whether the library was
+    consulted, what it returned, and what the finished prose ended up citing.
+    None of it is the model's self-report, which is the point — a model has no
+    reliable access to which of its sentences came from a retrieved passage
+    and which from its own weights, so asking it would produce a confident
+    label with nothing behind it.
+
+    Deliberately raw counts rather than a single verdict: the "grounded vs
+    recall" line is presentation, and the frontend renders it (see
+    ``teacher/transcript``). Emitted once, after the prose, alongside
+    ``Cited``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["provenance"] = "provenance"
+    #: Whether a library was available to search at all. False means the
+    #: student has uploaded nothing (or scoped everything out) — "no sources
+    #: cited" then says nothing about the answer.
+    had_library: bool
+    #: How many times the agent reached retrieval. 0 with ``had_library`` true
+    #: is only reachable on a conversational turn — the output guard bounces
+    #: any substantive answer that never looked.
+    searches: int
+    #: Total passages retrieval handed back across those searches.
+    passages: int
+    #: Distinct library sources the finished prose actually cites (``[Sn]``
+    #: markers), and graph papers it cites (``[n]``). Zero on both means
+    #: nothing grounded the answer but the model's own knowledge.
+    cited_sources: int
+    cited_papers: int
+
+
 class Done(BaseModel):
     """The workflow finished cleanly. Always the last event on success."""
 
@@ -270,7 +340,7 @@ class SourceSearchTrace(BaseModel):
 
 class FigureTrace(BaseModel):
     """An agent attached (or failed to attach) a figure — a paper's
-    (researcher) or an uploaded source's (researcher/librarian).
+    (``show_figure``) or an uploaded source's (``show_source_figure``).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -287,32 +357,28 @@ class FigureTrace(BaseModel):
     back to the per-paper/per-page number in ``figure``)."""
 
 
-class RetrievalTrace(BaseModel):
-    """The librarian's pre-answer retrieval: how many passages matched and
-    the distinct source titles they came from.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    type: Literal["trace"] = "trace"
-    action: Literal["retrieval"] = "retrieval"
-    found: int
-    sources: list[str]
-
-
 Trace: TypeAlias = Annotated[
     ReadTrace
     | ExpandTrace
     | SearchTrace
     | SourceSearchTrace
-    | FigureTrace
-    | RetrievalTrace,
+    | FigureTrace,
     Field(discriminator="action"),
 ]
 """Any "watch the agent work" event, discriminated by ``action``."""
 
 Event: TypeAlias = Annotated[
-    Beat | Token | Discovery | Figure | Cited | SourceRefs | Done | Error | Trace,
+    Beat
+    | Token
+    | Discovery
+    | Figure
+    | Cited
+    | SourceRefs
+    | PaperRefs
+    | Provenance
+    | Done
+    | Error
+    | Trace,
     Field(discriminator="type"),
 ]
 """Anything a workflow may yield, discriminated by ``type`` (traces nest their

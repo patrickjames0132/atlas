@@ -164,7 +164,7 @@ def _figure_pool(seed: Node, nodes: list[Node], mode: LectureMode) -> list[dict]
 def _seed_passages(seed: Node) -> list[dict]:
     """Library passages about the seed, for the intuition lecture.
 
-    The same hybrid retrieval the librarian grounds in, queried with the
+    The same hybrid retrieval search_sources uses, queried with the
     seed's title — extra context the lecture MAY draw on (attributed
     inline). Empty when the library is empty/unavailable or on any failure.
     """

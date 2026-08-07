@@ -189,9 +189,9 @@ class TestAgentExtras:
 
     def test_disabling_a_budget_with_zero_is_allowed(self):
         """0 figures means "no inline figures" — legitimate, unlike 0 steps."""
-        loaded = Config.model_validate(self._with_extras("librarian", {"figures": 0}))
-        librarian = next(entry for entry in loaded.llm.agents if entry.id == "librarian")
-        assert librarian.extras["figures"] == 0
+        loaded = Config.model_validate(self._with_extras("researcher", {"figures": 0}))
+        researcher = next(entry for entry in loaded.llm.agents if entry.id == "researcher")
+        assert researcher.extras["figures"] == 0
 
     def test_beat_bounds_must_be_ordered(self):
         with pytest.raises(ValidationError, match="min_beats"):

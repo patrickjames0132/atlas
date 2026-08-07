@@ -3,7 +3,7 @@
 Description:
 The shared heart of the two ``show_source_figure`` tools.
 
-The researcher (graph Q&A) and the librarian (graph-free library chat) both
+The researcher's graph Q&A and its graph-free chat both
 let the model attach a figure from the user's uploaded PDFs, addressed the
 way passages are cited: source + page. Everything past each agent's own
 budget checks is identical — resolve the address against the mined manifest

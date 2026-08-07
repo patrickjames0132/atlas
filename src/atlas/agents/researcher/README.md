@@ -89,8 +89,9 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   `Figure` event carries `index=None` (no numbered paper). It shares the
   `figures` budget and the library `prepare` gate below, and everything past
   the step charge lives in the shared `agents/library_figures.py` — the
-  librarian's twin runs the same core, so markers and error text can't
-  drift.
+  core was shared with the librarian's twin until that agent was retired in
+  v6.7.0; the seam is kept, since it is the natural home for the resolve /
+  dedupe / slot logic.
 - **`search_sources` is registered via a `prepare` hook** only when the
   (scope-filtered) library is non-empty — no availability probe at all:
   retrieval degrades by itself, and an empty library never pays the torch

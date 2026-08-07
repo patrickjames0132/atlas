@@ -85,3 +85,49 @@ describe('AnswerMarkdown library citations', () => {
     expect(screen.getByText('(Reinforcement Learning: An Introduction, p.460)')).toBeTruthy()
   })
 })
+
+describe('AnswerMarkdown paper citations with no graph', () => {
+  const PAPER_REFS = {
+    '1': {
+      node_id: 'node-atari',
+      title: 'Playing Atari with Deep RL',
+      url: 'https://example.org/atari',
+    },
+  }
+
+  it('renders [n] as a linked title when there is no graph to resolve it', () => {
+    // The graph-free case: `refs` is empty because the frontend never held a
+    // numbered list, so without this the marker is dead text.
+    render(<AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} />)
+    const link = screen.getByRole('link', { name: '(Playing Atari with Deep RL)' })
+    expect(link.getAttribute('href')).toBe('https://example.org/atari')
+    expect(screen.queryByText(/\[1\]/)).toBeNull()
+  })
+
+  it('prefers the graph chip when a graph IS open', () => {
+    const onRefClick = vi.fn()
+    render(
+      <AnswerMarkdown
+        text="As shown in [1]."
+        refs={{ '1': 'node-atari' }}
+        paperRefs={PAPER_REFS}
+        onRefClick={onRefClick}
+      />,
+    )
+    // Clicking spotlights the node rather than navigating away.
+    screen.getByRole('button', { name: '[1]' }).click()
+    expect(onRefClick).toHaveBeenCalledWith('node-atari')
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('renders a title with no link when the paper has no URL', () => {
+    render(
+      <AnswerMarkdown
+        text="As shown in [1]."
+        paperRefs={{ '1': { node_id: 'n', title: 'Untraceable Paper', url: '' } }}
+      />,
+    )
+    expect(screen.getByText('(Untraceable Paper)')).toBeTruthy()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+})

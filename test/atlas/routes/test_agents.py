@@ -15,6 +15,7 @@ import json
 import pytest
 
 from atlas.agents import events
+from atlas.agents.models import Intent
 from atlas.config import config
 from atlas.routes import agents as agents_routes
 
@@ -194,15 +195,23 @@ def test_the_two_chats_use_separate_stores(client, monkeypatch):
     assert agents_routes._SOURCES_SESSIONS["same-id"][0]["content"] == "library q"
 
 
-def test_ask_sources_has_no_availability_gate(client, monkeypatch):
+def test_ask_sources_runs_the_researcher_without_a_graph(client, monkeypatch):
+    """The graph-free chat is the same agent as /api/ask, just seedless — and
+    still has no embedder probe or availability refusal."""
+    seen: dict = {}
+
     def fake_run(intent, **kwargs):
-        yield events.RetrievalTrace(found=0, sources=[])
-        yield events.Token(text="I couldn't find anything in your library about that.")
+        seen["intent"], seen["kwargs"] = intent, kwargs
+        yield events.SourceSearchTrace(ok=True, query="anything", found=0)
+        yield events.Token(text="Nothing in your library covers that.")
         yield events.Done()
 
     monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
     response = client.post("/api/ask_sources", json={"question": "anything"})
     assert response.status_code == 200  # no embedder probe, no 400 refusal
     assert frames(response)[0][0] == "trace"
+    # Routed as research, with no seed/nodes — that absence IS the graph-free mode.
+    assert seen["intent"] is Intent.RESEARCH
+    assert "seed" not in seen["kwargs"] and "nodes" not in seen["kwargs"]
 
     assert client.post("/api/ask_sources", json={}).status_code == 400  # question required

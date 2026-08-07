@@ -512,7 +512,7 @@ const ROW_DEFS: RowDef[] = [
     section: 'agents',
     group: 'Provider',
     label: 'Anthropic API key',
-    hint: 'Used by every agent running an anthropic:* model (lecturer, researcher, librarian, …).',
+    hint: 'Used by every agent running an anthropic:* model (lecturer, researcher, …).',
     control: (draft, edit) => (
       <input
         type="text"
@@ -547,33 +547,6 @@ const ROW_DEFS: RowDef[] = [
     hint: "Writes the detail panel's on-demand paper TL;DR (cached per paper forever).",
     control: (draft, edit, models) => (
       <ModelInput draft={draft} edit={edit} agentId="summarizer" models={models} />
-    ),
-  },
-  {
-    key: 'librarian-model',
-    section: 'agents',
-    group: 'Librarian',
-    label: 'Model',
-    hint: 'Answers over your uploaded library, citing sources by page.',
-    control: (draft, edit, models) => (
-      <ModelInput draft={draft} edit={edit} agentId="librarian" models={models} />
-    ),
-  },
-  {
-    key: 'librarian-figures',
-    section: 'agents',
-    group: 'Librarian',
-    label: 'Inline figures',
-    hint: 'Figures the librarian may pull into one answer. 0 turns them off; empty uses the code default.',
-    control: (draft, edit) => (
-      <ExtrasNumber
-        draft={draft}
-        edit={edit}
-        agentId="librarian"
-        extrasKey="figures"
-        fallback={2}
-        min={0}
-      />
     ),
   },
   {

@@ -53,7 +53,8 @@ def partial_text(args_json: str, field: str = "text") -> str:
     ``allow_partial="trailing-strings"`` keeps the truncated tail of the
     in-flight string, so prose streams smoothly instead of buffering until
     the field closes. Shared by every agent that streams a structured
-    result's prose (researcher, librarian) — structured output is the house
+    result's prose (the researcher, and the lecturer's beats) — structured
+    output is the house
     answer to tool-call narration: text a model emits *outside* its final
     result is ignored instead of streamed-then-disavowed.
 

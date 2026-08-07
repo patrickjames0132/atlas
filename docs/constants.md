@@ -53,7 +53,7 @@ settings-modal ticket's candidate list.
 | `_LECTURES_MAX_CHARS` | Played-lectures context cap for the researcher | A full set of four lectures can't blow the prompt | 6000 | `src/atlas/agents/researcher/main.py` |
 | `_MAX_TOPICS` | OpenAlex topics kept per node | Detail-panel display cap | 6 | `src/atlas/integrations/openalex/nodes.py` |
 | `_MAX_ITEMS` | Hugging Face code links kept per paper | Detail-panel display cap | 5 | `src/atlas/integrations/huggingface/code_links.py` |
-| `_MAX_CANDIDATES` | Figure candidates listed to the librarian | Bounds the figure-choice prompt | 8 | `src/atlas/services/sources/figures.py` |
+| `_MAX_CANDIDATES` | Figure candidates listed to the agent | Bounds the figure-choice prompt | 8 | `src/atlas/services/sources/figures.py` |
 | `_CANDIDATE_CAPTION` | Chars of each candidate's caption shown | Same prompt bound | 80 | `src/atlas/services/sources/figures.py` |
 | `_MAX_CAPTION` (ar5iv) | Caption length cap, extracted figures | A runaway caption is extraction noise | 600 | `src/atlas/integrations/arxiv/figures.py` |
 | `_MAX_CAPTION` (pdf) | Caption length cap, mined PDF floats | Same, deliberately equal to the ar5iv cap | 600 | `src/atlas/services/pdf/floats.py` |
@@ -106,7 +106,6 @@ staging area is validated (unknown keys fail at import).
 | `source_searches` | researcher | Library-retrieval calls per question | Bounds local-library reads | 5 | same |
 | `figures` | researcher | `show_source_figure` calls per answer | Bounds inline images per answer | 3 | same |
 | `fulltext_max_chars` | researcher | Chars per full-text read | Keeps one read from flooding the context | 8000 | same |
-| `figures` | librarian | `show_source_figure` calls per answer | Same bound, librarian's tighter default | 2 | `src/atlas/agents/librarian/config.py` |
 
 ## Defaults with a parameter seam — caller decides, code holds the default
 

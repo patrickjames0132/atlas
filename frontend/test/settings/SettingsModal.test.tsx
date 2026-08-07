@@ -45,7 +45,6 @@ function makeConfig(): AtlasConfig {
       agents: [
         { id: 'query_analyst', model: 'anthropic:claude-haiku-4-5', extras: {} },
         { id: 'summarizer', model: 'anthropic:claude-haiku-4-5', extras: {} },
-        { id: 'librarian', model: 'anthropic:claude-haiku-4-5', extras: {} },
         // Unique among the agents, so a display-value query lands on it.
         { id: 'lecturer', model: 'anthropic:claude-sonnet-4-6', extras: {} },
         { id: 'researcher', model: 'anthropic:claude-opus-4-8', extras: { max_steps: 20 } },
@@ -247,7 +246,7 @@ describe('SettingsModal', () => {
   it('lists every configured agent, not just the ones with knobs', async () => {
     await renderOpen()
     fireEvent.click(screen.getByText('Agents'))
-    for (const agent of ['Query analyst', 'Summarizer', 'Librarian', 'Lecturer', 'Researcher']) {
+    for (const agent of ['Query analyst', 'Summarizer', 'Lecturer', 'Researcher']) {
       expect(await screen.findByText(agent)).toBeTruthy()
     }
   })

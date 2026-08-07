@@ -27,7 +27,7 @@ transcript/
   interleaved with its `<<FIG n>>` figures (via `../figures/split`), and
   the cited-papers footer — clickable to re-light the answer's whole
   grounding set.
-- **`AnswerMarkdown`** — the researcher and librarian reply in Markdown
+- **`AnswerMarkdown`** — the researcher replies in Markdown
   with `$…$` math and inline citations; this renders all three for
   real: remark-gfm for structure, remark-math + rehype-katex for math (the
   same KaTeX the rest of the app reaches through `MathText` — beats, the

@@ -80,6 +80,13 @@ class ResearcherDeps:
     figures_shown: dict[tuple[str, int], int] = field(default_factory=dict)
     cited_ids: list[str] = field(default_factory=list)
     queue: list[events.Event] = field(default_factory=list)
+    #: How many times ``search_sources`` actually reached retrieval this run,
+    #: and how many passages came back in total. Both are *observed facts*, not
+    #: model self-report — they drive the "did it look?" output guard and the
+    #: derived provenance the UI shows. A run with ``searches_run`` at 0 never
+    #: consulted the student's library, whatever the answer claims.
+    source_searches_run: int = 0
+    source_hits: int = 0
 
     def source_id(self, number: int) -> str | None:
         """Resolve a model-written ``[Sn]`` index to a real source id.
@@ -597,7 +604,7 @@ def show_source_figure(
         deps.emit(events.FigureTrace(ok=False, index=None, title=None, figure=figure))
         return f"No source [S{source}] in your library — check the numbered list."
     # Everything past the step charge — resolution, dedupe, slot, events —
-    # is shared with the librarian's twin (agents/library_figures.py).
+    # lives in agents/library_figures.py.
     return library_figures.attach_source_figure(deps, source_id, page, figure)
 
 
@@ -647,6 +654,12 @@ def search_sources(ctx: RunContext[ResearcherDeps], query: str, source: int | No
         log.exception("search_sources failed")
         deps.emit(events.SourceSearchTrace(ok=False, query=query))
         return f"Couldn't search your sources: {exc}"
+
+    # Counted the moment retrieval returns, hits or not: the guard downstream
+    # asks whether the library was *consulted*, which an empty result answers
+    # just as well as a full one.
+    deps.source_searches_run += 1
+    deps.source_hits += len(hits)
 
     deps.emit(events.SourceSearchTrace(ok=True, query=query, found=len(hits)))
     if not hits:
