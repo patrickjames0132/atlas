@@ -152,26 +152,98 @@ optional, behind a key.
       and then removed 2026-07-24 in favor of doing this correctly — the highlight
       can never be clickable without the structured reference this ticket adds.
       *(From #2 of the 2026-07-24 front-end quick-wins pass.)*
-- [ ] **Say whether the researcher may answer from its own knowledge — right now
-      the prompt leans "no"** — the ask was to confirm the researcher blends its
-      own LLM knowledge with the papers. It isn't *forbidden* (the result's `cited`
-      list is explicitly allowed to be empty), but nothing invites it and the
-      wording pushes the other way: `SYSTEM_PROMPT` opens *"Answer from real
-      content: read the papers you draw on"*, and the one escape hatch it names —
-      *"pull in outside work"* — is defined as `expand_node`/`search_papers`, i.e.
-      **more papers**, not recall. A model reading that will reasonably conclude
-      everything must be grounded in a fetched paper. So the honest answer to "is
-      this already the case?" is *probably not, and by accident*.
-      Decide what we actually want, then say it explicitly. It's a real design
-      question, not just wording: background a paper *assumes* (what a Bellman
-      equation is, why on-policy vs off-policy matters) is exactly what a student
-      needs and exactly what no cited paper will state. The knobs: does recall get
-      used freely, only to bridge gaps, or only when tools come up empty? How is it
-      **attributed** — `cited: []` reads as "ungrounded" today, and the frontend's
-      citation chips have nothing to point at, so the UI may need a way to show
-      "this part is background, not from a paper". And the guard has to be that
-      recall never quietly substitutes for reading a paper we *have*. *(From the
-      `todos.md` inbox, 2026-07-16.)*
+- [ ] **Retire the librarian: one researcher, retrieval as a tool, honest
+      provenance** — a consolidation of three tickets that turned out to be the
+      same design question (*"the librarian searches even when I say hi"*,
+      *"say whether the researcher may answer from its own knowledge"*, and
+      *"graph-less research mode"* — all three deleted in favor of this entry,
+      2026-08-06). Agreed with Patrick in discussion; **no rename** — the merged
+      agent stays `researcher` (a `teacher`/`tutor` rename was considered and
+      dropped: enough change here already, and `frontend/src/teacher/` is the
+      umbrella for the whole teaching surface, lecture UI included, so the names
+      wouldn't have lined up as cleanly as they look).
+
+      **The problem.** `librarian/main.py`'s `answer()` calls `sources.search()`
+      unconditionally as its first statement, before the model is engaged at
+      all. Say "hi" and hybrid FTS5 + vector search runs anyway: it either
+      returns arbitrary nearest neighbors (the model answers a greeting out of
+      whatever surfaced) or returns nothing and the greeting is met with the
+      canned `NO_HITS_ANSWER`. No prompt change can fix it — the model never
+      gets a say. Worse in the ordinary case: the retrieval query *is* the raw
+      user question, so a follow-up like *"what about the second one?"* is sent
+      to the index verbatim.
+
+      **The shape.** The librarian is already a strict subset of the researcher
+      — same passage retrieval, same figure tool, same event bridge, same
+      structured-output pattern; the only real difference is *when* retrieval
+      fires. The researcher already owns the tool this needs:
+      `search_sources(query, source_id)` (`researcher/tools.py:581`), with a
+      budget, a `SourceSearchTrace` event, a user-pinned scope override, and the
+      errors-as-text discipline. So this is a lift, not a rewrite — the same move
+      v5.28.0 made with `show_source_figure`. Once retrieval is a tool there is
+      no librarian left: it's the researcher with an empty graph, so the package
+      goes and graph-less chat falls out for free. Keeping two packages past
+      that point just duplicates prompt drift, which is already biting (see the
+      citation-format split in the ticket above).
+
+      **Enforcement — don't lose grounding-by-construction.** Today the model
+      *cannot* answer without passages in front of it. Make retrieval a tool and
+      it can skip the library and answer from memory, and the student will
+      reasonably believe it came from their book. The repo has direct evidence
+      this is a live risk: the agent already skips `show_figure` even when
+      explicitly asked (see the proactive-figures ticket below), so prompting
+      harder is the approach already known to fail. Do it structurally instead:
+      a **turn-level discriminator on the output — `conversational` |
+      `answered`** — with a PydanticAI output validator raising `ModelRetry`
+      when an `answered` turn came back with no `search_sources` call in the
+      run. The rule is *a search was attempted*, not *hits came back*, so it
+      stays enforceable when the library genuinely has nothing.
+
+      **Parametric knowledge: allowed, and the ordering matters.** Recall should
+      be permitted — background a source *assumes* (what a Bellman equation is,
+      on-policy vs off-policy) is exactly what a student needs and exactly what
+      no cited page states; a strict grounding rule doesn't make that answer
+      safer, only absent. But **"fall back only when sources can't answer" is
+      the wrong rule** — it fails on the case Patrick most cares about. If a book
+      is outdated the book *does* answer, so retrieval succeeds, fallback never
+      fires, and the stale answer ships with no signal. Strict fallback can only
+      trigger when a source is silent, never when it's wrong. So put the
+      enforcement on **looking**, not on ordering the prose: always search before
+      a substantive answer; answer from sources where they speak; add recall
+      where they don't; flag disagreement when noticed. The guard Patrick wanted
+      survives — recall can never *quietly substitute* for material we have,
+      because the search always ran. (For "my book is stale" specifically,
+      `search_papers` against S2 is the better instrument than recall — the model
+      has a cutoff of its own.)
+
+      **Provenance is per-claim and derived, not a third enum value.** A third
+      `parametric` case was considered and rejected: real teaching answers are
+      *mixed* (the book supplies the PPO objective, recall supplies the
+      advantage-estimate background it assumes), so a turn-level provenance label
+      misreports the common case in both directions. Keep the enum for
+      *enforcement* only, and compute provenance from what actually happened —
+      did `search_sources` run, did it return hits, did the answer emit source
+      refs — all checkable server-side, unlike a model's self-report of where its
+      own knowledge came from. The UI then shows a per-turn summary
+      (sources / mixed / recall) plus per-claim attribution.
+
+      **Ordering — the citation ticket above is the blocker.** Derived
+      provenance needs citations to be machine-detectable, and today a library
+      citation is prose the model rewords freely. Do the structured source
+      reference (and its prerequisite: one citation format across librarian +
+      researcher + `citation-discipline.md` + the tour example) **first**, then
+      this merge, then provenance display rides on it. Note `cited` is a
+      per-*answer* list, so per-claim linking is new work on the paper side too —
+      only the lecturer has per-marker refs (`Beat.refs`, `events.py:72`).
+
+      **Knock-on.** A third "reach" tool in play sharpens the still-open
+      **search vs. expand** boundary ticket below — that stays separate, but its
+      decision rule now has to cover `search_sources` alongside `expand_node`
+      and `search_papers`. Also verify the frontend degrades cleanly when a turn
+      carries no retrieval summary (`ChatMessage.tsx` renders the line only when
+      one is present) and that the `RetrievalTrace` → `SourceSearchTrace` shift
+      reads sensibly in the transcript — `api/agents.ts:303` already handles both
+      trace flavors.
 - [ ] **Reconcile when the researcher should search vs. expand** — the agent has
       two "reach beyond the graph" tools with fuzzy boundaries: `expand_node`
       (a lineage hop — references/citations/similar of a paper *on* the graph) and
@@ -181,17 +253,11 @@ optional, behind a key.
       skill prompt on the decision rule (expand = "trace a known paper's
       neighbors"; search = "reach recent/topical work no hop can"), and consider a
       cheap heuristic nudge. *(From the `todos.md` inbox, 2026-07-14.)*
-- [ ] **Graph-less research mode** — let the researcher run with no graph
-      open: agentic research from scratch (search S2 + the local library, no
-      seed required). Would retire the librarian in its favor — today's
-      no-graph chat is deliberately single-shot RAG (retrieval-before-model:
-      half the cost/latency, grounding guaranteed by construction), which is
-      the right trade until real usage demands agency there.
 - [ ] **Orchestrator model fan-out** — the hybrid design's model half, on the
       documented seam in `agents/orchestrator/main.py`: for ambiguous or
       multi-step asks, let an orchestrator model route or fan out across
-      sub-agents and synthesize. Same trigger as above: build when usage
-      shows the researcher's own tool loop isn't enough.
+      sub-agents and synthesize. Build when usage shows the researcher's own
+      tool loop isn't enough.
 - [ ] **Agent surfaces figures proactively (no explicit ask)** — today the
       agentic Q&A only calls `show_figure` when the question explicitly asks for
       a picture; you have to request an image every time to get one. It should
@@ -267,33 +333,6 @@ optional, behind a key.
       both) exposed as a researcher skill, so the answer is exact set output
       rather than model recall. Probably wants the result grounded as
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
-- [ ] **The librarian retrieves on every turn — even "hi"** — say hello to the
-      library chat and it still goes looking through your books: the retrieval
-      trace chip lists sources, and the answer is framed as if the greeting were
-      a research question. The cause isn't the model choosing badly, it's
-      **structural** — `librarian/main.py`'s `answer()` calls `sources.search()`
-      unconditionally as its first statement, *before* the model is engaged at
-      all (that's the deliberate retrieve-then-answer design: grounding
-      guaranteed by construction, half the cost/latency of an agentic loop). So
-      no prompt change can fix it; the model never gets a say. Both outcomes are
-      bad: hybrid FTS5 + vector search on "hi" either returns arbitrary nearest
-      neighbors (the model then answers a greeting out of whatever passages
-      surfaced) or returns nothing and the user's greeting is met with the canned
-      `NO_HITS_ANSWER` — *"I couldn't find anything in your library about that"*.
-      Wanted: a **cheap triage step ahead of retrieval** that separates
-      conversational turns (greetings, thanks, "what can you do?", follow-ups
-      answerable from history) from real library questions, and skips retrieval —
-      and the `RetrievalTrace` event — for the former, answering conversationally
-      instead. Design questions worth settling first: where triage lives (a
-      cheap/fast classifier call, a heuristic, or handing the model a
-      `search_library` tool and giving up single-shot RAG — note that last option
-      converges with **Graph-less research mode** above, so decide whether this
-      ticket is a stopgap or that ticket's first step); how a *follow-up* that
-      genuinely needs new passages is told apart from one the history already
-      covers; and what the frontend shows when there's no retrieval to report
-      (`ChatMessage.tsx` renders the summary line only when a turn carries one,
-      so omitting the event should already degrade cleanly — verify).
-      *(From the `todos.md` inbox, 2026-08-06.)*
 
 ### Citations & graph data
 
