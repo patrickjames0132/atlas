@@ -91,9 +91,12 @@ export const HOME_TOUR: TourStep[] = [
     presentIf: '[data-tour="assistant-btn"]',
     title: 'Chat with your books',
     body:
-      'Ask a question and the assistant retrieves the most relevant passages from your ' +
-      'library and answers grounded in them, citing each by its source and page. ' +
-      'Scope it to specific sources with the 📚 picker above the ask bar.',
+      'Ask a real question and the assistant searches your library before it answers, ' +
+      'citing each passage by its source and page — and it tells you underneath what it ' +
+      'drew on, including when it answered from its own background knowledge instead. ' +
+      'Just saying hello stays a conversation; it only goes digging when there is ' +
+      'something to dig for. Scope it to specific sources with the 📚 picker above the ' +
+      'ask bar.',
   },
   {
     target: '[data-tour="sessions-btn"]',

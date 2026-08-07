@@ -22,6 +22,8 @@ import type {
   Beat,
   ChatMsg,
   LectureMode,
+  PaperRef,
+  ProvenanceEvent,
   RetrieveEvent,
   SourceRef,
   TraceEvent,
@@ -235,6 +237,30 @@ const transcriptSlice = createSlice({
       if (msg) msg.sourceRefs = action.payload
     },
     /**
+     * What actually grounded the finished answer — searched or not, what came
+     * back, what it ended up citing. Observed server-side, so it lands with
+     * the other end-of-answer fields.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the provenance counts.
+     */
+    provenanceSet(state, action: PayloadAction<ProvenanceEvent>) {
+      const msg = lastMsg(state)
+      if (msg) msg.provenance = action.payload
+    },
+    /**
+     * The papers this answer's `[n]` markers name, resolved to title + URL —
+     * the fallback that keeps a citation readable when there's no graph to
+     * resolve it against.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the `[n]` index → paper map.
+     */
+    paperRefsSet(state, action: PayloadAction<Record<string, PaperRef>>) {
+      const msg = lastMsg(state)
+      if (msg) msg.paperRefs = action.payload
+    },
+    /**
      * Clear only the Q&A chat, leaving every cached lecture untouched — the
      * Clear button's behavior when no lecture is selected. (A selected lecture
      * is cleared on its own via `lectureDropped`.)
@@ -270,6 +296,8 @@ export const {
   citedSet,
   refsSet,
   sourceRefsSet,
+  provenanceSet,
+  paperRefsSet,
   chatCleared,
 } = transcriptSlice.actions
 export default transcriptSlice.reducer

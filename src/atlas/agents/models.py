@@ -27,7 +27,6 @@ class Intent(StrEnum):
 
     LECTURE = "lecture"
     RESEARCH = "research"
-    LIBRARIAN = "librarian"
 
 
 class LectureMode(StrEnum):

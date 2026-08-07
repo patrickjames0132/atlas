@@ -17,7 +17,6 @@ in ``skills/workflows/``:
   nodes; intuition stays on the seed alone and bridge sees the whole visible
   set.
 * ``research``  — pure delegation to ``researcher.answer``.
-* ``librarian`` — pure delegation to ``librarian.answer``.
 
 **No model lives here yet — deliberately.** The locked design is hybrid
 (deterministic dispatch for known intents, the orchestrator's own model
@@ -36,7 +35,7 @@ import logging
 from typing import Iterator
 
 from ...services.graph import Node, Provider
-from .. import events, lecturer, librarian, researcher
+from .. import events, lecturer, researcher
 from ..models import Intent, LectureMode, PlayedLecture
 
 log = logging.getLogger(__name__)
@@ -124,14 +123,15 @@ def run(
 
     Args:
         intent: Which workflow — see ``models.Intent``.
-        question: The user's question (research and librarian).
-        seed: The seed paper (lecture and research).
-        nodes: The visible graph nodes (lecture and research).
+        question: The user's question (research only).
+        seed: The seed paper — required for a lecture, optional for research
+            (absent = the graph-free chat).
+        nodes: The visible graph nodes — same requirement as ``seed``.
         mode: The lecture mode (lecture only).
         target: The bridge target paper (lecture only, bridge mode).
-        history: Prior conversation turns (research and librarian — separate
-            stores; routes own persistence).
-        source_ids: Library scope (research and librarian).
+        history: Prior conversation turns (research only; the routes layer
+            keeps one store per chat surface and owns persistence).
+        source_ids: Library scope (research only).
         lectures: Lectures already delivered this session (research only) —
             extra grounding so the answer builds on them instead of repeating.
         provider: The graph's academic-data provider (research only) — the
@@ -153,17 +153,15 @@ def run(
             # frontier=latest; intuition stays on the seed alone.
             yield from lecturer.lecture(seed, _story_nodes(seed, nodes, mode), mode, target)
         elif intent is Intent.RESEARCH:
-            if question is None or seed is None or nodes is None:
-                yield events.Error(message="research needs a question, a seed, and the visible nodes")
+            if question is None:
+                yield events.Error(message="research needs a question")
                 return
+            # seed/nodes are optional since v6.7.0: without them this is the
+            # graph-free chat the librarian used to serve, run by the same
+            # agent with an empty numbered list.
             yield from researcher.answer(
                 question, seed, nodes, history, source_ids, lectures, provider
             )
-        elif intent is Intent.LIBRARIAN:
-            if question is None:
-                yield events.Error(message="librarian needs a question")
-                return
-            yield from librarian.answer(question, history, source_ids)
         else:
             yield events.Error(message=f"unknown intent {intent!r}")
             return

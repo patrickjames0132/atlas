@@ -2,7 +2,7 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The AI teacher: streaming lecture, agentic Q&A, and offline library chat.
+ * The AI teacher: streaming lecture, and agentic Q&A with a graph or without.
  * Each is a `text/event-stream` POST decoded through the shared readSSE.
  *
  * (Named `agents` to match the backend's `routes/agents.py` and the `agents`
@@ -209,6 +209,10 @@ export interface AskHandlers {
   onFigure?: (f: AnswerFigure) => void
   /** The library index for this answer's `[Sn]` markers (before any prose). */
   onSourceRefs?: (refs: Record<string, SourceRef>) => void
+  /** What grounded the answer, once it's finished. */
+  onProvenance?: (provenance: ProvenanceEvent) => void
+  /** The papers the finished prose cites, resolved to title + URL. */
+  onPaperRefs?: (refs: Record<string, PaperRef>) => void
   onDone?: () => void
   onError?: (message: string) => void
   /** Abort to cancel the stream mid-answer. */
@@ -256,6 +260,9 @@ export async function streamAsk(
     else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
     else if (event === 'source_refs')
       h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
+    else if (event === 'provenance') h.onProvenance?.(data as ProvenanceEvent)
+    else if (event === 'paper_refs')
+      h.onPaperRefs?.((data as { refs: Record<string, PaperRef> }).refs)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })
@@ -273,9 +280,42 @@ export interface SourceRef {
 }
 
 /**
- * Offline library chat: the one trace it emits — which passages the
- * retrieval pulled, and from which sources — shown above the grounded
- * answer. (`action` is optional only for old saved sessions.)
+ * One paper an answer's `[n]` marker points at, resolved server-side.
+ *
+ * With a graph open the frontend resolves `[n]` itself against the numbered
+ * list it holds, and a click spotlights the node. With no graph it holds
+ * nothing — every paper arrived mid-answer and there is no canvas — so this
+ * carries what a reader needs instead: the title, and somewhere to go.
+ */
+export interface PaperRef {
+  node_id: string
+  title: string
+  /** The paper's landing page; may be empty. */
+  url: string
+}
+
+/**
+ * What actually grounded an answer — observed server-side, never the model's
+ * own claim about where its knowledge came from. The transcript turns these
+ * counts into one plain line; see `provenanceLine`.
+ */
+export interface ProvenanceEvent {
+  /** Whether the student had a library to search at all. */
+  had_library: boolean
+  /** How many times the agent reached retrieval (0 = it never looked). */
+  searches: number
+  /** Passages retrieval handed back across those searches. */
+  passages: number
+  /** Distinct library sources the finished prose cites. */
+  cited_sources: number
+  /** Graph papers the finished prose cites. */
+  cited_papers: number
+}
+
+/**
+ * Legacy: the librarian's one-shot retrieval summary, from before v6.7.0 made
+ * retrieval a tool. Nothing emits it any more — kept so saved sessions from
+ * that era still render their turns.
  */
 export interface RetrieveEvent {
   action?: 'retrieval'
@@ -287,15 +327,17 @@ export interface RetrieveEvent {
 export interface AskSourcesHandlers {
   /** A chunk of answer prose arrived. */
   onToken: (text: string) => void
-  /** The retrieval summary (emitted once, before any prose). */
-  onRetrieve?: (r: RetrieveEvent) => void
-  /** A non-retrieval trace — the librarian showing (or failing to show) a
-   *  library figure. */
+  /** A tool step to render as a trace chip — a source search, or a library
+   *  figure being shown (or failing to show). */
   onTrace?: (t: TraceEvent) => void
-  /** A figure the librarian attached from an uploaded PDF. */
+  /** A figure the agent attached from an uploaded PDF. */
   onFigure?: (f: AnswerFigure) => void
   /** The library index for this answer's `[Sn]` markers (before any prose). */
   onSourceRefs?: (refs: Record<string, SourceRef>) => void
+  /** What grounded the answer, once it's finished. */
+  onProvenance?: (provenance: ProvenanceEvent) => void
+  /** The papers the finished prose cites, resolved to title + URL. */
+  onPaperRefs?: (refs: Record<string, PaperRef>) => void
   onDone?: () => void
   onError?: (message: string) => void
   signal?: AbortSignal
@@ -304,7 +346,7 @@ export interface AskSourcesHandlers {
 /**
  * Stream an answer grounded purely in the user's local library — no graph.
  * A single retrieve event, then prose tokens — interleaved with figure
- * traces/attachments when the librarian pulls a figure from an uploaded PDF.
+ * traces/attachments when the agent pulls a figure from an uploaded PDF.
  *
  * @param body The question, a session id for follow-up context, and optional
  *             source_ids to scope retrieval to a subset of sources.
@@ -322,18 +364,15 @@ export async function streamAskSources(
   })
   await readSSE(res, (event, data) => {
     if (event === 'token') h.onToken((data as { text: string }).text)
-    else if (event === 'trace') {
-      // Two trace flavors share the frame name: the one-shot retrieval
-      // summary, and (since the librarian can show figures) figure traces.
-      const trace = data as { action?: string }
-      if (trace.action === 'retrieval' || trace.action === undefined) {
-        h.onRetrieve?.(data as RetrieveEvent)
-      } else {
-        h.onTrace?.(data as TraceEvent)
-      }
-    } else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
+    // Every trace is a tool step now — the one-shot retrieval summary went
+    // away with the librarian in v6.7.0.
+    else if (event === 'trace') h.onTrace?.(data as TraceEvent)
+    else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
     else if (event === 'source_refs')
       h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
+    else if (event === 'provenance') h.onProvenance?.(data as ProvenanceEvent)
+    else if (event === 'paper_refs')
+      h.onPaperRefs?.((data as { refs: Record<string, PaperRef> }).refs)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })

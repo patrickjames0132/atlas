@@ -235,7 +235,7 @@ Thin wrappers over `services/sources`. Points worth knowing:
 | --- | --- | --- |
 | `POST /api/lecture` | `lecture` | streamed lecture over the visible graph |
 | `POST /api/ask` | `research` | agentic Q&A over the graph |
-| `POST /api/ask_sources` | `librarian` | offline library chat |
+| `POST /api/ask_sources` | `research` | chat with no graph open (library + search) |
 
 (The route face of the `agents` package — a deliberate name-cousin,
 different full paths.) Each endpoint validates, builds typed inputs, and
@@ -263,7 +263,7 @@ Design decisions worth knowing:
   `config.server.history_turns` pairs.
 - **No availability gate on `/api/ask_sources`** (the old route 400'd when
   embeddings didn't load): retrieval self-degrades to lexical-only, and an
-  empty library gets the librarian's friendly no-hits answer — a working
+  empty library just means the agent's source search finds nothing — a working
   degraded feature shouldn't be refused. The sources drawer's `available`
   flag still tells the UI the semantic story.
 - **SSE `error` frames carry the orchestrator's message text** — like

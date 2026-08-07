@@ -80,11 +80,6 @@
         "extras": {}
       },
       {
-        "id": "librarian",
-        "model": "anthropic:claude-sonnet-4-6",
-        "extras": {}
-      },
-      {
         "id": "lecturer",
         "model": "anthropic:claude-sonnet-4-6",
         "extras": {

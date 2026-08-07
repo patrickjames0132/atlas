@@ -2,8 +2,8 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * Render an agent answer as Markdown + LaTeX. The researcher and librarian
- * both reply in Markdown (headers, bold, lists, tables) with `$…$` math and
+ * Render an agent answer as Markdown + LaTeX. The researcher replies in
+ * Markdown (headers, bold, lists, tables) with `$…$` math and
  * inline `[n]` citation markers; this turns all three into real output:
  *   • Markdown structure via remark-gfm,
  *   • math via remark-math + rehype-katex (the same KaTeX the rest of the app
@@ -26,7 +26,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import type { SourceRef } from '../../api'
+import type { PaperRef, SourceRef } from '../../api'
 import { remarkCite } from './remarkCite'
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
@@ -41,11 +41,15 @@ export default function AnswerMarkdown({
   text,
   refs,
   sourceRefs,
+  paperRefs,
   onRefClick,
 }: {
   text: string
   /** `[n]` → node-id map for this answer (undefined on old saves / no refs). */
   refs?: Record<string, string>
+  /** `[n]` → paper (title + URL), the fallback when there's no graph to
+   *  resolve a marker against. */
+  paperRefs?: Record<string, PaperRef>
   /** `[Sn]` index → library source, for rendering a marker as its real title
    *  (undefined on old saves, or when the turn cited no library passage). */
   sourceRefs?: Record<string, SourceRef>
@@ -64,19 +68,38 @@ export default function AnswerMarkdown({
       // index resolves to a node; otherwise it degrades to the bare `[n]` text.
       citeref: ({ index, children }: { index?: string; children?: ReactNode }) => {
         const nodeId = index && refs ? refs[index] : undefined
-        if (!nodeId || !onRefClick) return <>{children}</>
+        if (nodeId && onRefClick) {
+          return (
+            <button
+              type="button"
+              className="cite-ref"
+              title="Show this paper on the graph"
+              onClick={(event) => {
+                event.stopPropagation() // don't also trigger the whole-answer re-light
+                onRefClick(nodeId)
+              }}
+            >
+              {children}
+            </button>
+          )
+        }
+        // No graph to point at: the marker would otherwise be dead text with
+        // nothing to say which paper it named. Fall back to the server-resolved
+        // title, linking out where the paper actually lives.
+        const paper = index && paperRefs ? paperRefs[index] : undefined
+        if (!paper) return <>{children}</>
+        if (!paper.url) return <span className="source-ref">({paper.title})</span>
         return (
-          <button
-            type="button"
+          <a
             className="cite-ref"
-            title="Show this paper on the graph"
-            onClick={(event) => {
-              event.stopPropagation() // don't also trigger the whole-answer re-light
-              onRefClick(nodeId)
-            }}
+            href={paper.url}
+            target="_blank"
+            rel="noreferrer"
+            title={paper.title}
+            onClick={(event) => event.stopPropagation()}
           >
-            {children}
-          </button>
+            ({paper.title})
+          </a>
         )
       },
       // A library citation from remarkCite. The model wrote `[S2, p.460]`; the
@@ -102,7 +125,7 @@ export default function AnswerMarkdown({
         )
       },
     }),
-    [refs, sourceRefs, onRefClick],
+    [refs, sourceRefs, paperRefs, onRefClick],
   )
 
   return (

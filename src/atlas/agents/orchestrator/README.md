@@ -17,7 +17,6 @@ as deterministic code) while each sub-agent owns a single competence.
 orchestrator.run(intent, **payload)                    main.py
   lecture   → lecturer.lecture(seed, nodes, mode, target)
   q&a       → researcher.answer(question, seed, nodes, history, source_ids)
-  librarian → librarian.answer(question, history, source_ids)
   always    → Done on success | Error on failure/bad input — last, always
 ```
 
@@ -73,7 +72,7 @@ the FRONTIER narration; see the lecturer README.)
   `POST /api/lecture` → `lecture_beats`, `POST /api/ask` →
   `answer_agentic`, `POST /api/ask_sources` → `answer_from_sources`. All
   three become `orchestrator.run(...)` with intents `lecture` / `research`
-  / `librarian`, serializing each typed event as an SSE frame named by its
+, serializing each typed event as an SSE frame named by its
   `type` tag. Session history stays in routes (locked decision — agents
   receive history, never store it).
 - **Nothing else.** Sub-agents never call the orchestrator (no cycles), and

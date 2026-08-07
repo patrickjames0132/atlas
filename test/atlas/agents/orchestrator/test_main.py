@@ -47,14 +47,19 @@ NODES = [
 ]
 
 
-def test_librarian_intent_relays_and_appends_done(monkeypatch):
-    def fake_answer(question, history=None, source_ids=None):
-        yield events.RetrievalTrace(found=1, sources=["Deep Learning"])
+def test_research_without_a_graph_is_the_library_chat(monkeypatch):
+    """The graph-free path the librarian used to own: same intent, same agent,
+    no seed and no nodes."""
+    seen = {}
+
+    def fake_answer(question, seed=None, nodes=None, *args, **kwargs):
+        seen["seed"], seen["nodes"] = seed, nodes
         yield events.Token(text="From your book.")
 
-    monkeypatch.setattr(orchestrator_main.librarian, "answer", fake_answer)
-    out = list(run(Intent.LIBRARIAN, question="q"))
-    assert [event.type for event in out] == ["trace", "token", "done"]
+    monkeypatch.setattr(orchestrator_main.researcher, "answer", fake_answer)
+    out = list(run(Intent.RESEARCH, question="q"))
+    assert [event.type for event in out] == ["token", "done"]
+    assert seen == {"seed": None, "nodes": None}
 
 
 def test_research_intent_passes_everything_through(monkeypatch):
@@ -130,12 +135,12 @@ def test_directional_lecture_sorts_undated_nodes_last(monkeypatch):
 
 
 def test_a_failing_workflow_ends_with_error_not_done(monkeypatch):
-    def broken(question, history=None, source_ids=None):
+    def broken(question, *args, **kwargs):
         yield events.Token(text="starting...")
         raise RuntimeError("api down")
 
-    monkeypatch.setattr(orchestrator_main.librarian, "answer", broken)
-    out = list(run(Intent.LIBRARIAN, question="q"))
+    monkeypatch.setattr(orchestrator_main.researcher, "answer", broken)
+    out = list(run(Intent.RESEARCH, question="q"))
     assert [event.type for event in out] == ["token", "error"]
     assert "api down" in out[-1].message
 
@@ -143,5 +148,6 @@ def test_a_failing_workflow_ends_with_error_not_done(monkeypatch):
 def test_unknown_intent_and_missing_args_yield_error():
     assert [event.type for event in run("mystery")] == ["error"]  # type: ignore[arg-type]
     assert [event.type for event in run(Intent.LECTURE)] == ["error"]
-    assert [event.type for event in run(Intent.RESEARCH, question="why?")] == ["error"]
-    assert [event.type for event in run(Intent.LIBRARIAN)] == ["error"]
+    # A question with no graph is legitimate now (the graph-free chat), so the
+    # only missing-arg error left for research is the question itself.
+    assert [event.type for event in run(Intent.RESEARCH)] == ["error"]

@@ -83,7 +83,7 @@ def get_source_figures(source_id: str, *, refresh: bool = False) -> dict:
 def resolve_page_figure(source_id: str, page: int, figure: int) -> tuple[dict | None, str]:
     """Resolve "figure N on page P of source S" against the mined manifest.
 
-    The shared core of the researcher's and the librarian's
+    The core of the researcher's
     ``show_source_figure`` tools: both address figures the way passages are
     cited (source + page), and both need the same steerable error text when
     the address misses; only budgets/traces/events differ, and those stay in

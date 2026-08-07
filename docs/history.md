@@ -254,6 +254,83 @@
 
 ### AI teacher & lectures
 
+- [x] **The librarian is retired: one researcher, retrieval as a tool, honest
+      provenance** *(v6.7.0)* — a consolidation of three tickets that turned
+      out to be one design question ("the librarian searches even when I say
+      hi", "may the researcher answer from its own knowledge", and "graph-less
+      research mode").
+
+      **The problem.** `librarian.answer()` called `sources.search()` as its
+      first statement, before the model was engaged at all. Saying "hi" ran a
+      hybrid FTS5 + vector search over the student's books, which either
+      returned arbitrary nearest neighbours (the model then answered a greeting
+      out of whatever surfaced) or returned nothing and met the greeting with a
+      canned "I couldn't find anything in your library about that". No prompt
+      could fix it — the model never got a say. Quieter but worse in ordinary
+      use: the retrieval query *was* the raw user question, so a follow-up like
+      "what about the second one?" went to the index verbatim.
+
+      **The shape.** The librarian was already a strict subset of the
+      researcher — same retrieval, same figure tool, same event bridge, same
+      structured-output pattern; the only real difference was *when* retrieval
+      fired. Making retrieval a tool left nothing behind, so the package, its
+      config entry, its workflow playbook, its settings knobs, `Intent.LIBRARIAN`
+      and `RetrievalTrace` all went. `/api/ask_sources` now runs the researcher
+      with no seed and no nodes — that absence *is* graph-free mode, and the
+      graph-less research ticket fell out of it for free. The two chats keep
+      separate history stores, as before.
+
+      **Grounding-by-construction had to be replaced, not dropped.** When
+      retrieval ran before the model, the model *could not* answer without the
+      passages; as a tool it can skip them and answer from memory, which a
+      student would reasonably mistake for their own book talking. Prompting
+      harder was the approach already known to fail here (the agent skips
+      `show_figure` when asked outright), so the guard is structural: `Answer`
+      gained `kind: conversational | answered`, and an output validator
+      (`_must_have_looked`) raises `ModelRetry` when an `answered` turn never
+      reached retrieval despite having a library. It asks whether the library
+      was **consulted**, not whether it helped — an empty search satisfies it,
+      or an empty library would make every answer unreachable.
+
+      **Recall is allowed, and the ordering was the interesting part.** The
+      obvious rule — "fall back to your own knowledge only when sources can't
+      answer" — fails on the case that matters most: if a book is *outdated*
+      it still answers, so retrieval succeeds, fallback never fires, and the
+      stale answer ships with no signal. Strict fallback can only trigger when
+      a source is silent, never when it's wrong. So the enforcement is on
+      **looking**, not on ordering the prose: always search first, answer from
+      sources where they speak, add recall where they don't, and flag
+      disagreement explicitly when the field has moved on.
+
+      **Provenance is derived, not declared.** A third `parametric` enum case
+      was considered and rejected — real teaching answers are mixed (the book
+      supplies the objective, recall supplies the background it assumes), so a
+      turn-level provenance label misreports the common case in both
+      directions. `kind` stays enforcement-only. What the UI shows instead is
+      computed from what the server *watched happen*: searches run, passages
+      returned, sources and papers the finished prose cites (`Provenance`).
+      A model has no reliable access to which of its sentences came from a
+      passage and which from its weights, so asking it would produce a
+      confident label with nothing behind it. The wording lives in the
+      frontend (`transcript/provenance.ts`), which distinguishes "nothing in
+      your library matched — answered from background knowledge" from plain
+      recall; those are very different things to tell a student.
+
+      **Two bugs came out of it, both in `docs/bugs.md`:** a rejected answer
+      streaming to the screen before the validator could reject it (output
+      validators run *after* the output tool call completes, but prose streams
+      out of that same call), and paper citations going dead in graph-free mode
+      — the same "resolution lives on only one side of the wire" pattern
+      v6.6.0 had just fixed for library sources, caught by Patrick in browser
+      testing. Fixed by a `PaperRefs` event carrying title + URL, so `[n]`
+      renders as a linked paper title when there's no graph to point at.
+
+      Shipped with the graph-free preference for recall over `search_papers`
+      as a **soft** prompt rule rather than a hard hook, deliberately — the new
+      provenance line makes "does it ever actually use recall?" measurable, so
+      that question went to the Backlog to be answered from real use instead of
+      guessed at.
+
 - [x] **A failed figure chip drops the source and mislabels the figure**
       *(v6.1.1)* — a failed `show_source_figure` rendered as a bare "Tried
       **Figure 1**", naming neither the source it reached into nor the figure

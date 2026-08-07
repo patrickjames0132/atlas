@@ -191,8 +191,8 @@ def source_order(hits: list[dict]) -> list[dict]:
 
     The library counterpart to a graph's node list: what ``source_lines``
     numbers and ``source_refs`` resolves against, derived from whatever
-    retrieval actually returned (the librarian can only cite what it was
-    handed, unlike the researcher, which is shown the whole library).
+    retrieval actually returned — what a graph-free turn can cite, as
+    against the whole library the researcher is shown when a graph is open.
 
     Args:
         hits: Passage dicts from ``services.sources.search``.
@@ -235,6 +235,31 @@ def source_lines(sources: Sequence[dict]) -> str:
     return "\n".join(lines)
 
 
+def paper_refs(nodes: Sequence[Node], text: str) -> dict[str, dict]:
+    """Resolve the ``[n]`` markers prose used to readable paper references.
+
+    The richer sibling of ``refs_from_text``: same scan, same numbering, but
+    it carries the title and URL rather than only the node id. With a graph
+    open the frontend resolves ``[n]`` itself against the list it already
+    holds, so the id is enough; with no graph it holds nothing, and a bare id
+    points at no canvas — the marker would render as dead text with no way to
+    learn which paper it named.
+
+    Args:
+        nodes: The same node sequence ``node_lines`` numbered.
+        text: The finished answer prose.
+
+    Returns:
+        ``{"3": {"node_id": ..., "title": ..., "url": ...}, ...}`` — keyed by
+        the marker's number as a string, referenced in-range indices only.
+    """
+    refs: dict[str, dict] = {}
+    for token, node_id in refs_from_text(nodes, text).items():
+        node = nodes[int(token) - 1]
+        refs[token] = {"node_id": node_id, "title": node.title, "url": node.url or ""}
+    return refs
+
+
 def format_passages(hits: list[dict], sources: Sequence[dict]) -> str:
     """Render retrieved library passages for a prompt.
 
@@ -246,7 +271,7 @@ def format_passages(hits: list[dict], sources: Sequence[dict]) -> str:
         hits: Passage dicts from ``services.sources.search`` (each carrying
             ``source_id``, ``source_title``, optional ``page``, and ``text``).
         sources: The numbered library the tags index into, as from
-            ``source_order`` (librarian) or the whole library (researcher).
+            ``source_order`` (a turn's retrieved set) or the whole library.
 
     Returns:
         One passage per paragraph, tagged ``[Sn, p.N]``, whitespace collapsed.

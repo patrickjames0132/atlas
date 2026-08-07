@@ -7,7 +7,7 @@ hand-rolled Anthropic SDK loops.
 
 **Status: COMPLETE.** The shared infrastructure (`events.py`,
 `traversal.py`, `factory.py`, `prompts.py`, `skills/`), the
-model-driven agents (`query_analyst`, `summarizer`, `librarian`,
+model-driven agents (`query_analyst`, `summarizer`,
 `lecturer`, `researcher`),
 and the `orchestrator` dispatcher are built and tested; the old
 `teacher/` package is fully retired. What remains is wiring: routes call
@@ -29,10 +29,10 @@ protocol for every workflow, declared in one file.
 | Event       | Emitted by            | Meaning                                                        |
 | ----------- | --------------------- | -------------------------------------------------------------- |
 | `Beat`      | lecturer              | one narration paragraph + heading + nodes to light up          |
-| `Token`     | researcher, librarian      | a chunk of streamed answer prose                               |
-| `Trace`     | researcher, orchestrator, librarian | "watch the agent work" — one variant per action (below) |
+| `Token`     | researcher                 | a chunk of streamed answer prose                               |
+| `Trace`     | researcher, orchestrator   | "watch the agent work" — one variant per action (below) |
 | `Discovery` | researcher, orchestrator   | papers + edges to merge into the live graph                    |
-| `Figure`    | researcher, librarian | a real figure attached to the answer — a paper's, or one mined from an uploaded PDF (`index=None`) |
+| `Figure`    | researcher | a real figure attached to the answer — a paper's, or one mined from an uploaded PDF (`index=None`) |
 | `Cited`     | researcher            | final event: the node ids the answer draws on                  |
 | `Done`      | every workflow        | clean finish — always last on success                          |
 | `Error`     | every workflow        | failure — always last, so the frontend never hangs             |
@@ -182,8 +182,8 @@ the backend knows which of the user's sources a turn retrieved. The map is
 keyed by index alone and carries no page — the page is already in the marker
 — which is what lets it be emitted *before* the prose, so a marker renders as
 a real title the moment it streams instead of showing raw until the answer
-lands. Every agent that shows library passages uses this: librarian,
-researcher (`search_sources`), and lecturer (intuition mode). `history(turns)`
+lands. Both agents that show library passages use this: the researcher
+(`search_sources`) and the lecturer (intuition mode). `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI
 message history.
 
@@ -195,7 +195,7 @@ follow-up turn.
 ## Decisions log (locked before design)
 
 1. **Hybrid orchestration with intent hints.** Routes always call the
-   orchestrator, passing the UI's intent (`lecture` / `research` / `librarian`).
+   orchestrator, passing the UI's intent (`lecture` / `research`).
    Known intents dispatch straight to the matching sub-agent per its
    `skills/workflows/` playbook — no routing LLM call. The orchestrator's
    own model engages only when intent is ambiguous or a workflow needs
@@ -223,7 +223,7 @@ agents/
   factory.py         ← shared: config.llm entry -> live PydanticAI model
   streams.py         ← shared: the sync event bridge (drive a run, yield events)
   prompts.py         ← shared: skills -> instructions, passages/history -> model input
-  library_figures.py ← shared: the show_source_figure core (researcher + librarian)
+  library_figures.py ← the show_source_figure core (resolve/dedupe/slot)
   skills/            ← shared: skills.md files any sub-agent's config may load
     numbered-papers.md      the index-not-id grounding protocol
     teaching-voice.md       the "sharp, friendly teacher" persona rules
@@ -231,12 +231,10 @@ agents/
     figures.md              real figures only; <<FIG n>> marker placement
     workflows/              ← the orchestrator's playbooks, one per intent
       lecture.md              the lecturer (narrates the visible graph as-is)
-      research.md                  the researcher Q&A
-      librarian.md            the librarian RAG chat
+      research.md             the researcher Q&A (with a graph, or without)
   orchestrator/      ← an agent: main.py, tools.py, config.py, README.md
   lecturer/          ← an agent:    "        "         "          "
   researcher/             ← an agent:    "        "         "          "
-  librarian/         ← an agent:    "        "         "          "
   query_analyst/     ← an agent:    "        "         "          "
   summarizer/        ← an agent: main.py, config.py, README.md (no tools)
 ```
@@ -355,23 +353,14 @@ grounded in what it actually read.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`,
   `figures`.
 
-### `librarian` — offline library chat *(built)*
-
-Graph-free RAG over the user's own uploaded sources. See its own README.
-
-- **Input:** question, conversation history, optional scope. Retrieval
-  (`services.sources.search` — RRF over FTS5 + vectors) runs *before* the
-  agent, deterministically; the passages go in as context.
-- **Tools:** none.
-- **Output:** streamed prose citing inline by resolvable marker (`[S1,
-  p.243]`, rendered to the reader as the source's real title and page). A
-  `RetrievalTrace` names the retrieved sources first, followed by a
-  `SourceRefs` map resolving the markers; empty retrieval yields a friendly
-  "nothing found" answer without engaging the model.
-- **Skills:** `teaching-voice`, `citation-discipline`.
-- **Note:** the whole `workflows/librarian.md` playbook lives in
-  `librarian.answer(...)` — the orchestrator's `librarian` intent just
-  calls it.
+> **Retired in v6.7.0: `librarian`.** It was a graph-free RAG agent that
+> retrieved *before* the model ran, which meant it searched the student's
+> books to answer "hi" — no prompt could fix that, because the model never
+> got a say. It was also a strict subset of the researcher (same retrieval,
+> same figure tool, same event bridge, same structured output); the only
+> real difference was *when* retrieval fired. Making retrieval a tool left
+> nothing behind, so the package went and the researcher took both chats.
+> See `docs/history.md`.
 
 ### `query_analyst` — seed-search query expansion *(built)*
 
@@ -405,14 +394,14 @@ in detail):
   behind the Q&A path, `answer_from_sources` behind `POST /api/ask_sources` —
   and serializes their `("kind", data)` tuples as SSE frames. The rewrite
   replaces all of that with one entry point: routes call the
-  **orchestrator** with an intent hint (`lecture` / `research` / `librarian`),
+  **orchestrator** with an intent hint (`lecture` / `research`),
   serialize the typed `Event` stream by its `type` tag, and keep session
   history persistence for themselves (a locked decision — agents receive
   history, they never store it).
 
 Inside the package, the shared root modules exist for the sub-agents:
 every agent builds its model via `factory.build_model` and its instruction
-parts via `prompts.skill`; the librarian (and next the researcher) converts route
+parts via `prompts.skill`; the researcher converts route
 turns with `prompts.history`; the lecturer (and next the researcher) numbers
 papers with `prompts.node_lines` / `idx_to_id`; every workflow yields
 `events` models; `traversal.py` serves the researcher's expand/search tools.

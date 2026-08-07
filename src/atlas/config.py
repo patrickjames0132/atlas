@@ -323,14 +323,6 @@ class ResearcherExtras(ConfigModel):
     )
 
 
-class LibrarianExtras(ConfigModel):
-    """The librarian's one knob."""
-
-    figures: NonNegativeInt = Field(
-        default=2, description="show_source_figure calls per answer (0 disables figures)."
-    )
-
-
 #: Which typed knob model validates each agent's ``extras`` — the registry
 #: ``AgentConfig`` looks itself up in. An agent absent from here has no
 #: tunable knobs and must leave ``extras`` empty. Adding a knob means adding
@@ -339,7 +331,6 @@ class LibrarianExtras(ConfigModel):
 AGENT_EXTRAS: dict[str, type[ConfigModel]] = {
     "lecturer": LecturerExtras,
     "researcher": ResearcherExtras,
-    "librarian": LibrarianExtras,
 }
 
 

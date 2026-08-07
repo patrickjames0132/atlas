@@ -23,10 +23,11 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from typing import Iterator
+from typing import Iterator, Literal
 
 from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent, Tool, UsageLimits
+from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.messages import (
     PartDeltaEvent,
     PartStartEvent,
@@ -57,10 +58,20 @@ class Answer(BaseModel):
 
     ``cited`` holds numbered-list indices (the model never sees node ids) —
     mapped to ids and merged with the papers it actually read on the way out.
+
+    ``kind`` exists for **enforcement, not provenance**. It says whether this
+    turn was a substantive answer or just conversation ("hi", "thanks", "what
+    can you do?"), which is what ``_must_have_looked`` needs to decide whether
+    skipping the library was legitimate. It deliberately does *not* say where
+    the answer's knowledge came from: real teaching answers are mixed (the
+    book supplies the objective, recall supplies the background it assumes),
+    so a turn-level provenance label would misreport the common case in both
+    directions. Provenance is derived instead — see ``_provenance``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
+    kind: Literal["conversational", "answered"]
     text: str
     cited: list[int]
 
@@ -86,6 +97,19 @@ _show_source_figure_tool: Tool[ResearcherDeps] = Tool(
 # concurrently by default, but these tools mutate shared deps state —
 # budgets, and above all the numbered list, whose indices must be assigned
 # in call order.
+#: What the model is told when it answered substantively without ever
+#: consulting a library it had. Phrased as an instruction, not a scolding —
+#: it's a retry prompt, and the next attempt has to know what to do.
+_MUST_SEARCH_RETRY = (
+    "You answered without searching the student's library. Their own uploaded "
+    "sources may cover this, and an answer that ignores the textbook they "
+    "uploaded is a worse answer. Call search_sources first, then answer — "
+    "drawing on what it returns where it speaks to the question, and saying "
+    "so plainly if it doesn't. (If this turn was only conversational, set "
+    "kind to 'conversational' instead.)"
+)
+
+
 agent: Agent[ResearcherDeps, Answer] = Agent(
     factory.build_model(AGENT_ID),
     deps_type=ResearcherDeps,
@@ -100,6 +124,69 @@ agent: Agent[ResearcherDeps, Answer] = Agent(
         _show_source_figure_tool,
     ],
 )
+
+
+@agent.output_validator
+def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer:
+    """Reject a substantive answer that never consulted an available library.
+
+    This is what replaces the librarian's grounding-by-construction. When
+    retrieval ran *before* the model, the model could not answer without the
+    passages in front of it; as a tool it can simply not call it and answer
+    from memory, and the student will reasonably believe the answer came from
+    their book. Prompting alone is known to be insufficient here — the agent
+    already skips ``show_figure`` when asked outright — so the guard is
+    structural: an ``answered`` turn that never reached retrieval is bounced
+    back for another attempt.
+
+    Two deliberate limits. It asks whether the library was **consulted**, not
+    whether it *helped*: a search returning nothing still satisfies it, or an
+    empty library would make every answer unreachable. And it never fires
+    without a library — there is nothing to look in, and ``search_sources``
+    isn't even registered.
+
+    Args:
+        ctx: The run context carrying the researcher's deps.
+        output: The model's structured answer.
+
+    Returns:
+        The answer unchanged, when the guard is satisfied.
+
+    Raises:
+        ModelRetry: When a substantive answer skipped an available library.
+    """
+    deps = ctx.deps
+    if output.kind == "answered" and deps.has_sources and deps.source_searches_run == 0:
+        raise ModelRetry(_MUST_SEARCH_RETRY)
+    return output
+
+
+def _doomed(args_buffer: str, deps: ResearcherDeps) -> bool:
+    """Whether the in-flight answer is one ``_must_have_looked`` will bounce.
+
+    The guard can only run once the output tool call is complete — by which
+    point, without this, the whole rejected answer would already have streamed
+    to the student, only to be replaced by the retry. So the same condition is
+    evaluated *while* the args stream and prose is withheld until the attempt
+    is known-good. Streaming therefore implies acceptance: the two predicates
+    are identical, and no tool runs between them to change the answer.
+
+    Reading ``kind`` out of partial JSON is safe on one character, because the
+    two values disagree at the first: ``a``nswered vs ``c``onversational. An
+    empty read means it hasn't arrived — hold, don't guess. (If a model ever
+    emits ``text`` before ``kind``, this degrades to buffering the answer and
+    flushing it whole, which is slower but never wrong.)
+
+    Args:
+        args_buffer: The output tool call's JSON args accumulated so far.
+        deps: The run's deps, for the observed search count.
+
+    Returns:
+        True while this attempt would be rejected, so its prose must be held.
+    """
+    if not (deps.has_sources and deps.source_searches_run == 0):
+        return False  # nothing to violate — no library, or it already looked
+    return not streams.partial_text(args_buffer, "kind").startswith("c")
 
 
 def _library_context(library: list[dict]) -> str:
@@ -159,7 +246,7 @@ def _lectures_context(lectures: list[PlayedLecture]) -> str:
 
 
 def _prompt(
-    seed: Node,
+    seed: Node | None,
     nodes: list[Node],
     library: list[dict],
     question: str,
@@ -168,8 +255,10 @@ def _prompt(
     """Assemble the question turn: grounding context + the question.
 
     Args:
-        seed: The seed paper (heads the grounding context).
-        nodes: The visible graph nodes, as the numbered grounding list.
+        seed: The seed paper (heads the grounding context), or None when no
+            graph is open — the graph-free chat that replaced the librarian.
+        nodes: The visible graph nodes, as the numbered grounding list. Empty
+            in graph-free mode; ``search_papers`` can still fill it.
         library: The user's source library (listed so the model can scope
             search_sources); empty when there is none.
         question: The user's question.
@@ -179,10 +268,33 @@ def _prompt(
     Returns:
         The full user prompt.
     """
-    context = (
-        f"SEED paper: {seed.title}\n\n"
-        f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}"
-    )
+    if seed is not None:
+        context = (
+            f"SEED paper: {seed.title}\n\n"
+            f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}"
+        )
+    else:
+        # Graph-free: no seed, no numbered papers yet. search_papers still
+        # works and numbers what it finds, so the list starts empty rather
+        # than being absent — this is the researcher with an empty graph.
+        # But the default reach is different here: with no graph the student
+        # is in "chat with my books" mode, and pulling in literature they
+        # didn't ask for is slower and more surprising than simply knowing
+        # the answer. So the ordering flips — explain, then search only when
+        # explaining honestly isn't enough.
+        context = (
+            "No citation graph is open — the student is asking outside any "
+            "paper neighborhood, so treat this as a conversation about their "
+            "own material and the subject itself. After searching their "
+            "library, answer from it where it speaks and OTHERWISE FROM YOUR "
+            "OWN KNOWLEDGE: explaining a concept you know well is the right "
+            "response here, not a literature search.\n"
+            "Use search_papers only when the question genuinely needs the "
+            "literature — what's recent or current, who published a specific "
+            "result, what the state of the art is — or when you'd otherwise "
+            "have to guess. Papers you find are numbered as they arrive and "
+            "can be cited [n] as usual."
+        )
     if library:
         context += "\n\n" + _library_context(library)
     if lectures:
@@ -196,8 +308,8 @@ def _prompt(
 
 def answer(
     question: str,
-    seed: Node,
-    nodes: list[Node],
+    seed: Node | None = None,
+    nodes: list[Node] | None = None,
     history: list[dict] | None = None,
     source_ids: list[str] | None = None,
     lectures: list[PlayedLecture] | None = None,
@@ -207,9 +319,12 @@ def answer(
 
     Args:
         question: The user's question.
-        seed: The seed paper (heads the grounding context).
+        seed: The seed paper (heads the grounding context), or None for the
+            graph-free chat — asking straight over the library, with no
+            neighborhood open. Both halves of the same agent since v6.7.0;
+            the librarian that used to own this path is gone.
         nodes: The visible graph nodes — the initial numbered list; grows as
-            the agent expands and searches.
+            the agent expands and searches. None/empty in graph-free mode.
         history: Prior turns as ``[{role, content}, ...]``; malformed turns
             are skipped.
         source_ids: User-selected library scope. ``None`` = no scope (the
@@ -224,9 +339,11 @@ def answer(
             the agent stays in the same backend (and id space) as the graph.
 
     Yields:
-        ``Trace`` / ``Discovery`` / ``Figure`` events live as the agent
-        works, then ``Token`` deltas of the answer prose, and finally one
-        ``Cited`` — the papers it read plus any it named, as node ids.
+        One ``SourceRefs`` up front when a library is in play, then ``Trace``
+        / ``Discovery`` / ``Figure`` events live as the agent works, then
+        ``Token`` deltas of the answer prose, and finally ``Cited`` — the
+        papers it read plus any it named, as node ids — and ``Provenance``,
+        the observed record of what actually grounded the answer.
 
     Raises:
         Exception: Model/stream failures propagate — the caller ends the
@@ -238,9 +355,10 @@ def answer(
         wanted = set(source_ids)
         library = [source for source in library if source.get("id") in wanted]
 
+    graph_nodes = list(nodes or [])
     deps = ResearcherDeps(
-        nodes=list(nodes),
-        known_ids={node.id for node in nodes},
+        nodes=graph_nodes,
+        known_ids={node.id for node in graph_nodes},
         scope=source_ids,
         # No availability probe: retrieval degrades by itself (lexical-only
         # without the embedder), so an existing library is enough — and an
@@ -302,7 +420,7 @@ def answer(
             answer_grew = True
         elif isinstance(event, AgentRunResultEvent):
             final = event.result.output
-        if answer_grew:
+        if answer_grew and not _doomed(args_buffer, deps):
             grown = streams.partial_text(args_buffer)
             if len(grown) > len(emitted):
                 yield events.Token(text=grown[len(emitted) :])
@@ -320,3 +438,20 @@ def answer(
         if node_id not in cited:
             cited.append(node_id)
     yield events.Cited(node_ids=cited)
+    # The papers the prose actually names, resolved to title + URL. With a
+    # graph the frontend resolves [n] itself and this is redundant; with none
+    # it's the only thing standing between the reader and a dead marker.
+    paper_refs = prompts.paper_refs(deps.nodes, final.text)
+    if paper_refs:
+        yield events.PaperRefs(
+            refs={key: events.PaperRef(**ref) for key, ref in paper_refs.items()}
+        )
+    yield events.Provenance(
+        had_library=deps.has_sources,
+        searches=deps.source_searches_run,
+        passages=deps.source_hits,
+        # Counted off the finished prose, not claimed: which [Sn] markers the
+        # answer actually kept, and which papers it cites.
+        cited_sources=len(prompts.source_refs(deps.sources, final.text)),
+        cited_papers=len(cited),
+    )
