@@ -122,14 +122,81 @@ def test_refs_from_text_splits_combined_markers():
     }
 
 
-def test_format_passages_tags_source_and_page():
-    hits = [
-        {"source_title": "Deep Learning", "page": 243, "text": "Momentum   helps\nconverge."},
-        {"source_title": "A Web Page", "page": None, "text": "Regularization notes."},
+def _library_hits() -> list[dict]:
+    """Two passages from two sources, one of them page-less (a web page).
+
+    Returns:
+        The passage dicts, as ``services.sources.search`` returns them.
+    """
+    return [
+        {
+            "source_id": "src-dl",
+            "source_title": "Deep Learning",
+            "page": 243,
+            "text": "Momentum   helps\nconverge.",
+        },
+        {
+            "source_id": "src-web",
+            "source_title": "A Web Page",
+            "page": None,
+            "text": "Regularization notes.",
+        },
     ]
-    rendered = prompts.format_passages(hits)
+
+
+def test_format_passages_tags_the_marker_to_copy():
+    hits = _library_hits()
+    rendered = prompts.format_passages(hits, prompts.source_order(hits))
+    # The tag IS the citation marker — the model copies it rather than
+    # rewording a title, and a page-less source drops the page half.
+    assert "[S1, p.243] Momentum helps converge." in rendered
+    assert "[S2] Regularization notes." in rendered
+
+
+def test_format_passages_falls_back_to_the_title_when_unnumbered():
+    # A surface with no numbered library (nothing can resolve a marker there)
+    # still shows the passage, attributed by title — never silently dropped.
+    rendered = prompts.format_passages(_library_hits(), [])
     assert "[Deep Learning, p.243] Momentum helps converge." in rendered
     assert "[A Web Page] Regularization notes." in rendered
+
+
+def test_source_order_dedupes_by_source_first_seen():
+    hits = _library_hits() + [
+        {"source_id": "src-dl", "source_title": "Deep Learning", "page": 12, "text": "More."}
+    ]
+    assert prompts.source_order(hits) == [
+        {"id": "src-dl", "title": "Deep Learning"},
+        {"id": "src-web", "title": "A Web Page"},
+    ]
+
+
+def test_source_lines_numbers_the_library_with_extent():
+    lines = prompts.source_lines(
+        [
+            {"id": "src-dl", "title": "Deep Learning", "pages": 800},
+            {"id": "src-web", "title": "A Web Page", "kind": "url"},
+            {"id": "src-bare", "title": "No Extent"},
+        ]
+    )
+    assert lines == '[S1] "Deep Learning" (800pp)\n[S2] "A Web Page" (url)\n[S3] "No Extent"'
+
+
+def test_source_refs_resolves_only_the_markers_used():
+    sources = prompts.source_order(_library_hits())
+    # S9 is hallucinated and dropped; the page in the marker is ignored here
+    # (it rides on the marker, not the map).
+    refs = prompts.source_refs(sources, "As shown [S1, p.243] and [S9, p.1] — also [S2].")
+    assert refs == {
+        "1": {"source_id": "src-dl", "title": "Deep Learning"},
+        "2": {"source_id": "src-web", "title": "A Web Page"},
+    }
+
+
+def test_source_refs_with_no_text_maps_the_whole_library():
+    # The up-front emit: no prose exists yet, so every source is resolvable.
+    sources = prompts.source_order(_library_hits())
+    assert set(prompts.source_refs(sources, "")) == {"1", "2"}
 
 
 def test_history_converts_turns_and_skips_malformed():

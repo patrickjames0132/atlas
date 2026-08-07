@@ -32,6 +32,8 @@ import {
   lectureShown,
   lectureStarted,
   refsSet,
+  sourceRefsSet,
+  lectureSourcesSet,
   retrieveSet,
   tokenAppended,
   traceAdded,
@@ -250,6 +252,9 @@ export function useConversation() {
           { seed: seedNode, nodes: groundingNodes, mode },
           {
             signal: ctrl.signal,
+            // Arrives before the first beat, so a beat's [Sn, p.N] library
+            // citations render as real titles from the moment they appear.
+            onSourceRefs: (refs) => dispatch(lectureSourcesSet({ mode, refs })),
             onBeat: (beat) => {
               // `beat.refs` (the [n] → node-id map) is resolved server-side —
               // a lecture numbers the mode-filtered story nodes, which the
@@ -388,6 +393,7 @@ export function useConversation() {
                 }
               },
               onFigure: (figure) => dispatch(figureAdded(figure)),
+              onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
               onCited: (ids) => {
                 highlight(ids)
                 // Mark this answer active, like a beat lights up on arrival.
@@ -407,6 +413,7 @@ export function useConversation() {
             {
               signal: ctrl.signal,
               onRetrieve: (retrieval) => dispatch(retrieveSet(retrieval)),
+              onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
               onTrace: (trace) => dispatch(traceAdded(trace)),
               onFigure: (figure) => dispatch(figureAdded(figure)),
               onToken: (token) => dispatch(tokenAppended(token)),

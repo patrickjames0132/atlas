@@ -87,27 +87,6 @@ def _hit_titles(hits: list[dict]) -> list[str]:
     return titles
 
 
-def _hit_source_lines(hits: list[dict]) -> str:
-    """An id → title map of the sources behind the retrieved passages, so the
-    model can address ``show_source_figure`` (passages cite by title+page;
-    the tool wants the id).
-
-    Args:
-        hits: Passage dicts from ``services.sources.search``.
-
-    Returns:
-        One ``- [id] "Title"`` line per distinct source, first-seen order.
-    """
-    seen: set[str] = set()
-    lines: list[str] = []
-    for hit in hits:
-        source_id = hit.get("source_id")
-        if source_id and source_id not in seen:
-            seen.add(source_id)
-            lines.append(f'- [{source_id}] "{hit.get("source_title", "")}"')
-    return "\n".join(lines)
-
-
 def answer(
     question: str,
     history: list[dict] | None = None,
@@ -124,8 +103,9 @@ def answer(
             sources selected" — retrieval finds nothing.
 
     Yields:
-        One ``RetrievalTrace`` naming what was found, then ``Token`` prose
-        interleaved with any ``FigureTrace``/``Figure`` events the
+        One ``RetrievalTrace`` naming what was found and one ``SourceRefs``
+        resolving the ``[Sn]`` markers the answer may cite, then ``Token``
+        prose interleaved with any ``FigureTrace``/``Figure`` events the
         show_source_figure tool emits — or the canned no-hits line when
         retrieval came up empty (the model is never engaged for that).
 
@@ -143,12 +123,23 @@ def answer(
         yield events.Token(text=NO_HITS_ANSWER)
         return
 
+    # The numbered library this answer cites into. Emitted up front (the map is
+    # page-free) so every [Sn, p.N] marker resolves as it streams, rather than
+    # showing raw until the answer finishes. Named ``library`` because
+    # ``sources`` is the retrieval module imported above.
+    library = prompts.source_order(hits)
+    yield events.SourceRefs(
+        refs={
+            key: events.SourceRef(**ref) for key, ref in prompts.source_refs(library, "").items()
+        }
+    )
+
     prompt = (
-        f"Passages from your library:\n\n{prompts.format_passages(hits)}\n\n"
-        f"Their sources (for show_source_figure):\n{_hit_source_lines(hits)}\n\n"
+        f"Your library:\n{prompts.source_lines(library)}\n\n"
+        f"Passages from it:\n\n{prompts.format_passages(hits, library)}\n\n"
         f"Question: {question}"
     )
-    deps = make_deps()
+    deps = make_deps(library)
 
     final: Reply | None = None
     emitted = ""  # answer prose already yielded as Token events

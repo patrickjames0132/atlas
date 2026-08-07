@@ -1,8 +1,8 @@
 # `agents.librarian`
 
 The offline library chat: a graph-free RAG agent answering purely from the
-user's own uploaded sources (books, PDFs, web pages), citing inline by title
-and page — and, since v5.28.0, attaching real figures from the uploaded PDFs
+user's own uploaded sources (books, PDFs, web pages), citing them inline by
+a resolvable marker — and, since v5.28.0, attaching real figures from the uploaded PDFs
 via its one tool, `show_source_figure`. The first *streaming* agent in the
 crew, and the first to load shared skills.
 
@@ -37,7 +37,7 @@ the sources before a single token streams.
 
 - **`config.py`** — `AGENT_ID`, `SKILLS` (`teaching-voice` +
   `citation-discipline`), the librarian-specific `SYSTEM_PROMPT` (grounding
-  scope, the `[Title, p.N]` attribution form, and the figure-attachment
+  scope, the `[Sn, p.N]` attribution form, and the figure-attachment
   instructions), `NO_HITS_ANSWER`, and `BUDGETS` (the `figures` cap,
   overridable via the agent entry's `extras` like the researcher's).
 - **`main.py`** — the `Agent` (instructions = `SYSTEM_PROMPT` plus each
@@ -69,10 +69,15 @@ the sources before a single token streams.
   pattern (structured output; everything outside the final result ignored)
   fixes it, with `streams.partial_text` streaming the prose out of the
   output tool's partial JSON.
-- **The prompt lists the retrieved passages' source ids** (`- [id] "Title"`)
-  because passages cite by title+page while `show_source_figure` addresses
-  by id+page — the map is the bridge, scoped to just the sources actually
-  retrieved.
+- **The prompt numbers the retrieved sources** (`[S1] "Title"`, via
+  `prompts.source_lines`) and the model addresses them by that number alone —
+  both to cite (`[S1, p.243]`) and to attach a figure
+  (`show_source_figure(source=1, page=243)`). It never sees a real source id:
+  an index is the only token it reproduces exactly, whereas it rewords titles
+  freely, which is what made prose citations unresolvable before v6.6.0. The
+  numbering covers just the sources retrieval actually returned, and
+  `answer` emits the resolved index → source map as a `SourceRefs` event
+  *before* the prose, so each marker renders as a real title as it streams.
 - **`chat_k` over `search_k`**: the passages are the answer's *only*
   grounding (no paper reading, no follow-up searches), so the chat retrieves
   more than the researcher's search tool will.

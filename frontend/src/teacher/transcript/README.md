@@ -9,8 +9,8 @@ top-level components.
 transcript/
   BeatList.tsx       — lecture beats (click to light their papers)
   ChatMessage.tsx    — one turn: retrieval line, trace chips, prose+figures
-  AnswerMarkdown.tsx — Markdown + KaTeX + [n]-citation rendering for answers
-  remarkCite.ts      — the remark plugin that turns [n] markers into chips
+  AnswerMarkdown.tsx — Markdown + KaTeX + citation rendering for answers
+  remarkCite.ts      — the remark plugin that turns [n]/[Sn] markers into chips
 ```
 
 ## The pieces
@@ -28,19 +28,27 @@ transcript/
   the cited-papers footer — clickable to re-light the answer's whole
   grounding set.
 - **`AnswerMarkdown`** — the researcher and librarian reply in Markdown
-  with `$…$` math and inline `[n]` citations; this renders all three for
+  with `$…$` math and inline citations; this renders all three for
   real: remark-gfm for structure, remark-math + rehype-katex for math (the
   same KaTeX the rest of the app reaches through `MathText` — beats, the
   detail panel, and search hits keep `MathText`; only answers get the
   fuller Markdown treatment), and `remarkCite` for the markers. Links
   always open a new tab — an answer lives in a docked panel.
-- **`remarkCite`** — rewrites `[n]` text nodes into a synthetic `citeref`
-  element the renderer maps to a chip. It only rewrites the *shape*;
-  whether a given `[n]` resolves to a paper (and so becomes clickable,
-  spotlighting that node) is decided at render time from the answer's
-  `refs` map — an unresolvable marker renders inert, never broken. Runs on
-  mdast text nodes only, so markers inside inline code or math are left
-  untouched.
+- **`remarkCite`** — rewrites citation markers into synthetic elements the
+  renderer maps to chips. Two flavors, matched in one alternation so neither
+  can swallow the other: `[n]` → `citeref` (a graph paper) and `[S2, p.460]`
+  → `sourceref` (a passage from the user's own library). It only rewrites the
+  *shape*; whether a marker resolves is decided at render time — `[n]` from
+  the answer's `refs` map (clickable, spotlighting that node), `[Sn]` from
+  its `sourceRefs` map (rendered as the source's real title and page, the
+  page read off the marker itself). Either kind degrades to its raw text when
+  unresolvable — never broken. Runs on mdast text nodes only, so markers
+  inside inline code or math are left untouched.
+
+  Why the two resolve differently: the frontend already holds the numbered
+  paper list, so it can resolve `[n]` itself; only the *backend* knows which
+  library sources a turn retrieved, so `[Sn]` arrives pre-resolved on the
+  stream (see `agents/README.md`).
 
 ## Who uses it
 

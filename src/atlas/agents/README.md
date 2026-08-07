@@ -170,9 +170,20 @@ mode-filtered `_story_nodes`, which the frontend never sees, so it *can't*
 resolve them itself. The **researcher** is the mirror case: it gets the full,
 unfiltered node list, so the frontend resolves its answer's `[n]` markers
 directly (grounding order + idx-tagged discoveries) and no backend `refs` is
-emitted. `format_passages(hits)` renders retrieved library
-passages tagged `[Title, p.N]` (shared by the librarian's grounding context
-and, later, the researcher's `search_sources` tool result), and `history(turns)`
+emitted.
+
+**Library citations work the other way round.** `source_lines(sources)`
+numbers the user's uploaded sources (`[S1] "Title"`), `format_passages(hits,
+sources)` tags each retrieved passage with the marker to copy (`[S1, p.243]`,
+or `[S1]` for a page-less web source), and `source_refs(sources, text)`
+resolves those markers back to real ids. Unlike `[n]` paper markers, these
+*must* be resolved server-side and streamed (as a `SourceRefs` event): only
+the backend knows which of the user's sources a turn retrieved. The map is
+keyed by index alone and carries no page — the page is already in the marker
+— which is what lets it be emitted *before* the prose, so a marker renders as
+a real title the moment it streams instead of showing raw until the answer
+lands. Every agent that shows library passages uses this: librarian,
+researcher (`search_sources`), and lecturer (intuition mode). `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI
 message history.
 
@@ -352,10 +363,11 @@ Graph-free RAG over the user's own uploaded sources. See its own README.
   (`services.sources.search` — RRF over FTS5 + vectors) runs *before* the
   agent, deterministically; the passages go in as context.
 - **Tools:** none.
-- **Output:** streamed prose citing inline by title and page, e.g.
-  "(Deep Learning, p.243)". A `RetrievalTrace` names the retrieved sources
-  first; empty retrieval yields a friendly "nothing found" answer without
-  engaging the model.
+- **Output:** streamed prose citing inline by resolvable marker (`[S1,
+  p.243]`, rendered to the reader as the source's real title and page). A
+  `RetrievalTrace` names the retrieved sources first, followed by a
+  `SourceRefs` map resolving the markers; empty retrieval yields a friendly
+  "nothing found" answer without engaging the model.
 - **Skills:** `teaching-voice`, `citation-discipline`.
 - **Note:** the whole `workflows/librarian.md` playbook lives in
   `librarian.answer(...)` — the orchestrator's `librarian` intent just

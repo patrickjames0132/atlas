@@ -168,6 +168,9 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
       // under `history` (the primary "how we got here" mode) so the lecture
       // isn't lost, and show it.
       lectures: data.lectures ?? (data.beats?.length ? { history: data.beats } : {}),
+      // Saves from before structured library citations carry no source maps;
+      // their beats' [Sn] markers (if any) degrade to raw text, as designed.
+      lectureSources: data.lectureSources ?? {},
       activeMode: data.activeMode ?? (data.beats?.length ? ('history' as const) : null),
     },
   }
@@ -197,6 +200,7 @@ export const saveWorkspace = createAsyncThunk<
     edges: [...graph.edges, ...workspace.discoveredEdges],
     chat: transcript.chat,
     lectures: transcript.lectures,
+    lectureSources: transcript.lectureSources,
     activeMode: transcript.activeMode,
   })
 })

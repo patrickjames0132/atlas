@@ -30,8 +30,16 @@ def test_trace_then_streamed_tokens(monkeypatch):
     model = TestModel(call_tools=[], custom_output_args={"text": "Momentum smooths updates."})
     with librarian.agent.override(model=model):
         out = list(librarian.answer("what is momentum?"))
-    trace, *tokens = out
+    trace, refs, *tokens = out
     assert trace == events.RetrievalTrace(found=3, sources=["Deep Learning", "A Web Page"])
+    # The library index rides ahead of the prose, so [Sn] markers resolve as
+    # they stream rather than after the answer lands.
+    assert refs == events.SourceRefs(
+        refs={
+            "1": events.SourceRef(source_id="s1", title="Deep Learning"),
+            "2": events.SourceRef(source_id="s2", title="A Web Page"),
+        }
+    )
     assert tokens and all(isinstance(token, events.Token) for token in tokens)
     assert "".join(token.text for token in tokens) == "Momentum smooths updates."
 
@@ -82,15 +90,15 @@ def test_passages_and_history_reach_the_model(monkeypatch):
     messages = seen["messages"]
     assert len(messages) == 3  # two history turns ride ahead of the new request
     prompt = messages[-1].parts[-1].content
-    assert "[Deep Learning, p.243] Momentum helps." in prompt
+    assert "[S1, p.243] Momentum helps." in prompt
     assert prompt.strip().endswith("Question: what is momentum?")
     # instructions= survives alongside message history (the house rule).
     assert messages[-1].instructions and "grounded ONLY" in messages[-1].instructions
 
 
-def test_prompt_lists_source_ids_for_figures(monkeypatch):
-    """The passage block is followed by an id → title map so the model can
-    address show_source_figure (passages themselves cite by title+page)."""
+def test_prompt_numbers_the_library(monkeypatch):
+    """The passages are preceded by the numbered library they cite into — the
+    model addresses a source by its number, never by an id it can't see."""
     monkeypatch.setattr(librarian.main.sources, "search", lambda question, **kwargs: HITS)
     seen = {}
 
@@ -102,7 +110,8 @@ def test_prompt_lists_source_ids_for_figures(monkeypatch):
     with librarian.agent.override(model=FunctionModel(stream_function=record)):
         list(librarian.answer("q"))
     prompt = seen["messages"][-1].parts[-1].content
-    assert '- [s1] "Deep Learning"' in prompt and '- [s2] "A Web Page"' in prompt
+    assert '[S1] "Deep Learning"' in prompt and '[S2] "A Web Page"' in prompt
+    assert "s1" not in prompt and "s2" not in prompt  # real ids never reach the model
     assert seen["tools"] == ["show_source_figure"]
 
 
@@ -133,7 +142,7 @@ def test_show_source_figure_attaches_and_narration_is_suppressed(monkeypatch):
         if state["turn"] == 1:
             yield "Let me pull that figure. "  # narration — must NOT stream
             yield {0: DeltaToolCall(name="show_source_figure",
-                                    json_args='{"source_id": "s1", "page": 243}')}
+                                    json_args='{"source": 1, "page": 243}')}
         else:
             yield {0: DeltaToolCall(name="final_result",
                                     json_args='{"text": "See the momentum figure. ')}

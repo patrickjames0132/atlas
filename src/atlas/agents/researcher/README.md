@@ -81,8 +81,9 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   tables and algorithm boxes, and image URLs point at
   `/api/pdf_figure/<token>/<n>` instead of the ar5iv proxy.
 - **`show_source_figure` is the library twin of `show_figure`** —
-  page-addressed rather than list-addressed: passages cite `[Title, p.N]`,
-  so the tool takes `(source_id, page, figure)` and picks from the figure
+  page-addressed as well as list-addressed: passages cite `[Sn, p.N]`,
+  so the tool takes `(source, page, figure)` — `source` being the `[Sn]`
+  number, resolved to a real id by `deps.source_id` — and picks from the figure
   manifest mined off the source's stored PDF (`services/sources/figures.py`);
   the attached image serves from `/api/sources/<id>/figure/<n>` and its
   `Figure` event carries `index=None` (no numbered paper). It shares the
@@ -93,8 +94,9 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
 - **`search_sources` is registered via a `prepare` hook** only when the
   (scope-filtered) library is non-empty — no availability probe at all:
   retrieval degrades by itself, and an empty library never pays the torch
-  load. The user's scope overrides the model's `source_id` pick, so the
-  search can't stray outside chosen sources. (mypy note: the tool variable's
+  load. The user's scope overrides the model's `source` pick, so the
+  search can't stray outside chosen sources; an out-of-range `[Sn]` comes
+  back as tool text, never a raise. (mypy note: the tool variable's
   explicit `Tool[ResearcherDeps]` annotation is load-bearing — with `prepare=`
   in play, mypy can't infer the ParamSpec on its own.)
 

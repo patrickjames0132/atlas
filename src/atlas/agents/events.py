@@ -153,6 +153,34 @@ class Cited(BaseModel):
     node_ids: list[str]
 
 
+class SourceRef(BaseModel):
+    """One numbered library source an answer may cite, resolved to its real id.
+
+    The model only ever writes an index (``[S3, p.243]``); this is what that
+    index means. ``title`` rides along so the frontend can render the marker
+    as the human-readable *"(Deep Learning, p.243)"* without a second fetch.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_id: str
+    title: str
+
+
+class SourceRefs(BaseModel):
+    """The library index for one answer: ``[Sn]`` marker index → source.
+
+    Emitted **before** the prose, unlike ``Cited``: the map is page-free (the
+    page is in the marker itself), so it can be sent as soon as retrieval
+    settles, and every marker resolves the instant it streams in.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["source_refs"] = "source_refs"
+    refs: dict[str, SourceRef]
+
+
 class Done(BaseModel):
     """The workflow finished cleanly. Always the last event on success."""
 
@@ -284,7 +312,7 @@ Trace: TypeAlias = Annotated[
 """Any "watch the agent work" event, discriminated by ``action``."""
 
 Event: TypeAlias = Annotated[
-    Beat | Token | Discovery | Figure | Cited | Done | Error | Trace,
+    Beat | Token | Discovery | Figure | Cited | SourceRefs | Done | Error | Trace,
     Field(discriminator="type"),
 ]
 """Anything a workflow may yield, discriminated by ``type`` (traces nest their

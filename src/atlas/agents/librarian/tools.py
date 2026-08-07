@@ -25,16 +25,36 @@ from .config import BUDGETS
 
 @dataclass
 class LibrarianDeps:
-    """One answer's run-state: the event queue and the figure budget.
+    """One answer's run-state: the event queue, the figure budget, and the
+    numbered library the model addresses sources by.
 
     The ``queue`` is how tool-side happenings reach the workflow's event
     stream — the same push/drain bridge as the researcher's deps, just far
     smaller (the librarian has one tool and one budget).
+
+    ``sources`` is the same numbered list the prompt shows and ``[Sn]``
+    markers index into, so a tool call and a citation can't disagree about
+    which source ``S3`` is.
     """
 
     figures_left: int = 0
     figures_shown: dict[tuple[str, int], int] = field(default_factory=dict)
     queue: list[events.Event] = field(default_factory=list)
+    sources: list[dict] = field(default_factory=list)
+
+    def source_id(self, number: int) -> str | None:
+        """Resolve a model-written ``[Sn]`` index to a real source id.
+
+        Args:
+            number: The 1-based index as the model wrote it.
+
+        Returns:
+            The source id, or None when the index is out of range (a
+            hallucinated number comes back to the model as text, not a raise).
+        """
+        if 1 <= number <= len(self.sources):
+            return str(self.sources[number - 1]["id"])
+        return None
 
     def emit(self, event: events.Event) -> None:
         """Queue a trace/figure event for the stream bridge to flush.
@@ -54,17 +74,21 @@ class LibrarianDeps:
         return queued
 
 
-def make_deps() -> LibrarianDeps:
+def make_deps(sources: list[dict] | None = None) -> LibrarianDeps:
     """Fresh run-state for one answer, budgets loaded from config.
+
+    Args:
+        sources: The numbered library for this answer (as from
+            ``prompts.source_order``); omitted in tests that don't cite.
 
     Returns:
         The deps, with the figure budget primed.
     """
-    return LibrarianDeps(figures_left=BUDGETS["figures"])
+    return LibrarianDeps(figures_left=BUDGETS["figures"], sources=list(sources or []))
 
 
 def show_source_figure(
-    ctx: RunContext[LibrarianDeps], source_id: str, page: int, figure: int = 1
+    ctx: RunContext[LibrarianDeps], source: int, page: int, figure: int = 1
 ) -> str:
     """Place a figure/table from one of the student's uploaded sources into
     your answer. Use it when a passage you're citing refers to a figure the
@@ -74,7 +98,8 @@ def show_source_figure(
 
     Args:
         ctx: The run context carrying the librarian's deps (framework-injected).
-        source_id: The source's id, as listed with the passages.
+        source: Which source, as its number in "Your library" — the ``3`` of
+            ``[S3]``.
         page: The 1-based page the figure is on (usually the cited
             passage's page).
         figure: Which figure on that page, 1-based, when it has several.
@@ -84,4 +109,7 @@ def show_source_figure(
         budget/validity message (a page with no figures lists the source's
         pages that do have them).
     """
+    source_id = ctx.deps.source_id(source)
+    if source_id is None:
+        return f"No source [S{source}] in your library — check the numbered list."
     return library_figures.attach_source_figure(ctx.deps, source_id, page, figure)

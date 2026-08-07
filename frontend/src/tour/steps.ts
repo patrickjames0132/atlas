@@ -92,7 +92,7 @@ export const HOME_TOUR: TourStep[] = [
     title: 'Chat with your books',
     body:
       'Ask a question and the assistant retrieves the most relevant passages from your ' +
-      'library and answers grounded in them, citing by page — "(Deep Learning, p.243)". ' +
+      'library and answers grounded in them, citing each by its source and page. ' +
       'Scope it to specific sources with the 📚 picker above the ask bar.',
   },
   {

@@ -523,6 +523,14 @@
   color: var(--bg);
   outline: none;
 }
+/* A library citation ([Sn, p.N]) rendered as its source's real title and page.
+   Not a button yet — opening the source at that page is the follow-up ticket;
+   until then it reads as a quiet attribution rather than a dead control. */
+.source-ref {
+  color: var(--muted);
+  font-size: 0.94em;
+  white-space: nowrap;
+}
 /* Figures the agent pulled into its answer (show_figure). */
 .chat-figs {
   display: flex;

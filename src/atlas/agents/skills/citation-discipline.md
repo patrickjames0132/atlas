@@ -9,5 +9,11 @@ conversation.
 - When your result carries a `cited` field, report the papers your answer
   draws on there (by index). Cite none rather than padding the list.
 - Passages from the student's own library are attributed **inline in your
-  prose** by source title and page, e.g. "(Deep Learning, p.243)". Library
-  passages are not graph papers — they never go in a `cited` field.
+  prose** with the marker the passage is tagged with — `[S2, p.460]`, where
+  `S2` is the source's number in "Your library" and `460` is the page. Copy
+  it verbatim; it renders to the reader as that source's real title and page.
+  A source with no pages (a web page) is cited `[S2]`.
+- Never write a library source's title yourself in place of its marker — a
+  reworded title cannot be resolved back to the source, so the citation goes
+  dead. The marker is the only form that works.
+- Library passages are not graph papers — they never go in a `cited` field.

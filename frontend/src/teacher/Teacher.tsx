@@ -23,7 +23,7 @@ import type { CSSProperties, FormEvent, KeyboardEvent } from 'react'
 import { LECTURE_TITLES, type AnswerFigure, type LectureMode } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { loadLibrary, selectLibrary } from '../store/library'
-import { selectVisibleBeats } from '../store/transcript'
+import { selectVisibleBeats, selectVisibleSourceRefs } from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
 import ScopePicker from './ScopePicker'
 import Lightbox from '../figures/Lightbox'
@@ -60,6 +60,7 @@ export default function Teacher({
 }) {
   const chat = useAppSelector((state) => state.transcript.chat)
   const beats = useAppSelector(selectVisibleBeats)
+  const lectureSourceRefs = useAppSelector(selectVisibleSourceRefs)
   const lectures = useAppSelector((state) => state.transcript.lectures)
   const activeMode = useAppSelector((state) => state.transcript.activeMode)
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
@@ -351,6 +352,7 @@ export default function Teacher({
             </div>
             <BeatList
               beats={beats}
+              sourceRefs={lectureSourceRefs}
               activeBeat={activeBeat}
               onBeatClick={onBeatClick}
               onRefClick={onRefClick}

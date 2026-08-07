@@ -103,16 +103,19 @@ agent: Agent[ResearcherDeps, Answer] = Agent(
 
 
 def _library_context(library: list[dict]) -> str:
-    """The "Your library" listing so the model knows what it can search and
-    can scope search_sources by id.
+    """The "Your library" listing so the model knows what it can search, can
+    scope search_sources by number, and can cite passages by ``[Sn, p.N]``.
+
+    Args:
+        library: The user's sources, in display order.
+
+    Returns:
+        The numbered listing, headed by what the numbers are for.
     """
-    lines = []
-    for source in library:
-        location = f"{source['pages']}pp" if source.get("pages") else source.get("kind", "")
-        lines.append(f'- [{source["id"]}] "{source["title"]}" ({location})')
     return (
         "Your library (search with search_sources; attach a cited page's "
-        "figure with show_source_figure):\n" + "\n".join(lines)
+        "figure with show_source_figure; cite a passage by its [Sn, p.N] "
+        "marker):\n" + prompts.source_lines(library)
     )
 
 
@@ -243,6 +246,7 @@ def answer(
         # without the embedder), so an existing library is enough — and an
         # empty one never pays the torch load.
         has_sources=bool(library),
+        sources=library,
         provider=provider,
         steps_left=BUDGETS["max_steps"],
         full_reads_left=BUDGETS["full_reads"],
@@ -252,6 +256,16 @@ def answer(
         source_searches_left=BUDGETS["source_searches"],
         figures_left=BUDGETS["figures"],
     )
+
+    # The numbered library, resolved up front (the map is page-free) so every
+    # [Sn, p.N] marker renders as a real title the moment it streams in.
+    if library:
+        yield events.SourceRefs(
+            refs={
+                key: events.SourceRef(**ref)
+                for key, ref in prompts.source_refs(library, "").items()
+            }
+        )
 
     final: Answer | None = None
     emitted = ""  # answer prose already yielded as Token events

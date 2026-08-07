@@ -186,9 +186,11 @@ The Vite dev server proxies `/api/*` to Flask.
      and their inline `[n]` citations are **clickable** — click one to spotlight
      that paper on the graph, click it again to clear. (Lecture beats cite the
      same way.) Answers also cite their whole grounding set — click the bubble
-     to re-light them all.
+     to re-light them all. A claim drawn from **your own uploaded sources** is
+     attributed with its real title and page, resolved server-side rather than
+     written out by the model.
    - **No graph open?** The same panel is a chat straight over your uploaded
-     library, cited by page.
+     library, cited by source and page.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
 6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.

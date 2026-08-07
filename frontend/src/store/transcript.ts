@@ -17,7 +17,15 @@
 
 import { createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
-import type { AnswerFigure, Beat, ChatMsg, LectureMode, RetrieveEvent, TraceEvent } from '../api'
+import type {
+  AnswerFigure,
+  Beat,
+  ChatMsg,
+  LectureMode,
+  RetrieveEvent,
+  SourceRef,
+  TraceEvent,
+} from '../api'
 import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 
 export interface TranscriptState {
@@ -29,12 +37,28 @@ export interface TranscriptState {
    * instant after the first play.
    */
   lectures: Partial<Record<LectureMode, Beat[]>>
+  /**
+   * Per-mode library index for the `[Sn]` markers a lecture's beats cite —
+   * one map per lecture, not per beat, because every beat of a lecture cites
+   * the same retrieved sources. Only intuition-mode lectures retrieve, so the
+   * other modes never get an entry.
+   */
+  lectureSources: Partial<Record<LectureMode, Record<string, SourceRef>>>
   /** Which cached lecture is currently shown on screen (null = none visible —
    *  every mode button is deselected). */
   activeMode: LectureMode | null
 }
 
-const initialState: TranscriptState = { chat: [], lectures: {}, activeMode: null }
+const initialState: TranscriptState = {
+  chat: [],
+  lectures: {},
+  lectureSources: {},
+  activeMode: null,
+}
+
+/** A stable empty source map, so `selectVisibleSourceRefs` never returns a
+ *  fresh object (which would churn selector-driven re-renders). */
+const NO_SOURCE_REFS: Record<string, SourceRef> = {}
 
 /** A stable empty-beats reference, so `selectVisibleBeats` never returns a
  *  fresh array (which would churn selector-driven re-renders). */
@@ -63,6 +87,21 @@ const transcriptSlice = createSlice({
     lectureStarted(state, action: PayloadAction<LectureMode>) {
       state.activeMode = action.payload
       state.lectures[action.payload] = []
+      delete state.lectureSources[action.payload]
+    },
+    /**
+     * The library index for a lecture's `[Sn]` markers, which arrives before
+     * its first beat. Carried per mode (like the beats) so a lecture
+     * streaming in the background fills the right slot.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the mode and its `[Sn]` index → source map.
+     */
+    lectureSourcesSet(
+      state,
+      action: PayloadAction<{ mode: LectureMode; refs: Record<string, SourceRef> }>,
+    ) {
+      state.lectureSources[action.payload.mode] = action.payload.refs
     },
     /**
      * One finished lecture beat arrives from the stream — appended to its own
@@ -106,6 +145,7 @@ const transcriptSlice = createSlice({
      */
     lectureDropped(state, action: PayloadAction<LectureMode>) {
       delete state.lectures[action.payload]
+      delete state.lectureSources[action.payload]
       if (state.activeMode === action.payload) state.activeMode = null
     },
     /**
@@ -182,6 +222,19 @@ const transcriptSlice = createSlice({
       if (msg) msg.refs = action.payload
     },
     /**
+     * Attach the library index resolving this answer's `[Sn]` markers. Unlike
+     * `refsSet`, it arrives *before* the prose (the backend resolves it as
+     * soon as retrieval settles), so markers render as real titles while the
+     * answer is still streaming.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the `[Sn]` index → source map.
+     */
+    sourceRefsSet(state, action: PayloadAction<Record<string, SourceRef>>) {
+      const msg = lastMsg(state)
+      if (msg) msg.sourceRefs = action.payload
+    },
+    /**
      * Clear only the Q&A chat, leaving every cached lecture untouched — the
      * Clear button's behavior when no lecture is selected. (A selected lecture
      * is cleared on its own via `lectureDropped`.)
@@ -204,6 +257,7 @@ const transcriptSlice = createSlice({
 
 export const {
   lectureStarted,
+  lectureSourcesSet,
   beatAdded,
   lectureShown,
   lectureHidden,
@@ -215,6 +269,7 @@ export const {
   retrieveSet,
   citedSet,
   refsSet,
+  sourceRefsSet,
   chatCleared,
 } = transcriptSlice.actions
 export default transcriptSlice.reducer
@@ -237,4 +292,19 @@ export const selectTranscript = (state: { transcript: TranscriptState }) => stat
 export const selectVisibleBeats = (state: { transcript: TranscriptState }): Beat[] => {
   const { activeMode, lectures } = state.transcript
   return (activeMode && lectures[activeMode]) || NO_BEATS
+}
+
+/**
+ * The library index for the currently-shown lecture's `[Sn]` markers, or a
+ * stable empty map when no mode is selected (or the lecture cited no library
+ * passage).
+ *
+ * @param state The root state.
+ * @returns The visible lecture's `[Sn]` index → source map.
+ */
+export const selectVisibleSourceRefs = (state: {
+  transcript: TranscriptState
+}): Record<string, SourceRef> => {
+  const { activeMode, lectureSources } = state.transcript
+  return (activeMode && lectureSources[activeMode]) || NO_SOURCE_REFS
 }
