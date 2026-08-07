@@ -267,6 +267,33 @@ optional, behind a key.
       both) exposed as a researcher skill, so the answer is exact set output
       rather than model recall. Probably wants the result grounded as
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
+- [ ] **The librarian retrieves on every turn — even "hi"** — say hello to the
+      library chat and it still goes looking through your books: the retrieval
+      trace chip lists sources, and the answer is framed as if the greeting were
+      a research question. The cause isn't the model choosing badly, it's
+      **structural** — `librarian/main.py`'s `answer()` calls `sources.search()`
+      unconditionally as its first statement, *before* the model is engaged at
+      all (that's the deliberate retrieve-then-answer design: grounding
+      guaranteed by construction, half the cost/latency of an agentic loop). So
+      no prompt change can fix it; the model never gets a say. Both outcomes are
+      bad: hybrid FTS5 + vector search on "hi" either returns arbitrary nearest
+      neighbors (the model then answers a greeting out of whatever passages
+      surfaced) or returns nothing and the user's greeting is met with the canned
+      `NO_HITS_ANSWER` — *"I couldn't find anything in your library about that"*.
+      Wanted: a **cheap triage step ahead of retrieval** that separates
+      conversational turns (greetings, thanks, "what can you do?", follow-ups
+      answerable from history) from real library questions, and skips retrieval —
+      and the `RetrievalTrace` event — for the former, answering conversationally
+      instead. Design questions worth settling first: where triage lives (a
+      cheap/fast classifier call, a heuristic, or handing the model a
+      `search_library` tool and giving up single-shot RAG — note that last option
+      converges with **Graph-less research mode** above, so decide whether this
+      ticket is a stopgap or that ticket's first step); how a *follow-up* that
+      genuinely needs new passages is told apart from one the history already
+      covers; and what the frontend shows when there's no retrieval to report
+      (`ChatMessage.tsx` renders the summary line only when a turn carries one,
+      so omitting the event should already degrade cleanly — verify).
+      *(From the `todos.md` inbox, 2026-08-06.)*
 
 ### Citations & graph data
 
