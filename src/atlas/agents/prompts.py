@@ -186,22 +186,118 @@ def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
     return refs
 
 
-def format_passages(hits: list[dict]) -> str:
+def source_order(hits: list[dict]) -> list[dict]:
+    """The distinct sources behind a set of passages, first-seen order.
+
+    The library counterpart to a graph's node list: what ``source_lines``
+    numbers and ``source_refs`` resolves against, derived from whatever
+    retrieval actually returned (the librarian can only cite what it was
+    handed, unlike the researcher, which is shown the whole library).
+
+    Args:
+        hits: Passage dicts from ``services.sources.search``.
+
+    Returns:
+        One ``{"id", "title"}`` dict per distinct source, first-seen order.
+    """
+    seen: set[str] = set()
+    sources: list[dict] = []
+    for hit in hits:
+        source_id = hit.get("source_id")
+        if source_id and source_id not in seen:
+            seen.add(source_id)
+            sources.append({"id": source_id, "title": hit.get("source_title", "")})
+    return sources
+
+
+def source_lines(sources: Sequence[dict]) -> str:
+    """Render the library as the numbered list the model cites into.
+
+    The exact analogue of ``node_lines`` for uploaded sources, and for the
+    same reason: the model never sees a source's real id, only its position,
+    because a one-token index is the only thing it can reproduce exactly. It
+    freely rewords a *title* mid-prose ("The Feynman Lectures on Physics,
+    Vol. III" for a source stored as ``the_feynman_lectures_vol_III_…``),
+    which is precisely what made prose citations unresolvable before.
+
+    Args:
+        sources: The library entries to number, in display order — dicts
+            carrying ``id``, ``title``, and optionally ``pages``/``kind``.
+
+    Returns:
+        One ``[Sn] "Title" (extent)`` line per source.
+    """
+    lines = []
+    for number, source in enumerate(sources, start=1):
+        extent = f"{source['pages']}pp" if source.get("pages") else source.get("kind", "")
+        suffix = f" ({extent})" if extent else ""
+        lines.append(f'[S{number}] "{source["title"]}"{suffix}')
+    return "\n".join(lines)
+
+
+def format_passages(hits: list[dict], sources: Sequence[dict]) -> str:
     """Render retrieved library passages for a prompt.
+
+    Each passage is tagged with the citation marker the model should copy
+    into its prose verbatim — ``[Sn, p.N]``, indexing into ``sources`` — so
+    attribution is a copy, not a recall.
 
     Args:
         hits: Passage dicts from ``services.sources.search`` (each carrying
-            ``source_title``, optional ``page``, and ``text``).
+            ``source_id``, ``source_title``, optional ``page``, and ``text``).
+        sources: The numbered library the tags index into, as from
+            ``source_order`` (librarian) or the whole library (researcher).
 
     Returns:
-        One passage per paragraph, tagged ``[Title, p.N]`` so the model can
-        attribute it inline, whitespace collapsed.
+        One passage per paragraph, tagged ``[Sn, p.N]``, whitespace collapsed.
+        A passage whose source isn't in ``sources`` falls back to its bare
+        title — unciteable, but never silently dropped.
     """
+    numbers = {source["id"]: number for number, source in enumerate(sources, start=1)}
     lines = []
     for hit in hits:
-        location = f", p.{hit['page']}" if hit.get("page") else ""
-        lines.append(f"[{hit['source_title']}{location}] {' '.join(hit['text'].split())}")
+        page = f", p.{hit['page']}" if hit.get("page") else ""
+        number = numbers.get(hit.get("source_id", ""))
+        tag = f"S{number}{page}" if number else f"{hit['source_title']}{page}"
+        lines.append(f"[{tag}] {' '.join(hit['text'].split())}")
     return "\n\n".join(lines)
+
+
+#: A library citation marker in model prose: ``[S3, p.243]``, or ``[S3]`` for
+#: a source with no pages (a web page). Group 1 is the source's index into the
+#: numbered library, group 2 the page when one is cited.
+_SOURCE_MARKER = re.compile(r"\[S(\d+)(?:,?\s*p\.\s*(\d+))?\]", re.IGNORECASE)
+
+
+def source_refs(sources: Sequence[dict], text: str) -> dict[str, dict]:
+    """Map the ``[Sn]`` markers in prose back to the sources they name.
+
+    The library counterpart to ``refs_from_text``, with one deliberate
+    difference: it is keyed by **index alone**, not by the full marker, and
+    carries no page. The page is already in the marker, so the frontend reads
+    it from there and this map stays page-free — which lets it be emitted
+    *before* the prose streams, so a marker resolves the moment it appears
+    instead of flickering as raw ``[S3, p.243]`` until the answer ends.
+
+    Args:
+        sources: The same library sequence ``source_lines`` numbered.
+        text: The prose to scan, or ``""`` to map every source (the up-front
+            emit, before any prose exists).
+
+    Returns:
+        ``{"3": {"source_id": ..., "title": ...}, ...}`` — keyed by the
+        marker's index as a string. Out-of-range indices are dropped: a
+        hallucinated marker degrades to plain text, it never raises.
+    """
+    if text:
+        wanted = {int(match.group(1)) for match in _SOURCE_MARKER.finditer(text)}
+    else:
+        wanted = set(range(1, len(sources) + 1))
+    return {
+        str(index): {"source_id": sources[index - 1]["id"], "title": sources[index - 1]["title"]}
+        for index in sorted(wanted)
+        if 1 <= index <= len(sources)
+    }
 
 
 def history(turns: list[dict] | None) -> list[ModelMessage]:

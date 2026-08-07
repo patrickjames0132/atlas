@@ -60,7 +60,9 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
   body text (equations kept as LaTeX, capped at `_SEED_FULLTEXT_CHARS`) so the
   lecture teaches it in chapters with its real math — and grounds in
   `_seed_passages` library passages (the librarian's hybrid retrieval, queried
-  with the seed's title — optional context, attributed inline). Everything
+  with the seed's title — optional context, cited by the same `[Sn, p.N]`
+  marker protocol the answer agents use, with one `SourceRefs` event emitted
+  ahead of the first beat to resolve them). Everything
   degrades to empty on any failure; a lecture never blocks on its grounding.
 
 ## Design decisions worth knowing

@@ -10,7 +10,9 @@
  *     uses through `MathText` — beats, the detail panel, and search hits keep
  *     `MathText`; only answers get the fuller Markdown treatment),
  *   • `[n]` markers via `remarkCite`, made clickable when the answer's `refs`
- *     map resolves them to a graph node (glowing that one paper on click).
+ *     map resolves them to a graph node (glowing that one paper on click),
+ *   • `[Sn, p.N]` markers, rendered as the library source's real title and
+ *     page from the answer's `sourceRefs` map.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -24,6 +26,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import type { SourceRef } from '../../api'
 import { remarkCite } from './remarkCite'
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
@@ -37,11 +40,15 @@ const REHYPE_PLUGINS = [rehypeKatex]
 export default function AnswerMarkdown({
   text,
   refs,
+  sourceRefs,
   onRefClick,
 }: {
   text: string
   /** `[n]` → node-id map for this answer (undefined on old saves / no refs). */
   refs?: Record<string, string>
+  /** `[Sn]` index → library source, for rendering a marker as its real title
+   *  (undefined on old saves, or when the turn cited no library passage). */
+  sourceRefs?: Record<string, SourceRef>
   /** Spotlight one paper on the graph (undefined = markers render inert). */
   onRefClick?: (nodeId: string) => void
 }) {
@@ -72,8 +79,30 @@ export default function AnswerMarkdown({
           </button>
         )
       },
+      // A library citation from remarkCite. The model wrote `[S2, p.460]`; the
+      // reader gets the source's real title and page. Unresolved (a
+      // hallucinated index, or an old save with no map) degrades to the raw
+      // marker, same as an unresolved `[n]`.
+      sourceref: ({
+        index,
+        page,
+        children,
+      }: {
+        index?: string
+        page?: string
+        children?: ReactNode
+      }) => {
+        const source = index && sourceRefs ? sourceRefs[index] : undefined
+        if (!source) return <>{children}</>
+        return (
+          <span className="source-ref" title={source.title}>
+            ({source.title}
+            {page ? `, p.${page}` : ''})
+          </span>
+        )
+      },
     }),
-    [refs, onRefClick],
+    [refs, sourceRefs, onRefClick],
   )
 
   return (

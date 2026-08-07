@@ -128,29 +128,27 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **Make inline library-source citations first-class — resolvable and
-      clickable-to-page** — an answer that cites the student's uploaded material
-      writes a plain-prose locator like *"(Reinforcement Learning: An
-      Introduction, p.460)"* that renders as dead text. It can't be made
-      clickable from the frontend, because the prose carries no structured
-      reference — only a title the model has freely reworded (abbreviated,
-      prettified, or the raw slug). Bring source citations to **parity with paper
-      `[n]` citations** (which resolve to a node id, stream a `refs` map, and glow
-      the paper on click): emit a **structured source reference — source id +
-      page — on the answer stream**, and render it as a highlighted, clickable
-      marker that opens that source at that page via the existing
-      `show_source_figure` / PDF-viewer plumbing. **Prerequisite cleanup — the
-      prompts disagree on the citation format:** the librarian persona tags
-      passages `[Title, p.N]` (brackets, `agents/librarian/config.py`) while
-      `agents/skills/citation-discipline.md` instructs `(Title, p.243)` (parens)
-      — and its fake example *"(Deep Learning, p.243)"* leaks into every system
-      prompt though no such source exists (the tour's "Chat with your books" step,
-      `tour/steps.ts`, echoes the same example). Standardize **one** format across
-      librarian + researcher + citation-discipline (and the tour example) so
-      detection is exact. Note the **page-less** case (a web source with no page)
-      needs a fallback. **Supersedes** the frontend prose-highlight bandaid, built
-      and then removed 2026-07-24 in favor of doing this correctly — the highlight
-      can never be clickable without the structured reference this ticket adds.
+- [ ] **Click a library citation to open the source at that page** — Part 2 of
+      the citation ticket whose Part 1 shipped in **v6.6.0** (see
+      [docs/history.md](docs/history.md)). Citations now *resolve*: the model
+      writes `[S1, p.243]`, the server hands the frontend a real source id, and
+      the reader sees *"(Reinforcement Learning: An Introduction, p.460)"*. What's
+      missing is the click — it renders as quiet grey text, not a control.
+      **The blocker is that there is no page viewer, which the original ticket
+      wrongly assumed existed:** the only source-image route is
+      `/api/sources/<id>/figure/<n>`, which serves one *mined manifest entry*,
+      and nothing in the frontend displays an arbitrary page. Two halves:
+      **(a) backend, small** — `pdf/floats.py`'s `render_float` already
+      rasterizes a clipped page region via PyMuPDF, so a whole-page render is
+      the same call without the clip; add `/api/sources/<id>/page/<n>`.
+      **(b) frontend, a new surface** — decide how a page is shown (a lightbox
+      like `FigCard`'s? a docked reader?), which is the real design work here.
+      Then make `.source-ref` a button. Note the page-render path has no
+      caption-anchoring dependency, so unlike figure mining it works on any
+      PDF-backed source — but URL sources have no stored PDF and must degrade
+      to nothing clickable. **Supersedes** the frontend prose-highlight bandaid,
+      built and then removed 2026-07-24 — that highlight could never be
+      clickable without the structured reference v6.6.0 added.
       *(From #2 of the 2026-07-24 front-end quick-wins pass.)*
 - [ ] **Retire the librarian: one researcher, retrieval as a tool, honest
       provenance** — a consolidation of three tickets that turned out to be the
@@ -227,14 +225,15 @@ optional, behind a key.
       own knowledge came from. The UI then shows a per-turn summary
       (sources / mixed / recall) plus per-claim attribution.
 
-      **Ordering — the citation ticket above is the blocker.** Derived
-      provenance needs citations to be machine-detectable, and today a library
-      citation is prose the model rewords freely. Do the structured source
-      reference (and its prerequisite: one citation format across librarian +
-      researcher + `citation-discipline.md` + the tour example) **first**, then
-      this merge, then provenance display rides on it. Note `cited` is a
+      **Ordering — the blocker cleared in v6.6.0.** Derived provenance needs
+      citations to be machine-detectable, which they weren't while a library
+      citation was prose the model reworded freely. That shipped: markers are
+      structured (`[Sn, p.N]` → source id, resolved server-side and streamed as
+      `SourceRefs`), and the citation format is standardized across librarian +
+      researcher + lecturer + `citation-discipline.md`. **This ticket is now
+      unblocked and is the next one to build.** Still true: `cited` is a
       per-*answer* list, so per-claim linking is new work on the paper side too —
-      only the lecturer has per-marker refs (`Beat.refs`, `events.py:72`).
+      only the lecturer has per-marker refs (`Beat.refs`, `events.py`).
 
       **Knock-on.** A third "reach" tool in play sharpens the still-open
       **search vs. expand** boundary ticket below — that stays separate, but its
@@ -675,9 +674,12 @@ optional, behind a key.
       clears both files. So: sweep the genuine violations, add the rule +
       exceptions list to `.oxlintrc.json` (it rides the existing `precommit`
       nox session for free), and the convention stops depending on review
-      catching it. Worth deciding whether `test/` is in scope — over half the
-      hits live there, and the tests mirror `src/`, so probably yes.
-      *(Filed 2026-08-06, out of the structured-source-citations branch.)*
+      catching it. **`test/` is in scope** (Patrick, 2026-08-06) — over half the
+      hits live there and the tests mirror `src/`, so the rule applies to both
+      trees; note `.oxlintrc.json` already carries a `test/**` override block
+      (it relaxes the jsdoc rules), and `id-length` should *not* be relaxed
+      there. *(Filed 2026-08-06, out of the structured-source-citations
+      branch.)*
 - [ ] **Scrub the STOP/SKIP docs & memories once citation-thresholding supersedes
       them** — a deliberately-deferred cleanup, **gated on** the "Replace the
       STOP/SKIP citation rules with a citation-threshold predicate" ticket

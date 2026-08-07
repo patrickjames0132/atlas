@@ -11,7 +11,7 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import type { AnswerFigure, Beat } from '../../api'
+import type { AnswerFigure, Beat, SourceRef } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import AnswerMarkdown from './AnswerMarkdown'
@@ -37,12 +37,16 @@ const asAnswerFigure = (figure: NonNullable<Beat['figure']>): AnswerFigure => ({
 export default function BeatList({
   beats,
   activeBeat,
+  sourceRefs,
   onBeatClick,
   onRefClick,
   onEnlarge,
 }: {
   beats: Beat[]
   activeBeat: number | null
+  /** The lecture's `[Sn]` index → source map, shared by every beat (they all
+   *  cite the same retrieved library). */
+  sourceRefs?: Record<string, SourceRef>
   onBeatClick: (index: number, beat: Beat) => void
   /** Spotlight one paper from a clicked inline `[n]` marker in a beat. */
   onRefClick?: (nodeId: string) => void
@@ -62,7 +66,12 @@ export default function BeatList({
               <MathText>{beat.heading}</MathText>
             </div>
           )}
-          <AnswerMarkdown text={beat.text} refs={beat.refs} onRefClick={onRefClick} />
+          <AnswerMarkdown
+            text={beat.text}
+            refs={beat.refs}
+            sourceRefs={sourceRefs}
+            onRefClick={onRefClick}
+          />
           {beat.figure && (
             // Enlarging the figure must not toggle the beat's highlight.
             <div onClick={(event) => event.stopPropagation()}>

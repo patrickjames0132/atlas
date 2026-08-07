@@ -182,7 +182,7 @@ def test_user_scope_overrides_the_models_source_pick(monkeypatch):
         {"id": "s2", "title": "RL Book", "kind": "pdf", "pages": 500},
     ]
     model = scripted(
-        [("search_sources", ['{"query": "momentum", "source_id": "s1"}'])],
+        [("search_sources", ['{"query": "momentum", "source": 1}'])],
         [final("Not in your sources.", [])],
     )
     run(model, monkeypatch, library=library, source_ids=["s2"])
@@ -310,7 +310,7 @@ def test_show_source_figure_attaches_a_library_figure(monkeypatch):
     )
     library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
     model = scripted(
-        [("show_source_figure", ['{"source_id": "src1", "page": 12}'])],
+        [("show_source_figure", ['{"source": 1, "page": 12}'])],
         [final("See the book's figure. <<FIG 1>>", [])],
     )
     out = run(model, monkeypatch, library=library)
@@ -343,7 +343,7 @@ def test_show_source_figure_wrong_page_reports_figure_pages(monkeypatch):
     library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
     seen: dict = {}
     model = scripted(
-        [("show_source_figure", ['{"source_id": "src1", "page": 5}'])],
+        [("show_source_figure", ['{"source": 1, "page": 5}'])],
         [final("No figure then.", [])],
         seen=seen,
     )
@@ -364,3 +364,54 @@ def test_show_source_figure_gated_on_the_library(monkeypatch):
     model = scripted([final("done", [])], seen=seen_with)
     run(model, monkeypatch, library=[{"id": "s", "title": "T", "kind": "pdf", "pages": 1}])
     assert "show_source_figure" in seen_with["tools"]
+
+
+def test_library_index_precedes_the_prose(monkeypatch):
+    """The [Sn] map is emitted before any token, so a marker renders as a real
+    title while the answer is still streaming (not after it lands, like Cited).
+    """
+    library = [
+        {"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300},
+        {"id": "src2", "title": "A Web Page", "kind": "url"},
+    ]
+    model = scripted([final("Grounded [S1, p.12].", [])])
+    out = run(model, monkeypatch, library=library)
+    assert out[0] == events.SourceRefs(
+        refs={
+            "1": events.SourceRef(source_id="src1", title="My Textbook"),
+            "2": events.SourceRef(source_id="src2", title="A Web Page"),
+        }
+    )
+
+
+def test_no_library_index_without_a_library(monkeypatch):
+    out = run(scripted([final("ok", [])]), monkeypatch, library=None)
+    assert not any(isinstance(event, events.SourceRefs) for event in out)
+
+
+def test_prompt_numbers_the_library_and_hides_ids(monkeypatch):
+    seen: dict = {}
+    library = [{"id": "src-hex-id", "title": "My Textbook", "kind": "pdf", "pages": 300}]
+    run(scripted([final("ok", [])], seen=seen), monkeypatch, library=library)
+    prompt = seen["turns"][0][-1].parts[-1].content
+    assert '[S1] "My Textbook" (300pp)' in prompt
+    # The id is what the model must never see — an index is the only token it
+    # can reproduce exactly (see prompts.source_lines).
+    assert "src-hex-id" not in prompt
+
+
+def test_out_of_range_source_number_comes_back_as_text(monkeypatch):
+    """A hallucinated [Sn] is steerable information, never a raise — the house
+    rule for every researcher tool."""
+    library = [{"id": "src1", "title": "My Textbook", "kind": "pdf", "pages": 300}]
+    model = scripted(
+        [("search_sources", ['{"query": "momentum", "source": 9}'])],
+        [final("Couldn't find it.", [])],
+    )
+    out = run(model, monkeypatch, library=library)
+    trace = next(
+        event
+        for event in out
+        if isinstance(event, events.SourceSearchTrace) and not event.ok
+    )
+    assert trace.query == "momentum"

@@ -48,7 +48,12 @@ store/
   toggled show/hide for free; `selectVisibleBeats` reads out the shown mode's
   beats. Save persists the whole cache (a restore brings every played lecture
   back, not just the visible one); a pre-caching save's flat `beats` folds into
-  the `history` slot on restore.
+  the `history` slot on restore. `lectureSources` is the parallel per-mode map
+  resolving the `[Sn]` library citations a lecture's beats may carry — one map
+  per lecture, not per beat, because every beat cites the same retrieved
+  sources (chat turns carry their own `sourceRefs` on the message instead).
+  Saves predating structured library citations have neither; those markers
+  degrade to raw text on restore.
 - **`highlight`** — the teacher writes (active beat / cited answer), the
   canvas glows. Stored as an id array (serializable); `selectHighlightSet`
   memoizes the Set the canvas wants.

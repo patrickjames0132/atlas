@@ -80,3 +80,40 @@ describe('remarkCite', () => {
     expect(paragraph.children).toEqual([{ type: 'inlineCode', value: 'array[1]' }])
   })
 })
+
+describe('remarkCite — library citations', () => {
+  it('turns [Sn, p.N] into a sourceref carrying index and page', () => {
+    const paragraph = transform(makeTree([{ type: 'text', value: 'as shown [S2, p.460].' }]))
+    expect(paragraph.children.map((child) => child.type)).toEqual(['text', 'sourceref', 'text'])
+    const [, marker] = paragraph.children as Array<{
+      data?: { hProperties?: { index?: string; page?: string } }
+    }>
+    expect(marker.data?.hProperties).toEqual({ index: '2', page: '460' })
+  })
+
+  it('carries no page for a page-less source', () => {
+    const paragraph = transform(makeTree([{ type: 'text', value: 'a web note [S3].' }]))
+    const [, marker] = paragraph.children as Array<{
+      data?: { hProperties?: { index?: string; page?: string } }
+    }>
+    expect(marker.data?.hProperties).toEqual({ index: '3' })
+  })
+
+  it('keeps paper and library markers apart in one sentence', () => {
+    // The shared alternation must not let [7] swallow [S2, p.1] or vice versa.
+    const paragraph = transform(makeTree([{ type: 'text', value: 'both [7] and [S2, p.1] agree' }]))
+    expect(paragraph.children.map((child) => child.type)).toEqual([
+      'text',
+      'citeref',
+      'text',
+      'sourceref',
+      'text',
+    ])
+  })
+
+  it('leaves the raw marker as its fallback text', () => {
+    const paragraph = transform(makeTree([{ type: 'text', value: 'x [S2, p.460] y' }]))
+    const [, marker] = paragraph.children as Array<{ children?: Array<{ value: string }> }>
+    expect(marker.children?.[0].value).toBe('[S2, p.460]')
+  })
+})

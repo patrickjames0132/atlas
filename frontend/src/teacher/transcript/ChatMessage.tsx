@@ -179,6 +179,7 @@ export default function ChatMessage({
                     key={index}
                     text={part}
                     refs={message.refs}
+                    sourceRefs={message.sourceRefs}
                     onRefClick={onRefClick}
                   />
                 ) : (

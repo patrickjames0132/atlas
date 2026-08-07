@@ -520,6 +520,59 @@
 
 ### Bring-your-own sources
 
+- [x] **Structured library citations — the model cites an index, the reader
+      sees a title** *(v6.6.0)* — Part 1 of the "make inline library-source
+      citations first-class" ticket (Part 2, clickable-to-page, stayed in the
+      Backlog — see below). Before this, a claim drawn from an uploaded book
+      was attributed in plain prose (`"(Deep Learning, p.243)"`) that rendered
+      as dead text and **could not be resolved back to the source**: the prose
+      carried only a title the model had freely reworded — abbreviated,
+      prettified, or the raw upload slug. The concrete case that settles it:
+      a source stored as `the_feynman_lectures_vol_III_quantum_mechanics` gets
+      written mid-sentence as "The Feynman Lectures on Physics, Vol. III",
+      which no exact-match lookup will ever find.
+
+      The fix mirrors the protocol papers have used all along: **the model is
+      shown a numbered list and writes an index, never an id.**
+      `prompts.source_lines` numbers the library (`[S1] "Title"`),
+      `format_passages` tags each retrieved passage with the marker to copy
+      verbatim (`[S1, p.243]`, or `[S1]` for a page-less web source), and
+      `source_refs` resolves those markers back to real ids server-side. An
+      index is the only token a model reproduces exactly; a title is not.
+      The reader never sees the wire format — the frontend renders `[S1,
+      p.243]` as *"(Reinforcement Learning: An Introduction, p.460)"*.
+
+      Three decisions worth keeping. **(1) The map streams *before* the
+      prose**, unlike `Cited`: it is keyed by index alone and carries no page
+      (the page is already in the marker), so it is complete as soon as
+      retrieval settles — otherwise every marker would render raw until the
+      answer finished, then pop. **(2) Papers and sources resolve on opposite
+      sides of the wire** — the frontend already holds the numbered paper list
+      so it resolves `[n]` itself, but only the backend knows which of the
+      user's sources a given turn retrieved, so `[Sn]` arrives pre-resolved as
+      a `SourceRefs` event. **(3) The source tools moved onto indices too** —
+      `show_source_figure(source=1, page=243)` and `search_sources(query,
+      source=1)` — because the model no longer sees ids at all, which is the
+      whole point; an out-of-range `[Sn]` comes back as tool text, never a
+      raise.
+
+      Also killed the **fake citation example** that had leaked into every
+      system prompt: `"(Deep Learning, p.243)"` named a source no library
+      contains, and appeared in four places at once — `librarian/config.py`
+      (as `[Title, p.N]`, brackets), `skills/citation-discipline.md` (as
+      `(Title, p.243)`, parens — the two prompts disagreed on the format),
+      `agents/README.md`, and the tour's "Chat with your books" step. One
+      format now, no invented source.
+
+      Scope grew once mid-branch, correctly: the **lecturer** also loads
+      `citation-discipline`, so changing the skill alone would have had
+      intuition-mode beats emitting markers nothing rendered. It came along —
+      beats already render through the same `AnswerMarkdown`, so it was
+      wiring a per-lecture source map (`lectureSources`, one per lecture
+      rather than per beat) through the store. Saved sessions predating the
+      change restore fine; their markers, if any, degrade to raw text, the
+      same way an unresolvable `[n]` always has.
+
 - [x] **Figures from uploaded PDFs in answers** *(v5.28.0)* — the library
       analogue of `show_figure`, shipped for BOTH answering agents. Uploaded
       PDFs now **keep their original file** beside the indexed text

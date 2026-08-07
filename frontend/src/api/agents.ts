@@ -92,6 +92,9 @@ export interface Discovery {
 export interface LectureHandlers {
   /** A new beat arrived — append it to the lecture panel. */
   onBeat: (beat: Beat) => void
+  /** The library index for the lecture's `[Sn]` markers (before any beat).
+   *  Intuition mode only — the other modes retrieve no passages. */
+  onSourceRefs?: (refs: Record<string, SourceRef>) => void
   onDone?: () => void
   onError?: (message: string) => void
   /** Abort to cancel the stream (e.g. when the user closes the panel). */
@@ -100,7 +103,8 @@ export interface LectureHandlers {
 
 /**
  * Stream a lecture over the visible graph. Beats arrive one at a time; a
- * lecture never expands the graph, so beats are the only payload frames.
+ * lecture never expands the graph, so beats and the up-front library index
+ * are the only payload frames.
  *
  * @param body The seed, the visible nodes, the lecture mode, and (bridge
  *             mode only) the target paper. Nodes are the FULL graph-node
@@ -119,6 +123,8 @@ export async function streamLecture(
   })
   await readSSE(res, (event, data) => {
     if (event === 'beat') h.onBeat(data as Beat)
+    else if (event === 'source_refs')
+      h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })
@@ -201,6 +207,8 @@ export interface AskHandlers {
   onDiscovery?: (d: Discovery) => void
   /** A figure the agent attached to its answer, to render inline. */
   onFigure?: (f: AnswerFigure) => void
+  /** The library index for this answer's `[Sn]` markers (before any prose). */
+  onSourceRefs?: (refs: Record<string, SourceRef>) => void
   onDone?: () => void
   onError?: (message: string) => void
   /** Abort to cancel the stream mid-answer. */
@@ -246,9 +254,22 @@ export async function streamAsk(
     else if (event === 'discovery') h.onDiscovery?.(data as Discovery)
     else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
     else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
+    else if (event === 'source_refs')
+      h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })
+}
+
+/**
+ * One numbered library source an answer's `[Sn]` markers may point at,
+ * resolved server-side (the model only ever writes the index).
+ */
+export interface SourceRef {
+  /** The real source id — what a click will open once the viewer lands. */
+  source_id: string
+  /** The source's stored title, rendered in place of the marker. */
+  title: string
 }
 
 /**
@@ -273,6 +294,8 @@ export interface AskSourcesHandlers {
   onTrace?: (t: TraceEvent) => void
   /** A figure the librarian attached from an uploaded PDF. */
   onFigure?: (f: AnswerFigure) => void
+  /** The library index for this answer's `[Sn]` markers (before any prose). */
+  onSourceRefs?: (refs: Record<string, SourceRef>) => void
   onDone?: () => void
   onError?: (message: string) => void
   signal?: AbortSignal
@@ -309,6 +332,8 @@ export async function streamAskSources(
         h.onTrace?.(data as TraceEvent)
       }
     } else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
+    else if (event === 'source_refs')
+      h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
     else if (event === 'done') h.onDone?.()
     else if (event === 'error') h.onError?.((data as { message: string }).message)
   })

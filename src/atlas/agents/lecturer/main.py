@@ -291,10 +291,15 @@ def _prompt(
             "`figure` to its number):\n" + "\n".join(figure_lines)
         )
     if passages:
+        # Same numbered-library protocol as the answer agents: the beat cites
+        # [Sn, p.N], never a title it might reword (see prompts.source_lines).
+        library = prompts.source_order(passages)
         sections.append(
-            "Passages from the student's own library (optional extra "
-            "context — attribute inline when you draw on one):\n"
-            + prompts.format_passages(passages)
+            "The student's own library:\n"
+            + prompts.source_lines(library)
+            + "\n\nPassages from it (optional extra context — cite by the "
+            "marker each is tagged with when you draw on one):\n"
+            + prompts.format_passages(passages, library)
         )
     sections.append("Now deliver the lecture.")
     return "\n\n".join(sections)
@@ -357,7 +362,7 @@ def lecture(
     nodes: list[Node],
     mode: LectureMode = LectureMode.HISTORY,
     target: Node | None = None,
-) -> Iterator[events.Beat]:
+) -> Iterator[events.Beat | events.SourceRefs]:
     """Stream a lecture over the visible graph as typed beats.
 
     Args:
@@ -368,7 +373,9 @@ def lecture(
         target: The bridge target paper (bridge mode only), or None.
 
     Yields:
-        ``events.Beat`` per beat, as soon as each is complete — a beat is
+        One ``events.SourceRefs`` first when the intuition lecture retrieved
+        library passages (resolving the ``[Sn]`` markers its beats may cite),
+        then ``events.Beat`` per beat, as soon as each is complete — a beat is
         final once the model starts the next one, so narration begins before
         the lecture ends. Beats with blank text are dropped. A beat may
         carry one figure from the mode's pool (the seed's own in intuition;
@@ -397,6 +404,17 @@ def lecture(
             emitted += 1
             if beat.text.strip():
                 yield _beat(beat, nodes, figures)
+
+    # The library a beat may cite, resolved up front like the answer agents'
+    # (see researcher.main) so [Sn, p.N] renders as a real title from the
+    # first beat onward.
+    if passages:
+        yield events.SourceRefs(
+            refs={
+                key: events.SourceRef(**ref)
+                for key, ref in prompts.source_refs(prompts.source_order(passages), "").items()
+            }
+        )
 
     prompt = _prompt(seed, nodes, mode, target, figures, passages, fulltext)
     for event in streams.drive(agent, prompt):

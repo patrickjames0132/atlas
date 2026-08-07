@@ -10,7 +10,14 @@
  */
 
 import type { GraphNode, GraphEdge, Provider } from './graph'
-import type { AnswerFigure, Beat, LectureMode, RetrieveEvent, TraceEvent } from './agents'
+import type {
+  AnswerFigure,
+  Beat,
+  LectureMode,
+  RetrieveEvent,
+  SourceRef,
+  TraceEvent,
+} from './agents'
 
 /**
  * One chat turn in the teacher transcript. Hoisted here (shared by
@@ -31,6 +38,15 @@ export interface ChatMsg {
    * small and survives a saved-session reload. Assistant/researcher turns only.
    */
   refs?: Record<string, string>
+  /**
+   * Map from an inline `[Sn]` library-citation index (the key, stringified) to
+   * the source it names. Resolved server-side and streamed *before* the prose
+   * — unlike `refs`, which the frontend resolves itself from the numbered
+   * grounding list it already holds; only the backend knows which of the
+   * user's sources a given turn retrieved. Page-free on purpose: the page
+   * lives in the marker (`[S2, p.460]`), so this map is complete up front.
+   */
+  sourceRefs?: Record<string, SourceRef>
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
   /** Figures the agent pulled into this answer (assistant turns only). */
@@ -71,6 +87,12 @@ export interface SessionData {
    * all back, not just the visible one.
    */
   lectures?: Partial<Record<LectureMode, Beat[]>>
+  /**
+   * Per-mode library index for the `[Sn]` markers each cached lecture's beats
+   * cite. Absent on saves predating structured library citations — those
+   * beats' markers (if any) degrade to raw text on restore.
+   */
+  lectureSources?: Partial<Record<LectureMode, Record<string, SourceRef>>>
   /** Which cached lecture was on screen when saved (null/absent = none). */
   activeMode?: LectureMode | null
   /**

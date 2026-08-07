@@ -62,6 +62,10 @@ class ResearcherDeps:
     known_ids: set[str]
     scope: list[str] | None  # user-pinned source_ids; overrides the model's pick
     has_sources: bool
+    #: The numbered library ``[Sn]`` markers and the source tools index into —
+    #: the same list ``prompts.source_lines`` renders into the prompt, so a
+    #: citation and a tool call can't disagree about which source ``S3`` is.
+    sources: list[dict] = field(default_factory=list)
     provider: Provider = "s2"  # the graph provider — expand/search/hydrate follow it
     steps_left: int = 0
     full_reads_left: int = 0
@@ -76,6 +80,20 @@ class ResearcherDeps:
     figures_shown: dict[tuple[str, int], int] = field(default_factory=dict)
     cited_ids: list[str] = field(default_factory=list)
     queue: list[events.Event] = field(default_factory=list)
+
+    def source_id(self, number: int) -> str | None:
+        """Resolve a model-written ``[Sn]`` index to a real source id.
+
+        Args:
+            number: The 1-based index as the model wrote it.
+
+        Returns:
+            The source id, or None when the index is out of range (a
+            hallucinated number comes back to the model as text, not a raise).
+        """
+        if 1 <= number <= len(self.sources):
+            return str(self.sources[number - 1]["id"])
+        return None
 
     def emit(self, event: events.Event) -> None:
         """Queue a trace/discovery event for the stream bridge to flush.
@@ -548,18 +566,19 @@ def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str
 
 
 def show_source_figure(
-    ctx: RunContext[ResearcherDeps], source_id: str, page: int, figure: int = 1
+    ctx: RunContext[ResearcherDeps], source: int, page: int, figure: int = 1
 ) -> str:
     """Place a figure/table from one of the student's OWN uploaded sources
     into your answer — the library twin of show_figure. Use it when a
-    passage you're citing (search_sources reports its source and page)
+    passage you're citing (search_sources tags each with its marker)
     refers to a figure the student would benefit from seeing. The result
     gives you a <<FIG n>> marker: put it on its own line in your prose
     exactly where the figure belongs.
 
     Args:
         ctx: The run context carrying the researcher's deps (framework-injected).
-        source_id: The source's id from "Your library".
+        source: Which source, as its number in "Your library" — the ``3`` of
+            ``[S3]``.
         page: The 1-based page the figure is on (usually the cited
             passage's page).
         figure: Which figure on that page, 1-based, when it has several.
@@ -573,12 +592,16 @@ def show_source_figure(
     if not _spend_step(deps):
         deps.emit(events.FigureTrace(ok=False, index=None, title=None, figure=figure))
         return STEPS_EXHAUSTED
+    source_id = deps.source_id(source)
+    if source_id is None:
+        deps.emit(events.FigureTrace(ok=False, index=None, title=None, figure=figure))
+        return f"No source [S{source}] in your library — check the numbered list."
     # Everything past the step charge — resolution, dedupe, slot, events —
     # is shared with the librarian's twin (agents/library_figures.py).
     return library_figures.attach_source_figure(deps, source_id, page, figure)
 
 
-def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str | None = None) -> str:
+def search_sources(ctx: RunContext[ResearcherDeps], query: str, source: int | None = None) -> str:
     """Semantic search over the student's OWN uploaded sources (books, PDFs,
     web pages) — not the citation graph. Returns the most relevant passages
     with source title and page; attribute them inline in your prose.
@@ -586,11 +609,12 @@ def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str |
     Args:
         ctx: The run context carrying the researcher's deps (framework-injected).
         query: What to look for — a concept or question, not an id.
-        source_id: Restrict to one source's id from "Your library" (optional).
+        source: Restrict to one source, as its number in "Your library" —
+            the ``3`` of ``[S3]`` (optional; omit to search everything).
 
     Returns:
-        The most relevant passages (source title + page + text), or a
-        budget/validity message.
+        The most relevant passages, each tagged with the ``[Sn, p.N]`` marker
+        to cite it by, or a budget/validity message.
     """
     deps = ctx.deps
     query = query.strip()
@@ -609,8 +633,14 @@ def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str |
     # stray outside the chosen sources.
     if deps.scope is not None:
         source_ids: list[str] | None = deps.scope
+    elif source is not None:
+        pinned = deps.source_id(source)
+        if pinned is None:
+            deps.emit(events.SourceSearchTrace(ok=False, query=query))
+            return f"No source [S{source}] in your library — check the numbered list."
+        source_ids = [pinned]
     else:
-        source_ids = [source_id] if source_id else None
+        source_ids = None
     try:
         hits = retrieval.search(query, source_ids=source_ids)
     except Exception as exc:
@@ -621,4 +651,6 @@ def search_sources(ctx: RunContext[ResearcherDeps], query: str, source_id: str |
     deps.emit(events.SourceSearchTrace(ok=True, query=query, found=len(hits)))
     if not hits:
         return f'No passages in your library matched "{query}".'
-    return f'Passages from your library for "{query}":\n\n' + prompts.format_passages(hits)
+    return f'Passages from your library for "{query}":\n\n' + prompts.format_passages(
+        hits, deps.sources
+    )
