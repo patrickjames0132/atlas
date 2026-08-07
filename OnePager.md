@@ -654,6 +654,30 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Sweep single-letter identifiers out of the frontend, then machine-enforce
+      it** — the no-single-letter-identifiers convention covers *both* halves of
+      the codebase, but only the backend is enforced: `bin/check_identifiers.py`
+      reads `.py` and `.ipynb`, so the frontend has drifted unnoticed since the
+      one-time sweep. **72 violations across 15 files** as of 2026-08-06, worst
+      in `test/graph/clusterForce.test.ts` (13), `src/notation/latexToUnicode.ts`
+      (9), and `src/api/agents.ts` (9 — the SSE handler params `h`/`r`/`t`/`d`/`f`,
+      spotted while adding `onSourceRefs` there for structured citations).
+      **The enforcement half is cheap and was verified 2026-08-06: oxlint *does*
+      implement `id-length`** (as `eslint(id-length)`) — CLAUDE.md's "no
+      min-name-length rule" note is about **ruff**, not oxlint, so the frontend
+      never needed the custom-hook treatment the backend got. Its `exceptions`
+      option works too, which matters because a real share of the 72 are the
+      exemptions CLAUDE.md already grants: react-force-graph's `node.x`/`.y`
+      (`graph/model.ts`), the `_s`/`_t` endpoint fields, and external property
+      names we don't own — e.g. `AnswerMarkdown.tsx`'s `a:` is the react-markdown
+      override for the `<a>` *tag*, not a variable. Confirmed working:
+      `{"id-length": ["error", {"min": 2, "exceptions": ["a", "x", "y"]}]}`
+      clears both files. So: sweep the genuine violations, add the rule +
+      exceptions list to `.oxlintrc.json` (it rides the existing `precommit`
+      nox session for free), and the convention stops depending on review
+      catching it. Worth deciding whether `test/` is in scope — over half the
+      hits live there, and the tests mirror `src/`, so probably yes.
+      *(Filed 2026-08-06, out of the structured-source-citations branch.)*
 - [ ] **Scrub the STOP/SKIP docs & memories once citation-thresholding supersedes
       them** — a deliberately-deferred cleanup, **gated on** the "Replace the
       STOP/SKIP citation rules with a citation-threshold predicate" ticket
