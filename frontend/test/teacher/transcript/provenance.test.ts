@@ -4,8 +4,8 @@
  * Description:
  * The grounding line: turning observed provenance counts into what the
  * transcript tells the student. The cases that matter are the honest ones —
- * "it looked and found nothing" must not read the same as "it never looked",
- * and an ungrounded answer must say so rather than stay silent.
+ * an answer that cited nothing must say so, and "it looked and found nothing"
+ * must not read the same as "it never looked".
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -18,9 +18,11 @@ import type { ProvenanceEvent } from '../../../src/api'
 /** A provenance record with everything zeroed, for per-case overrides. */
 function provenance(overrides: Partial<ProvenanceEvent> = {}): ProvenanceEvent {
   return {
+    kind: 'answered',
     had_library: true,
     searches: 0,
     passages: 0,
+    paper_searches: 0,
     cited_sources: 0,
     cited_papers: 0,
     ...overrides,
@@ -34,33 +36,42 @@ describe('provenanceLine', () => {
     )
   })
 
-  it('singularizes a lone source and a lone paper', () => {
+  it('singularizes a lone paper but not the sources collection', () => {
     expect(provenanceLine(provenance({ searches: 1, cited_sources: 1 }))).toBe(
       'grounded in 1 of your sources',
     )
     expect(provenanceLine(provenance({ cited_papers: 1 }))).toBe('grounded in 1 paper')
   })
 
-  it('distinguishes "looked and found nothing" from plain recall', () => {
-    // These are very different things to tell a student, and the counts are
-    // the only way to tell them apart.
+  it('says nothing for a pleasantry', () => {
+    expect(provenanceLine(provenance({ kind: 'conversational' }))).toBeNull()
+  })
+
+  it('admits an answer that nothing was searched for', () => {
+    // No library in scope and no literature search: pure recall, and the
+    // student should be told rather than left to assume it was grounded.
+    expect(provenanceLine(provenance({ had_library: false }))).toBe(
+      'answered from background knowledge — nothing was searched',
+    )
+  })
+
+  it('reports a library search that came up empty', () => {
     expect(provenanceLine(provenance({ searches: 1, passages: 0 }))).toBe(
-      'nothing in your library matched — answered from background knowledge',
-    )
-    expect(provenanceLine(provenance({ searches: 1, passages: 4 }))).toBe(
-      'answered from background knowledge',
+      'searched your library (no matches), cited nothing — answered from background knowledge',
     )
   })
 
-  it('says nothing for a conversational turn', () => {
-    // A greeting cited nothing and drew on nothing; labelling it would be noise.
-    expect(provenanceLine(provenance({ had_library: true }))).toBeNull()
-    expect(provenanceLine(provenance({ had_library: false }))).toBeNull()
+  it('reports a literature search that produced no citation', () => {
+    // The case that was previously indistinguishable from pure recall: it
+    // went to Semantic Scholar, then cited none of what it found.
+    expect(provenanceLine(provenance({ had_library: false, paper_searches: 2 }))).toBe(
+      'searched the literature, cited nothing — answered from background knowledge',
+    )
   })
 
-  it('still reports grounding when there was no library at all', () => {
-    expect(provenanceLine(provenance({ had_library: false, cited_papers: 2 }))).toBe(
-      'grounded in 2 papers',
+  it('reports both when it looked in both and cited neither', () => {
+    expect(provenanceLine(provenance({ searches: 1, passages: 4, paper_searches: 1 }))).toBe(
+      'searched your library and the literature, cited nothing — answered from background knowledge',
     )
   })
 })

@@ -300,12 +300,22 @@ export interface PaperRef {
  * counts into one plain line; see `provenanceLine`.
  */
 export interface ProvenanceEvent {
+  /**
+   * How the model classified the turn — the one self-reported field here,
+   * carried so the claim can be checked against the counts beside it. A
+   * `conversational` turn that produced a full answer is the model excusing
+   * itself from the library search.
+   */
+  kind: 'conversational' | 'answered'
   /** Whether the student had a library to search at all. */
   had_library: boolean
   /** How many times the agent reached retrieval (0 = it never looked). */
   searches: number
   /** Passages retrieval handed back across those searches. */
   passages: number
+  /** How many times it searched for papers (Semantic Scholar / OpenAlex).
+   *  Separate from `searches`, which counts the student's own library. */
+  paper_searches: number
   /** Distinct library sources the finished prose cites. */
   cited_sources: number
   /** Graph papers the finished prose cites. */

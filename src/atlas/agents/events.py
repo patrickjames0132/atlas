@@ -234,6 +234,12 @@ class Provenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     type: Literal["provenance"] = "provenance"
+    #: How the model classified the turn. The one *self-reported* field here,
+    #: and it is carried precisely so the claim can be checked against the
+    #: counts beside it: a ``conversational`` turn that produced a full answer
+    #: is the model excusing itself from the library, which is exactly the
+    #: loophole the guard can't close from the inside.
+    kind: Literal["conversational", "answered"]
     #: Whether a library was available to search at all. False means the
     #: student has uploaded nothing (or scoped everything out) — "no sources
     #: cited" then says nothing about the answer.
@@ -244,6 +250,13 @@ class Provenance(BaseModel):
     searches: int
     #: Total passages retrieval handed back across those searches.
     passages: int
+    #: How many times the agent searched for papers (Semantic Scholar /
+    #: OpenAlex). Separate from ``searches`` because the two say different
+    #: things: one is "did it consult the student's own material", the other
+    #: "did it go to the literature". Without it, an answer that searched the
+    #: web of papers and cited none of them was indistinguishable from one
+    #: written purely from the model's own knowledge.
+    paper_searches: int
     #: Distinct library sources the finished prose actually cites (``[Sn]``
     #: markers), and graph papers it cites (``[n]``). Zero on both means
     #: nothing grounded the answer but the model's own knowledge.

@@ -11,6 +11,7 @@ transcript/
   ChatMessage.tsx    — one turn: retrieval line, trace chips, prose+figures
   AnswerMarkdown.tsx — Markdown + KaTeX + citation rendering for answers
   remarkCite.ts      — the remark plugin that turns [n]/[Sn] markers into chips
+  provenance.ts      — the counts under an answer -> the one grounding line
 ```
 
 ## The pieces
@@ -49,6 +50,16 @@ transcript/
   paper list, so it can resolve `[n]` itself; only the *backend* knows which
   library sources a turn retrieved, so `[Sn]` arrives pre-resolved on the
   stream (see `agents/README.md`).
+
+- **`provenance`** — the grounding line under each answer. The backend ships
+  *counts* (library searches, paper searches, passages, what the prose cites),
+  never a verdict, so the wording lives here and can change without touching
+  the agent. The rule it encodes: say what the answer drew on, and never imply
+  grounding that isn't there — an answer that cited nothing says so, and
+  "searched your library (no matches)" reads differently from "nothing was
+  searched", because those are different things to tell a student. A
+  conversational turn renders no line: a greeting asserts nothing, so
+  attributing it would be noise.
 
 ## Who uses it
 

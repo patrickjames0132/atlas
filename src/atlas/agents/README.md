@@ -33,16 +33,19 @@ protocol for every workflow, declared in one file.
 | `Trace`     | researcher, orchestrator   | "watch the agent work" — one variant per action (below) |
 | `Discovery` | researcher, orchestrator   | papers + edges to merge into the live graph                    |
 | `Figure`    | researcher | a real figure attached to the answer — a paper's, or one mined from an uploaded PDF (`index=None`) |
-| `Cited`     | researcher            | final event: the node ids the answer draws on                  |
+| `Cited`     | researcher            | the node ids the answer draws on                               |
+| `SourceRefs` | researcher, lecturer | `[Sn]` marker index → library source, sent *before* the prose  |
+| `PaperRefs` | researcher            | `[n]` marker index → paper (title + URL), for when there's no graph to resolve against |
+| `Provenance` | researcher           | what actually grounded the answer — observed, not claimed      |
 | `Done`      | every workflow        | clean finish — always last on success                          |
 | `Error`     | every workflow        | failure — always last, so the frontend never hangs             |
 
 Design points worth knowing:
 
 - **Two nested discriminated unions.** `Event` discriminates on `type`;
-  its trace member is itself a union of six variants (`ReadTrace`,
-  `ExpandTrace`, `SearchTrace`, `SourceSearchTrace`, `FigureTrace`,
-  `RetrievalTrace`) discriminating on `action`. One
+  its trace member is itself a union of five variants (`ReadTrace`,
+  `ExpandTrace`, `SearchTrace`, `SourceSearchTrace`, `FigureTrace`)
+  discriminating on `action`. One
   `validate_python` call resolves both levels — a raw
   `{"type": "trace", "action": "read", ...}` dict comes back as a
   `ReadTrace`. The old teacher passed loose `{"action": ..., ...}` dicts
@@ -186,6 +189,21 @@ lands. Both agents that show library passages use this: the researcher
 (`search_sources`) and the lecturer (intuition mode). `history(turns)`
 converts the routes layer's `[{role, content}]` turns into PydanticAI
 message history.
+
+**Provenance is observed, never asked for.** `Provenance` carries what the
+server watched happen during a turn — whether a library was in scope, how many
+library searches and paper searches ran, how many passages came back, and how
+many sources and papers the *finished prose* cites. It does not ask the model
+where its knowledge came from, because a model has no reliable access to which
+of its sentences came from a retrieved passage and which from its own weights;
+the answer would be a confident label with nothing behind it. The one
+self-reported field on it is `kind`, and it rides there precisely so the claim
+can be checked against the counts beside it. The frontend turns the counts into
+one line (`teacher/transcript/provenance.ts`) — deliberately, so the wording is
+presentation and can change without touching the agent. Library and paper
+searches are counted **separately**: "went to Semantic Scholar and cited none
+of it" and "wrote this from memory" are different things to tell a student, and
+a single counter made them indistinguishable (see `docs/history.md`, v6.8.0).
 
 One house rule lives here: **agents are built with `instructions=`, never
 `system_prompt=`** — PydanticAI silently drops a `system_prompt` whenever

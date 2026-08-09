@@ -533,7 +533,8 @@ def test_no_library_means_no_guard(monkeypatch):
     model = scripted([final("From what I know: momentum smooths.", [])])
     out = run(model, monkeypatch, library=None)
     assert provenance_of(out) == events.Provenance(
-        had_library=False, searches=0, passages=0, cited_sources=0, cited_papers=0
+        kind="answered", had_library=False, searches=0, passages=0,
+        paper_searches=0, cited_sources=0, cited_papers=0,
     )
 
 
@@ -590,3 +591,33 @@ def test_paper_refs_resolve_the_markers_the_prose_used(monkeypatch):
 def test_no_paper_refs_when_the_prose_cites_nothing(monkeypatch):
     out = run(scripted([final("No papers needed.", [])]), monkeypatch)
     assert not any(isinstance(event, events.PaperRefs) for event in out)
+
+
+def test_provenance_carries_the_models_own_classification(monkeypatch):
+    """The one self-reported field on Provenance, carried so a `conversational`
+    turn that skipped the library can be checked against what it produced —
+    the loophole the output guard can't close from the inside."""
+    model = scripted([final("The Odyssey is an epic poem.", [], kind="conversational")])
+    out = run(model, monkeypatch, library=LIBRARY)
+    provenance = provenance_of(out)
+    assert provenance.kind == "conversational"
+    assert provenance.had_library is True and provenance.searches == 0
+
+
+def test_provenance_counts_paper_searches_separately(monkeypatch):
+    """A trip to Semantic Scholar and an answer written from the model's own
+    weights are very different things to report — and were indistinguishable
+    until paper searches were counted."""
+    monkeypatch.setattr(
+        researcher.tools.traversal,
+        "search",
+        lambda query, limit, year_from, year_to, provider: [],
+    )
+    model = scripted(
+        [("search_papers", ['{"query": "black holes"}'])],
+        [final("Nothing turned up; here is what I know.", [])],
+    )
+    out = run(model, monkeypatch, library=None)
+    provenance = provenance_of(out)
+    assert provenance.paper_searches == 1
+    assert provenance.searches == 0  # library searches stay their own count

@@ -189,9 +189,10 @@ The Vite dev server proxies `/api/*` to Flask.
      to re-light them all. A claim drawn from **your own uploaded sources** is
      attributed with its real title and page, resolved server-side rather than
      written out by the model.
-     Underneath each answer, a line says what actually grounded it — your
-     sources, papers, or the model's own background knowledge — computed from
-     what the agent did, not from what it claims.
+     Underneath each answer, a line says what actually grounded it — which of
+     your sources, which papers — computed from what the agent did, not from
+     what it claims. When nothing grounded it, it says that too: Atlas grounds
+     answers in real material, and is honest when it can't.
    - **No graph open?** The same panel is the same agent, seedless: it searches
      your library through its tools rather than being handed passages, so a
      greeting stays a greeting and a real question gets looked up first.
