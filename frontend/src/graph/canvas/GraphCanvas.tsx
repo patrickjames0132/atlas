@@ -20,7 +20,7 @@ import ForceGraph2DImport from 'react-force-graph-2d'
 import type { GraphNode } from '../../api'
 import { latexToUnicode } from '../../notation/latexToUnicode'
 import { nodeRadius, primaryRel } from '../model'
-import type { VLink, VNode } from '../model'
+import type { PositionedVNode, VLink, VNode } from '../model'
 import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR, SELECTION_RING, useCanvasInk } from '../theme'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
@@ -109,7 +109,7 @@ export default function GraphCanvas({
       linkDirectionalArrowLength={(link: VLink) => (link.type === 'similar' ? 0 : 2.4)}
       linkDirectionalArrowRelPos={1}
       nodeCanvasObject={(
-        node: VNode & { x: number; y: number },
+        node: PositionedVNode,
         ctx: CanvasRenderingContext2D,
         globalScale: number,
       ) => {
@@ -191,7 +191,7 @@ export default function GraphCanvas({
         }
       }}
       nodePointerAreaPaint={(
-        node: VNode & { x: number; y: number },
+        node: PositionedVNode,
         color: string,
         ctx: CanvasRenderingContext2D,
       ) => {

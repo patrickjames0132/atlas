@@ -40,7 +40,7 @@ export interface UseTimelineArgs {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fgRef: { current: any }
   /** The canvas size (drawAxis spans the visible viewport). */
-  size: { w: number; h: number }
+  size: { width: number; height: number }
   /** Shared "zoomToFit already ran for this layout" latch. */
   fitDone: { current: boolean }
   /** The selected year window (Timeline refits when it changes). */
@@ -218,7 +218,7 @@ export function useTimeline({
       const fg = fgRef.current
       if (layout !== 'timeline' || !base || !fg || base.maxYear <= base.minYear) return
       const tl = fg.screen2GraphCoords(0, 0)
-      const br = fg.screen2GraphCoords(size.w, size.h)
+      const br = fg.screen2GraphCoords(size.width, size.height)
       // Only label as many years as comfortably fit (≥28px apart on screen).
       const px = YEAR_SPACING * globalScale
       const step = px < 28 ? Math.ceil(28 / px) : 1

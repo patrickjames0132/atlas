@@ -219,7 +219,8 @@ Quality gates: `uv run nox` runs the whole repo's — pre-commit hooks (file
 hygiene; ruff incl. Google-style docstring rules; a repo-local
 no-single-letter-identifiers AST check, notebooks included; pydoclint for
 Args/Returns completeness; the frontend's prettier + oxlint incl. JSDoc
-completeness), strict mypy, pytest (`test/`, 419 offline tests), and Vitest
+completeness and `id-length`, the frontend half of that same naming rule),
+strict mypy, pytest (`test/`, 491 offline tests), and Vitest
 (`frontend/test/`, offline too) — plus `cd frontend && npm run build`
 (strict tsc + Vite) for the type/build check.
 

@@ -23,7 +23,7 @@ import { useMarquee } from '../../../src/graph/hooks/useMarquee'
 import type { VNode } from '../../../src/graph/model'
 
 /** A visible node placed at a sim position; its screen coords equal x/y here. */
-function node(id: string, x: number, y: number): VNode {
+function node(id: string, simX: number, simY: number): VNode {
   return {
     id,
     arxiv_id: null,
@@ -33,8 +33,8 @@ function node(id: string, x: number, y: number): VNode {
     url: null,
     rels: ['reference'],
     is_seed: false,
-    x,
-    y,
+    x: simX,
+    y: simY,
   }
 }
 
@@ -43,7 +43,9 @@ const VIEW = { nodes: [node('a', 10, 10), node('b', 40, 40), node('c', 500, 500)
 
 /** A fake ForceGraph ref whose screen coords are the node's own x/y (the wrap
  *  sits at the origin, so no offset). */
-const fgRef = { current: { graph2ScreenCoords: (x: number, y: number) => ({ x, y }) } }
+const fgRef = {
+  current: { graph2ScreenCoords: (simX: number, simY: number) => ({ x: simX, y: simY }) },
+}
 
 /** A wrap element whose bounding box is the viewport origin. */
 function makeWrapRef(): RefObject<HTMLDivElement | null> {

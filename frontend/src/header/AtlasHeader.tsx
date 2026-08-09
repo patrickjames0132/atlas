@@ -24,13 +24,13 @@ import './header.css'
 export interface AtlasHeaderProps {
   /** The controlled search box value (passed through to Search). */
   query: string
-  onQueryChange: (q: string) => void
+  onQueryChange: (query: string) => void
   /** The academic-data backend graphs are built from (the dropdown value). */
   provider: Provider
   /** Switch the backend — re-seeds the current graph under the new provider. */
   onProviderChange: (provider: Provider) => void
   /** Submit the search form (routes to graph-load or keyword search). */
-  onSubmit: (e: FormEvent) => void
+  onSubmit: (event: FormEvent) => void
   /** A search is in flight. */
   searching: boolean
   /** A graph is loading. */

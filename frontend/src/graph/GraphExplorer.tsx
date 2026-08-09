@@ -142,7 +142,7 @@ export default function GraphExplorer({
   const wrapRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null)
-  const [size, setSize] = useState({ w: 800, h: 600 })
+  const [size, setSize] = useState({ width: 800, height: 600 })
   /** One-shot latch: zoomToFit runs once per graph/layout, on engine stop. */
   const fitDone = useRef(false)
 
@@ -150,7 +150,7 @@ export default function GraphExplorer({
   useEffect(() => {
     if (!wrapRef.current) return
     const el = wrapRef.current
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }))
+    const ro = new ResizeObserver(() => setSize({ width: el.clientWidth, height: el.clientHeight }))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
@@ -586,8 +586,8 @@ export default function GraphExplorer({
         {hasGraph && (
           <GraphCanvas
             fgRef={fgRef}
-            width={size.w}
-            height={size.h}
+            width={size.width}
+            height={size.height}
             data={view}
             focusSet={focusSet}
             pinned={pinned}

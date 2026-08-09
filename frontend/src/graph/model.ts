@@ -25,8 +25,12 @@ export const ID_RE =
  * decorate with position (`x`/`y`) and optional pin coordinates (`fx`/`fy`).
  */
 export type VNode = GraphNode & {
+  // `x`/`y` are react-force-graph's own field names, written by its
+  // simulation — external property names we don't get to rename.
+  /* oxlint-disable id-length */
   x?: number
   y?: number
+  /* oxlint-enable id-length */
   fx?: number
   fy?: number
   vx?: number
@@ -38,6 +42,13 @@ export type VNode = GraphNode & {
    *  restores re-derive it from the discovery edges. */
   _origin?: string
 }
+
+/**
+ * A {@link VNode} the simulation has already placed. The canvas paint
+ * callbacks only ever run on positioned nodes, so they take this instead of
+ * re-narrowing `x`/`y` inline at every call site.
+ */
+export type PositionedVNode = VNode & Required<Pick<VNode, 'x' | 'y'>>
 
 /**
  * A live simulation link. RFG mutates `source`/`target` from ids into node
