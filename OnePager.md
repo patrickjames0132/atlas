@@ -703,18 +703,88 @@ optional, behind a key.
       "LLM vendor" row is a fixed label. Watch for per-provider streaming and
       tool-call differences in the agentic paths (see `teacher/agentic.py`'s
       SDK-boundary handling). *(From the `todos.md` inbox, 2026-07-20.)*
-- [ ] **Publish to PyPI — pick an available distribution name** — `atlas` is
-      almost certainly taken on PyPI, so the package `name` in `pyproject.toml`
-      must change (candidates: `arxiv-atlas`, `atlas-papers`, …) even though the
-      GitHub repo and the `atlas` CLI stay as-is. Also needs the packaging work:
-      a `[build-system]`, **bundling the built React frontend (`frontend/dist`)
-      as package data** so `atlas serve` works from an installed wheel,
+- [ ] **Publish to PyPI — pick an available distribution name** — the package
+      `name` in `pyproject.toml` must change even though the GitHub repo and the
+      `atlas` CLI stay as-is. **Availability checked 2026-08-09:** `atlas` is
+      TAKEN; `arxiv-atlas`, `atlas-papers`, `papers-atlas`, `atlas-graph`, and
+      `citation-atlas` are all free (404 on the PyPI JSON API). Also needs the
+      packaging work: **bundling the built React frontend (`frontend/dist`) as
+      package data** so `atlas serve` works from an installed wheel,
       config-file discovery for an installed package (today it reads
       `config.json` from the cwd), and the PyPI metadata (license, authors,
-      classifiers, project URLs, long-description from the README). Ties into the
-      licensing work (2026-07-20) — a public, timestamped PyPI release is also
-      the prior-art defense discussed there. *(Raised 2026-07-20, deferred from
-      the licensing pass.)*
+      classifiers, project URLs, long-description from the README).
+      `[build-system]` already exists (hatchling).
+      **The real driver, established 2026-08-09.** Not distribution to the
+      public — Patrick needs the code inside his employer's network, and their
+      only ingress is an **Artifactory remote that proxies PyPI** (it also
+      fronts npm and other public mirrors) with a **JFrog Xray** scan on the
+      way in. A public GitHub repo does *not* help if GitHub isn't an approved
+      source. Artifactory serves **both sdists and wheels**, so the sdist can
+      carry whatever source the work side needs. The work copy is a **one-way
+      import — no syncing code back** to the GitHub repo (Patrick, 2026-08-09).
+      **Consequences of that framing:**
+      - PyPI gives no *fork* — no git history, no PRs. It seeds a work-side
+        repo once; it is not a synced remote. Accepted.
+      - **Blocked on the PyMuPDF/AGPL question** — see the optional-extra
+        ticket below. Xray license policy plausibly rejects the whole package
+        over that one transitive dependency, which would waste the packaging
+        work. **Patrick owns clarifying the Xray policy**, including the
+        specific question of whether it flags *declared optional dependencies*
+        or only what actually resolves.
+      - **Open: does the work side need the frontend TypeScript source?** A
+        wheel/sdist would carry the built `frontend/dist`, not `frontend/src`.
+        Their Artifactory also fronts npm, so building the frontend at work is
+        possible — but only if the TS source gets there somehow.
+      - The **Windows CUDA torch routing does not survive publication**:
+        `[[tool.uv.index]]` is uv-only resolution config, absent from wheel
+        metadata, so `pip install` on Windows silently gets PyPI's CPU-only
+        torch — exactly the bug that index block exists to fix. Needs at least
+        a documented warning; matters less if the work side is Linux.
+      Ties into the licensing work (2026-07-20) — a public, timestamped release
+      is also the prior-art defense discussed there, though note
+      `docs/licensing.md:61` credits *"this repo, and PyPI"*, so making the
+      GitHub repo public would serve that goal on its own. **The MIT →
+      Apache-2.0 relicense trigger does *not* fire on a one-way import** (no
+      outside copyright enters the repo); Patrick nonetheless chose to
+      relicense first, 2026-08-09, as a deliberate preference rather than a
+      prerequisite. *(Raised 2026-07-20, deferred from the licensing pass;
+      re-scoped 2026-08-09 around the work-Artifactory driver.)*
+- [ ] **Make PyMuPDF an optional extra — it's AGPL, and it's the one licensing
+      landmine in the dependency graph** — a license audit of the installed tree
+      (2026-08-09) came back clean everywhere except one:
+      `pymupdf` is **"Dual Licensed - GNU AFFERO GPL 3.0 or Artifex
+      commercial"**. Everything else is BSD-3 (torch, scikit-learn, flask),
+      Apache-2.0 (sentence-transformers), or MIT (anthropic, duckdb,
+      sqlite-vec). Enterprise scanners commonly ban AGPL outright, and Atlas is
+      a Flask **network service** — precisely the scenario AGPL §13 targets — so
+      this is the most likely reason the "Publish to PyPI" work above fails at
+      the Xray gate. **The fix, and why it beats a work-specific fork:**
+      ```toml
+      dependencies = [ … ]           # pymupdf removed
+      [project.optional-dependencies]
+      pdf = ["pymupdf>=1.24"]
+      ```
+      `pip install <dist>` then has no AGPL anywhere in its graph, while
+      `pip install <dist>[pdf]` (and the dev env / `uv sync --all-extras`) keeps
+      today's behavior. One published package, no divergent branch whose
+      pymupdf-removal could drift back into `main` — which was Patrick's stated
+      worry, 2026-08-09. **Contained enough to be tractable:** pymupdf is
+      imported in exactly three modules — `services/pdf/{floats,mine,text}.py` —
+      with references in `config.py` and `services/sources/extract.py`. The work
+      is making those imports lazy and degrading the upload/sources feature
+      cleanly ("PDF support not installed") rather than crashing at import.
+      Work doesn't plan to upload files or sources at all (Patrick), so the
+      degraded mode is the *expected* mode there.
+      **Caveat that could kill the approach:** some policy engines flag
+      *declared* optional dependencies, not just resolved ones. If Xray does,
+      the extra doesn't clear the gate and the real fix is swapping to
+      `pypdfium2` (BSD-3/Apache-2.0) or `pdfminer.six` (MIT) — a much bigger
+      job, since `mine.py`/`floats.py` lean on PyMuPDF's layout and image
+      extraction. Confirm before building either. Worth doing on its own merits
+      regardless of PyPI: it lightens the default install and removes a copyleft
+      dependency from a network service. See [docs/pdf-mining.md](docs/pdf-mining.md)
+      before touching the caching layer. *(Filed 2026-08-09, out of the PyPI
+      packaging discussion.)*
 - [ ] **A build / deploy / release strategy** — the release ritual is ad-hoc and
       manual (bump `pyproject.toml` → `uv lock` → tag → push; see `CLAUDE.md`),
       and there's no deploy story at all. Define a real one: **CI** (run
@@ -724,7 +794,12 @@ optional, behind a key.
       publishing** in — the concrete packaging (distribution name, frontend
       bundling) is the separate "Publish to PyPI" item above; this is the
       surrounding automation. Likely staged: CI first, then release automation,
-      then deploy. *(From the `todos.md` inbox, 2026-07-20.)*
+      then deploy. **Note (2026-08-09):** there is still no `.github/workflows/`
+      at all, so **CI is the piece with standalone value** — it doesn't depend
+      on any of the PyPI/Artifactory questions and would stop the gate being
+      skippable today. The release-automation half, by contrast, is downstream
+      of the two tickets above and shouldn't start until the Xray policy is
+      known. *(From the `todos.md` inbox, 2026-07-20.)*
 - [ ] **Rename the `data/oa_pdfs/` PDF cache — "oa" reads as OpenAlex, means
       open-access** — `services/pdf/fetch.py` caches downloaded PDFs under
       `data_dir/oa_pdfs` (hash-named, LRU-pruned beyond `config.pdf.cache_files`).
