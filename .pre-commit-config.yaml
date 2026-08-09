@@ -26,6 +26,8 @@ repos:
   # (`_` as a pure discard excepted), in notebooks as well as modules — ruff
   # has no minimum-name-length rule (E741 only bans l/I/O), so this is a small
   # AST walker of our own. See bin/check_identifiers.py's docstring.
+  # This is the BACKEND half only; the frontend half is oxlint's `id-length`
+  # rule in frontend/.oxlintrc.json (see the oxlint hook below).
   - repo: local
     hooks:
       - id: identifiers
@@ -57,17 +59,21 @@ repos:
   # the session-start bin/setup installs it. Prettier runs first and fixes in
   # place (the ruff --fix pattern): a reformat fails the run so the changes
   # get restaged, then oxlint judges the formatted code.
+  # The trigger pattern spans src/ AND test/ (both npm scripts cover both) plus
+  # .oxlintrc.json itself, so a test-only or config-only commit is judged too —
+  # oxlint's id-length rule is the frontend half of the no-single-letter-
+  # identifiers convention, and tests are not exempt from it.
   - repo: local
     hooks:
       - id: prettier
         name: prettier (frontend format)
         language: system
         entry: npm run format --silent --prefix frontend
-        files: ^frontend/(src/.*\.(ts|tsx|css)|vite\.config\.ts)$
+        files: ^frontend/((src|test)/.*\.(ts|tsx|css)|vite\.config\.ts|\.oxlintrc\.json)$
         pass_filenames: false
       - id: oxlint
         name: oxlint (frontend lint)
         language: system
         entry: npm run lint --silent --prefix frontend
-        files: ^frontend/(src/.*\.(ts|tsx|css)|vite\.config\.ts)$
+        files: ^frontend/((src|test)/.*\.(ts|tsx|css)|vite\.config\.ts|\.oxlintrc\.json)$
         pass_filenames: false

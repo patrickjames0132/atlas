@@ -22,6 +22,36 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### The frontend format/lint hooks never ran on a test-only commit
+
+*Found 2026-08-09 while wiring oxlint's `id-length` rule (v6.9.0) — not by a
+symptom, but by reading the hook config to check the new rule would fire.*
+
+- **Symptom.** None, which is the point. `uv run nox -s precommit` was always
+  green, and so was every commit. But `pre-commit` on an actual
+  **`git commit` touching only `frontend/test/`** silently ran neither
+  prettier nor oxlint.
+- **Root cause.** Both hooks are `pass_filenames: false` — they shell out to
+  `npm run format` / `npm run lint`, which cover `src/` **and** `test/`. What
+  decides whether the hook runs at all is the separate `files:` regex, and
+  that had been left at `^frontend/(src/.*\.(ts|tsx|css)|vite\.config\.ts)$`.
+  So the *scripts* covered `test/` while the *trigger* did not: the two
+  drifted apart the moment the prettier script's glob grew a `test/` entry,
+  and nothing tied them together. `nox -s precommit` hid it completely,
+  because `pre-commit run --all-files` passes every file and every hook
+  matches something.
+- **Fix.** Widened both patterns to
+  `^frontend/((src|test)/.*\.(ts|tsx|css)|vite\.config\.ts|\.oxlintrc\.json)$`
+  — `test/` because the scripts already lint it and the naming convention
+  applies there too, and `.oxlintrc.json` because a config-only change should
+  re-judge the tree.
+- **Lesson / guard.** For a `pass_filenames: false` hook, the `files:` regex
+  is a *second, independent* declaration of scope — it must be re-checked
+  whenever the underlying script's globs change, or the hook quietly narrows.
+  And a green `nox -s precommit` is **not** evidence the git hook fires:
+  `--all-files` masks every trigger-pattern gap. To test the real thing, stage
+  a file of the kind in question and run `pre-commit run` without `--all-files`.
+
 ### A recall answer said nothing about being recall — when there was no library
 
 *Found by Patrick on day one of v6.7.0 (2026-08-06), and misdiagnosed twice

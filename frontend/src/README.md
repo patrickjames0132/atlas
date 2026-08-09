@@ -57,3 +57,22 @@ utilities — `useResizablePanel` for both right-docked panels),
 Every folder has its own README with the full story — this file is just the
 map. Verified by `npm run build` (strict tsc + Vite) and oxlint; behavior
 by the end-of-phase browser milestone.
+
+One oxlint rule is worth calling out because it encodes a house convention
+rather than a correctness check: **`id-length`** (`min: 2`) is the frontend
+half of CLAUDE.md's no-single-letter-identifiers rule — the backend half is
+`bin/check_identifiers.py`. It runs over `src/` and `test/` alike. Two
+deliberate settings:
+
+- **`properties: "never"`** — object-literal keys and member access are
+  exempt, because those names are usually not ours: react-force-graph's
+  `node.x`/`.y`, a `VLink`'s `_s`/`_t`, react-markdown's `a:` component
+  override, `latexToUnicode`'s subscript map keyed by the LaTeX character
+  itself. The cost is that a destructured `const { a } = obj` slips
+  through — an accepted trade for not drowning in false positives.
+- **`exceptions: ["_"]`** — the pure-discard idiom, `.map((_, index) => …)`.
+
+TypeScript property *signatures* are still checked (they're declarations, not
+accesses), so the handful of genuinely external field names declared in our
+own types carry a scoped `oxlint-disable` with a comment saying whose name it
+is — see `graph/model.ts` (`x`/`y`) and `api/search.ts` (the `q` wire key).

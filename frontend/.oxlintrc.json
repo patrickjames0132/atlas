@@ -2,6 +2,7 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["react", "typescript", "oxc", "jsdoc"],
   "rules": {
+    "id-length": ["error", { "min": 2, "properties": "never", "exceptions": ["_"] }],
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }],
     "jsdoc/require-param": ["error", { "checkDestructured": false }],

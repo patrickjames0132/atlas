@@ -2341,6 +2341,57 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Infrastructure, quality & tooling
 
+- [x] **Sweep single-letter identifiers out of the frontend, then machine-enforce
+      it** *(v6.9.0)* — the no-single-letter-identifiers convention covers *both*
+      halves of the codebase, but only the backend was enforced:
+      `bin/check_identifiers.py` reads `.py` and `.ipynb`, so the frontend had
+      drifted unnoticed since the one-time v2.4.2 sweep. **72 raw violations
+      across 15 files** as of 2026-08-06, worst in
+      `test/graph/clusterForce.test.ts` (13), `src/notation/latexToUnicode.ts`
+      (9), and `src/api/agents.ts` (9 — the SSE handler params `h`/`t`/`d`/`f`,
+      spotted while adding `onSourceRefs` there for structured citations).
+      **The enforcement half was cheap, as scouted: oxlint *does* implement
+      `id-length`** (as `eslint(id-length)`) — CLAUDE.md's "no min-name-length
+      rule" note is about **ruff**, not oxlint, so the frontend never needed the
+      custom-hook treatment the backend got.
+      **Where the shipped design diverged from the ticket.** The plan was an
+      `exceptions: ["a", "x", "y"]` list, since a real share of the 72 are
+      exemptions CLAUDE.md already grants (react-force-graph's `node.x`/`.y`,
+      the `_s`/`_t` endpoint fields, `AnswerMarkdown.tsx`'s `a:` react-markdown
+      override for the `<a>` *tag*, `latexToUnicode`'s map keyed by the LaTeX
+      character itself). But a global exceptions list whitelists those letters
+      as **variable** names too, which is exactly what the rule exists to stop.
+      Shipped instead: **`properties: "never"`** — property access and
+      object-literal keys are out of scope, mirroring the backend hook's own
+      "attribute reads are out of scope" rule — with `exceptions` holding only
+      `_`, the pure-discard idiom. That cut 72 raw hits to **20 genuine ones**
+      without whitelisting a single letter as a name. Trade-off, documented in
+      `frontend/src/README.md`: a destructured `const { a } = obj` slips
+      through; tightening it would flag ~50 legitimate external names.
+      **The sweep.** `handlers` not `h` and `trace`/`discovery`/`figure` not
+      `t`/`d`/`f` (`api/agents.ts`, JSDoc realigned); `query` not `q`
+      (`api/search.ts`, `header/AtlasHeader.tsx`); `event` not `e`;
+      `size: { width, height }` not `{ w, h }` (`useTimeline` + its two callers
+      and test); `simX`/`simY` in the marquee test helpers. `GraphCanvas`'s two
+      inline `VNode & { x: number; y: number }` narrowings became one named
+      **`PositionedVNode`** = `Required<Pick<VNode, 'x' | 'y'>>` in `model.ts` —
+      better than a disable comment, since the single letters appear only as
+      string-literal type keys. The two external field names still *declared* in
+      our own types — `VNode`'s `x`/`y`, `LiveSearchResponse.q` (the `?q=` wire
+      key the backend echoes; renaming it would mean touching routes + backend
+      tests, out of scope for a frontend sweep) — carry a scoped
+      `oxlint-disable id-length` plus a comment naming whose field it is,
+      because TS property *signatures* are declarations and stay in scope.
+      **`test/` is in scope** (Patrick, 2026-08-06) — over half the hits lived
+      there and the tests mirror `src/`; the existing `test/**` override block
+      relaxes only the jsdoc rules, and `id-length` was deliberately *not*
+      added to it. The rule rides the existing `precommit` nox session for
+      free. Behavior-neutral: all five nox sessions green (491 backend tests,
+      214 frontend tests, strict mypy, Trivy), verified in the browser.
+      **Found along the way:** the pre-commit `prettier`/`oxlint` hooks' trigger
+      pattern never matched `frontend/test/` — see [bugs.md](bugs.md).
+      *(Filed 2026-08-06 out of the structured-source-citations branch; shipped
+      2026-08-09.)*
 - [x] **Budget vocabulary — name the two rules, define every term once**
       *(v5.10.0)* — the landmark-sizing code had accumulated a vocabulary nobody
       could read: five functions whose names described a *criterion* ("density")

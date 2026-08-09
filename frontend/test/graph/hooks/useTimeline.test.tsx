@@ -56,7 +56,7 @@ function timelineX(nodes: VNode[]) {
       base: base(nodes),
       layout: 'timeline',
       fgRef: { current: null },
-      size: { w: 800, h: 600 },
+      size: { width: 800, height: 600 },
       fitDone: { current: false },
       yearLo: 2018,
       yearHi: 2026,

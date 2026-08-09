@@ -55,7 +55,11 @@ node object references** once the simulation binds them. Three consequences:
 - **`VNode` / `VLink` make the mutation typed.** `VNode` is a `GraphNode`
   plus the sim fields; `VLink` carries `_s`/`_t` copies of the raw endpoint
   ids, because after binding, `source`/`target` no longer *are* ids —
-  filtering and persistence read `_s`/`_t`.
+  filtering and persistence read `_s`/`_t`. `x`/`y` are optional on `VNode`
+  (the sim hasn't run yet on a freshly merged node), so `canvas/`'s paint
+  callbacks — which only ever see placed nodes — take **`PositionedVNode`**,
+  the one-line `Required<Pick<VNode, 'x' | 'y'>>` narrowing, instead of
+  re-stating `& { x: number; y: number }` at each call site.
 - **`Base` must keep object identity.** The per-graph dataset (nodes, links,
   year range, per-relation counts, the citation-count ceiling) is built once
   per graph and then only ever *mutated in place* — rebuild it (or `.map()`

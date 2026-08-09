@@ -19,6 +19,10 @@ import type { GraphNode, Provider } from './graph'
  * named a known paper, LLM-recalled + S2-verified matches lead the list.
  */
 export interface LiveSearchResponse {
+  /** The echoed query. `q` is the wire name — it's the `?q=` request
+   *  parameter the backend echoes back verbatim (see routes/search.py), not
+   *  a name we get to choose. */
+  // oxlint-disable-next-line id-length -- wire key, see above
   q: string
   count: number
   papers: GraphNode[]
@@ -71,7 +75,7 @@ function applyOptions(params: URLSearchParams, options?: SearchOptions): void {
  * expands free-text queries through the query analyst before the lexical
  * search runs (unless the options turn the analyst off).
  *
- * @param q        The search query.
+ * @param query    The search query.
  * @param limit    Maximum hits to return (default 25).
  * @param options  Optional date/field filters + the analyst switch (see
  *                 {@link SearchOptions}).
@@ -82,12 +86,12 @@ function applyOptions(params: URLSearchParams, options?: SearchOptions): void {
  *         caller surfaces the error in the search UI.
  */
 export async function searchLive(
-  q: string,
+  query: string,
   limit = 25,
   options?: SearchOptions,
   provider: Provider = 's2',
 ): Promise<LiveSearchResponse> {
-  const params = new URLSearchParams({ q, limit: String(limit), provider })
+  const params = new URLSearchParams({ q: query, limit: String(limit), provider })
   applyOptions(params, options)
   const res = await fetch(`/api/search?${params.toString()}`)
   if (!res.ok) throw new Error(`Search failed (${res.status})`)
@@ -125,20 +129,20 @@ export interface LocalHit {
  * on text), and neither does the analyst switch (no LLM is ever involved
  * locally).
  *
- * @param q        The search query.
+ * @param query    The search query.
  * @param limit    Maximum hits to return (default 10).
  * @param options  Optional search options — only the year window applies locally.
  * @param provider The selected backend — only its cached snapshots are searched.
  * @returns The cached hits (empty on any failure).
  */
 export async function searchLocal(
-  q: string,
+  query: string,
   limit = 10,
   options?: SearchOptions,
   provider: Provider = 's2',
 ): Promise<LocalHit[]> {
   try {
-    const params = new URLSearchParams({ q, limit: String(limit), provider })
+    const params = new URLSearchParams({ q: query, limit: String(limit), provider })
     applyOptions(params, options)
     params.delete('fields') // not supported locally
     params.delete('analyst') // ditto — the local search never involves the LLM

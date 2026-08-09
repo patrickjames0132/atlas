@@ -186,10 +186,18 @@ branch `main`.
   (`ctx`, `fg`, `lo`/`hi`, `aid`, `err`, `msg`, `buf`, `frac`) are fine; the
   rule is specifically about single letters. The whole codebase was swept clean
   of them once — keep it that way, don't reintroduce them. **Machine-enforced
-  since v5.3.0**: a pre-commit hook (`bin/check_identifiers.py`, an AST walker)
-  fails the gate on any single-letter *binding* in `.py` files and `.ipynb`
-  code cells alike (`_` as a pure discard is the one allowed single character;
-  attribute reads are out of scope).
+  on both sides**, with `_` the one allowed single character (the pure-discard
+  idiom) and property *access* out of scope on both:
+  - **Backend, since v5.3.0** — a pre-commit hook (`bin/check_identifiers.py`,
+    an AST walker) fails the gate on any single-letter *binding* in `.py`
+    files and `.ipynb` code cells alike.
+  - **Frontend, since v6.9.0** — oxlint's **`id-length`** rule
+    (`frontend/.oxlintrc.json`, `min: 2`, `properties: "never"`) over `src/`
+    and `test/`. Because `properties: "never"` exempts accesses but *not* TS
+    property signatures, the few external field names declared in our own
+    types (`VNode`'s `x`/`y`, the `q` search wire key) carry a scoped
+    `oxlint-disable id-length` plus a comment saying whose name it is —
+    that comment is the point, so don't strip them.
 - **The in-app help tracks the UI.** The frontend teaches itself in three
   places: the guided tour's step text (`frontend/src/tour/steps.ts`), the
   one-line gesture/hint lines inside components (e.g. GraphControls'
@@ -268,8 +276,10 @@ in `noxfile.py`, all reusing the uv env (no per-session installs):
   presence isn't machine-checkable in oxlint, so JSDoc-on-every-function
   stays a convention, swept once 2026-07-10), as local hooks running the
   frontend's own npm scripts (they need `frontend/node_modules` — the
-  session-start `bin/setup` installs it). Prettier fixes in place like ruff
-  `--fix`: a reformat fails the run so the changes get restaged.
+  session-start `bin/setup` installs it), plus **`id-length`**, the frontend
+  half of the no-single-letter-identifiers convention (see "Code conventions").
+  Prettier fixes in place like ruff `--fix`: a reformat fails the run so the
+  changes get restaged.
 - **`mypy`** — type-checks `src/atlas`, **strict since v1.21.1**: no
   `disable_error_code` entries and `check_untyped_defs = true`. Keep it that way —
   new code must type-check clean; don't reintroduce disabled codes. At SDK

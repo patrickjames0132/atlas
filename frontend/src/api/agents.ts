@@ -106,27 +106,27 @@ export interface LectureHandlers {
  * lecture never expands the graph, so beats and the up-front library index
  * are the only payload frames.
  *
- * @param body The seed, the visible nodes, the lecture mode, and (bridge
- *             mode only) the target paper. Nodes are the FULL graph-node
- *             shapes — the backend's typed boundary rejects trimmed ones.
- * @param h    Event handlers; see {@link LectureHandlers}.
+ * @param body     The seed, the visible nodes, the lecture mode, and (bridge
+ *                 mode only) the target paper. Nodes are the FULL graph-node
+ *                 shapes — the backend's typed boundary rejects trimmed ones.
+ * @param handlers Event handlers; see {@link LectureHandlers}.
  */
 export async function streamLecture(
   body: { seed: GraphNode; nodes: GraphNode[]; mode: LectureMode; target?: GraphNode },
-  h: LectureHandlers,
+  handlers: LectureHandlers,
 ): Promise<void> {
   const res = await fetch('/api/lecture', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: h.signal,
+    signal: handlers.signal,
   })
   await readSSE(res, (event, data) => {
-    if (event === 'beat') h.onBeat(data as Beat)
+    if (event === 'beat') handlers.onBeat(data as Beat)
     else if (event === 'source_refs')
-      h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
-    else if (event === 'done') h.onDone?.()
-    else if (event === 'error') h.onError?.((data as { message: string }).message)
+      handlers.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
+    else if (event === 'done') handlers.onDone?.()
+    else if (event === 'error') handlers.onError?.((data as { message: string }).message)
   })
 }
 
@@ -202,11 +202,11 @@ export interface AskHandlers {
   /** The final citation list: ids of the papers the answer drew from. */
   onCited: (nodeIds: string[]) => void
   /** An agent step (read/expand/search) to render as a trace chip. */
-  onTrace?: (t: TraceEvent) => void
+  onTrace?: (trace: TraceEvent) => void
   /** Papers the agent discovered, to merge into the live graph. */
-  onDiscovery?: (d: Discovery) => void
+  onDiscovery?: (discovery: Discovery) => void
   /** A figure the agent attached to its answer, to render inline. */
-  onFigure?: (f: AnswerFigure) => void
+  onFigure?: (figure: AnswerFigure) => void
   /** The library index for this answer's `[Sn]` markers (before any prose). */
   onSourceRefs?: (refs: Record<string, SourceRef>) => void
   /** What grounded the answer, once it's finished. */
@@ -225,14 +225,14 @@ export interface AskHandlers {
  * agent's pre-answer narration is never streamed, so there's nothing to
  * disavow.)
  *
- * @param body The question, a session id for follow-up context, the seed,
- *             the visible nodes (full graph-node shapes — the grounding
- *             scope), the graph's provider (so the researcher's expand/search/
- *             hydrate use the same backend), optional source_ids scoping the
- *             researcher's library search to a subset of uploaded sources, and
- *             optional lectures already played this session (extra context the
- *             answer may build on).
- * @param h    Event handlers; see {@link AskHandlers}.
+ * @param body     The question, a session id for follow-up context, the seed,
+ *                 the visible nodes (full graph-node shapes — the grounding
+ *                 scope), the graph's provider (so the researcher's expand/
+ *                 search/hydrate use the same backend), optional source_ids
+ *                 scoping the researcher's library search to a subset of
+ *                 uploaded sources, and optional lectures already played this
+ *                 session (extra context the answer may build on).
+ * @param handlers Event handlers; see {@link AskHandlers}.
  */
 export async function streamAsk(
   body: {
@@ -244,27 +244,27 @@ export async function streamAsk(
     source_ids?: string[]
     lectures?: PlayedLecture[]
   },
-  h: AskHandlers,
+  handlers: AskHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: h.signal,
+    signal: handlers.signal,
   })
   await readSSE(res, (event, data) => {
-    if (event === 'token') h.onToken((data as { text: string }).text)
-    else if (event === 'trace') h.onTrace?.(data as TraceEvent)
-    else if (event === 'discovery') h.onDiscovery?.(data as Discovery)
-    else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
-    else if (event === 'cited') h.onCited((data as { node_ids: string[] }).node_ids)
+    if (event === 'token') handlers.onToken((data as { text: string }).text)
+    else if (event === 'trace') handlers.onTrace?.(data as TraceEvent)
+    else if (event === 'discovery') handlers.onDiscovery?.(data as Discovery)
+    else if (event === 'figure') handlers.onFigure?.(data as AnswerFigure)
+    else if (event === 'cited') handlers.onCited((data as { node_ids: string[] }).node_ids)
     else if (event === 'source_refs')
-      h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
-    else if (event === 'provenance') h.onProvenance?.(data as ProvenanceEvent)
+      handlers.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
+    else if (event === 'provenance') handlers.onProvenance?.(data as ProvenanceEvent)
     else if (event === 'paper_refs')
-      h.onPaperRefs?.((data as { refs: Record<string, PaperRef> }).refs)
-    else if (event === 'done') h.onDone?.()
-    else if (event === 'error') h.onError?.((data as { message: string }).message)
+      handlers.onPaperRefs?.((data as { refs: Record<string, PaperRef> }).refs)
+    else if (event === 'done') handlers.onDone?.()
+    else if (event === 'error') handlers.onError?.((data as { message: string }).message)
   })
 }
 
@@ -339,9 +339,9 @@ export interface AskSourcesHandlers {
   onToken: (text: string) => void
   /** A tool step to render as a trace chip — a source search, or a library
    *  figure being shown (or failing to show). */
-  onTrace?: (t: TraceEvent) => void
+  onTrace?: (trace: TraceEvent) => void
   /** A figure the agent attached from an uploaded PDF. */
-  onFigure?: (f: AnswerFigure) => void
+  onFigure?: (figure: AnswerFigure) => void
   /** The library index for this answer's `[Sn]` markers (before any prose). */
   onSourceRefs?: (refs: Record<string, SourceRef>) => void
   /** What grounded the answer, once it's finished. */
@@ -358,32 +358,32 @@ export interface AskSourcesHandlers {
  * A single retrieve event, then prose tokens — interleaved with figure
  * traces/attachments when the agent pulls a figure from an uploaded PDF.
  *
- * @param body The question, a session id for follow-up context, and optional
- *             source_ids to scope retrieval to a subset of sources.
- * @param h    Event handlers; see {@link AskSourcesHandlers}.
+ * @param body     The question, a session id for follow-up context, and
+ *                 optional source_ids to scope retrieval to a subset of sources.
+ * @param handlers Event handlers; see {@link AskSourcesHandlers}.
  */
 export async function streamAskSources(
   body: { question: string; session_id: string; source_ids?: string[] },
-  h: AskSourcesHandlers,
+  handlers: AskSourcesHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask_sources', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: h.signal,
+    signal: handlers.signal,
   })
   await readSSE(res, (event, data) => {
-    if (event === 'token') h.onToken((data as { text: string }).text)
+    if (event === 'token') handlers.onToken((data as { text: string }).text)
     // Every trace is a tool step now — the one-shot retrieval summary went
     // away with the librarian in v6.7.0.
-    else if (event === 'trace') h.onTrace?.(data as TraceEvent)
-    else if (event === 'figure') h.onFigure?.(data as AnswerFigure)
+    else if (event === 'trace') handlers.onTrace?.(data as TraceEvent)
+    else if (event === 'figure') handlers.onFigure?.(data as AnswerFigure)
     else if (event === 'source_refs')
-      h.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
-    else if (event === 'provenance') h.onProvenance?.(data as ProvenanceEvent)
+      handlers.onSourceRefs?.((data as { refs: Record<string, SourceRef> }).refs)
+    else if (event === 'provenance') handlers.onProvenance?.(data as ProvenanceEvent)
     else if (event === 'paper_refs')
-      h.onPaperRefs?.((data as { refs: Record<string, PaperRef> }).refs)
-    else if (event === 'done') h.onDone?.()
-    else if (event === 'error') h.onError?.((data as { message: string }).message)
+      handlers.onPaperRefs?.((data as { refs: Record<string, PaperRef> }).refs)
+    else if (event === 'done') handlers.onDone?.()
+    else if (event === 'error') handlers.onError?.((data as { message: string }).message)
   })
 }
