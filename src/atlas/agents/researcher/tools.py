@@ -87,6 +87,11 @@ class ResearcherDeps:
     #: consulted the student's library, whatever the answer claims.
     source_searches_run: int = 0
     source_hits: int = 0
+    #: How many times ``search_papers`` reached the provider. Counted for the
+    #: same reason: an answer that went to Semantic Scholar and an answer that
+    #: came from the model's own weights are very different things to report,
+    #: and without this they were indistinguishable in the provenance record.
+    paper_searches_run: int = 0
 
     def source_id(self, number: int) -> str | None:
         """Resolve a model-written ``[Sn]`` index to a real source id.
@@ -464,6 +469,7 @@ def search_papers(
     deps.searched.add(visit_key)
     deps.searches_left -= 1
 
+    deps.paper_searches_run += 1
     try:
         hits = traversal.search(query, BUDGETS["search_limit"], year_from, year_to, deps.provider)
     except _TRAVERSAL_ERRORS as exc:

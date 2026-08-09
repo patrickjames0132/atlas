@@ -22,6 +22,48 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A recall answer said nothing about being recall — when there was no library
+
+*Found by Patrick on day one of v6.7.0 (2026-08-06), and misdiagnosed twice
+before the logs settled it.*
+
+- **Symptom.** Asking the chat about The Odyssey — deliberately off-topic, to
+  see whether recall was reachable at all — produced a full answer with no
+  library search and **no grounding line at all**. The answer looked
+  authoritative and said nothing about where it came from, which is the exact
+  failure the provenance line exists to prevent.
+- **The two wrong diagnoses.** Both of us assumed the model had labelled a
+  real question `conversational` to excuse itself from searching — a genuine
+  design weakness (`_must_have_looked` only fires on `answered`, and `kind` is
+  self-reported by the party it constrains), so the story fit. It was wrong.
+  `grep 'answer kind=' data/atlas.log` showed
+  `kind=answered library=False searches=0`: the classification was correct
+  every time, and there simply was **no library in scope** on those turns.
+- **Root cause.** A missing branch in `transcript/provenance.ts`. The
+  skip-the-library line was gated on `had_library && searches === 0`, so a
+  turn with *no* library fell past every case to `return null`. The one
+  situation where the answer is unambiguously recall — nothing to consult, so
+  nothing consulted — was the one situation that rendered nothing.
+- **Fix (v6.7.1).** Restructure around the question that actually matters:
+  once a pleasantry is ruled out, **every** answer that cites nothing names
+  where it came from. No library is now its own case ("answered from
+  background knowledge") rather than falling through the library-shaped
+  branches.
+- **Lesson / guard.** Two. First, the code lesson: when a predicate reads
+  `X && Y`, check what happens when `X` is false — here the `!had_library`
+  path was never written, only unreached. Second, the diagnostic one: *a
+  plausible story that fits the symptom is not a diagnosis.* The conversational
+  loophole explained the evidence perfectly and was still not the cause; one
+  grep of the log ended twenty minutes of confident reasoning in the wrong
+  direction. That log line exists because the same ticket added it — which is
+  the argument for logging a model's own claims next to the observed counts.
+  Guarded by the no-library recall cases in `provenance.test.ts`.
+
+  *(The conversational loophole is real regardless, just not what happened
+  here. v6.7.1 narrowed it pre-emptively — `answered` is now the prompt's
+  default and `kind` rides on `Provenance` and the log — and the Backlog
+  tracks the escalation if it ever does misfire.)*
+
 ### A rejected answer streamed to the screen before the guard could reject it
 
 *Caught while designing the look-before-you-answer guard (2026-08-06), before

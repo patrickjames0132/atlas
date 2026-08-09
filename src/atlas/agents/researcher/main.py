@@ -23,6 +23,7 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
+import logging
 from typing import Iterator, Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -51,6 +52,8 @@ from .tools import (
     show_figure,
     show_source_figure,
 )
+
+log = logging.getLogger(__name__)
 
 
 class Answer(BaseModel):
@@ -277,23 +280,18 @@ def _prompt(
         # Graph-free: no seed, no numbered papers yet. search_papers still
         # works and numbers what it finds, so the list starts empty rather
         # than being absent — this is the researcher with an empty graph.
-        # But the default reach is different here: with no graph the student
-        # is in "chat with my books" mode, and pulling in literature they
-        # didn't ask for is slower and more surprising than simply knowing
-        # the answer. So the ordering flips — explain, then search only when
-        # explaining honestly isn't enough.
+        # An earlier version told the model to prefer its own knowledge here
+        # and search only as a last resort. That was an attempt to make the
+        # graph-free chat behave like a general assistant, and it was both
+        # unenforceable (a soft prompt rule against an always-available tool)
+        # and off-mission: Atlas grounds answers in papers and the student's
+        # own material. Reaching for the literature with no graph open is the
+        # right instinct, not one to suppress.
         context = (
             "No citation graph is open — the student is asking outside any "
-            "paper neighborhood, so treat this as a conversation about their "
-            "own material and the subject itself. After searching their "
-            "library, answer from it where it speaks and OTHERWISE FROM YOUR "
-            "OWN KNOWLEDGE: explaining a concept you know well is the right "
-            "response here, not a literature search.\n"
-            "Use search_papers only when the question genuinely needs the "
-            "literature — what's recent or current, who published a specific "
-            "result, what the state of the art is — or when you'd otherwise "
-            "have to guess. Papers you find are numbered as they arrive and "
-            "can be cited [n] as usual."
+            "paper neighborhood. There are no numbered papers yet; "
+            "search_papers can find some and they'll be numbered as they "
+            "arrive, and can be cited [n] as usual."
         )
     if library:
         context += "\n\n" + _library_context(library)
@@ -446,10 +444,23 @@ def answer(
         yield events.PaperRefs(
             refs={key: events.PaperRef(**ref) for key, ref in paper_refs.items()}
         )
+    # Logged as well as streamed: a mislabelled turn is the one failure the
+    # output guard cannot catch (it only fires on `answered`), so the
+    # classification needs to be greppable in data/atlas.log after the fact.
+    log.info(
+        "answer kind=%s library=%s searches=%d passages=%d paper_searches=%d",
+        final.kind,
+        deps.has_sources,
+        deps.source_searches_run,
+        deps.source_hits,
+        deps.paper_searches_run,
+    )
     yield events.Provenance(
+        kind=final.kind,
         had_library=deps.has_sources,
         searches=deps.source_searches_run,
         passages=deps.source_hits,
+        paper_searches=deps.paper_searches_run,
         # Counted off the finished prose, not claimed: which [Sn] markers the
         # answer actually kept, and which papers it cites.
         cited_sources=len(prompts.source_refs(deps.sources, final.text)),

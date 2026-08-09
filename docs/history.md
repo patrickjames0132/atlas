@@ -254,6 +254,61 @@
 
 ### AI teacher & lectures
 
+- [x] **Atlas grounds — the general-assistant ambition is cut** *(v6.8.0)* —
+      two days after the librarian retirement shipped, a scope correction that
+      is mostly deletion. v6.7.0 had tried to give the graph-free chat a
+      general-purpose character: a prompt rule preferring the model's own
+      knowledge over `search_papers`, machinery to detect when recall was
+      used, and a plan to measure whether it ever was. Patrick killed it after
+      testing (2026-08-08): *"this feels like we are trying to do too much."*
+      He was right, and had said so earlier — *"I don't really see the agent
+      ever using its own recall if it can just search S2"* — which is exactly
+      what the logs showed.
+
+      **Why it couldn't work.** The rule was a soft prompt preference against
+      an always-available tool, with nothing structural behind it, unlike the
+      library guard it sat beside. And the instrument meant to measure it was
+      measuring the wrong thing: `Provenance.searches` counted *library*
+      searches only, so a turn that ran off to Semantic Scholar and a turn
+      written purely from the model's weights both reported zero. The plan to
+      "watch the grounding line for recall answers" could never have worked as
+      built.
+
+      **Why it shouldn't work.** Claude Desktop already does general knowledge,
+      web search and RAG, and always will do them better — that is what it is
+      for. Atlas's value is the citation graph and the student's own material;
+      competing on general chat is unwinnable and off-mission. The distinction
+      that survives: recall as *scaffolding inside a grounded answer* (what a
+      Bellman equation is, on the way to answering something a paper does
+      cover) is on-mission, needed no machinery, and was never at risk. Recall
+      as a *general fallback for arbitrary questions* was the thing being
+      built, and it was the wrong thing.
+
+      **What went.** The graph-free "prefer your own knowledge" prompt rule;
+      the `ANSWER_LENGTH` heuristic that guessed whether a conversational turn
+      was really an answer; and two Backlog tickets chasing the behavior. What
+      stayed: the look-before-you-answer guard (the actual product value — it
+      is what killed "hi searches my books"), and provenance, now **fixed to
+      count paper searches separately** so the line distinguishes "searched the
+      literature and cited none of it" from "nothing was searched at all". The
+      resulting product story is simpler and more honest than what it replaced:
+      *Atlas grounds; the line tells you in what; if nothing grounded it, it
+      says so and you take the question elsewhere.*
+
+- [x] **The conversational loophole, narrowed** *(v6.7.1)* — a follow-up to
+      the librarian retirement, plus the bug that hid behind it.
+      `_must_have_looked` only fires on an `answered` turn, and `kind` is
+      self-reported by the model the guard constrains — so the enforcement was
+      only as strong as that one field's honesty, in a ticket that had
+      *explicitly rejected* self-reported provenance for exactly that reason.
+      Narrowed rather than closed (whether a turn is a real question is
+      irreducibly a judgment): `answered` became the prompt's default with
+      `conversational` enumerated exhaustively, and `kind` now rides on the
+      `Provenance` event and the log so the classification is greppable.
+      Shipped alongside the bug that prompted the investigation and turned out
+      to be unrelated — a recall answer rendering no grounding line at all when
+      no library was in scope (`docs/bugs.md`).
+
 - [x] **The librarian is retired: one researcher, retrieval as a tool, honest
       provenance** *(v6.7.0)* — a consolidation of three tickets that turned
       out to be one design question ("the librarian searches even when I say

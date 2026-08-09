@@ -150,29 +150,23 @@ optional, behind a key.
       built and then removed 2026-07-24 — that highlight could never be
       clickable without the structured reference v6.6.0 added.
       *(From #2 of the 2026-07-24 front-end quick-wins pass.)*
-- [ ] **Does the researcher ever actually use recall, or does it just search?**
-      — the open question left by v6.7.0, and deliberately left open. The
-      library rule is *structural* (`_must_have_looked` bounces an answer that
-      skipped an available library — the model gets no say), but the
-      graph-free preference for background knowledge over `search_papers` is
-      only **words in a prompt**, and searching is the reflexively safe move
-      for a research agent. Patrick's read (2026-08-06): *"I don't really see
-      the agent ever using its own recall if it can just search S2."* Probably
-      right. Counter-evidence: this repo's agent *under*-calls tools rather
-      than over-calling (it skips `show_figure` when asked outright — the very
-      reason the library guard had to be structural), so it may not reach for
-      S2 as eagerly as expected.
-      **This is now measurable rather than arguable**, which is why it shipped
-      soft: the `Provenance` event records per turn whether the agent searched
-      and what it cited, so a turn with `searches > 0` and `cited_papers == 0`
-      is a recall answer. Watch the grounding line over real use before
-      changing anything. **If it does over-search, the fix is one hook**:
-      `search_papers` is a plain `Tool`, but `search_sources` already
-      demonstrates the pattern — a `prepare=` hook returning `None` withholds
-      a tool, so `return tool_def if ctx.deps.nodes else None` makes
-      graph-free chat strictly library + recall. (That was the third option
-      when this was decided; Patrick chose to watch first.)
-      *(Filed 2026-08-06, out of the librarian-retirement browser round.)*
+- [ ] **The guard is gated on a field the model writes** — a known weakness in
+      `_must_have_looked`, kept here because the guard itself is core: it only
+      fires on an `answered` turn, and `kind` is self-reported, so labelling a
+      real question `conversational` would skip the library unchallenged.
+      **Never observed** — it was the first suspect when a v6.7.0 answer
+      skipped the search, but the log said `kind=answered` and the real cause
+      was elsewhere (`docs/bugs.md`). Narrowed pre-emptively in v6.7.1
+      (`answered` is the prompt's default; any question on any subject
+      qualifies). Watch with `grep 'answer kind=' data/atlas.log` — a
+      `conversational` line on a turn that clearly asked something is the
+      signal. If it ever does slip, the lever is a cheap pre-classifier
+      deciding the kind before the researcher runs, so the answering model
+      can't grant itself the exemption (`query_analyst` is the pattern).
+      Related gap, unbuilt: a user can say *"answer from your own knowledge,
+      don't search"* and nothing expresses that — with a library in scope the
+      guard would override an explicit instruction.
+      *(Filed 2026-08-06; scope-trimmed 2026-08-08.)*
 - [ ] **Reconcile when the researcher should search vs. expand** — the agent has
       two "reach beyond the graph" tools with fuzzy boundaries: `expand_node`
       (a lineage hop — references/citations/similar of a paper *on* the graph) and
