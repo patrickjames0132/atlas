@@ -1,0 +1,90 @@
+# The quality gate for arXiv Atlas, run on GitHub — the same `uv run nox` you'd
+# run by hand, plus the frontend typecheck that nox deliberately doesn't cover.
+#
+# Why this exists: the gate used to depend entirely on remembering to run it
+# before pushing, and it was skippable in ways that left no trace (a missing
+# `trivy` makes the security session skip *silently* and still report success).
+# CI runs it in a clean, pinned environment on every push to main.
+name: CI
+
+on:
+  push:
+    # !!! TEMPORARY — REMOVE `feature/ci-workflow` BEFORE MERGING TO MAIN !!!
+    # A workflow can only be exercised from the branch it's triggered on, and
+    # push/workflow_dispatch both need it on the default branch — so this line
+    # exists purely to smoke-test the gate once before it lands. It must come
+    # back to `branches: [main]`.
+    branches: [main, feature/ci-workflow]
+  # Working branches live locally by default (see CLAUDE.md), so this trigger
+  # will rarely fire — it costs nothing and means the gate is already wired if a
+  # branch ever does get pushed for review.
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same ref makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin both caches inside the workspace so one actions/cache path works on
+  # Linux and Windows alike (the defaults differ per-OS).
+  UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+  npm_config_cache: ${{ github.workspace }}/.npm-cache
+  # Nothing in the gate needs torch, and on Linux a full sync pulls the ~15
+  # nvidia-* CUDA packages the lockfile gates on `sys_platform == 'linux'`.
+  # See bin/setup.sh for the full reasoning. A useful side effect: this run
+  # fails if anything ever starts importing torch at module scope, which keeps
+  # the embedder's lazy import honest.
+  ATLAS_SKIP_TORCH: '1'
+
+jobs:
+  gate:
+    strategy:
+      # Report both platforms — a Windows-only break shouldn't be hidden by
+      # Linux failing first, or vice versa.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # mise reads .tool-versions, so CI installs the SAME pinned python / uv /
+      # nodejs / trivy the developer machines do — one source of truth. It also
+      # means trivy is genuinely on PATH, so nox's `security` session actually
+      # scans instead of skipping.
+      - uses: jdx/mise-action@v4
+
+      - name: Cache uv downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-${{ matrix.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: uv-${{ matrix.os }}-
+
+      - name: Cache npm downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.npm_config_cache }}
+          key: npm-${{ matrix.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: npm-${{ matrix.os }}-
+
+      # The documented bootstrap, reused rather than retyped, so CI can't drift
+      # from what a developer runs. Windows runners ship Git Bash, so the .sh
+      # works on both and bin/setup.bat stays a local convenience.
+      - name: Bootstrap (bin/setup.sh)
+        shell: bash
+        run: bin/setup.sh
+
+      - name: Quality gate (uv run nox)
+        shell: bash
+        run: uv run nox
+
+      # nox has no session for this: `tsc -b` is the frontend's type check and
+      # the working agreement runs it by hand. Here it's part of the gate.
+      # (bin/setup.sh already built once; this re-runs cheaply and is the step
+      # that actually reports a type error as a CI failure.)
+      - name: Frontend typecheck (tsc + vite build)
+        shell: bash
+        run: npm run build --prefix frontend

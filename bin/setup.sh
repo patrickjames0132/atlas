@@ -14,6 +14,18 @@ else
   echo "warning: mise not found — skipping pinned-tool install (https://mise.jdx.dev)" >&2
 fi
 
-uv sync --all-groups
+# ATLAS_SKIP_TORCH=1 drops torch from the sync. CI sets it: nothing in the gate
+# needs torch (sentence-transformers is imported lazily inside
+# services/sources/embeddings.py's _get_model, and every test stubs the embedder
+# via the stub_embeddings fixture), while on Linux a full sync drags in the
+# ~15 nvidia-* CUDA packages the lockfile marks `sys_platform == 'linux'` —
+# multiple GB per cold cache. Keeping it an opt-in env var means CI and a local
+# bootstrap stay ONE script. Don't set it locally: `atlas serve` needs torch to
+# embed anything for real.
+sync_args=(--all-groups)
+if [ "${ATLAS_SKIP_TORCH:-}" = "1" ]; then
+  sync_args+=(--no-install-package torch)
+fi
+uv sync "${sync_args[@]}"
 npm install --prefix frontend
 npm run build --prefix frontend
