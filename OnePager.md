@@ -785,21 +785,23 @@ optional, behind a key.
       dependency from a network service. See [docs/pdf-mining.md](docs/pdf-mining.md)
       before touching the caching layer. *(Filed 2026-08-09, out of the PyPI
       packaging discussion.)*
-- [ ] **A build / deploy / release strategy** — the release ritual is ad-hoc and
-      manual (bump `pyproject.toml` → `uv lock` → tag → push; see `CLAUDE.md`),
-      and there's no deploy story at all. Define a real one: **CI** (run
-      `uv run nox` on push/PR so the gate can't be skipped), a **repeatable
-      build** (backend wheel + bundled frontend), how a **release** is cut and
-      published, and **where/how the service is deployed**. Fold **PyPI
-      publishing** in — the concrete packaging (distribution name, frontend
-      bundling) is the separate "Publish to PyPI" item above; this is the
-      surrounding automation. Likely staged: CI first, then release automation,
-      then deploy. **Note (2026-08-09):** there is still no `.github/workflows/`
-      at all, so **CI is the piece with standalone value** — it doesn't depend
-      on any of the PyPI/Artifactory questions and would stop the gate being
-      skippable today. The release-automation half, by contrast, is downstream
-      of the two tickets above and shouldn't start until the Xray policy is
-      known. *(From the `todos.md` inbox, 2026-07-20.)*
+- [ ] **A deploy / release-automation strategy** — *(CI, the first of this
+      ticket's three stages, **shipped in v6.10.0** — see
+      [docs/history.md](docs/history.md). What follows is the remainder.)* The
+      release ritual is still manual (bump `pyproject.toml` → `uv lock` → tag →
+      push; see `CLAUDE.md`), and there's no deploy story at all. Still to
+      define: a **repeatable build** (backend wheel + bundled frontend), how a
+      **release** is cut and published, and **where/how the service is
+      deployed**. `.github/workflows/release.yml` exists but only asserts the
+      tag matches `pyproject.toml`'s version — it is the place the build and
+      publish jobs will land. **Fold PyPI publishing in** — the concrete
+      packaging (distribution name, frontend bundling) is the "Publish to PyPI"
+      item above; this is the surrounding automation, and it **shouldn't start
+      until the Xray policy answer lands**, since that decides whether there's
+      a publishable artifact at all. Deploy is the genuinely open one: no
+      target has been chosen, and the service needs an `ANTHROPIC_API_KEY` and
+      a writable `data/`, so it isn't a static host. *(From the `todos.md`
+      inbox, 2026-07-20; narrowed 2026-08-09 when CI shipped.)*
 - [ ] **Rename the `data/oa_pdfs/` PDF cache — "oa" reads as OpenAlex, means
       open-access** — `services/pdf/fetch.py` caches downloaded PDFs under
       `data_dir/oa_pdfs` (hash-named, LRU-pruned beyond `config.pdf.cache_files`).
