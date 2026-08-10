@@ -238,6 +238,24 @@ optional, behind a key.
       and compare against the PDF; if the manifest is empty everywhere, the
       question is whether the volume has a text layer at all.
       *(From the `todos.md` inbox, 2026-07-19.)*
+- [ ] **Images from HTML sources never reach the chat either** — the same
+      user-visible symptom as the Feynman ticket above ("the assistant can't
+      show me a picture from this source"), but a **different pipeline**, so
+      don't assume one fix covers both: that one is PDF float-mining in
+      `services/pdf`, this one is whatever the HTML ingest path does with
+      `<img>`. Repro Patrick is using: the **Wikipedia "Black hole" article** —
+      image-rich and public, so it makes a good fixture. **Questions to answer
+      before designing anything:** does HTML ingest extract images at all, or
+      only text? If it records them, where do they live — note
+      [docs/pdf-mining.md](docs/pdf-mining.md) settles that images are
+      *deliberately* never cached server-side for PDFs, and that reasoning may
+      or may not carry to remote URLs we could simply hot-link. And can
+      `show_source_figure` even address a non-PDF source, given it's
+      page/manifest-shaped today? Start by ingesting the article and dumping
+      what the source record actually holds — the same "look before fixing"
+      discipline the Feynman ticket calls for. Also worth checking whether the
+      honest-failure trace chip fires here, or whether it fails silently; the
+      latter would be its own bug. *(From the `todos.md` inbox, 2026-08-09.)*
 - [ ] **Should display filters scope the agents? Researcher yes, lecturer maybe
       not** — today filtering the graph (relation chips, year / citation sliders)
       narrows what **both** the researcher and the lecturer are grounded in:
@@ -504,8 +522,15 @@ optional, behind a key.
       by citation source. v6.3.0's `BuildShape.cache_suffix()` is the pattern to
       follow — a suffix that's empty on the default path and distinguishing
       otherwise — so a corpus/live choice keys around the cache instead of
-      serving the wrong old snapshot. *(From the `todos.md` inbox, 2026-07-16;
-      scoped 2026-07-19; adaptive half shipped 2026-07-20.)*
+      serving the wrong old snapshot.
+      **Sequencing (Patrick, 2026-08-09): do this *after* the S2-corpus
+      landmark-citation research tickets land, not before.** The toggle is only
+      worth exposing once the corpus path is known-good — shipping a user-facing
+      "use the corpus" switch while the corpus still returns a random-looking
+      set of Field Landmarks would just hand people a way to make their graph
+      worse. Treat the research outcome as the gate. *(From the `todos.md`
+      inbox, 2026-07-16; scoped 2026-07-19; adaptive half shipped 2026-07-20;
+      gated on the corpus research 2026-08-09.)*
 
 - [ ] **A filter chip for teacher-discovered nodes and search nodes** — discovered
       papers (dashed ring, from `expand_node`/`search_papers`) and topic-search
@@ -547,6 +572,24 @@ optional, behind a key.
       it's a highlight only — clicking shouldn't do anything, since there's no
       node/page to jump to. *(From the `todos.md` inbox, 2026-07-19.)*
 
+- [ ] **Let a source be renamed after upload, so chat references are readable**
+      — an uploaded source carries whatever name it arrived with, and in a chat
+      citation that's often unreadable: a hashed PDF filename, or a URL slug for
+      a web page. Give the library an **alias** — an editable display name set
+      after upload — and render *that* wherever the source is named to the user
+      (the `[Sn]` marker's resolved title, the trace chips, the library list).
+      Pairs naturally with the reference-highlighting ticket above: no point
+      styling a citation to stand out while the text inside it is a hash.
+      **Design notes:** the alias is presentation-only — retrieval, embeddings,
+      and the stored source id must not key on it, or renaming would invalidate
+      the index. Keep the original name visible somewhere (tooltip, or beneath
+      the alias in the library list) so a source stays identifiable. Worth
+      deciding whether an alias also reaches the *agent* — the researcher sees
+      source titles when it decides what to search, so a clearer name may help
+      it too, but that makes the alias semantically load-bearing rather than
+      cosmetic. Default to presentation-only unless there's a reason.
+      *(From the `todos.md` inbox, 2026-08-09.)*
+
 - [ ] **Light-mode relation colors — darker & higher-contrast** — the v6.2.0
       light/dark toggle deliberately left the *relation* palette unthemed (gold
       seed, blue references, green landmarks, pink search were chosen to read on
@@ -582,6 +625,27 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Re-evaluate where the frontend lives and what its folder is called** —
+      **it stays in this repo for now** (Patrick, 2026-08-09); this is about
+      *placement and naming*, not extraction. `frontend/` is a generic name
+      inherited from `npm create vite`, and it sits at the repo root as a peer
+      of `src/` — which reads oddly now that the backend is a proper src-layout
+      package (`src/atlas/`) and the frontend is the larger of the two trees.
+      Options worth weighing: rename in place (`web/`, `ui/`, `app/`, or
+      something Atlas-specific); move it under a shared parent so the two halves
+      are visibly siblings (`packages/`, `apps/`); or leave it and just write
+      down *why*, which is a legitimate outcome. **What makes this
+      non-trivial** is the blast radius of a rename — `frontend/` is named in
+      `.pre-commit-config.yaml`'s two hook patterns, `noxfile.py`'s `vitest`
+      session, both `bin/setup` scripts, `.github/workflows/ci.yml`,
+      `.gitignore` (`frontend/dist/`), the Flask static-serving path, and a
+      good deal of prose across `README.md`, `CLAUDE.md`, and the READMEs
+      themselves. Do it as one mechanical sweep with the gate green on both
+      sides, or not at all — a half-renamed tree is worse than either end
+      state. Also note the "Publish to PyPI" ticket wants to ship
+      `frontend/dist` as package data, so settle the location *before* the
+      packaging work hard-codes a path. *(From the `todos.md` inbox,
+      2026-08-09.)*
 - [ ] **Scrub the STOP/SKIP docs & memories once citation-thresholding supersedes
       them** — a deliberately-deferred cleanup, **gated on** the "Replace the
       STOP/SKIP citation rules with a citation-threshold predicate" ticket
