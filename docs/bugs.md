@@ -22,6 +22,57 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### The "fully offline" test suite was loading a real BERT model — and it took Windows CI to notice
+
+*Found 2026-08-09 by the very first CI run (v6.10.0), on `windows-latest`.
+Green on macOS and Linux for as long as the test had existed.*
+
+- **Symptom.** `uv run nox` died on the Windows runner with
+  `Windows fatal exception: access violation`, the C-level crash of the
+  interpreter — exit code `3221225477`. The traceback bottomed out in
+  `torch/cuda/graphs.py`'s `is_current_stream_capturing`, reached from
+  `sentence_transformers … encode` ← `embeddings.embed_query` ←
+  `retrieval._vector_search` ← the researcher's `search_sources` tool ←
+  `test_show_source_figure_attaches_a_library_figure`. Linux passed the same
+  commit.
+- **Root cause — the crash was the messenger, not the message.** That test
+  takes only `monkeypatch`; it never asks for `stub_embeddings`. Its scripted
+  agent calls `search_sources`, which runs the *real* retrieval path, which
+  embeds the query with a *real* sentence-transformers model. So the suite
+  downloaded and ran a BERT model on any machine where torch was importable —
+  flatly contradicting `test/atlas/conftest.py`'s "fully offline" guarantee.
+  It had never been *noticed* because `_load_model` swallows failures and
+  returns `None`: wherever torch was missing or the model wouldn't load, the
+  code degraded silently to lexical search and the test passed anyway. Windows
+  CI was simply the first environment where torch *was* present, *was*
+  loadable, and was the **CUDA build with no GPU** — where the same code path
+  doesn't degrade, it segfaults.
+- **The second, self-inflicted half.** CI had set `ATLAS_SKIP_TORCH=1` so
+  `bin/setup.sh` would skip torch entirely, which would have masked this
+  forever. It didn't work: **`uv run` syncs the project before running**, so
+  `uv run nox` reinstalled the very package the bootstrap had excluded. The
+  timings gave it away — bootstrap 25s (no CUDA download), then `uv run nox`
+  3:09. Fixed with `uv run --no-sync nox`.
+- **Fix.** The autouse `_isolate` fixture now also forces
+  `config.sources.semantic_enabled` off, so no test can reach a real embedder
+  by accident. This is deliberately the same place, and the same reasoning, as
+  the earlier `s2_corpus` leak — both are "a real resource on the developer's
+  machine silently replaces the test double." `stub_embeddings` is unaffected
+  (it patches `available`/`embed_texts`/`embed_query`, above the config gate).
+  The three loader tests in `test_embeddings.py` opt back in through
+  `_install_fake`, which is safe because the `sentence_transformers` it
+  installs is a fake module.
+- **Lesson / guard.** **A test that passes because a dependency is missing is
+  not passing — it's abstaining.** `_load_model`'s catch-all `except` is right
+  for production (slow beats unavailable) but it means an isolation leak in
+  tests shows up as *nothing at all*. When a fixture exists to replace a heavy
+  dependency, the default must be that the real one is unreachable, not that
+  well-behaved tests remember to ask. Verified by running the suite with torch
+  **installed** and asserting neither `torch` nor `sentence_transformers` ends
+  up in `sys.modules`: 605 passed, no leak, and the suite got 2.7x faster
+  (7.7s → 2.8s) purely from stopping the model-load attempts. That timing drop
+  is itself the tell nobody had thought to look for.
+
 ### The frontend format/lint hooks never ran on a test-only commit
 
 *Found 2026-08-09 while wiring oxlint's `id-length` rule (v6.9.0) — not by a

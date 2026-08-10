@@ -169,8 +169,14 @@ authoritative.
   `pyproject.toml` version, on the merge commit.
 - **Push:** `git push origin main --follow-tags`.
 
-The repo is **private** (`github.com/patrickjames0132/atlas`), default
-branch `main`.
+The repo is **public** (`github.com/patrickjames0132/atlas`, MIT, created
+2026-06-28), default branch `main`. *(This line said "private" until
+2026-08-09; the GitHub API says otherwise, so it was stale. Two things follow
+from public that are easy to get wrong: **GitHub Actions minutes are free and
+unlimited** on standard runners, so the CI matrix costs nothing; and the
+"public, timestamped release" prior-art defense in
+[docs/licensing.md](docs/licensing.md) is **already satisfied by this repo** —
+it does not wait on a PyPI release.)*
 
 ## Code conventions
 
@@ -256,7 +262,31 @@ branch `main`.
 ## Quality gate — `uv run nox` (backend + frontend)
 
 **`uv run nox`** runs the whole repo's gate in one shot — five sessions defined
-in `noxfile.py`, all reusing the uv env (no per-session installs):
+in `noxfile.py`, all reusing the uv env (no per-session installs).
+
+**CI runs it too, since v6.10.0** (`.github/workflows/ci.yml`): every push to
+`main`, on `ubuntu-latest` *and* `windows-latest`. Three things about it are
+worth knowing before you edit either the workflow or `bin/setup.sh`:
+
+- It **reuses `bin/setup.sh`** instead of restating the bootstrap, so CI can't
+  drift from what you run locally. Change the bootstrap and CI follows.
+- It sets **`ATLAS_SKIP_TORCH=1`** (the guard in `bin/setup.{sh,bat}`). Nothing
+  in the gate needs torch — `sentence_transformers` is imported lazily in
+  `services/sources/embeddings.py`'s `_get_model` and every test stubs the
+  embedder — while a full Linux sync pulls the ~15 `nvidia-*` CUDA packages
+  the lockfile gates on `sys_platform == 'linux'`. **Side effect worth
+  preserving: CI now fails if anything imports torch at module scope**, which
+  is what keeps that lazy import honest. Don't "fix" a CI-only torch
+  ImportError by installing torch in CI — fix the eager import.
+- It runs **`npm run build` as a separate step**, because no nox session
+  typechecks the frontend (`tsc -b`). Adding a nox session for it would let
+  that step be dropped; today the two are deliberately both present.
+
+`release.yml` fires on `v*` tags and asserts the tag matches `pyproject.toml`'s
+version — the one automated check on the otherwise manual release ritual. It
+publishes nothing yet; that's blocked on the PyPI/AGPL question in the OnePager.
+
+The five sessions:
 
 - **`precommit`** — every pre-commit hook (`.pre-commit-config.yaml`): file
   hygiene + **ruff** lint (config in `pyproject.toml`; includes the

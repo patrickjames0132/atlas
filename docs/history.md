@@ -2341,6 +2341,79 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Infrastructure, quality & tooling
 
+- [x] **CI — run the quality gate on GitHub, and check tag/version at release
+      time** *(v6.10.0)* — the first of the three stages in the "build / deploy /
+      release strategy" ticket; the rest (repeatable build, publish, deploy)
+      stays open. There was **no `.github/workflows/` at all**, so the gate
+      depended entirely on remembering to run it — and it was skippable without
+      leaving a trace, since a missing `trivy` makes nox's `security` session
+      skip *silently* and still report success.
+      **`ci.yml`** runs `bin/setup.sh` then `uv run nox` on `ubuntu-latest` and
+      `windows-latest`, plus `npm run build`. Design decisions worth keeping:
+      **(1)** the toolchain comes from **`jdx/mise-action`** reading
+      `.tool-versions`, so CI installs the same pinned python/uv/node/trivy the
+      dev machines do — one source of truth, and Trivy genuinely on PATH means
+      the security scan *runs* instead of skipping, which was the original
+      motivation. **(2)** It **reuses `bin/setup.sh`** rather than restating the
+      bootstrap, so CI can't drift from local. **(3)** `npm run build` is a
+      separate step because **no nox session typechecks the frontend** — `tsc -b`
+      was a manual step in the working agreement, and CI closes that gap.
+      **(4)** Windows runners use Git Bash, so one `.sh` serves both and
+      `setup.bat` stays a local convenience.
+      **The torch finding, which shaped the whole thing.** Nothing in the gate
+      needs torch: `sentence_transformers` is imported lazily inside
+      `services/sources/embeddings.py`'s `_load_model`, and `stub_embeddings`
+      monkeypatches the three entry points. Verified by building a genuinely
+      torch-free env — **605 tests passed, mypy clean over 93 source files**.
+      *(That verification was true but not the whole story, as the first CI run
+      then proved: some of those passes were the suite silently **abstaining**,
+      because `_load_model` swallows a failed import and degrades to lexical
+      search. See the bugs.md entry below.)* That matters because the lockfile
+      carries ~15
+      `nvidia-*` CUDA packages gated `sys_platform == 'linux'`, so a naive
+      `uv sync` on `ubuntu-latest` downloads the full CUDA stack every cold
+      cache (the env drops 951M → 484M on macOS, far more on Linux). Shipped as
+      **`ATLAS_SKIP_TORCH=1`**, an opt-in guard added to `bin/setup.{sh,bat}` so
+      CI and a local bootstrap remain **one script**. It also makes
+      `windows-latest` cheap, since the `[[tool.uv.index]]` CUDA routing never
+      engages. **Deliberate side effect: CI now fails if anything imports torch
+      at module scope**, which is what keeps the lazy import honest — the fix
+      for such a failure is the eager import, never installing torch in CI.
+      **`release.yml`** fires on `v*` tags and asserts the tag matches
+      `pyproject.toml`'s version. The release ritual is four manual steps and
+      nothing had ever checked that the bump and the tag agree — a `v6.9.0` tag
+      on a tree still saying `6.8.0` was silent. It deliberately builds and
+      publishes nothing; the distribution shape is blocked on the PyMuPDF/AGPL
+      question, and the file is where that work will land.
+      **Release model — no release branches.** Considered and rejected
+      `release/<version>`: that's a **git-flow** artifact solving two problems
+      this repo doesn't have (freezing an RC while `develop` takes features, and
+      maintaining parallel lines). Solo, single-version, no RC period → pure
+      overhead. Also rejected **release-please/semantic-release**: they expect
+      Conventional Commits and a generated `CHANGELOG.md`, and would fight the
+      hand-written narrative in this very file. Settled on the standard
+      **tag-triggered release from `main`**, which is what CLAUDE.md already
+      described by hand. Revisit release branches only if a `release/6.x`
+      backport line ever becomes real.
+      **Verified before merge** by temporarily adding `feature/ci-workflow` to
+      the push trigger and watching a real run (a workflow can only be exercised
+      from a branch it triggers on, and push/dispatch both need the default
+      branch) — the temporary trigger was stripped before the merge. **It paid
+      for itself on run #1**, which was green on Linux and crashed the
+      interpreter on Windows, surfacing two defects that had been invisible
+      locally: `uv run` re-syncing away the torch exclusion (fixed with
+      `--no-sync`), and a genuine test-isolation leak where the suite loaded a
+      real BERT model whenever torch happened to be importable. Both are
+      written up in [bugs.md](bugs.md) — the second is the more valuable find,
+      and it argues on its own for keeping the Windows runner.
+      **Also corrected here:** `CLAUDE.md` had claimed the repo was **private**
+      since before the pivot; the GitHub API says public (MIT, created
+      2026-06-28). Two things follow that had been mis-reasoned all session —
+      Actions minutes are **free and unlimited** on public repos' standard
+      runners, and the "public, timestamped release" prior-art defense in
+      `docs/licensing.md` is **already satisfied by the repo itself**, not
+      pending a PyPI release.
+
 - [x] **Sweep single-letter identifiers out of the frontend, then machine-enforce
       it** *(v6.9.0)* — the no-single-letter-identifiers convention covers *both*
       halves of the codebase, but only the backend was enforced:

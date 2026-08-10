@@ -46,9 +46,22 @@ def _isolate(monkeypatch, tmp_path):
     only one root was nulled and the corpus tests wrote their synthetic
     release into the real (mid-ingest) Parquet root. A corpus test opts back
     in by pointing the root at its own temp dir (see that package's conftest).
+
+    Semantic search is forced **off** (``semantic_enabled``) for the same
+    reason, and it is not theoretical: any test that reaches
+    ``sources.retrieval.search`` — the researcher's ``search_sources`` tool,
+    for one — would otherwise call the *real* embedder, download a
+    sentence-transformers model, and run it. That silently made the suite
+    non-offline on any machine with torch installed, and on Windows CI's CUDA
+    build with no GPU it crashed the interpreter outright (access violation in
+    ``torch/cuda/graphs.py``). Nothing here needs a real model: a test that
+    wants embeddings takes ``stub_embeddings``, which patches
+    ``available``/``embed_texts``/``embed_query`` directly and so is unaffected
+    by this switch.
     """
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
     monkeypatch.setattr(config.storage, "s2_corpus", None)
+    monkeypatch.setattr(config.sources, "semantic_enabled", False)
     monkeypatch.setattr(config.providers.s2, "min_interval", 0.0)
     monkeypatch.setattr(config.providers.openalex, "min_interval", 0.0)
 

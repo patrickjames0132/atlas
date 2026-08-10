@@ -1,0 +1,44 @@
+# Tag-time checks for arXiv Atlas.
+#
+# The release ritual is deliberately manual and lives in CLAUDE.md ("Release
+# mechanics"): bump `version` in pyproject.toml -> `uv lock` -> commit on the
+# feature branch -> merge to main -> annotated tag vX.Y.Z -> push --follow-tags.
+# Four hand-run steps, and nothing has ever checked that step 1 and step 5
+# agree. A `v6.9.0` tag sitting on a tree that still says `6.8.0` is silent
+# today; this makes it loud.
+#
+# Deliberately NOT here (yet): building and publishing anything. The
+# distribution shape is still open — see OnePager.md's "Publish to PyPI"
+# ticket, which is blocked on the PyMuPDF/AGPL question. This file is the place
+# that work will land when it's unblocked.
+#
+# There's also no need to re-run the gate here: the tag sits on a merge commit
+# that the CI workflow already tested on push to main.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  version-matches-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tag must match pyproject.toml version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Ubuntu runners ship a python3 new enough for tomllib (3.11+), so
+          # this needs no toolchain install and the job stays a few seconds.
+          project_version="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          tag_version="${GITHUB_REF_NAME#v}"
+          echo "pyproject.toml: ${project_version}"
+          echo "tag:            ${GITHUB_REF_NAME} (-> ${tag_version})"
+          if [ "${project_version}" != "${tag_version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${project_version}." \
+                 "Fix the version, re-lock, and move the tag."
+            exit 1
+          fi
+          echo "Match."

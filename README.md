@@ -220,9 +220,19 @@ hygiene; ruff incl. Google-style docstring rules; a repo-local
 no-single-letter-identifiers AST check, notebooks included; pydoclint for
 Args/Returns completeness; the frontend's prettier + oxlint incl. JSDoc
 completeness and `id-length`, the frontend half of that same naming rule),
-strict mypy, pytest (`test/`, 491 offline tests), and Vitest
+strict mypy, pytest (`test/`, 605 offline tests), and Vitest
 (`frontend/test/`, offline too) — plus `cd frontend && npm run build`
 (strict tsc + Vite) for the type/build check.
+
+All of that also runs in CI (`.github/workflows/ci.yml`) on every push to
+`main`, across `ubuntu-latest` and `windows-latest`. CI installs the pinned
+toolchain from `.tool-versions` with mise, so it runs the *same* python / uv /
+node / trivy the developer machines do — and because Trivy is genuinely on
+PATH there, the security scan actually runs rather than skipping. It reuses
+`bin/setup.sh` rather than restating it, with `ATLAS_SKIP_TORCH=1`: nothing in
+the gate needs torch, and skipping it avoids dragging the multi-gigabyte
+Linux CUDA wheels into every run. A second workflow (`release.yml`) fires on
+`v*` tags and fails if the tag and `pyproject.toml`'s version disagree.
 
 For the project's direction and past, two living docs sit beside the code:
 **[OnePager.md](OnePager.md)** (the vision, the full feature stack, and the
