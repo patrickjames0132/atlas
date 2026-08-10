@@ -51,6 +51,12 @@ class _FakeModel:
 def _install_fake(monkeypatch, *, fail_on: str | None = None) -> list[str | None]:
     """Put a fake ``sentence_transformers`` in sys.modules; return the device log.
 
+    Also flips ``semantic_enabled`` back on. The autouse ``_isolate`` fixture
+    forces it off suite-wide so nothing accidentally loads a real embedding
+    model (see test/atlas/conftest.py); these loader tests are the deliberate
+    exception, and they're safe because the module installed here is a fake —
+    no torch, no download.
+
     Args:
         monkeypatch: pytest's monkeypatch fixture.
         fail_on: Device string whose construction should raise, simulating an
@@ -60,6 +66,7 @@ def _install_fake(monkeypatch, *, fail_on: str | None = None) -> list[str | None
         A list that receives the ``device`` argument of every construction
         attempt, in order.
     """
+    monkeypatch.setattr(config.sources, "semantic_enabled", True)
     attempted: list[str | None] = []
 
     def build(model_id, device=None, **kwargs):

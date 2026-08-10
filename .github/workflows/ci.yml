@@ -77,9 +77,14 @@ jobs:
         shell: bash
         run: bin/setup.sh
 
-      - name: Quality gate (uv run nox)
+      # --no-sync is load-bearing: `uv run` syncs the project first by default,
+      # which would reinstall the torch that bin/setup.sh deliberately skipped
+      # (silently undoing ATLAS_SKIP_TORCH — that's exactly how run #1 ended up
+      # with a CUDA torch on the Windows runner). The bootstrap step above has
+      # already synced; this just runs.
+      - name: Quality gate (uv run --no-sync nox)
         shell: bash
-        run: uv run nox
+        run: uv run --no-sync nox
 
       # nox has no session for this: `tsc -b` is the frontend's type check and
       # the working agreement runs it by hand. Here it's part of the gate.
