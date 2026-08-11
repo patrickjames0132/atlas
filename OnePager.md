@@ -128,6 +128,29 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
+- [ ] **A chat citation seeds the graph instead of linking out** — in graph-free
+      mode the answer's `[n]` markers render as external links to the paper's
+      landing page (`AnswerMarkdown.tsx`'s `citeref` fallback). Clicking one
+      should instead **build that paper's graph and open its detail panel** —
+      the whole point of the app is one click away and currently points at
+      Semantic Scholar. Most of it is already there: `PaperRef` carries
+      `node_id` (`agents/events.py`), `GET /api/graph` accepts a raw provider
+      node id as a seed (`routes/graph.py`), and selecting the new seed opens
+      the detail panel (the same `setSelectedId` the tour's `'details'` stage
+      makes). Swap the `<a href>` for a button dispatching
+      `loadGraph({ seed: node_id })`; demote the external URL to a small
+      secondary affordance rather than deleting it.
+      **The real work is transcript continuity, and it's decided
+      (Patrick, 2026-08-10): the conversation must survive the transition.**
+      Today `loadGraph.fulfilled` bumps `epoch` (`store/workspace.ts`),
+      `store/transcript.ts` resets the transcript to `initialState` on that
+      action, and `<Teacher key={epoch}>` remounts — so the click as-built
+      would **destroy the answer being read** in order to inspect one paper
+      from it. Needs a "seeded from chat" variant of the load that skips the
+      transcript reset; a cold search from the header keeps the per-graph
+      reset, which is still right there. This is also what makes the landing
+      chat bar's collapse-into-the-panel motion read as continuous rather than
+      destructive — see that ticket. *(Filed 2026-08-10.)*
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
       [docs/history.md](docs/history.md)). Citations now *resolve*: the model
@@ -510,6 +533,29 @@ optional, behind a key.
 
 ### UI & rendering polish
 
+- [ ] **The landing page is a chat bar** — today home is a sentence and a
+      button in a lot of empty space (`Atlas.tsx`'s hint overlay: *"Search for
+      a paper…"* plus a *"💬 Chat with your library"* CTA that opens the side
+      panel). Replace it with a **centered chat bar as the landing surface** —
+      the ChatGPT/Claude shape — with the header's **Assistant tab hidden on
+      home** (nothing to summon; it's already in front of you) and reappearing
+      in graph mode, where the chat collapses back into the side panel.
+      Patrick's design, sanity-checked with a co-worker, 2026-08-10.
+      **Two things beyond the layout.** (a) **Ungate it.** The entry point is
+      gated on owning a library — `assistantAvailable={hasGraph || libraryCount
+      > 0}`, and `Teacher` isn't even mounted otherwise — so a cold first-run
+      user would get a chat bar they can't type into. Sources become *optional
+      grounding*, not an entry requirement. **No agent change is needed for
+      this**: the researcher's prompt already treats any question on any
+      subject as `answered` and `search_sources` is `prepare`-gated off when
+      the library is empty, so a no-graph/no-library turn already works.
+      (b) **The help surfaces move with it** — the HOME tour steps and their
+      `presentIf: '[data-tour="assistant-btn"]'` guards (`tour/steps.ts`) all
+      assume the assistant lives behind a header button, and would teach the
+      old UI.
+      Best done **after** the chat-citation ticket above, whose transcript
+      continuity is what makes the collapse-into-the-panel motion preserve the
+      conversation. *(Filed 2026-08-10.)*
 - [ ] **Settings modal — the corpus vs. live-citations toggle** — the
       adaptive-sizing half of the stage-2 ticket shipped in v6.3.0 (the switch,
       the revived per-chip count sliders, the band-shape inputs — see history).
