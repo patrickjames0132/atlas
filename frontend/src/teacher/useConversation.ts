@@ -234,6 +234,14 @@ export function useConversation() {
     [dispatch],
   )
 
+  /** Stop the in-flight question, keeping whatever it has already streamed —
+   * the partial answer is real work the reader may still want. The abort path
+   * is already quiet by design (`ask` skips `setError` when its own signal
+   * aborted, and clears `asking` in `finally`), so this only has to fire it. */
+  const stopAsk = useCallback(() => {
+    askCtrl.current?.abort()
+  }, [])
+
   /** The Clear button, contextual on what's selected:
    *    • a lecture is shown → clear just that lecture (stop it if it's still
    *      loading, drop its cache, and unlight the graph), leaving the chat and
@@ -485,6 +493,7 @@ export function useConversation() {
     onPaperSeed,
     toggleLecture,
     ask,
+    stopAsk,
     clear,
   }
 }

@@ -22,18 +22,24 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 ├─ guided tour overlay (?)         tour/Tour.tsx (two phases in tour/steps.ts —
 │                                   search on first launch, graph tools on the
 │                                   first graph; each auto-runs once)
-└─ body
+└─ body                            two states: with no graph the assistant IS
+   │                                 the body (a centred landing chat) and the
+   │                                 overlays get their own layer; with a graph
+   │                                 the explorer takes it and the assistant
+   │                                 docks. Teacher stays at one position in the
+   │                                 tree across both, so the switch never
+   │                                 remounts it — see teacher/README.md.
    ├─ graph area                   graph/GraphExplorer.tsx
    │  ├─ overlays (from the shell): hit list  search/HitList.tsx
-   │  │                             loading / error / hint  (Atlas.tsx)
+   │  │                             loading / error  (Atlas.tsx)
    │  ├─ controls panel            graph/controls/GraphControls.tsx
    │  ├─ find control (🔍 → pill)  graph/controls/FindBar.tsx
    │  ├─ the canvas                graph/canvas/GraphCanvas.tsx
    │  ├─ legend                    graph/controls/Legend.tsx
    │  ├─ detail panel (on select)  detail/DetailPanel.tsx
    │  └─ figure lightbox           figures/Lightbox.tsx
-   └─ assistant panel (🎓)         teacher/Teacher.tsx
-      ├─ scope picker              teacher/ScopePicker.tsx
+   └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked
+      ├─ scope picker              teacher/ScopePicker.tsx (in the ask bar)
       ├─ lecture beats             teacher/transcript/BeatList.tsx
       ├─ chat turns                teacher/transcript/ChatMessage.tsx
       │  └─ inline figures         teacher/figures/FigCard.tsx
