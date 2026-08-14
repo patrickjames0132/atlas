@@ -43,8 +43,35 @@ transcript/
   the answer's `refs` map (clickable, spotlighting that node), `[Sn]` from
   its `sourceRefs` map (rendered as the source's real title and page, the
   page read off the marker itself). Either kind degrades to its raw text when
-  unresolvable — never broken. Runs on mdast text nodes only, so markers
-  inside inline code or math are left untouched.
+  unresolvable — never broken. With **no graph** to spotlight, `[n]` falls
+  through to the answer's `paperRefs` map and becomes a button that *builds*
+  that paper's graph (`onPaperSeed`) — what makes a graph-free survey a way
+  *into* the graph rather than a list of outbound links. It stays the bare
+  `[n]` the prose was written around (rendering full titles inline derailed
+  the sentence, twice over when two papers back one claim) with the title on
+  hover, and carries a small node-and-edge glyph.
+
+  **The glyphs are not decoration.** After a chat→graph jump one transcript
+  holds both kinds of chip, and they do different things — a spotlight is a
+  reversible highlight, a seed rebuilds the workspace — so a reader must be
+  able to tell them apart *before* clicking. They're a matched pair in one
+  visual language, differing exactly where the behaviour does: **three nodes
+  wired together** (teal) builds a graph, **one node lit** (accent blue)
+  lights up a paper already on one. Marked in shape as well as colour on
+  purpose — colour alone says *that* they differ without saying *what*, and
+  says nothing at all to a colour-blind reader.
+
+  **A third state, from the same cause.** Because a transcript now
+  outlives the graph it was written against, an older answer can cite a
+  paper that is no longer loaded — the marker resolved fine when it was
+  written, but clicking would highlight nothing. Those chips render
+  **greyed and inert**, checked per-chip against `selectWorkspaceNodeIds`
+  (the loaded set, *not* the visible one — keying on the year/citation
+  filters would flicker chips as a slider is dragged). They come back to
+  life by themselves if that paper appears on a later graph.
+
+  All of this runs on mdast text nodes only, so markers inside inline code
+  or math are left untouched.
 
   Why the two resolve differently: the frontend already holds the numbered
   paper list, so it can resolve `[n]` itself; only the *backend* knows which

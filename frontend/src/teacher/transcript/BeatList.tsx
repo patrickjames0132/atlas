@@ -40,6 +40,7 @@ export default function BeatList({
   sourceRefs,
   onBeatClick,
   onRefClick,
+  onGraphIds,
   onEnlarge,
 }: {
   beats: Beat[]
@@ -50,6 +51,8 @@ export default function BeatList({
   onBeatClick: (index: number, beat: Beat) => void
   /** Spotlight one paper from a clicked inline `[n]` marker in a beat. */
   onRefClick?: (nodeId: string) => void
+  /** Paper ids still on the graph; a `[n]` outside it greys out. */
+  onGraphIds?: Set<string>
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   if (beats.length === 0) return null
@@ -71,6 +74,7 @@ export default function BeatList({
             refs={beat.refs}
             sourceRefs={sourceRefs}
             onRefClick={onRefClick}
+            onGraphIds={onGraphIds}
           />
           {beat.figure && (
             // Enlarging the figure must not toggle the beat's highlight.

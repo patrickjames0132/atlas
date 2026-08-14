@@ -13,6 +13,9 @@
   --muted: #7c8392;
   --accent: #6ea8fe;
   --accent-strong: #3b82f6;
+  /* Citation chips that BUILD a graph, vs --accent for the ones that
+     spotlight a paper already on one. Distinct hue, same weight. */
+  --seed-ref: #4fd1c5;
   --chip: #232936;
   --canvas-ink: rgba(231, 236, 245, 0.9);
   --canvas-ink-soft: rgba(242, 244, 248, 0.55);
@@ -47,6 +50,7 @@
   --muted: #79808f;
   --accent: #2c6fd1;
   --accent-strong: #2563eb;
+  --seed-ref: #0d9488;
   --chip: #eff2f6;
   --canvas-ink: rgba(35, 39, 47, 0.82);
   --canvas-ink-soft: rgba(35, 39, 47, 0.4);

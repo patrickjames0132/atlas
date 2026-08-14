@@ -116,6 +116,8 @@ export default function ChatMessage({
   streaming,
   onActivate,
   onRefClick,
+  onGraphIds,
+  onPaperSeed,
   onEnlarge,
 }: {
   message: ChatMsg
@@ -127,6 +129,10 @@ export default function ChatMessage({
   onActivate?: () => void
   /** Spotlight one paper from a clicked inline `[n]` marker. */
   onRefClick?: (nodeId: string) => void
+  /** Paper ids still on the graph; a `[n]` outside it greys out. */
+  onGraphIds?: Set<string>
+  /** Build a graph seeded on a cited paper (graph-free answers only). */
+  onPaperSeed?: (nodeId: string) => void
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   const clickable = !!onActivate
@@ -183,6 +189,8 @@ export default function ChatMessage({
                     sourceRefs={message.sourceRefs}
                     paperRefs={message.paperRefs}
                     onRefClick={onRefClick}
+                    onGraphIds={onGraphIds}
+                    onPaperSeed={onPaperSeed}
                   />
                 ) : (
                   // The user's own question — plain text, math typeset, no Markdown.

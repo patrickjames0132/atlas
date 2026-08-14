@@ -40,7 +40,13 @@ import {
   traceAdded,
   turnStarted,
 } from '../store/transcript'
-import { discoveryMerged, selectGroundingNodes, selectSeedNode } from '../store/workspace'
+import {
+  discoveryMerged,
+  loadGraph,
+  selectGroundingNodes,
+  selectSeedNode,
+  selectWorkspaceNodeIds,
+} from '../store/workspace'
 
 /**
  * Mint a fresh chat-session id (keys the backend's per-conversation history).
@@ -91,6 +97,10 @@ export function useConversation() {
   const dispatch = useAppDispatch()
   const seedNode = useAppSelector(selectSeedNode)
   const groundingNodes = useAppSelector(selectGroundingNodes)
+  // Which cited papers are still reachable — a transcript now outlives the
+  // graph it was written against, so `[n]` chips are checked before they
+  // render as controls.
+  const onGraphIds = useAppSelector(selectWorkspaceNodeIds)
   // The graph's provider — so the researcher's expand/search/hydrate use the
   // same backend (and id space) as the graph the question is grounded in.
   const provider = useAppSelector((state) => state.workspace.provider)
@@ -140,6 +150,20 @@ export function useConversation() {
       lectures.current.forEach((ctrl) => ctrl.abort())
     }
   }, [])
+  // The one graph change that does NOT remount the panel: a chat-seeded jump
+  // keeps the conversation (and its scroll position), so the unmount cleanup
+  // above never fires and a stream started against the old graph would keep
+  // pushing discoveries into the new one. Abort on the seed changing under a
+  // live panel instead — the same guarantee, just not riding on a remount.
+  const seedAtMount = useRef(seedNode?.id ?? null)
+  useEffect(() => {
+    const seedId = seedNode?.id ?? null
+    if (seedId === seedAtMount.current) return
+    seedAtMount.current = seedId
+    askCtrl.current?.abort()
+    lectureCtrls.current.forEach((ctrl) => ctrl.abort())
+    lectureCtrls.current.clear()
+  }, [seedNode])
   // Keys the backend's per-chat history; clearing the chat mints a new one so
   // the fresh conversation also detaches from server-side context.
   const sessionId = useRef(newSessionId())
@@ -198,6 +222,16 @@ export function useConversation() {
       highlight(off ? [] : [nodeId])
     },
     [activeRef, highlight],
+  )
+
+  /** Click a cited paper in a graph-free answer: build that paper's graph and
+   * open its detail panel. `fromChat` is what keeps the conversation alive
+   * across the jump — see the `loadGraph` thunk. */
+  const onPaperSeed = useCallback(
+    (nodeId: string) => {
+      dispatch(loadGraph({ seed: nodeId, fromChat: true }))
+    },
+    [dispatch],
   )
 
   /** The Clear button, contextual on what's selected:
@@ -447,6 +481,8 @@ export function useConversation() {
     onBeatClick,
     onChatClick,
     onRefClick,
+    onGraphIds,
+    onPaperSeed,
     toggleLecture,
     ask,
     clear,

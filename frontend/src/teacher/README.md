@@ -71,7 +71,11 @@ structure rule's nesting case (the `graph/hooks` precedent).
 - **Session mechanics:** a client-generated `session_id` keys the backend's
   chat history; clearing the chat mints a new one, so a cleared conversation
   also detaches from server-side context. The panel remounts per workspace
-  `epoch` (fresh run-state per graph); the transcript itself resets or
+  `epoch`, which now bumps on **Home and restore only** — a graph load
+  leaves the panel, its scroll position and its run state alone, because
+  the conversation survives a re-seed and remounting would scroll the
+  reader back to the top. In-flight streams are aborted on the seed change
+  rather than on an unmount that no longer happens; the transcript resets or
   restores via the store, not via remount props.
 - **Wire deltas absorbed here:** `onDiscovery` (was `onNodes`), error
   `{message}`, no `discard` handler (the researcher's pre-answer narration is
