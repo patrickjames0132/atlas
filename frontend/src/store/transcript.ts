@@ -219,13 +219,13 @@ const transcriptSlice = createSlice({
      * @param state  The slice state (mutated via immer).
      * @param action Carries the marker → node-id map.
      */
-    refsSet(state, action: PayloadAction<Record<string, string>>) {
+    graphRefsSet(state, action: PayloadAction<Record<string, string>>) {
       const msg = lastMsg(state)
-      if (msg) msg.refs = action.payload
+      if (msg) msg.graphRefs = action.payload
     },
     /**
      * Attach the library index resolving this answer's `[Sn]` markers. Unlike
-     * `refsSet`, it arrives *before* the prose (the backend resolves it as
+     * `graphRefsSet`, it arrives *before* the prose (the backend resolves it as
      * soon as retrieval settles), so markers render as real titles while the
      * answer is still streaming.
      *
@@ -310,7 +310,7 @@ export const {
   figureAdded,
   retrieveSet,
   citedSet,
-  refsSet,
+  graphRefsSet,
   sourceRefsSet,
   provenanceSet,
   paperRefsSet,

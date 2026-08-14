@@ -185,7 +185,7 @@ export default function ChatMessage({
                   <AnswerMarkdown
                     key={index}
                     text={part}
-                    refs={message.refs}
+                    graphRefs={message.graphRefs}
                     sourceRefs={message.sourceRefs}
                     paperRefs={message.paperRefs}
                     onRefClick={onRefClick}

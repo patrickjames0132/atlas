@@ -31,7 +31,7 @@ import {
   lectureHidden,
   lectureShown,
   lectureStarted,
-  refsSet,
+  graphRefsSet,
   sourceRefsSet,
   provenanceSet,
   paperRefsSet,
@@ -58,7 +58,7 @@ const newSessionId = () => (crypto.randomUUID?.() as string) || String(Math.rand
 /** An inline citation marker in answer prose: a single index (`[7]`) or a
  *  combined list (`[14, 29]`). Group 1 holds the digits and separators; split
  *  on `REF_SEPARATOR` for the individual indices. Kept in step with the same
- *  pattern in `remarkCite` (render) and the backend's `refs_from_text`. */
+ *  pattern in `remarkCite` (render) and the backend's `graph_refs_from_text`. */
 const REF_MARKER = /\[(\d+(?:[\s,]+\d+)*)\]/g
 /** The separator between indices inside a combined marker (comma and/or space). */
 const REF_SEPARATOR = /[\s,]+/
@@ -73,18 +73,18 @@ const REF_SEPARATOR = /[\s,]+/
  * @param numberedIds The grounding list's node ids, in numbered order.
  * @returns The marker → node-id map for the turn's clickable chips.
  */
-function resolveRefs(text: string, numberedIds: string[]): Record<string, string> {
-  const refs: Record<string, string> = {}
+function resolveGraphRefs(text: string, numberedIds: string[]): Record<string, string> {
+  const graphRefs: Record<string, string> = {}
   for (const match of text.matchAll(REF_MARKER)) {
     // A combined marker (`[14, 29]`) resolves each of its indices, so every
     // number in it becomes clickable.
     for (const token of match[1].split(REF_SEPARATOR)) {
       const index = Number(token)
       const nodeId = numberedIds[index - 1]
-      if (nodeId) refs[token] = nodeId
+      if (nodeId) graphRefs[token] = nodeId
     }
   }
-  return refs
+  return graphRefs
 }
 
 /**
@@ -291,7 +291,7 @@ export function useConversation() {
             // citations render as real titles from the moment they appear.
             onSourceRefs: (refs) => dispatch(lectureSourcesSet({ mode, refs })),
             onBeat: (beat) => {
-              // `beat.refs` (the [n] → node-id map) is resolved server-side —
+              // `beat.graph_refs` (the [n] → node-id map) is resolved server-side —
               // a lecture numbers the mode-filtered story nodes, which the
               // frontend never sees, so it can't resolve them itself.
               dispatch(beatAdded({ mode, beat }))
@@ -442,7 +442,7 @@ export function useConversation() {
             },
           )
           // Answer complete: freeze the `[n]` → node-id map onto the turn.
-          dispatch(refsSet(resolveRefs(answerText, numberedIds)))
+          dispatch(graphRefsSet(resolveGraphRefs(answerText, numberedIds)))
         } else {
           // No graph: the same researcher, seedless — it reaches for the
           // library (and S2) through its tools instead of a numbered graph.

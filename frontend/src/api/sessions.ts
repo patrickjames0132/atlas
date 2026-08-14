@@ -39,11 +39,11 @@ export interface ChatMsg {
    * one paper). Only referenced-and-resolvable indices are kept, so it stays
    * small and survives a saved-session reload. Assistant/researcher turns only.
    */
-  refs?: Record<string, string>
+  graphRefs?: Record<string, string>
   /**
    * Map from an inline `[Sn]` library-citation index (the key, stringified) to
    * the source it names. Resolved server-side and streamed *before* the prose
-   * — unlike `refs`, which the frontend resolves itself from the numbered
+   * — unlike `graphRefs`, which the frontend resolves itself from the numbered
    * grounding list it already holds; only the backend knows which of the
    * user's sources a given turn retrieved. Page-free on purpose: the page
    * lives in the marker (`[S2, p.460]`), so this map is complete up front.
@@ -58,7 +58,7 @@ export interface ChatMsg {
   /**
    * `[n]` index → the paper it names, with title and URL. Only needed when
    * the frontend can't resolve the marker itself (graph-free turns, where
-   * `refs` is empty because no numbered list was ever held). Absent on turns
+   * `graphRefs` is empty because no numbered list was ever held). Absent on turns
    * from before v6.7.0.
    */
   paperRefs?: Record<string, PaperRef>

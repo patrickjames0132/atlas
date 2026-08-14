@@ -160,7 +160,7 @@ _REF_MARKER = re.compile(r"\[(\d+(?:[\s,]+\d+)*)\]")
 _REF_SEP = re.compile(r"[\s,]+")
 
 
-def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
+def graph_refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
     """Map the ``[n]`` markers a passage of prose *used* back to node ids.
 
     The clickable-citation counterpart to ``idx_to_id``: where that resolves an
@@ -177,13 +177,13 @@ def refs_from_text(nodes: Sequence[Node], text: str) -> dict[str, str]:
     Returns:
         ``{"7": "<node id>", ...}`` — keyed by the marker's number as a string.
     """
-    refs: dict[str, str] = {}
+    graph_refs: dict[str, str] = {}
     for match in _REF_MARKER.finditer(text):
         for token in _REF_SEP.split(match.group(1)):
             index = int(token)
             if 1 <= index <= len(nodes):
-                refs[token] = nodes[index - 1].id
-    return refs
+                graph_refs[token] = nodes[index - 1].id
+    return graph_refs
 
 
 def source_order(hits: list[dict]) -> list[dict]:
@@ -238,7 +238,7 @@ def source_lines(sources: Sequence[dict]) -> str:
 def paper_refs(nodes: Sequence[Node], text: str) -> dict[str, dict]:
     """Resolve the ``[n]`` markers prose used to readable paper references.
 
-    The richer sibling of ``refs_from_text``: same scan, same numbering, but
+    The richer sibling of ``graph_refs_from_text``: same scan, same numbering, but
     it carries the title and URL rather than only the node id. With a graph
     open the frontend resolves ``[n]`` itself against the list it already
     holds, so the id is enough; with no graph it holds nothing, and a bare id
@@ -253,11 +253,11 @@ def paper_refs(nodes: Sequence[Node], text: str) -> dict[str, dict]:
         ``{"3": {"node_id": ..., "title": ..., "url": ...}, ...}`` — keyed by
         the marker's number as a string, referenced in-range indices only.
     """
-    refs: dict[str, dict] = {}
-    for token, node_id in refs_from_text(nodes, text).items():
+    paper_refs: dict[str, dict] = {}
+    for token, node_id in graph_refs_from_text(nodes, text).items():
         node = nodes[int(token) - 1]
-        refs[token] = {"node_id": node_id, "title": node.title, "url": node.url or ""}
-    return refs
+        paper_refs[token] = {"node_id": node_id, "title": node.title, "url": node.url or ""}
+    return paper_refs
 
 
 def format_passages(hits: list[dict], sources: Sequence[dict]) -> str:
@@ -297,7 +297,7 @@ _SOURCE_MARKER = re.compile(r"\[S(\d+)(?:,?\s*p\.\s*(\d+))?\]", re.IGNORECASE)
 def source_refs(sources: Sequence[dict], text: str) -> dict[str, dict]:
     """Map the ``[Sn]`` markers in prose back to the sources they name.
 
-    The library counterpart to ``refs_from_text``, with one deliberate
+    The library counterpart to ``graph_refs_from_text``, with one deliberate
     difference: it is keyed by **index alone**, not by the full marker, and
     carries no page. The page is already in the marker, so the frontend reads
     it from there and this map stays page-free — which lets it be emitted

@@ -71,7 +71,7 @@ export default function BeatList({
           )}
           <AnswerMarkdown
             text={beat.text}
-            refs={beat.refs}
+            graphRefs={beat.graph_refs}
             sourceRefs={sourceRefs}
             onRefClick={onRefClick}
             onGraphIds={onGraphIds}

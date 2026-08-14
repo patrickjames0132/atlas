@@ -102,20 +102,20 @@ def test_idx_to_id_maps_and_ignores_out_of_range():
     assert prompts.idx_to_id(nodes, [2, 1, 99, 0, -3]) == ["b", "a"]
 
 
-def test_refs_from_text_maps_used_markers_and_ignores_out_of_range():
+def test_graph_refs_from_text_maps_used_markers_and_ignores_out_of_range():
     nodes = [make_node("a"), make_node("b"), make_node("c")]
     text = "As [1] showed, and later [3] refined it (see also [9], unrelated to [2])."
     # Only referenced, in-range markers; keyed by the number as a string.
-    assert prompts.refs_from_text(nodes, text) == {"1": "a", "3": "c", "2": "b"}
+    assert prompts.graph_refs_from_text(nodes, text) == {"1": "a", "3": "c", "2": "b"}
     # No markers -> empty map (a lecture beat that names no papers inline).
-    assert prompts.refs_from_text(nodes, "Plain prose, no citations.") == {}
+    assert prompts.graph_refs_from_text(nodes, "Plain prose, no citations.") == {}
 
 
-def test_refs_from_text_splits_combined_markers():
+def test_graph_refs_from_text_splits_combined_markers():
     nodes = [make_node("a"), make_node("b"), make_node("c")]
     # A combined marker contributes each of its (in-range) indices, mixing
     # comma and bare-space separators; an out-of-range member is dropped.
-    assert prompts.refs_from_text(nodes, "Both [1, 3] agree, and [2 9] diverge.") == {
+    assert prompts.graph_refs_from_text(nodes, "Both [1, 3] agree, and [2 9] diverge.") == {
         "1": "a",
         "3": "c",
         "2": "b",

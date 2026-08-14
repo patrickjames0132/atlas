@@ -33,7 +33,7 @@ lecturer.lecture(seed, nodes, mode, target)          main.py
      before the lecture ends
   4  each LectureBeat -> events.Beat, indices mapped to node ids
      (prompts.idx_to_id); the beat's inline [n] markers resolved to a
-     refs map (prompts.refs_from_text) for clickable citations;
+     graph_refs map (prompts.graph_refs_from_text) for clickable citations;
      blank-text beats dropped
 ```
 

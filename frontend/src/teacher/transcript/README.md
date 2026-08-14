@@ -40,7 +40,7 @@ transcript/
   can swallow the other: `[n]` → `citeref` (a graph paper) and `[S2, p.460]`
   → `sourceref` (a passage from the user's own library). It only rewrites the
   *shape*; whether a marker resolves is decided at render time — `[n]` from
-  the answer's `refs` map (clickable, spotlighting that node), `[Sn]` from
+  the answer's `graphRefs` map (clickable, spotlighting that node), `[Sn]` from
   its `sourceRefs` map (rendered as the source's real title and page, the
   page read off the marker itself). Either kind degrades to its raw text when
   unresolvable — never broken. With **no graph** to spotlight, `[n]` falls

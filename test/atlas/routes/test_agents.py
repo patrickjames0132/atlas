@@ -59,7 +59,7 @@ def test_lecture_types_the_payload_and_relays_by_event_type(client, monkeypatch)
     response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "intuition"})
     assert frames(response) == [
         ("beat", {"heading": "Roots", "text": "It began.", "node_ids": ["node02"],
-                  "refs": {}, "figure": None}),
+                  "graph_refs": {}, "figure": None}),
         ("done", {}),
     ]
     assert seen["intent"] == "lecture" and seen["kwargs"]["mode"] == "intuition"

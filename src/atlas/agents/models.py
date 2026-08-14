@@ -42,7 +42,7 @@ class LectureMode(StrEnum):
 class PlayedBeat(BaseModel):
     """One beat of an already-delivered lecture, trimmed to what the researcher
     needs as context: the signpost heading and the narration paragraph (the
-    node ids, refs, and figure the frontend renders are dropped on the wire).
+    node ids, graph_refs, and figure the frontend renders are dropped on the wire).
     """
 
     model_config = ConfigDict(extra="forbid")

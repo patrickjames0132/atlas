@@ -161,18 +161,18 @@ sequence with blank lines natively. `node_lines(nodes)` renders graph nodes
 as the numbered list of the `numbered-papers` protocol (a paper's number is
 its list position + 1) and `idx_to_id` maps the model's indices back to node
 ids, ignoring hallucinated ones (shared by the lecturer and, later, the
-researcher). `refs_from_text(nodes, text)` is the clickable-citation
+researcher). `graph_refs_from_text(nodes, text)` is the clickable-citation
 counterpart: it scans finished prose for the `[n]` markers actually *used* and
 resolves each against the same numbered list, returning a `{"n": node_id}` map
 the frontend turns into clickable chips. A combined marker (`[14, 29]`, which
 the model sometimes writes despite the prompt asking for separate `[14][29]`)
 contributes each of its indices, so every number stays clickable — the same
 split the frontend's `remarkCite` and `resolveRefs` apply. The **lecturer** resolves this
-server-side and ships it on each beat's `refs` field — a lecture numbers the
+server-side and ships it on each beat's `graph_refs` field — a lecture numbers the
 mode-filtered `_story_nodes`, which the frontend never sees, so it *can't*
 resolve them itself. The **researcher** is the mirror case: it gets the full,
 unfiltered node list, so the frontend resolves its answer's `[n]` markers
-directly (grounding order + idx-tagged discoveries) and no backend `refs` is
+directly (grounding order + idx-tagged discoveries) and no backend `graph_refs` is
 emitted.
 
 **Library citations work the other way round.** `source_lines(sources)`
