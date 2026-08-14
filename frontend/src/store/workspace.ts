@@ -71,6 +71,15 @@ export interface WorkspaceState {
   provider: Provider
   /** Bumps on every load/restore — the teacher panel remounts per epoch. */
   epoch: number
+  /**
+   * This graph was opened by clicking a paper the agent cited in a graph-free
+   * answer, so the seed's detail panel should open by itself — the click asked
+   * to *see that paper*, and landing on a bare canvas would make the reader
+   * hunt for the node they just named. GraphExplorer consumes and clears it
+   * (`seedDetailRevealed`); it is deliberately not the same thing as
+   * `selectedNodeIds`, which is the hand-picked scoping set.
+   */
+  revealSeedDetail: boolean
   loading: boolean
   /**
    * The current graph-build stage while `loading`, streamed from the SSE build
@@ -93,6 +102,7 @@ const initialState: WorkspaceState = {
   layout: 'timeline',
   provider: 's2',
   epoch: 0,
+  revealSeedDetail: false,
   loading: false,
   buildProgress: null,
   error: null,
@@ -103,14 +113,19 @@ const initialState: WorkspaceState = {
  * The build always uses the workspace's currently-selected `provider` (the
  * header dropdown), so a re-seed and a Refresh stay on the same backend.
  *
- * @param seed    The paper reference to build the neighborhood around.
- * @param refresh Bypass the server's day-cached snapshot for this seed and
- *                rebuild from the provider (the "Refresh" action) — useful when
- *                the provider's data for a paper has visibly changed.
+ * @param seed     The paper reference to build the neighborhood around.
+ * @param refresh  Bypass the server's day-cached snapshot for this seed and
+ *                 rebuild from the provider (the "Refresh" action) — useful when
+ *                 the provider's data for a paper has visibly changed.
+ * @param fromChat This load came from clicking a paper the agent cited, rather
+ *                 than from a cold search — so the seed's detail panel opens on
+ *                 arrival, because the click asked to *see that paper*. (It no
+ *                 longer gates the transcript: every graph load keeps the
+ *                 conversation now — see `store/transcript`.)
  */
 export const loadGraph = createAsyncThunk<
   GraphResponse,
-  { seed: string; refresh?: boolean },
+  { seed: string; refresh?: boolean; fromChat?: boolean },
   { state: { workspace: WorkspaceState } }
 >('workspace/loadGraph', ({ seed, refresh = false }, { dispatch, getState }) =>
   fetchGraphStream(seed, getState().workspace.provider, refresh, (progress) =>
@@ -314,6 +329,16 @@ const workspaceSlice = createSlice({
       state.selectedNodeIds = []
     },
     /**
+     * GraphExplorer has opened the chat-seeded paper's detail panel, so the
+     * request is spent. Cleared rather than left standing: without this, ✕-ing
+     * the panel and then re-rendering would spring it back open.
+     *
+     * @param state The slice state (mutated via immer).
+     */
+    seedDetailRevealed(state) {
+      state.revealSeedDetail = false
+    },
+    /**
      * Home: back to the default no-graph state (the page-load look). The
      * epoch bump remounts the teacher panel for fresh run state; the
      * transcript and highlights clear themselves via extraReducers.
@@ -330,6 +355,7 @@ const workspaceSlice = createSlice({
       state.layout = 'timeline'
       state.error = null
       state.epoch += 1
+      state.revealSeedDetail = false
     },
     /**
      * The shared search/graph error overlay (null clears it).
@@ -361,7 +387,15 @@ const workspaceSlice = createSlice({
         state.visibleNodeIds = []
         // A hand-picked selection is per-graph; a new seed starts unscoped.
         state.selectedNodeIds = []
-        state.epoch += 1
+        // Loading a graph deliberately does NOT bump the epoch. The shell
+        // keys the teacher panel on it, so a bump remounts the panel and
+        // rebuilds the transcript's scroll container at the top — and since
+        // the conversation now survives a graph change, that would throw the
+        // reader back to the start of an answer they were mid-way through.
+        // Only Home and a session restore remount now; `useConversation`
+        // aborts in-flight streams on the seed change instead of relying on
+        // an unmount that no longer happens.
+        state.revealSeedDetail = action.meta.arg.fromChat === true
         state.loading = false
       })
       .addCase(loadGraph.rejected, (state, action) => {
@@ -385,6 +419,7 @@ const workspaceSlice = createSlice({
         state.layout = action.payload.layout
         state.provider = action.payload.provider
         state.epoch += 1
+        state.revealSeedDetail = false
         state.loading = false
       })
       .addCase(restoreSession.rejected, (state, action) => {
@@ -404,6 +439,7 @@ export const {
   nodeSelectionAdded,
   nodeSelectionToggled,
   nodeSelectionCleared,
+  seedDetailRevealed,
   errorSet,
   workspaceCleared,
 } = workspaceSlice.actions
@@ -492,6 +528,26 @@ export const selectNodeSelectionSet = createSelector(
 
 /** Legend flags: any agent-discovered papers on the canvas (dashed ring),
  * incl. a restored session's; any from ungrounded topic search (pink). */
+/**
+ * Every paper id the workspace currently holds — the built graph plus whatever
+ * the agent has pulled in since. What a transcript's `[n]` citation is checked
+ * against before it renders as a live control: since a chat-seeded jump keeps
+ * the conversation across a graph change, an older answer can cite papers that
+ * are no longer anywhere on screen, and a chip that silently highlights nothing
+ * is worse than one that says so.
+ *
+ * Deliberately the *loaded* set, not the *visible* one (`visibleNodeIds`): the
+ * question is "does this paper exist here", not "is it past the year slider" —
+ * keying on the filters would flicker chips grey and blue as a slider is
+ * dragged.
+ */
+export const selectWorkspaceNodeIds = createSelector(
+  (state: StateWithWorkspace) => state.workspace.graph,
+  (state: StateWithWorkspace) => state.workspace.discoveredNodes,
+  (graph, discovered) =>
+    new Set([...(graph?.nodes ?? []).map((node) => node.id), ...discovered.map((node) => node.id)]),
+)
+
 export const selectHasDiscovered = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,

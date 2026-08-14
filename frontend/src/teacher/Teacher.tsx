@@ -76,6 +76,8 @@ export default function Teacher({
     onBeatClick,
     onChatClick,
     onRefClick,
+    onGraphIds,
+    onPaperSeed,
     toggleLecture,
     ask,
     clear,
@@ -356,6 +358,7 @@ export default function Teacher({
               activeBeat={activeBeat}
               onBeatClick={onBeatClick}
               onRefClick={onRefClick}
+              onGraphIds={onGraphIds}
               onEnlarge={setLightbox}
             />
             {beats.length === 0 && loadingModes.includes(activeModeMeta.key) && (
@@ -365,8 +368,18 @@ export default function Teacher({
         ) : (
           <>
             {chat.map((message, index) => {
+              // Clicking the bubble re-lights the answer's whole grounding
+              // set — so it's only a control while at least one of those
+              // papers is actually on the graph. Since the conversation now
+              // outlives the graph it was written against, an older answer can
+              // cite nothing that's still loaded, and a clickable bubble that
+              // highlights nothing is the same dead pointer its `[n]` chips
+              // grey out for. Partial overlap still counts: lighting the
+              // papers that *are* here is useful.
               const clickable =
-                message.role === 'assistant' && !!message.cited && message.cited.length > 0
+                message.role === 'assistant' &&
+                !!message.cited &&
+                message.cited.some((nodeId) => onGraphIds.has(nodeId))
               return (
                 <ChatMessage
                   key={`c${index}`}
@@ -375,6 +388,8 @@ export default function Teacher({
                   streaming={asking}
                   onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
                   onRefClick={onRefClick}
+                  onGraphIds={onGraphIds}
+                  onPaperSeed={onPaperSeed}
                   onEnlarge={setLightbox}
                 />
               )

@@ -523,6 +523,43 @@
   color: var(--bg);
   outline: none;
 }
+/* A cited paper in a GRAPH-FREE answer: same `[n]` chip, but clicking builds
+   that paper's graph instead of spotlighting a node on one. Marked in shape as
+   well as colour — the glyph is what says "this navigates", which colour alone
+   can't say (and can't say at all to a colour-blind reader). Teal against the
+   spotlight chip's blue, and never wrapping away from its number. */
+.cite-ref-seed {
+  color: var(--seed-ref);
+  white-space: nowrap;
+}
+.cite-ref-seed:hover,
+.cite-ref-seed:focus-visible {
+  background: var(--seed-ref);
+  color: var(--bg);
+}
+/* Its companion: a chip that lights up a paper already on the canvas. Keeps
+   --accent (the app's "this is on the graph" colour) and carries the one-node
+   glyph, so the pair reads as one family differing where they actually
+   differ. */
+.cite-ref-spot {
+  white-space: nowrap;
+}
+/* A cited paper that has left the building: the transcript outlived the graph
+   it was written against (a chat-seeded jump), so this marker resolves to a
+   node that is no longer loaded. Quiet, inert, and unmistakably not a control
+   — no glyph, no pointer, no hover state. It comes back to life by itself if
+   that paper turns up on a later graph. */
+.cite-ref-stale {
+  color: var(--muted);
+  opacity: 0.75;
+  cursor: default;
+}
+.cite-ref-glyph {
+  width: 0.72em;
+  height: 0.72em;
+  margin-left: 2px;
+  vertical-align: -0.04em;
+}
 /* A library citation ([Sn, p.N]) rendered as its source's real title and page.
    Not a button yet — opening the source at that page is the follow-up ticket;
    until then it reads as a quiet attribution rather than a dead control. */

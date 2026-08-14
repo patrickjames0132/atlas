@@ -130,4 +130,71 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     expect(screen.getByText('(Untraceable Paper)')).toBeTruthy()
     expect(screen.queryByRole('link')).toBeNull()
   })
+
+  it('maps the paper on click when seeding is available', () => {
+    // The headline behaviour: in graph-free mode the chip builds that paper's
+    // graph rather than making a trip to Semantic Scholar.
+    const onPaperSeed = vi.fn()
+    render(
+      <AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} onPaperSeed={onPaperSeed} />,
+    )
+    screen.getByRole('button', { name: '[1]' }).click()
+    expect(onPaperSeed).toHaveBeenCalledWith('node-atari')
+  })
+
+  it('keeps the marker compact and puts the title in the tooltip', () => {
+    // A full title inline derailed the sentence — twice over when two papers
+    // back one claim. The prose keeps its `[n]`; the title is on hover.
+    render(<AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} onPaperSeed={vi.fn()} />)
+    const chip = screen.getByRole('button', { name: '[1]' })
+    expect(chip.getAttribute('title')).toContain('Playing Atari with Deep RL')
+    expect(screen.queryByText(/Playing Atari with Deep RL/)).toBeNull()
+  })
+
+  it('greys out a citation whose paper is not on the graph on screen', () => {
+    // Reachable only because a chat-seeded jump carries the conversation
+    // across a graph change: the marker resolved when it was written, but
+    // clicking would now highlight nothing.
+    const onRefClick = vi.fn()
+    render(
+      <AnswerMarkdown
+        text="As shown in [1]."
+        refs={{ '1': 'node-atari' }}
+        onRefClick={onRefClick}
+        onGraphIds={new Set(['node-something-else'])}
+      />,
+    )
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.getByText(/\[1\]/)).toBeTruthy()
+  })
+
+  it('keeps the chip live when the paper IS on the graph on screen', () => {
+    const onRefClick = vi.fn()
+    render(
+      <AnswerMarkdown
+        text="As shown in [1]."
+        refs={{ '1': 'node-atari' }}
+        onRefClick={onRefClick}
+        onGraphIds={new Set(['node-atari'])}
+      />,
+    )
+    screen.getByRole('button', { name: '[1]' }).click()
+    expect(onRefClick).toHaveBeenCalledWith('node-atari')
+  })
+
+  it('marks a seeding chip apart from a spotlight chip in shape, not only colour', () => {
+    // The two chips do different things — one highlights, one rebuilds the
+    // workspace — so the difference must survive a colour-blind reader.
+    const { container: seeding } = render(
+      <AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} onPaperSeed={vi.fn()} />,
+    )
+    expect(seeding.querySelector('.cite-ref-seed svg')).toBeTruthy()
+    cleanup()
+    const { container: spotlight } = render(
+      <AnswerMarkdown text="As shown in [1]." refs={{ '1': 'node-atari' }} onRefClick={vi.fn()} />,
+    )
+    // The spotlight chip carries its own glyph — same family, different shape.
+    expect(spotlight.querySelector('.cite-ref-seed')).toBeNull()
+    expect(spotlight.querySelector('.cite-ref-spot svg')).toBeTruthy()
+  })
 })

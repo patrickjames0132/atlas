@@ -254,6 +254,96 @@
 
 ### AI teacher & lectures
 
+- [x] **A chat citation maps the paper — and brings the conversation with
+      it** *(v6.11.0)* — in graph-free mode the agent's `[n]` markers rendered
+      as external links to Semantic Scholar: the app's whole reason to exist
+      was one click away, and that click went somewhere else. Now the marker
+      builds that paper's graph and opens its detail panel.
+
+      Most of the wiring already existed — `PaperRef` has carried `node_id`
+      since v6.7.0, `GET /api/graph` already accepted a raw provider node id
+      as a seed, and selecting the seed already opened the panel. **The real
+      work was transcript continuity.** `loadGraph.fulfilled` bumps `epoch`,
+      the transcript slice reset itself on that action, and `<Teacher
+      key={epoch}>` remounted — so the obvious implementation would have
+      *destroyed the answer being read* in order to inspect a paper named
+      inside it. A `fromChat` flag on the thunk now carries the one intent
+      through both slices: the transcript survives, and
+      `workspace.revealSeedDetail` tells GraphExplorer to open the new seed's
+      panel once, then clears itself so ✕-ing the panel doesn't spring it back
+      open. A cold search from the header still starts a fresh conversation,
+      which is right — the exception is precisely the case where the jump
+      *continues* one thought.
+
+      **The prose problem, and the design that fixed it.** First cut rendered
+      each cited paper's full title inline. It derailed the sentence — badly
+      when two papers backed one claim, worse when a title arrived in caps —
+      so the chip went back to the bare `[n]` the prose was written around,
+      with the title on hover. That was safe to do only because *this ticket
+      removed the reason the title was there*: the v6.7.0 note in `events.py`
+      argued a graph-free `[n]` would otherwise be "dead text with no way to
+      learn what paper it was", and the marker is not dead any more.
+
+      That left a subtler problem Patrick caught: after the jump, one
+      transcript holds **both** kinds of chip — one that spotlights a paper on
+      the canvas, one that rebuilds the workspace — and a reader shouldn't
+      discover which by clicking. So the two are a matched pair in one visual
+      language, differing exactly where the behaviour does: **three nodes
+      wired together** (teal) builds a graph, **one node lit** (accent blue)
+      spotlights one already on it. Marked in *shape* as well as colour on
+      purpose — colour alone says that they differ without saying what, and
+      says nothing at all to a colour-blind reader. Drawn as inline SVG rather
+      than typed: nothing in unicode reads as a citation graph, and the near
+      misses (`⁂`, `⌗`) render inconsistently across fonts. Lecture beats
+      route through the same component, so they pick up the spotlight glyph
+      too.
+
+      **Two consequences of transcript survival, caught in testing and fixed
+      in the same release** — both of them invariants this ticket broke rather
+      than pre-existing bugs. **The panel remounted.** The shell keys `Teacher`
+      on `workspace.epoch`, so a load rebuilt the transcript's scroll container
+      at the top, throwing the reader back to the start of the answer they had
+      just clicked out of — the store kept the conversation and the DOM threw
+      it away. A chat-seeded load now skips the epoch bump entirely, which is
+      the honest reading of the flag: same session, same panel. That moved the
+      stream-abort guarantee off the unmount it used to ride on, so
+      `useConversation` aborts on the seed changing under a live panel instead
+      — otherwise a lecture streaming in the background would keep pushing
+      discoveries into the new graph. **And citations could go stale.** An
+      answer written against graph A survives onto graph B, where its `[n]`
+      markers resolve to node ids that are no longer loaded: live-looking chips
+      that silently highlight nothing. They now render greyed and inert,
+      checked per-chip against `selectWorkspaceNodeIds` and coming back to life
+      by themselves if that paper turns up on a later graph. Deliberately the
+      *loaded* node set rather than the *visible* one — keying on the
+      year/citation filters would have chips flickering as a slider is dragged.
+
+      **And one behaviour change the release made safe, rather than broke.**
+      Testing turned up that a cold search from the header still wiped the
+      chat — long-standing, deliberate ("a fresh graph starts a fresh
+      conversation"), and now wrong for the same reason the chat-seeded jump
+      was: *"even if my chat starts with quantum computing and then switches
+      to DQN, perhaps it should be up to the user to clear their chat"*
+      (Patrick). It should. The slice's two halves have different owners — the
+      **chat is the user's**, so clearing it is theirs to do (the Clear button,
+      or Home), while **lectures belong to the graph**, since a lecture
+      narrates the neighborhood you built and its beats point at that graph's
+      nodes. A graph load now keeps the chat and drops the lectures. That was
+      only safe to change *because* stale citations already degrade — before
+      this release a surviving transcript meant a screenful of dead pointers,
+      which is exactly why the reset was wholesale. `fromChat` got simpler in
+      the process: it no longer gates the transcript at all, and only opens the
+      seed's detail panel. The bubble-level click went the same way as the
+      chip-level one — an answer whose whole grounding set has left the graph
+      stops being clickable, with partial overlap still counting, because
+      lighting the papers that *are* here is useful.
+
+      **Dropped deliberately:** the paper's own landing page is no longer
+      linked from the answer. It's one click further, in the detail panel the
+      seed opens — the graph is the point, and a second affordance per
+      citation was the clutter the compact chip existed to remove.
+      *(From the 2026-08-10 design conversation; shipped 2026-08-13.)*
+
 - [x] **Atlas grounds — the general-assistant ambition is cut** *(v6.8.0)* —
       two days after the librarian retirement shipped, a scope correction that
       is mostly deletion. v6.7.0 had tried to give the graph-free chat a

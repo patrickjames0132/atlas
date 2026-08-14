@@ -10,7 +10,9 @@
  *     uses through `MathText` — beats, the detail panel, and search hits keep
  *     `MathText`; only answers get the fuller Markdown treatment),
  *   • `[n]` markers via `remarkCite`, made clickable when the answer's `refs`
- *     map resolves them to a graph node (glowing that one paper on click),
+ *     map resolves them to a graph node (glowing that one paper on click) —
+ *     and, with no graph to glow, resolved through `paperRefs` into a button
+ *     that maps that paper instead,
  *   • `[Sn, p.N]` markers, rendered as the library source's real title and
  *     page from the answer's `sourceRefs` map.
  *
@@ -33,6 +35,53 @@ const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
 const REHYPE_PLUGINS = [rehypeKatex]
 
 /**
+ * One node, lit — the companion to `GraphGlyph`, marking the chips that
+ * spotlight a paper already on the canvas. Deliberately the *same* motif with
+ * the meaningful difference carried by the shape: one node glowing rather than
+ * three wired together, which is exactly how the two clicks differ.
+ *
+ * @returns The inline glyph.
+ */
+function SpotlightGlyph() {
+  return (
+    <svg className="cite-ref-glyph" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+      <circle
+        cx="6"
+        cy="6"
+        r="4.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+        opacity="0.5"
+      />
+      <circle cx="6" cy="6" r="1.9" fill="currentColor" />
+    </svg>
+  )
+}
+
+/**
+ * Three nodes and two edges — the app's own motif for "this builds a map",
+ * marking the citation chips that seed a graph apart from the ones that
+ * spotlight a paper already on it. Drawn rather than typed: no glyph in the
+ * unicode block reads as a citation graph, and the ones that come close
+ * (⁂, ⌗) render inconsistently across fonts. `currentColor` so it inherits
+ * the chip's own colour through hover and focus.
+ *
+ * @returns The inline glyph.
+ */
+function GraphGlyph() {
+  return (
+    <svg className="cite-ref-glyph" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+      <line x1="2.5" y1="9" x2="6" y2="3.5" stroke="currentColor" strokeWidth="1" />
+      <line x1="6" y1="3.5" x2="9.5" y2="8" stroke="currentColor" strokeWidth="1" />
+      <circle cx="6" cy="3" r="1.6" fill="currentColor" />
+      <circle cx="2.5" cy="9.2" r="1.4" fill="currentColor" />
+      <circle cx="9.5" cy="8.2" r="1.4" fill="currentColor" />
+    </svg>
+  )
+}
+
+/**
  * Render an answer's Markdown + math + clickable `[n]` citations.
  *
  * @returns The rendered answer body.
@@ -43,6 +92,8 @@ export default function AnswerMarkdown({
   sourceRefs,
   paperRefs,
   onRefClick,
+  onGraphIds,
+  onPaperSeed,
 }: {
   text: string
   /** `[n]` → node-id map for this answer (undefined on old saves / no refs). */
@@ -55,6 +106,14 @@ export default function AnswerMarkdown({
   sourceRefs?: Record<string, SourceRef>
   /** Spotlight one paper on the graph (undefined = markers render inert). */
   onRefClick?: (nodeId: string) => void
+  /** Every paper id the workspace currently holds. A `[n]` resolving to an id
+   *  outside it renders greyed and inert — see the stale branch below.
+   *  Undefined skips the check entirely (nothing to check against). */
+  onGraphIds?: Set<string>
+  /** Build a graph seeded on a cited paper — the graph-free counterpart of
+   *  `onRefClick`, which needs a graph to point at. Undefined falls back to
+   *  linking out to the paper's own page. */
+  onPaperSeed?: (nodeId: string) => void
 }) {
   const components = useMemo<Components>(
     () => ({
@@ -68,11 +127,24 @@ export default function AnswerMarkdown({
       // index resolves to a node; otherwise it degrades to the bare `[n]` text.
       citeref: ({ index, children }: { index?: string; children?: ReactNode }) => {
         const nodeId = index && refs ? refs[index] : undefined
+        // Cited a paper that isn't on the graph any more. Only reachable since
+        // a chat-seeded jump started carrying the conversation across a graph
+        // change: the marker resolved fine when it was written, and the paper
+        // it names is real, but clicking would now highlight nothing. Render
+        // it as quiet, inert text that says so rather than a live-looking
+        // control that no-ops.
+        if (nodeId && onGraphIds && !onGraphIds.has(nodeId)) {
+          return (
+            <span className="cite-ref cite-ref-stale" title="Not on the graph currently open">
+              {children}
+            </span>
+          )
+        }
         if (nodeId && onRefClick) {
           return (
             <button
               type="button"
-              className="cite-ref"
+              className="cite-ref cite-ref-spot"
               title="Show this paper on the graph"
               onClick={(event) => {
                 event.stopPropagation() // don't also trigger the whole-answer re-light
@@ -80,14 +152,40 @@ export default function AnswerMarkdown({
               }}
             >
               {children}
+              <SpotlightGlyph />
             </button>
           )
         }
-        // No graph to point at: the marker would otherwise be dead text with
-        // nothing to say which paper it named. Fall back to the server-resolved
-        // title, linking out where the paper actually lives.
+        // No graph to point at, but the server resolved the marker to a real
+        // paper — so the click *maps* it. The chip stays the bare `[n]` the
+        // prose was written around (a full title inline derailed the sentence,
+        // twice over when two papers back a claim); the title moves to the
+        // tooltip, and the glyph marks this as the chip that builds a graph
+        // rather than lighting one up. That difference is worth signalling in
+        // shape and not only in colour: one is a reversible highlight, the
+        // other rebuilds the workspace, and a reader shouldn't discover which
+        // by clicking.
         const paper = index && paperRefs ? paperRefs[index] : undefined
         if (!paper) return <>{children}</>
+        if (onPaperSeed) {
+          return (
+            <button
+              type="button"
+              className="cite-ref cite-ref-seed"
+              title={`Map this paper's citations — ${paper.title}`}
+              onClick={(event) => {
+                event.stopPropagation() // don't also trigger the whole-answer re-light
+                onPaperSeed(paper.node_id)
+              }}
+            >
+              {children}
+              <GraphGlyph />
+            </button>
+          )
+        }
+        // Nowhere to seed (an old save re-read outside a live workspace):
+        // degrade to the link-out this used to be. The title carries here
+        // because a bare `[n]` with nothing behind it really would be dead.
         if (!paper.url) return <span className="source-ref">({paper.title})</span>
         return (
           <a
@@ -125,7 +223,7 @@ export default function AnswerMarkdown({
         )
       },
     }),
-    [refs, sourceRefs, paperRefs, onRefClick],
+    [refs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed],
   )
 
   return (

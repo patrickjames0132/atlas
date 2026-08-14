@@ -25,8 +25,13 @@ store/
   `(selected ∩ visible) ∪ discoveries`, via `selectGroundingNodes`; the full
   seed node via `selectSeedNode`), the legend
   (`selectHasDiscovered`/`HasSearchHits`),
-  the header (seed title), and Save. `epoch` bumps per load/restore — the
-  shell keys the teacher panel on it, replacing the old `graphKey` hack.
+  the header (seed title), and Save. `epoch` bumps on **Home and restore
+  only** — the shell keys the teacher panel on it, so a bump remounts the
+  panel and rebuilds the transcript's scroll container at the top. Since a
+  conversation now survives a graph change, a graph load must not remount:
+  it would throw the reader back to the start of whatever they were
+  reading. In-flight streams are aborted by `useConversation` watching the
+  seed change instead of by the unmount that no longer happens.
   `error` is the shared search/graph overlay surface.
   `workspaceCleared` is the Home action: workspace back to initial (epoch
   bumped so the teacher remounts), with the transcript and highlights
@@ -42,7 +47,19 @@ store/
   old `onStateChange` → `teacherStateRef` plumbing died: the transcript used
   to live in Teacher.tsx with a live duplicate hoisted into Atlas purely so
   Save could read it. Reset/restore ride the workspace thunks via
-  `extraReducers` — a fresh graph empties it, a restored session refills it.
+  `extraReducers`, and the slice's two halves have **different owners**: a new
+  graph keeps the `chat` and drops the `lectures`. The chat is the *user's* —
+  they asked those questions, and loading another graph says nothing about
+  being finished with the answers, so clearing it is theirs to do (the Clear
+  button, or Home). Lectures belong to the *graph*: a lecture narrates the
+  neighborhood you built and its beats point at that graph's nodes. Home
+  (`workspaceCleared`) still empties both; a restore replaces both. This is
+  only safe because citations degrade — an `[n]` whose paper is no longer
+  loaded renders greyed and inert instead of silently highlighting nothing
+  (`teacher/transcript/README.md`), which is why the reset used to be
+  wholesale. A `fromChat` load additionally sets `workspace.revealSeedDetail`,
+  which GraphExplorer consumes (and clears) to open the new seed's detail
+  panel on arrival.
   Lectures are held as a **per-mode cache** (`lectures`: mode → beats) plus the
   `activeMode` on screen, so each of the four modes is played once and then
   toggled show/hide for free; `selectVisibleBeats` reads out the shown mode's

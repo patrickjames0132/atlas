@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { Beat } from '../../src/api'
+import workspaceReducer from '../../src/store/workspace'
 import reducer, {
   beatAdded,
   chatCleared,
@@ -137,5 +138,62 @@ describe('transcript lecture caching', () => {
     expect(state.chat).toEqual([])
     expect(state.lectures.history).toHaveLength(1)
     expect(state.activeMode).toBeNull()
+  })
+})
+
+/** A `loadGraph.fulfilled` action, as the store would dispatch it. */
+function graphLoadedAction(fromChat: boolean) {
+  return {
+    type: 'workspace/loadGraph/fulfilled',
+    payload: {
+      seed: { id: 'seed', arxiv_id: null, title: 'Seed' },
+      nodes: [],
+      edges: [],
+      counts: {},
+    },
+    meta: { arg: { seed: 'seed', fromChat }, requestId: 'r', requestStatus: 'fulfilled' },
+  } as unknown as Parameters<typeof reducer>[1]
+}
+
+describe('transcript survival across a graph load', () => {
+  const graphLoaded = graphLoadedAction
+
+  it.each([
+    ['seeded from a citation', true],
+    ['searched cold from the header', false],
+  ])('keeps the conversation when the graph was %s', (_label, fromChat) => {
+    // The chat is the user's: they asked those questions, and loading another
+    // graph doesn't say they're done with the answers. Clearing it is theirs
+    // to do — the Clear button, or Home.
+    const state = play(turnStarted('What is new in quantum computing?'), graphLoaded(fromChat))
+    // turnStarted seeds the user turn plus the assistant placeholder.
+    expect(state.chat).toHaveLength(2)
+    expect(state.chat[0].text).toBe('What is new in quantum computing?')
+  })
+
+  it('drops the cached lectures, which belong to the graph that is going away', () => {
+    // A lecture narrates the neighborhood you built and its beats point at
+    // that graph's nodes — carrying one onto a different graph would narrate
+    // papers that aren't there.
+    const state = play(
+      lectureStarted('history'),
+      beatAdded({ mode: 'history', beat: makeBeat() }),
+      turnStarted('And what about DQN?'),
+      graphLoaded(false),
+    )
+    expect(state.lectures).toEqual({})
+    expect(state.activeMode).toBeNull()
+    expect(state.chat).toHaveLength(2)
+  })
+})
+
+describe('workspace epoch across a graph load', () => {
+  it.each([true, false])('holds the epoch steady on any graph load (fromChat=%s)', (fromChat) => {
+    // The shell keys the teacher panel on `epoch`, so a bump remounts it and
+    // rebuilds the transcript's scroll container at the top — throwing the
+    // reader back to the start of the answer they were reading. Only Home and
+    // a session restore remount now.
+    const loaded = workspaceReducer(undefined, graphLoadedAction(fromChat))
+    expect(loaded.epoch).toBe(0)
   })
 })

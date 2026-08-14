@@ -273,8 +273,24 @@ const transcriptSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // A fresh graph starts a fresh conversation; Home clears everything.
-      .addCase(loadGraph.fulfilled, () => initialState)
+      // A new graph keeps your conversation and drops the lectures. The two
+      // halves of this slice belong to different owners: the chat is the
+      // user's — they asked those questions, and nothing about loading another
+      // graph says they're finished with the answers, so clearing it is theirs
+      // to do (the Clear button, or Home). Lectures belong to the *graph*: a
+      // lecture narrates the neighborhood you built, and its beats point at
+      // that graph's nodes, so carrying one onto a different graph would
+      // narrate papers that aren't there.
+      //
+      // This is only safe because citations degrade — an `[n]` whose paper
+      // isn't on the graph any more renders greyed and inert rather than
+      // silently highlighting nothing (see `teacher/transcript/README.md`).
+      // Before that, a surviving transcript meant a screenful of dead
+      // pointers, which is why this used to reset wholesale.
+      .addCase(loadGraph.fulfilled, (state) => ({
+        ...initialState,
+        chat: state.chat,
+      }))
       .addCase(workspaceCleared, () => initialState)
       // A restored session brings its saved transcript along.
       .addCase(restoreSession.fulfilled, (_state, action) => action.payload.transcript)

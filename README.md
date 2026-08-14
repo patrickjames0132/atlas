@@ -185,7 +185,9 @@ The Vite dev server proxies `/api/*` to Flask.
      your sources / show a figure). Answers render in full **Markdown + math**,
      and their inline `[n]` citations are **clickable** — click one to spotlight
      that paper on the graph, click it again to clear. (Lecture beats cite the
-     same way.) Answers also cite their whole grounding set — click the bubble
+     same way.) A tiny glyph on each chip says which click you're about to
+     make: **one node lit** spotlights a paper already on the canvas, **three
+     nodes wired together** builds that paper's own graph. Answers also cite their whole grounding set — click the bubble
      to re-light them all. A claim drawn from **your own uploaded sources** is
      attributed with its real title and page, resolved server-side rather than
      written out by the model.
@@ -195,7 +197,11 @@ The Vite dev server proxies `/api/*` to Flask.
      answers in real material, and is honest when it can't.
    - **No graph open?** The same panel is the same agent, seedless: it searches
      your library through its tools rather than being handed passages, so a
-     greeting stays a greeting and a real question gets looked up first.
+     greeting stays a greeting and a real question gets looked up first. Its
+     citations are the way *in*: clicking one **maps that paper** — builds its
+     graph and opens its details — and the conversation comes with you rather
+     than being cleared, so a survey answer is a doorway into the graph instead
+     of a list of links out to someone else's site.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
 6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.

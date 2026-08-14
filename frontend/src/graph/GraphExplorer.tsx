@@ -36,6 +36,7 @@ import {
   nodeSelectionToggled,
   selectHasDiscovered,
   selectHasSearchHits,
+  seedDetailRevealed,
   selectNodeSelectionSet,
   selectWorkspace,
   visibleNodesSet,
@@ -104,8 +105,16 @@ export default function GraphExplorer({
   tourStage?: string
 }) {
   const dispatch = useAppDispatch()
-  const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef, provider } =
-    useAppSelector(selectWorkspace)
+  const {
+    graph,
+    discoveredNodes,
+    discoveredEdges,
+    layout,
+    loading,
+    seedRef,
+    provider,
+    revealSeedDetail,
+  } = useAppSelector(selectWorkspace)
   const highlightIds = useAppSelector(selectHighlightSet)
   const selectedIds = useAppSelector(selectNodeSelectionSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
@@ -270,6 +279,16 @@ export default function GraphExplorer({
   useEffect(() => {
     if (tourStage === 'details' && !selectedId && graph) setSelectedId(graph.seed.id)
   }, [tourStage, selectedId, graph, setSelectedId])
+
+  // A graph opened from a chat citation lands with its seed's detail panel
+  // already open: the click said "show me that paper", so the paper is what
+  // should be on screen. Consumed once (`seedDetailRevealed`) so ✕-ing the
+  // panel doesn't spring it back open on the next render.
+  useEffect(() => {
+    if (!revealSeedDetail || !graph) return
+    setSelectedId(graph.seed.id)
+    dispatch(seedDetailRevealed())
+  }, [revealSeedDetail, graph, setSelectedId, dispatch])
 
   /**
    * Canvas click, split by modifier: a shift-click toggles the node in the
