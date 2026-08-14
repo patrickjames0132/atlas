@@ -326,6 +326,35 @@ optional, behind a key.
 
 ### Citations & graph data
 
+- [ ] **Surveys as a first-class node kind** — a review/survey paper is a
+      different animal from a primary result: it's the field's own overlook of
+      a period, and right now it's an anonymous dot like everything else.
+      Identify them, give them their **own node colour and filter chip**, and
+      let the user **scope the researcher and lecturer to them** — "teach me
+      this field from its surveys" is a genuinely different (and often better)
+      first pass than the citation lineage.
+
+      **The data is there and we simply don't ask for it**, which makes the
+      first step small: S2 exposes `publicationTypes` (carrying `Review`) and
+      OpenAlex a `type` field (`review`) — neither appears in
+      `semantic_scholar/nodes.py`'s `NEIGHBOR_FIELDS` nor
+      `openalex/nodes.py`'s `NEIGHBOR_SELECT`, so it's a field addition on both
+      before anything else can be built. Worth checking coverage on a real
+      graph first: if the flag is sparse or noisy, a title/abstract heuristic
+      ("a survey of", "a review of", ": a survey") may have to back it up, and
+      that changes the ticket's shape.
+
+      **Then two halves.** *Rendering* — surveys aren't a graph *relation*
+      (a paper is a survey regardless of how it reached the canvas), so this is
+      an **overlay** on the existing relation colouring rather than a new
+      relation, and the chip is a filter over a property, not over `rels`.
+      That's a real difference from the sibling "filter chip for
+      teacher-discovered and search nodes" ticket, which does filter `rels`.
+      *Scoping* — the agents already accept a hand-picked node set
+      (`selectedNodeIds` → `selectGroundingNodes`), so "only the surveys" could
+      ride that existing seam rather than needing its own plumbing.
+      *(From the `todos.md` inbox, 2026-08-14.)*
+
 - [ ] **Replace the STOP/SKIP citation rules with a citation-threshold predicate**
       — the standing goal (Patrick, 2026-07-20). Rip out the STOP rule, the SKIP
       rule, truncated-vs-full-history, and adaptive-vs-non-adaptive, and replace
@@ -553,6 +582,17 @@ optional, behind a key.
   relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
 ### UI & rendering polish
+
+- [ ] **The Data Provider dropdown's text sits off-centre** — minor, and the
+      cause is already visible: `.provider-select select`
+      (`header/header.css`) uses `padding: 7px 26px 7px 10px`, where the 26px
+      right pad reserves a lane for the custom data-URI caret (the native
+      arrow rendered outside the rounded border on macOS, hence
+      `appearance: none`). The text is centred in the *element*, so the
+      asymmetric padding pushes it visibly left of optical centre. Either
+      balance the horizontal padding and let the caret overlap its own lane, or
+      commit to left-aligning the label so the offset reads as intentional.
+      *(From the `todos.md` inbox, 2026-08-14.)*
 
 - [ ] **Settings modal — the corpus vs. live-citations toggle** — the
       adaptive-sizing half of the stage-2 ticket shipped in v6.3.0 (the switch,
