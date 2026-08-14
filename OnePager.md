@@ -128,6 +128,55 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
+- [ ] **The graph-free chat ignores the provider dropdown — and that breaks
+      citation seeding** *(diagnosed 2026-08-14, not yet fixed)* — two symptoms,
+      one root cause, both confirmed in `data/atlas.log`.
+
+      **The cause.** `streamAskSources` (`api/agents.ts`) has no `provider`
+      field in its body, and `api_ask_sources` (`routes/agents.py`) never reads
+      one — its `orchestrator.run(Intent.RESEARCH, …)` call omits it entirely.
+      So the graph-free researcher always runs on the default backend no matter
+      what the header's "Data source" dropdown says. The graph-mode path
+      (`streamAsk` → `/api/ask`) *does* send it, which is why this only bites
+      the landing chat.
+
+      **Symptom 1: the agent queries the wrong backend.** Switch to OpenAlex,
+      ask a question, and the log fills with `semantic_scholar.client` requests
+      (Patrick confirmed; the S2 429 backoffs are unmistakable).
+
+      **Symptom 2: seeding a graph from a citation fails.** Because the search
+      ran on S2, the answer's `PaperRef.node_id`s are 40-hex S2 paperIds — and
+      the seeding click (v6.11.0) builds with the *workspace's* provider, so
+      the request is `?seed=<S2 id>&provider=openalex`, which
+      `openalex.resolve_seed_work` can't resolve: *"Could not build that
+      graph."* Logged as `graph build failed for 9ecbd3cf…`.
+
+      **Fix, in two parts.** (a) Thread `provider` through the graph-free ask,
+      matching what `/api/ask` already does — that alone fixes both symptoms in
+      the common case. (b) Even so, a `node_id` is only meaningful in the
+      provider that produced it, and nothing binds them: switching the dropdown
+      *after* an answer, or restoring a session saved under the other backend,
+      leaves live chips pointing at ids the current provider can't resolve. So
+      carry the provider on the `PaperRef` and seed with *that*, or grey the
+      chip when they disagree — the same treatment stale graph refs already get.
+      *(Filed 2026-08-14.)*
+- [ ] **Does the header search bar still earn its place?** — an open design
+      question, not yet a decision. The chat bar now does much of what the seed
+      search does: ask about a topic, get papers back, click a citation chip to
+      map one. Header search is the only path that goes *straight* from a title
+      or a pasted arXiv id to a graph, with no answer in between — real value
+      when you know exactly which paper you want, and it's cache-first and
+      LLM-free (`query_analyst` expansion is optional and skippable), which the
+      chat path is not. **The question to answer before touching it:** can one
+      bar serve both without making the fast path slow — e.g. routing a pasted
+      id or an exact-title match straight to a graph (`ID_RE` already does this
+      in `Atlas.tsx`'s submit) while anything conversational goes to the agent?
+      If yes, the header search folds in and the landing page gets simpler
+      still. If no, they're two different intents that happen to look alike, and
+      the honest answer is to keep both and make the split legible. Worth
+      deciding *before* more UI is hung off either one. *(Patrick's question,
+      2026-08-14.)*
+
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
       [docs/history.md](docs/history.md)). Citations now *resolve*: the model
