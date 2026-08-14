@@ -2431,6 +2431,34 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Infrastructure, quality & tooling
 
+- [x] **`refs` → `graph_refs`: naming the citation maps apart** *(v6.12.0)* —
+      three different `[n]`-marker maps had grown up beside each other, and the
+      oldest and most load-bearing was the one with the least specific name:
+      `refs` (marker → graph node id) sat next to `sourceRefs` (→ a library
+      passage) and `paperRefs` (→ a paper with no graph to point at). v6.11.0
+      made the collision matter — it put two kinds of citation chip in one
+      transcript — so Patrick called the rename immediately after.
+
+      Renamed on both sides of the wire, keeping each side's convention:
+      `Beat.refs` → `Beat.graph_refs` (snake_case, backend-resolved, because a
+      lecture's numbered list is the mode-filtered `_story_nodes` the frontend
+      never sees), `prompts.refs_from_text` → `graph_refs_from_text`, and
+      frontend-side `msg.refs` → `msg.graphRefs` with `refsSet` /
+      `resolveRefs` following. Deliberately **not** renamed: `SourceRefs.refs`
+      and `PaperRefs.refs`, which are those events' own envelope field rather
+      than the graph-ref concept — renaming them would have muddied the
+      distinction the ticket existed to draw.
+
+      **The part that needed care was the save format.** `refs` is persisted
+      in saved sessions, on chat turns *and* on cached lecture beats, so a
+      straight rename would have silently dropped the maps on every existing
+      save — and silently is the operative word: the session restores looking
+      perfectly fine, with every citation quietly reduced to inert text. A
+      restore-time migration reads whichever key a save carries. That path had
+      no coverage at all, so it got the frontend suite's first thunk-mocking
+      test (legacy save migrates; current save passes through untouched).
+      *(Requested 2026-08-13; shipped 2026-08-13.)*
+
 - [x] **CI — run the quality gate on GitHub, and check tag/version at release
       time** *(v6.10.0)* — the first of the three stages in the "build / deploy /
       release strategy" ticket; the rest (repeatable build, publish, deploy)

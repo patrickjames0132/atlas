@@ -25,7 +25,7 @@ describe('AnswerMarkdown citations', () => {
     render(
       <AnswerMarkdown
         text="Both [14, 29] agree."
-        refs={{ '14': 'node-fourteen', '29': 'node-twentynine' }}
+        graphRefs={{ '14': 'node-fourteen', '29': 'node-twentynine' }}
         onRefClick={onRefClick}
       />,
     )
@@ -41,7 +41,7 @@ describe('AnswerMarkdown citations', () => {
 
   it('renders an unresolved marker as inert text, not a chip', () => {
     const onRefClick = vi.fn()
-    render(<AnswerMarkdown text="See [9] though." refs={{}} onRefClick={onRefClick} />)
+    render(<AnswerMarkdown text="See [9] though." graphRefs={{}} onRefClick={onRefClick} />)
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.getByText(/\[9\]/)).toBeTruthy()
   })
@@ -75,7 +75,7 @@ describe('AnswerMarkdown library citations', () => {
     render(
       <AnswerMarkdown
         text="Both [14] and [S2, p.460] agree."
-        refs={{ '14': 'node-fourteen' }}
+        graphRefs={{ '14': 'node-fourteen' }}
         sourceRefs={SOURCE_REFS}
         onRefClick={onRefClick}
       />,
@@ -96,7 +96,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
   }
 
   it('renders [n] as a linked title when there is no graph to resolve it', () => {
-    // The graph-free case: `refs` is empty because the frontend never held a
+    // The graph-free case: `graphRefs` is empty because the frontend never held a
     // numbered list, so without this the marker is dead text.
     render(<AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} />)
     const link = screen.getByRole('link', { name: '(Playing Atari with Deep RL)' })
@@ -109,7 +109,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     render(
       <AnswerMarkdown
         text="As shown in [1]."
-        refs={{ '1': 'node-atari' }}
+        graphRefs={{ '1': 'node-atari' }}
         paperRefs={PAPER_REFS}
         onRefClick={onRefClick}
       />,
@@ -159,7 +159,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     render(
       <AnswerMarkdown
         text="As shown in [1]."
-        refs={{ '1': 'node-atari' }}
+        graphRefs={{ '1': 'node-atari' }}
         onRefClick={onRefClick}
         onGraphIds={new Set(['node-something-else'])}
       />,
@@ -173,7 +173,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     render(
       <AnswerMarkdown
         text="As shown in [1]."
-        refs={{ '1': 'node-atari' }}
+        graphRefs={{ '1': 'node-atari' }}
         onRefClick={onRefClick}
         onGraphIds={new Set(['node-atari'])}
       />,
@@ -191,7 +191,11 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     expect(seeding.querySelector('.cite-ref-seed svg')).toBeTruthy()
     cleanup()
     const { container: spotlight } = render(
-      <AnswerMarkdown text="As shown in [1]." refs={{ '1': 'node-atari' }} onRefClick={vi.fn()} />,
+      <AnswerMarkdown
+        text="As shown in [1]."
+        graphRefs={{ '1': 'node-atari' }}
+        onRefClick={vi.fn()}
+      />,
     )
     // The spotlight chip carries its own glyph — same family, different shape.
     expect(spotlight.querySelector('.cite-ref-seed')).toBeNull()

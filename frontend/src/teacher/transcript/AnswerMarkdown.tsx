@@ -9,7 +9,7 @@
  *   • math via remark-math + rehype-katex (the same KaTeX the rest of the app
  *     uses through `MathText` — beats, the detail panel, and search hits keep
  *     `MathText`; only answers get the fuller Markdown treatment),
- *   • `[n]` markers via `remarkCite`, made clickable when the answer's `refs`
+ *   • `[n]` markers via `remarkCite`, made clickable when the answer's `graphRefs`
  *     map resolves them to a graph node (glowing that one paper on click) —
  *     and, with no graph to glow, resolved through `paperRefs` into a button
  *     that maps that paper instead,
@@ -88,7 +88,7 @@ function GraphGlyph() {
  */
 export default function AnswerMarkdown({
   text,
-  refs,
+  graphRefs,
   sourceRefs,
   paperRefs,
   onRefClick,
@@ -96,8 +96,8 @@ export default function AnswerMarkdown({
   onPaperSeed,
 }: {
   text: string
-  /** `[n]` → node-id map for this answer (undefined on old saves / no refs). */
-  refs?: Record<string, string>
+  /** `[n]` → node-id map for this answer (undefined on old saves / none). */
+  graphRefs?: Record<string, string>
   /** `[n]` → paper (title + URL), the fallback when there's no graph to
    *  resolve a marker against. */
   paperRefs?: Record<string, PaperRef>
@@ -126,7 +126,7 @@ export default function AnswerMarkdown({
       // The synthetic citation element from remarkCite. Clickable only when its
       // index resolves to a node; otherwise it degrades to the bare `[n]` text.
       citeref: ({ index, children }: { index?: string; children?: ReactNode }) => {
-        const nodeId = index && refs ? refs[index] : undefined
+        const nodeId = index && graphRefs ? graphRefs[index] : undefined
         // Cited a paper that isn't on the graph any more. Only reachable since
         // a chat-seeded jump started carrying the conversation across a graph
         // change: the marker resolved fine when it was written, and the paper
@@ -223,7 +223,7 @@ export default function AnswerMarkdown({
         )
       },
     }),
-    [refs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed],
+    [graphRefs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed],
   )
 
   return (

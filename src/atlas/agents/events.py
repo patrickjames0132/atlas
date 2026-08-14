@@ -69,7 +69,7 @@ class Beat(BaseModel):
     # frontend make each ``[n]`` clickable. Resolved here (not frontend-side)
     # because a lecture's numbered list is the mode-filtered ``_story_nodes``,
     # which the frontend never sees.
-    refs: dict[str, str] = Field(default_factory=dict)
+    graph_refs: dict[str, str] = Field(default_factory=dict)
     figure: BeatFigure | None = None
 
 

@@ -84,7 +84,7 @@ def test_beats_resolve_inline_ref_markers_for_clickable_citations():
     with lecturer.agent.override(model=model):
         out = list(lecturer.lecture(SEED, NODES))
     assert out[0].node_ids == ["node03"]  # the structured highlight set
-    assert out[0].refs == {"3": "node03", "2": "node02"}  # every inline [n] used
+    assert out[0].graph_refs == {"3": "node03", "2": "node02"}  # every inline [n] used
 
 
 def test_blank_text_beats_are_dropped():

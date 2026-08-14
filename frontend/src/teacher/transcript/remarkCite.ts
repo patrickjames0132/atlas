@@ -46,7 +46,7 @@ interface CiteRefNode {
 /**
  * The library-citation counterpart of {@link CiteRefNode}, emitting
  * `<sourceref index="n" page="460">`. The page rides on the element rather
- * than in the refs map, so the map stays page-free and can arrive before the
+ * than in the graphRefs map, so the map stays page-free and can arrive before the
  * prose does (see the backend's `prompts.source_refs`).
  */
 interface SourceRefNode {

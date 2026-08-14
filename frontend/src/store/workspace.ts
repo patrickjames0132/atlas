@@ -21,10 +21,12 @@ import {
   fetchGraphStream,
   getSession,
   saveSession,
+  type Beat,
   type BuildProgress,
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
+  type LectureMode,
   type Provider,
   type SavedSessionMeta,
 } from '../api'
@@ -151,6 +153,55 @@ export const switchProvider = createAsyncThunk<
   if (seedRef) dispatch(loadGraph({ seed: seedRef }))
 })
 
+/** A saved chat turn or lecture beat as it may appear on disk: `graphRefs` /
+ *  `graph_refs` on anything saved from v6.12.0 on, the older bare `refs` on
+ *  everything before. */
+type LegacyRefs = { refs?: Record<string, string> }
+
+/**
+ * Carry a saved chat turn's `[n]` → node-id map onto the current field name.
+ * Saves predating the `refs` → `graphRefs` rename are still out there, and a
+ * silently dropped map is the worst outcome: the turn restores looking fine,
+ * with every citation reduced to inert text.
+ *
+ * @param message The saved chat turn.
+ * @returns The turn with `graphRefs` populated from whichever key it carries.
+ */
+function withGraphRefs<Message extends { graphRefs?: Record<string, string> }>(
+  message: Message,
+): Message {
+  const legacy = (message as Message & LegacyRefs).refs
+  return message.graphRefs || !legacy ? message : { ...message, graphRefs: legacy }
+}
+
+/**
+ * The lecture-beat twin of `withGraphRefs`. Beats are wire objects, so their
+ * field is snake_case (`graph_refs`) — the older saves carry `refs` there too.
+ *
+ * @param beat The saved lecture beat.
+ * @returns The beat with `graph_refs` populated from whichever key it carries.
+ */
+function withBeatGraphRefs(beat: Beat): Beat {
+  const legacy = (beat as Beat & LegacyRefs).refs
+  return beat.graph_refs || !legacy ? beat : { ...beat, graph_refs: legacy }
+}
+
+/**
+ * Apply a per-beat migration across every cached lecture in a save.
+ *
+ * @param lectures The saved per-mode lecture cache.
+ * @param migrate  The per-beat transform to apply.
+ * @returns The cache with each mode's beats migrated.
+ */
+function mapLectures(
+  lectures: Partial<Record<LectureMode, Beat[]>>,
+  migrate: (beat: Beat) => Beat,
+): Partial<Record<LectureMode, Beat[]>> {
+  return Object.fromEntries(
+    Object.entries(lectures).map(([mode, beats]) => [mode, (beats ?? []).map(migrate)]),
+  )
+}
+
 /**
  * Reopen a saved session: rebuild its graph directly (no S2 fetch, so no
  * rate-limit cost and the exact discovered papers are preserved). The
@@ -177,12 +228,15 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     // (Old saves may carry a hist_trace field from the retired lecture
     // backfill — ignored; lectures no longer expand the graph.)
     transcript: {
-      chat: data.chat ?? [],
+      chat: (data.chat ?? []).map(withGraphRefs),
       // New saves carry the per-mode lecture cache directly. A pre-caching
       // save has only a flat `beats` array with no mode recorded — fold it in
       // under `history` (the primary "how we got here" mode) so the lecture
       // isn't lost, and show it.
-      lectures: data.lectures ?? (data.beats?.length ? { history: data.beats } : {}),
+      lectures: mapLectures(
+        data.lectures ?? (data.beats?.length ? { history: data.beats } : {}),
+        withBeatGraphRefs,
+      ),
       // Saves from before structured library citations carry no source maps;
       // their beats' [Sn] markers (if any) degrade to raw text, as designed.
       lectureSources: data.lectureSources ?? {},

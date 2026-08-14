@@ -352,7 +352,7 @@ def _beat(beat: LectureBeat, nodes: list[Node], figures: list[dict]) -> events.B
         node_ids=prompts.idx_to_id(nodes, beat.nodes),
         # Resolve the beat's inline [n] markers against the same numbered list
         # (the mode-filtered story nodes) so the frontend can make them clickable.
-        refs=prompts.refs_from_text(nodes, text),
+        graph_refs=prompts.graph_refs_from_text(nodes, text),
         figure=figure,
     )
 

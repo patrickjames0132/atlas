@@ -11,7 +11,7 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode, GraphResponse } from '../../src/api'
 import reducer, {
   nodeSelectionAdded,
@@ -20,10 +20,12 @@ import reducer, {
   nodeSelectionToggled,
   providerSet,
   selectGroundingNodes,
+  restoreSession,
   visibleNodesSet,
   workspaceCleared,
 } from '../../src/store/workspace'
 import type { WorkspaceState } from '../../src/store/workspace'
+import type { TranscriptState } from '../../src/store/transcript'
 
 /** A minimal valid GraphNode; override per test. */
 function makeNode(id: string, overrides: Partial<GraphNode> = {}): GraphNode {
@@ -150,5 +152,57 @@ describe('selection lifecycle', () => {
     let state = reducer(initial(), nodeSelectionSet(['a']))
     state = reducer(state, visibleNodesSet(['a', 'b', 'c']))
     expect(state.selectedNodeIds).toEqual(['a'])
+  })
+})
+
+describe('restoring a save from before the graphRefs rename', () => {
+  /** A legacy save: `[n]` maps under the old bare `refs` key, on both a chat
+   *  turn and a cached lecture beat. */
+  const LEGACY_SAVE = {
+    data: {
+      seed: { id: 'seed', arxiv_id: null, title: 'Seed' },
+      nodes: [],
+      edges: [],
+      chat: [
+        { role: 'user', text: 'Why attention?' },
+        { role: 'assistant', text: 'Because [1].', refs: { '1': 'node-attention' } },
+      ],
+      lectures: {
+        history: [
+          { heading: 'One', text: 'As [2] showed.', node_ids: [], refs: { '2': 'node-rnn' } },
+        ],
+      },
+    },
+  }
+
+  it('carries the old `refs` maps onto the current field names', async () => {
+    // A dropped map is the worst outcome here: the turn restores looking
+    // perfectly fine, with every citation quietly reduced to inert text.
+    const api = await import('../../src/api')
+    const getSession = vi.spyOn(api, 'getSession').mockResolvedValue(LEGACY_SAVE as never)
+
+    const action = await restoreSession('saved-1')(vi.fn(), vi.fn(), undefined)
+    const { transcript } = action.payload as { transcript: TranscriptState }
+
+    expect(transcript.chat[1].graphRefs).toEqual({ '1': 'node-attention' })
+    expect(transcript.lectures.history?.[0].graph_refs).toEqual({ '2': 'node-rnn' })
+    getSession.mockRestore()
+  })
+
+  it('leaves a current save untouched', async () => {
+    const api = await import('../../src/api')
+    const getSession = vi.spyOn(api, 'getSession').mockResolvedValue({
+      data: {
+        ...LEGACY_SAVE.data,
+        chat: [{ role: 'assistant', text: 'Because [1].', graphRefs: { '1': 'node-new' } }],
+        lectures: {},
+      },
+    } as never)
+
+    const action = await restoreSession('saved-2')(vi.fn(), vi.fn(), undefined)
+    const { transcript } = action.payload as { transcript: TranscriptState }
+
+    expect(transcript.chat[0].graphRefs).toEqual({ '1': 'node-new' })
+    getSession.mockRestore()
   })
 })

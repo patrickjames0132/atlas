@@ -34,7 +34,7 @@ export interface Beat {
    * shift). Not sent by the backend; attached before the beat is stored so the
    * renderer can make each `[n]` clickable. Absent on older saved sessions.
    */
-  refs?: Record<string, string>
+  graph_refs?: Record<string, string>
   /**
    * A real paper figure attached to this beat (proxied image + the paper's
    * caption + the figure's number in the lecture's pool). `title` names the
