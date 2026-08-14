@@ -505,29 +505,6 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **The landing page is a chat bar** — today home is a sentence and a
-      button in a lot of empty space (`Atlas.tsx`'s hint overlay: *"Search for
-      a paper…"* plus a *"💬 Chat with your library"* CTA that opens the side
-      panel). Replace it with a **centered chat bar as the landing surface** —
-      the ChatGPT/Claude shape — with the header's **Assistant tab hidden on
-      home** (nothing to summon; it's already in front of you) and reappearing
-      in graph mode, where the chat collapses back into the side panel.
-      Patrick's design, sanity-checked with a co-worker, 2026-08-10.
-      **Two things beyond the layout.** (a) **Ungate it.** The entry point is
-      gated on owning a library — `assistantAvailable={hasGraph || libraryCount
-      > 0}`, and `Teacher` isn't even mounted otherwise — so a cold first-run
-      user would get a chat bar they can't type into. Sources become *optional
-      grounding*, not an entry requirement. **No agent change is needed for
-      this**: the researcher's prompt already treats any question on any
-      subject as `answered` and `search_sources` is `prepare`-gated off when
-      the library is empty, so a no-graph/no-library turn already works.
-      (b) **The help surfaces move with it** — the HOME tour steps and their
-      `presentIf: '[data-tour="assistant-btn"]'` guards (`tour/steps.ts`) all
-      assume the assistant lives behind a header button, and would teach the
-      old UI.
-      Best done **after** the chat-citation ticket above, whose transcript
-      continuity is what makes the collapse-into-the-panel motion preserve the
-      conversation. *(Filed 2026-08-10.)*
 - [ ] **Settings modal — the corpus vs. live-citations toggle** — the
       adaptive-sizing half of the stage-2 ticket shipped in v6.3.0 (the switch,
       the revived per-chip count sliders, the band-shape inputs — see history).

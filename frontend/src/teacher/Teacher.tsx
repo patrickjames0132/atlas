@@ -2,17 +2,32 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The unified assistant panel — now a slim shell. One docked side panel
- * whose capability levels up with context:
- *   • No graph, has a library → the graph-free chat (the researcher, seedless).
- *   • A graph is open → the streaming lecture + agentic Q&A (researcher).
+ * The unified assistant — a slim shell around one conversation, rendered in
+ * two shapes and at two capability levels. The shapes:
+ *   • `landing` — no graph yet, so the chat owns the whole body as a centred
+ *     column. This is the app's front door, and needs neither a graph nor an
+ *     uploaded library to be useful.
+ *   • docked — a graph is open, so it collapses to a resizable side panel
+ *     beside the map.
+ * The capability, independently:
+ *   • No graph → the researcher, seedless: the literature plus whatever
+ *     sources the reader has uploaded.
+ *   • A graph is open → the streaming lecture + agentic Q&A over it.
+ *
+ * **The two shapes are one component instance, deliberately.** The shell keeps
+ * it at a single position in the tree and only swaps the `landing` flag, so
+ * entering graph mode collapses the chat into the panel without remounting —
+ * the conversation, its scroll position and its run state all survive. That
+ * is the whole point of clicking a cited paper: the answer you were reading is
+ * still there when its graph arrives. (`epoch`, which the parent keys on, no
+ * longer bumps on a graph load for the same reason — only Home and a session
+ * restore remount.)
  *
  * The conversation itself lives in the store (transcript slice) and the
  * stream orchestration in useConversation; this component owns only what it
- * alone renders — the input box, the scope picker's data, the lightbox.
- * The panel is remounted per workspace epoch (keyed by the parent), so a
- * re-seed starts a fresh conversation; a restored session's transcript
- * arrives via the store, no seeding props needed.
+ * alone renders — the input box, the scope picker's data, the lightbox. A
+ * restored session's transcript arrives via the store, no seeding props
+ * needed.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -51,10 +66,20 @@ const MODES: { key: LectureMode; label: string; rel: string; tag: string }[] = [
  */
 export default function Teacher({
   collapsed = false,
+  landing = false,
   onClose,
 }: {
   /** Hidden (but kept mounted, so the conversation survives) when collapsed. */
   collapsed?: boolean
+  /**
+   * This is the landing surface, not a docked side panel: no graph is open, so
+   * the conversation gets the whole body as a centred column. Deliberately the
+   * *same component instance* as the docked panel — the shell keeps it at one
+   * position in the tree and only swaps this flag, so entering graph mode
+   * collapses the chat into the side panel without remounting it, and the
+   * answer you were reading keeps its scroll position.
+   */
+  landing?: boolean
   /** Collapse the panel (the header ✕). */
   onClose?: () => void
 }) {
@@ -80,6 +105,7 @@ export default function Teacher({
     onPaperSeed,
     toggleLecture,
     ask,
+    stopAsk,
     clear,
   } = useConversation()
 
@@ -115,9 +141,9 @@ export default function Teacher({
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
 
-  // First reader fetches; the panel remounts per workspace epoch, and the
-  // loaded flag keeps those remounts (and the drawer) from re-fetching a
-  // library the store already holds.
+  // First reader fetches; the loaded flag keeps the drawer (and the remounts
+  // that Home and a session restore still cause) from re-fetching a library
+  // the store already holds.
   useEffect(() => {
     if (!libraryLoaded) dispatch(loadLibrary())
   }, [libraryLoaded, dispatch])
@@ -174,6 +200,16 @@ export default function Teacher({
     if (field.scrollHeight > 0) field.style.height = `${field.scrollHeight}px`
   }, [input])
 
+  // What the ask bar invites, which is not always the same offer. The old copy
+  // promised books and PDFs whenever there was no graph — fine back when a
+  // library was the price of admission, and a lie now that the assistant is
+  // the landing surface for everyone. Only name the library when there is one.
+  const askPlaceholder = hasGraph
+    ? 'Ask about the papers on screen…'
+    : libraryItems.length > 0
+      ? 'Ask your books, PDFs, or the literature…'
+      : 'Ask a research question…'
+
   // The one-line "Answers also draw on …" note above the ask bar: lectures and
   // sources share it (space is tight), each part naming its picker's icon.
   // Only what's actually in play appears — no lectures played and no sources
@@ -190,80 +226,67 @@ export default function Teacher({
 
   return (
     <section
-      className={`teacher ${collapsed ? 'collapsed' : ''}`}
+      className={`teacher${landing ? ' landing' : ''}${landing && chat.length === 0 ? ' empty' : ''}${collapsed ? ' collapsed' : ''}`}
       data-tour="assistant-panel"
-      style={{ width }}
+      style={landing ? undefined : { width }}
     >
-      <div
-        className={`panel-resize-handle${dragging ? ' dragging' : ''}`}
-        onPointerDown={onHandlePointerDown}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize panel"
-      />
+      {/* Nothing to resize against on the landing surface — it owns the body. */}
+      {!landing && (
+        <div
+          className={`panel-resize-handle${dragging ? ' dragging' : ''}`}
+          onPointerDown={onHandlePointerDown}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panel"
+        />
+      )}
       <div className="teacher-head">
-        <div className="teacher-head-top">
-          <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask your library'}</span>
-          <div className="teacher-head-right">
-            {hasGraph && playedModes.length > 0 && (
-              <ScopePicker
-                items={lectureItems}
-                checkedIds={lectureScope}
-                dataTour="lecture-scope"
-                open={openScope === 'lectures'}
-                onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
-                onToggle={(id) =>
-                  setExcludedLectures((prev) =>
-                    prev.includes(id as LectureMode)
-                      ? prev.filter((mode) => mode !== id)
-                      : [...prev, id as LectureMode],
-                  )
-                }
-                onSelectAll={() => setExcludedLectures([])}
-                onDeselectAll={() => setExcludedLectures(playedModes)}
-                labels={{
-                  icon: '🎓',
-                  unit: 'lecture',
-                  heading: 'Use as context',
-                  allHint: 'Every played lecture is fed to the researcher.',
-                  someHint: 'Only the checked lectures are fed to the researcher.',
-                  noneHint: 'No lectures selected — answers ignore them.',
-                  buttonTitle: 'Choose which played lectures the researcher uses as context',
-                }}
-              />
-            )}
-            {libraryItems.length > 1 && (
-              <ScopePicker
-                items={libraryItems}
-                checkedIds={scopeIds}
-                dataTour="source-scope"
-                open={openScope === 'sources'}
-                onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
-                onToggle={(id) =>
-                  setExcludedSources((prev) =>
-                    prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
-                  )
-                }
-                onSelectAll={() => setExcludedSources([])}
-                onDeselectAll={() => setExcludedSources(libraryItems.map((source) => source.id))}
-                labels={{
-                  icon: '📚',
-                  unit: 'source',
-                  heading: 'Search in',
-                  allHint: 'All sources are searched.',
-                  someHint: 'Only the checked sources are searched.',
-                  noneHint: "No sources selected — the assistant won't search your library.",
-                  buttonTitle: 'Choose which of your sources the assistant may search',
-                }}
-              />
-            )}
-            {onClose && (
-              <button className="link-btn" onClick={onClose} aria-label="Close the assistant panel">
-                ✕
-              </button>
-            )}
+        {/* The landing surface has no panel title and nothing to close, and
+            its source picker moved into the ask bar — so the row would be an
+            empty strip of chrome. */}
+        {!landing && (
+          <div className="teacher-head-top">
+            <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask the assistant'}</span>
+            <div className="teacher-head-right">
+              {hasGraph && playedModes.length > 0 && (
+                <ScopePicker
+                  items={lectureItems}
+                  checkedIds={lectureScope}
+                  dataTour="lecture-scope"
+                  open={openScope === 'lectures'}
+                  onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
+                  onToggle={(id) =>
+                    setExcludedLectures((prev) =>
+                      prev.includes(id as LectureMode)
+                        ? prev.filter((mode) => mode !== id)
+                        : [...prev, id as LectureMode],
+                    )
+                  }
+                  onSelectAll={() => setExcludedLectures([])}
+                  onDeselectAll={() => setExcludedLectures(playedModes)}
+                  labels={{
+                    icon: '🎓',
+                    unit: 'lecture',
+                    heading: 'Use as context',
+                    allHint: 'Every played lecture is fed to the researcher.',
+                    someHint: 'Only the checked lectures are fed to the researcher.',
+                    noneHint: 'No lectures selected — answers ignore them.',
+                    buttonTitle: 'Choose which played lectures the researcher uses as context',
+                  }}
+                />
+              )}
+              {onClose && (
+                <button
+                  className="link-btn"
+                  onClick={onClose}
+                  aria-label="Close the assistant panel"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {hasGraph && (
           <div className="teacher-modes">
             <p className="lecture-intro">
@@ -320,22 +343,6 @@ export default function Teacher({
           </div>
         )}
       </div>
-
-      {showClear && (
-        <div className="teacher-toolbar">
-          <button
-            className="clear-btn"
-            onClick={clear}
-            title={
-              clearsLecture
-                ? 'Clear this lecture'
-                : 'Clear the Q&A chat — start a fresh conversation'
-            }
-          >
-            {clearsLecture ? 'Clear lecture' : 'Clear chat'}
-          </button>
-        </div>
-      )}
 
       <div className="teacher-scroll">
         {/* One panel, two views: a shown lecture takes over the scroll (its
@@ -394,13 +401,16 @@ export default function Teacher({
                 />
               )
             })}
-            {chat.length === 0 && (
-              <div className="teacher-hint">
-                {hasGraph
-                  ? 'Ask a question about the papers on the graph — or play a lecture above.'
-                  : 'Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and pages — citing them by page. No graph needed.'}
-              </div>
-            )}
+            {chat.length === 0 &&
+              (landing ? (
+                <h1 className="landing-greeting">What do you want to explore?</h1>
+              ) : (
+                <div className="teacher-hint">
+                  {hasGraph
+                    ? 'Ask a question about the papers on the graph — or play a lecture above.'
+                    : 'Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and pages — citing them by page. No graph needed.'}
+                </div>
+              ))}
           </>
         )}
         {error && <div className="teacher-error">{error}</div>}
@@ -416,17 +426,96 @@ export default function Teacher({
         <p className="ask-context-note">Answers also draw on {askContextParts.join(' · ')}.</p>
       )}
       <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
+        {/* Which sources the researcher may search, inset in the bar rather than
+            floating above it: it belongs to the question you're about to ask,
+            so it sits with the ask. */}
+        {libraryItems.length > 1 && (
+          <ScopePicker
+            items={libraryItems}
+            checkedIds={scopeIds}
+            dataTour="source-scope"
+            open={openScope === 'sources'}
+            onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
+            onToggle={(id) =>
+              setExcludedSources((prev) =>
+                prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
+              )
+            }
+            onSelectAll={() => setExcludedSources([])}
+            onDeselectAll={() => setExcludedSources(libraryItems.map((source) => source.id))}
+            labels={{
+              icon: '📚',
+              unit: 'source',
+              heading: 'Search in',
+              allHint: 'All sources are searched.',
+              someHint: 'Only the checked sources are searched.',
+              noneHint: "No sources selected — the assistant won't search your library.",
+              buttonTitle: 'Choose which of your sources the assistant may search',
+            }}
+          />
+        )}
         <textarea
           ref={inputRef}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={onInputKeyDown}
           rows={1}
-          placeholder={hasGraph ? 'Ask about the papers on screen…' : 'Ask your books and PDFs…'}
+          placeholder={askPlaceholder}
           aria-label="Ask the assistant a question"
         />
-        <button type="submit" disabled={asking || !input.trim()}>
-          {asking ? '…' : 'Ask'}
+        {/* Clear, inside the bar beside the send rather than floating above the
+            transcript — same round shape and size, but muted rather than
+            accent: it's the destructive one, and it shouldn't compete with the
+            control you actually came here to press. Contextual, as it always
+            was: with a lecture on screen it clears that instead of the chat,
+            which the tooltip says since the icon can't. */}
+        {showClear && (
+          <button
+            type="button"
+            className="ask-clear"
+            onClick={clear}
+            title={
+              clearsLecture ? 'Clear this lecture' : 'Clear the chat — start a fresh conversation'
+            }
+            aria-label={clearsLecture ? 'Clear lecture' : 'Clear chat'}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M3.2 4.6h9.6M6.5 4.6V3.3a.8.8 0 0 1 .8-.8h1.4a.8.8 0 0 1 .8.8v1.3M4.8 4.6l.45 7.9a1.1 1.1 0 0 0 1.1 1h3.3a1.1 1.1 0 0 0 1.1-1l.45-7.9"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+        {/* One button, two jobs. While an answer streams it shows the same
+            hopping dots the lecture buttons wear — and hovering turns it into a
+            stop, so the control that says "working" is also the one that ends
+            it. Deliberately not disabled mid-flight: that was the old ellipsis,
+            which looked inert and offered no way out of a long run. */}
+        <button
+          type={asking ? 'button' : 'submit'}
+          className={asking ? 'is-stop' : undefined}
+          disabled={!asking && !input.trim()}
+          onClick={asking ? stopAsk : undefined}
+          title={asking ? 'Stop generating' : undefined}
+          aria-label={asking ? 'Stop generating' : 'Ask'}
+        >
+          {asking ? (
+            <>
+              <span className="hop-dots" aria-hidden="true">
+                <span className="hop-dot" />
+                <span className="hop-dot" />
+                <span className="hop-dot" />
+              </span>
+              <span className="stop-glyph" aria-hidden="true" />
+            </>
+          ) : (
+            '↑'
+          )}
         </button>
       </form>
 

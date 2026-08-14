@@ -1747,6 +1747,65 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The landing page is a chat bar** *(v6.13.0)* — home was a sentence and
+      a button in a lot of empty space, with the assistant filed behind a
+      header toggle and gated on owning a library. Now Atlas opens on a centred
+      chat: the assistant is the front door, and needs neither a graph nor an
+      uploaded library. Patrick's design, sanity-checked with a co-worker.
+
+      **One instance, two shapes — the decision everything else hangs off.**
+      The shell keeps `Teacher` at a single position in the tree and swaps a
+      `landing` flag, so entering graph mode collapses the chat into the side
+      panel as a *CSS change*. Rendering a separate landing component would
+      have remounted the panel and undone v6.11.0's whole point: the answer you
+      were reading survives, scroll position and all. The header's Assistant
+      tab now appears only in graph mode — it exists to summon something you
+      can't see, and on the landing page the chat is already in front of you.
+      Ungating deleted `libraryCount` outright; no agent change was needed,
+      since the researcher already treats any question as `answered` and
+      `search_sources` is `prepare`-gated off when there's no library.
+
+      **Then eight rounds of visual feedback**, which is where most of the work
+      went. The ask bar became a single **pill** — the form *is* the control,
+      textarea and buttons borderless inside it, focus ringing the whole thing
+      — and the docked panel adopted it too, so the chat doesn't change
+      character just because a graph appeared. The source scope and Clear both
+      moved **into** the bar: on the landing surface the panel head has no
+      title and no ✕, so anything left there floated in empty space, and the
+      scope was never header furniture anyway — it qualifies the question
+      you're about to ask. The scope trigger is now its icon alone (the popover
+      shows the truth once open, an accent fill marks a narrowed scope, the
+      tooltip spells it out), and its popover opens upward. Clear takes the
+      send button's round shape but stays muted — it's the destructive one and
+      mustn't compete with the control you came to press. The send doubles as
+      **stop**: hopping dots at rest, a stop square on hover, never disabled
+      mid-flight, keeping the partial answer.
+
+      **Three bugs found in that feedback loop, each a real defect.** A stale
+      first draft of the landing CSS survived a rewrite underneath the new one,
+      so `flex: 0 1 auto; margin-top: auto` applied to *every* landing state
+      and the bar drifted down the page as each SSE event arrived — the stranded
+      block also carried an unscoped `.teacher-head` rule that stripped the
+      docked panel's header border. Moving the scope picker inside the `<form>`
+      made `.teacher-ask button` match the popover's own All/None/✕ and blow
+      them up into giant accent circles (`> button` is the fix, and the comment
+      now says what it's protecting). And the error card's ✕ rendered but
+      couldn't be clicked: `.overlay` is `pointer-events: none` *by design* so
+      a "Building graph…" card doesn't block what's underneath, so the button
+      had to opt back in.
+
+      **Light mode got its own pass.** The composer was borrowing `--chip`,
+      which on light sits ~1% off `--bg` — it read as nothing at all. It has
+      its own theme variables now: dark lifts off the page with fill, light is
+      a raised white card with a border and hairline shadow. The panel's
+      trace-row and active-answer tints were alpha washes of a pale periwinkle
+      tuned against dark; on light they vanished, so the alphas are variables
+      and light gets a deeper hue and more of it. Worth remembering from that:
+      `--lecture` is declared **on `.teacher`**, so a `:root[data-theme=...]`
+      override cannot reach it — custom properties resolve from the nearest
+      declaring ancestor, not by specificity.
+      *(From the 2026-08-10 design conversation; shipped 2026-08-14.)*
+
 - [x] **Wrap text in the research chat input** *(v6.5.0)* — the ask box was a
       single-line `<input>`, so longer questions scrolled sideways and were hard
       to read while composing. It's now an **auto-growing `<textarea>`** that

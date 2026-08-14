@@ -9,6 +9,13 @@
      rgba(). (The lecture *buttons* are coloured per-relation instead — see
      `--c` on .teach-btn.) Retune here in one place. */
   --lecture: 165, 180, 252;
+  /* How hard the tints above bite. The alpha values were tuned against a dark
+     page, where a 6–10% wash of a pale periwinkle still separates; on light
+     they land within a couple of percent of the background and the trace rows
+     and active-answer highlight all but vanish. Light gets a deeper hue and
+     more of it. */
+  --lecture-wash: 0.06;
+  --lecture-wash-strong: 0.1;
   position: relative; /* anchors the .panel-resize-handle on the left edge */
   width: 340px;
   flex-shrink: 0;
@@ -18,11 +25,168 @@
   border-left: 1px solid var(--border);
   background: var(--panel);
 }
+/* Scoped to `.teacher`, not `:root`: the triple above is declared on this
+   element, so an override at the root would never reach it. */
+:root[data-theme='light'] .teacher {
+  --lecture: 79, 91, 168;
+  --lecture-wash: 0.09;
+  --lecture-wash-strong: 0.16;
+}
 /* Collapsed = hidden but still mounted, so the conversation is preserved and
    the canvas reclaims the width. */
 .teacher.collapsed {
   display: none;
 }
+/* The landing surface: the same panel, given the whole body. Before a graph
+   exists the conversation IS the page, so it drops the docked chrome (fixed
+   width, left border, resize handle) and centres itself in a reading column.
+   Only the class changes between the two shapes — the component instance is
+   the same one, so entering graph mode collapses this into the side panel
+   without losing the conversation or its scroll position. */
+.teacher.landing {
+  width: 100%;
+  flex: 1;
+  border-left: none;
+  background: var(--bg);
+  padding: 0 24px;
+}
+.teacher.landing > * {
+  width: min(720px, 100%);
+  margin-inline: auto;
+}
+/* Nothing to label and nothing to close — the head would be an empty bar. */
+.teacher.landing .teacher-head {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* Empty page: the headline and the bar are one group, floated to the optical
+   centre. Once there's a conversation the layout reverts to a normal
+   transcript — scrolling body, bar pinned at the bottom. */
+.teacher.landing.empty {
+  justify-content: center;
+}
+.teacher.landing.empty .teacher-scroll {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+/* With a conversation going, the bar snaps to the bottom and stays there: the
+   transcript takes the space above it and scrolls inside that, filling from
+   the top. Without `min-height: 0` a flex item floors at min-content, so the
+   transcript would grow past the panel and shove the bar down the screen as
+   each SSE event arrived. */
+.teacher.landing:not(.empty) .teacher-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.landing-greeting {
+  margin: 0 0 26px;
+  text-align: center;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+
+/* The source scope, inset in the ask bar. It used to sit in the panel head,
+   which on the landing surface left it floating over empty space with no title
+   or ✕ to belong to — and it never really belonged there anyway: the scope is
+   part of the question you're about to ask, so it travels with the ask in both
+   shapes. Quiet by default, and it wears the accent once the scope is narrowed,
+   because a silently-restricted search is the one state worth noticing. */
+/* No align-self here on purpose: the chip takes whichever alignment the bar
+   itself uses — centred in the landing pill, bottom-aligned in the docked bar
+   where the textarea grows upward. Pinning it overrode the pill and left it
+   sitting off-centre. */
+.teacher-ask .scope-wrap {
+  flex-shrink: 0;
+}
+/* In the bar it's the icon alone — a round affordance you press to open the
+   picker, not a status readout. The words ("All sources" / "2 sources") were
+   the widest thing in the pill and said least: the popover shows the truth the
+   moment you open it, the accent fill below marks a narrowed scope at a
+   glance, and the tooltip still spells the state out. */
+.teacher-ask .scope-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1;
+}
+.teacher-ask .scope-btn-label {
+  display: none;
+}
+.teacher-ask .scope-btn:hover,
+.teacher-ask .scope-btn:focus-visible {
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--text-strong);
+}
+/* Narrowed scope stays legible as a state without a border fighting the pill —
+   the only cue left once the label is gone, so it has to carry. */
+.teacher-ask .scope-btn.on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* The bar sits at the bottom of the page, so the popover has to open upward —
+   downward would run it straight off the viewport. It also reads as a menu
+   here rather than a form: one row per source, hit state on the row, and a
+   check on the right for what's in scope. */
+.teacher-ask .scope-pop {
+  top: auto;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: auto;
+  width: 280px;
+  padding: 6px;
+  border-radius: 10px;
+}
+.teacher-ask .scope-pop-head {
+  padding: 4px 8px 6px;
+}
+.teacher-ask .scope-item {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 8px;
+  border-radius: 6px;
+}
+.teacher-ask .scope-item:hover,
+.teacher-ask .scope-item:has(input:focus-visible) {
+  background: var(--hover);
+}
+/* The checkbox is moved out of sight rather than removed: the row is the hit
+   target and the ✓ is the state, but the input still has to be reachable and
+   focusable from the keyboard. */
+.teacher-ask .scope-item input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+.teacher-ask .scope-item::after {
+  content: '✓';
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 13px;
+  visibility: hidden;
+}
+.teacher-ask .scope-item:has(input:checked)::after {
+  visibility: visible;
+}
+
+/* On the landing surface it's the primary thing on the page, so it reads
+   larger and sits off the bottom edge. Everything else it inherits. */
+.teacher.landing .teacher-ask {
+  margin-bottom: 20px;
+}
+.teacher.landing .teacher-ask textarea {
+  font-size: 15px;
+}
+
 .teacher-head {
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
@@ -50,6 +214,13 @@
   position: relative;
 }
 .scope-btn {
+  /* Icon and label are separate elements (the ask bar hides the label), so the
+     gap replaces the literal space they used to be joined by. Safe as flex
+     here precisely because they're elements — no stray whitespace text node to
+     become a third item. */
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 5px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -144,13 +315,6 @@
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--muted);
-}
-/* A thin bar at the top of the content zone holding the contextual Clear —
-   kept with the transcript it acts on, and out of the lecture controls above. */
-.teacher-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 16px 0;
 }
 /* The four lecture modes as an even 2×2 grid — equal-height cells so the long
    labels ("This paper's intuition") sit as tidily as the short
@@ -263,21 +427,6 @@
     opacity: 0.7;
   }
 }
-/* The "Clear" button reads as secondary — small, sitting at the top-right of
-   the transcript (see .teacher-toolbar), not among the lecture controls. */
-.clear-btn {
-  padding: 5px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-.clear-btn:hover:not(:disabled) {
-  background: rgba(120, 130, 150, 0.12);
-  color: var(--text-strong);
-}
 
 .teacher-scroll {
   flex: 1;
@@ -340,7 +489,7 @@
 }
 .beat.active {
   border-color: var(--accent);
-  background: rgba(var(--lecture), 0.1);
+  background: rgba(var(--lecture), var(--lecture-wash-strong));
 }
 .beat-heading {
   font-size: 11px;
@@ -393,7 +542,7 @@
 }
 .chat.assistant.active {
   border-color: var(--accent);
-  background: rgba(var(--lecture), 0.1);
+  background: rgba(var(--lecture), var(--lecture-wash-strong));
 }
 .chat-cited {
   margin-top: 6px;
@@ -669,7 +818,7 @@
   color: var(--muted);
   padding: 3px 7px;
   border-left: 2px solid var(--accent-strong);
-  background: rgba(var(--lecture), 0.06);
+  background: rgba(var(--lecture), var(--lecture-wash));
   border-radius: 0 4px 4px 0;
 }
 .trace-line.fail {
@@ -698,33 +847,46 @@
   color: var(--muted);
 }
 
-/* --- the ask bar (shared with the library chat) --- */
+/* --- the ask bar, one control in both shapes --- */
+/* The whole form is the pill: textarea and buttons sit inside it borderless,
+   and focus rings the pill rather than the input, so the thing the eye reads
+   as one control lights up as one. Shared by the landing surface and the
+   docked panel deliberately — the chat should not change character just
+   because a graph appeared beside it. */
 .teacher-ask {
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  /* The textarea grows upward as it wraps; keep the Ask button pinned to the
-     bottom line rather than centred against a tall input. */
-  align-items: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 12px;
+  padding: 7px 7px 7px 10px;
+  border: 1px solid var(--composer-border);
+  border-radius: 26px;
+  background: var(--composer-bg);
+  box-shadow: var(--composer-shadow);
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s;
+}
+.teacher-ask:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .teacher-ask textarea {
   flex: 1;
   min-width: 0;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  padding: 9px 4px;
+  border: none;
+  background: transparent;
   color: var(--text-strong);
   font-size: 13px;
   /* Match the surrounding UI — textareas default to a monospace stack. */
   font-family: inherit;
-  line-height: 1.4;
+  line-height: 1.5;
   /* JS sizes the height to the content (see Teacher.tsx); cap the growth here
      and scroll past it. resize:none because the auto-grow owns the height. The
-     min-height floors it to exactly one line (1.4em line + 18px padding + 2px
-     border, border-box) so it never clips — including before the first measure. */
-  min-height: calc(1.4em + 20px);
+     min-height floors it to exactly one line so it never clips, including
+     before the first measure. */
+  min-height: calc(1.5em + 18px);
   max-height: 140px;
   overflow-y: auto;
   resize: none;
@@ -733,18 +895,80 @@
 }
 .teacher-ask textarea:focus {
   outline: none;
-  border-color: var(--accent);
 }
-.teacher-ask button {
-  padding: 9px 16px;
-  border-radius: 8px;
+/* The submit. `> button` and not `button`: the source picker lives inside this
+   form too, and its popover's All / None / ✕ must keep their own look. */
+.teacher-ask > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
   border: 1px solid var(--accent-strong);
   background: var(--accent-strong);
   color: white;
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
 }
-.teacher-ask button:disabled {
+.teacher-ask > button.ask-clear {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+/* Both buttons are 34px; the hover fill just has to be solid enough to read
+   as the same circle. `--hover` (5% white) is so faint that a low-contrast
+   disc looks smaller than the solid accent one beside it — an optical
+   difference, not a geometric one. */
+.teacher-ask > button.ask-clear:hover,
+.teacher-ask > button.ask-clear:focus-visible {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text-strong);
+}
+.teacher-ask > button.ask-clear svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+/* Mid-flight the button holds both faces: dots at rest, a stop square once
+   you reach for it. Swapped on hover/focus rather than by state, so the button
+   answers "what will clicking do?" at the moment you ask. */
+.teacher-ask > button.is-stop .stop-glyph {
+  display: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.teacher-ask > button.is-stop:hover .hop-dots,
+.teacher-ask > button.is-stop:focus-visible .hop-dots {
+  display: none;
+}
+.teacher-ask > button.is-stop:hover .stop-glyph,
+.teacher-ask > button.is-stop:focus-visible .stop-glyph {
+  display: block;
+}
+.teacher-ask > button .hop-dots {
+  height: auto;
+  gap: 3px;
+}
+.teacher-ask > button .hop-dot {
+  width: 4px;
+  height: 4px;
+}
+.teacher-ask > button:disabled:has(.hop-dots) {
+  opacity: 1;
+}
+.teacher-ask > button:disabled {
   opacity: 0.5;
   cursor: default;
 }

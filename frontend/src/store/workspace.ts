@@ -71,7 +71,12 @@ export interface WorkspaceState {
    * saved session so a restore's Refresh rebuilds under the same provider.
    */
   provider: Provider
-  /** Bumps on every load/restore — the teacher panel remounts per epoch. */
+  /**
+   * Bumps on Home and session restore — the shell keys the teacher panel on it,
+   * so a bump remounts the panel. A graph *load* deliberately doesn't bump:
+   * the conversation survives a re-seed, and remounting would rebuild its
+   * scroll container at the top (see the `loadGraph` reducer).
+   */
   epoch: number
   /**
    * This graph was opened by clicking a paper the agent cited in a graph-free

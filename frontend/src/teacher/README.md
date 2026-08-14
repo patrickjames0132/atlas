@@ -1,9 +1,12 @@
 # `src/teacher`
 
-The unified assistant panel — the old 743-line `Teacher.tsx` split along
-its real seams. One docked panel whose capability levels up with context:
-no graph → the graph-free chat (the researcher, seedless); graph
-open → lecture buttons + agentic Q&A (the lecturer and researcher).
+The unified assistant — the old 743-line `Teacher.tsx` split along its real
+seams. One conversation in two shapes: with no graph it is the **landing
+surface**, a centred chat that is the app's front door and needs neither a
+graph nor an uploaded library; with a graph it docks as a side panel beside
+the map. Its capability levels up separately — no graph → the researcher,
+seedless (the literature plus whatever sources you've uploaded); graph open →
+lecture buttons + agentic Q&A (the lecturer and researcher).
 
 ```
 teacher/
@@ -13,7 +16,9 @@ teacher/
   ScopePicker.tsx    — generic checkbox-scope popover: which sources the
                        assistant searches AND which lectures it uses as context
                        (open state controlled by Teacher — the two popovers
-                       are mutually exclusive; ✕ or the trigger closes)
+                       are mutually exclusive; ✕ or the trigger closes). Its
+                       trigger renders icon + label as separate elements so
+                       the ask bar can show the icon alone.
   figures/           ← sub-package: the inline-figure pipeline
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
@@ -136,10 +141,30 @@ structure rule's nesting case (the `graph/hooks` precedent).
 
 ## Who uses it, and how/why
 
-The shell renders `Teacher` (keyed on `epoch`, hidden-not-unmounted when
-collapsed so the conversation survives toggling). Everything else flows
-through the store: highlights → the canvas, discoveries → the explorer's
-sim merge, transcript → Save.
+The shell renders `Teacher` in **two shapes from one instance** — `landing`
+(no graph: it owns the body as a centred column, and is the app's front
+door) and docked (a graph is up). Only the class changes, deliberately: the
+shell keeps the component at one position in the tree, so entering graph
+mode collapses the landing chat into the side panel without remounting it,
+and the answer you were reading keeps its scroll position. It is keyed on
+`epoch` — which bumps on Home and restore only, for that same reason — and is
+hidden-not-unmounted when collapsed, so the conversation survives toggling.
+Everything else flows through the store: highlights → the canvas, discoveries
+→ the explorer's sim merge, transcript → Save.
+
+**Where the controls live, and why.** The source scope and Clear both sit in
+the **ask bar** rather than the panel head. On the landing surface the head
+has no title and no ✕, so anything left there floats in empty space with
+nothing to belong to — and the scope was never really header furniture
+anyway: it qualifies the question you are about to ask, so it travels with the
+ask. In the bar the scope trigger is its icon alone (the popover shows the
+truth once open, an accent fill marks a narrowed scope, and the tooltip spells
+it out), and its popover opens **upward**, since the bar sits at the bottom of
+the page. Clear takes the send button's round shape but stays muted: it is the
+destructive one and must not compete with the control you came to press. The
+send itself doubles as **stop** while an answer streams — hopping dots at
+rest, a stop square on hover — so the thing that says "working" is also the
+thing that ends it, and it is never disabled mid-flight.
 
 ## How it's verified
 

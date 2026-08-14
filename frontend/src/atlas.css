@@ -13,9 +13,28 @@
 
 /* --- body: canvas + side panels --- */
 .atlas-body {
+  position: relative;
   flex: 1;
   display: flex;
   min-height: 0;
+}
+/* Before a graph exists there's no canvas to float the search hits and build
+   progress over, so they get their own layer across the body. Zero-width and
+   click-through: the landing chat sits underneath and must stay usable, while
+   the overlays themselves take their own pointer events back. */
+.landing-overlays {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.landing-overlays > * {
+  pointer-events: auto;
+}
+/* Dead centre here too — the scrim behind it is what makes that readable, so
+   the landing surface and a re-seeding graph behave identically. */
+.landing-overlays .overlay {
+  max-width: min(460px, calc(100% - 32px));
 }
 .canvas-wrap {
   position: relative;
@@ -101,33 +120,33 @@
   transition: width 0.3s ease;
 }
 .overlay.error {
+  position: relative;
   color: #f78ca0;
+  padding-right: 40px;
 }
-.overlay.hint {
-  line-height: 1.5;
-}
-.hint-or {
-  margin: 12px 0 8px;
-  font-size: 12px;
+/* Dismiss — sized to be hittable without crowding a one-line message.
+   `pointer-events: auto` is load-bearing: `.overlay` is click-through on
+   purpose (so a "Building graph…" card doesn't block the canvas or chat
+   underneath it), and this button inherits that unless it opts back in. */
+.overlay-close {
+  pointer-events: auto;
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 4px 6px;
+  border: none;
+  background: none;
   color: var(--muted);
-  opacity: 0.7;
-}
-.hint-cta {
-  padding: 9px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: transparent;
-  color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-  pointer-events: auto; /* .overlay disables events; re-enable for the button */
+  border-radius: 6px;
 }
-.hint-cta:hover {
-  background: var(--accent-strong);
-  color: #fff;
+.overlay-close:hover,
+.overlay-close:focus-visible {
+  background: var(--hover);
+  color: var(--text-strong);
+  outline: none;
 }
 
 /* --- shared primitives --- */

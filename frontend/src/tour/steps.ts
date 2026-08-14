@@ -77,26 +77,22 @@ export const HOME_TOUR: TourStep[] = [
       'machine. Remove a source any time; the assistant only ever cites what’s here.',
   },
   {
-    target: '[data-tour="assistant-btn"]',
-    title: 'The AI assistant',
+    target: '[data-tour="ask"]',
+    title: 'Start here',
     body:
-      'One panel, two levels: with no graph open it chats over your uploaded library; ' +
-      'once a graph is up it lectures over the map and researches your questions with ' +
-      'real tools — and it keeps drawing on your library too, for whichever sources you ' +
-      'leave selected in its 📚 scope.',
+      'This is the front door: ask a research question and the assistant goes looking — ' +
+      'through the literature, and through your own uploaded sources if you have any. ' +
+      'No graph or library needed to begin. Just saying hello stays a conversation; it ' +
+      'only goes digging when there is something to dig for.',
   },
   {
     target: '[data-tour="assistant-panel"]',
-    stage: 'assistant',
-    presentIf: '[data-tour="assistant-btn"]',
-    title: 'Chat with your books',
+    title: 'Every answer is a way in',
     body:
-      'Ask a real question and the assistant searches your library before it answers, ' +
-      'citing each passage by its source and page — and it tells you underneath what it ' +
-      'drew on, including when it answered from its own background knowledge instead. ' +
-      'Just saying hello stays a conversation; it only goes digging when there is ' +
-      'something to dig for. Scope it to specific sources with the 📚 picker above the ' +
-      'ask bar.',
+      'Papers the assistant cites are clickable: the chip marked with three linked nodes ' +
+      'builds that paper’s graph and opens its details, bringing the conversation with ' +
+      'it. Once a map is up this chat collapses into a side panel — and the header grows ' +
+      'an Assistant tab to bring it back.',
   },
   {
     target: '[data-tour="sessions-btn"]',

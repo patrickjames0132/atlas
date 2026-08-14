@@ -77,7 +77,9 @@ describe('ScopePicker', () => {
   it('clicking the trigger requests the opposite open state', () => {
     const onOpenChange = vi.fn()
     renderPicker(false, onOpenChange)
-    fireEvent.click(screen.getByText('📚 All sources'))
+    // By role, not by text: the trigger's icon and label are separate
+    // elements so the ask bar can hide the label and show the icon alone.
+    fireEvent.click(screen.getByRole('button', { name: /All sources/ }))
     expect(onOpenChange).toHaveBeenCalledWith(true)
   })
 

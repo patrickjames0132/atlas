@@ -94,9 +94,12 @@ export default function ScopePicker({
         type="button"
         className={`scope-btn ${all ? '' : 'on'}`}
         onClick={() => onOpenChange(!open)}
-        title={labels.buttonTitle}
+        // The label is hidden where the picker sits inside the ask bar (see
+        // teacher.css), so the current state has to survive in the tooltip.
+        title={`${buttonLabel} — ${labels.buttonTitle}`}
       >
-        {labels.icon} {buttonLabel}
+        <span className="scope-btn-icon">{labels.icon}</span>
+        <span className="scope-btn-label">{buttonLabel}</span>
       </button>
       {open && (
         <div className="scope-pop">

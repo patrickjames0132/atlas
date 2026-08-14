@@ -16,6 +16,13 @@
   /* Citation chips that BUILD a graph, vs --accent for the ones that
      spotlight a paper already on one. Distinct hue, same weight. */
   --seed-ref: #4fd1c5;
+  /* The ask bar's own surface. Not --chip: on light that sits within a hair of
+     --bg and the composer stops reading as a control at all. Dark lifts off the
+     page with fill alone; light is a raised white card, which is the honest
+     light-mode idiom for the same job. */
+  --composer-bg: #232936;
+  --composer-border: transparent;
+  --composer-shadow: none;
   --chip: #232936;
   --canvas-ink: rgba(231, 236, 245, 0.9);
   --canvas-ink-soft: rgba(242, 244, 248, 0.55);
@@ -51,6 +58,9 @@
   --accent: #2c6fd1;
   --accent-strong: #2563eb;
   --seed-ref: #0d9488;
+  --composer-bg: #ffffff;
+  --composer-border: #d5dae2;
+  --composer-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   --chip: #eff2f6;
   --canvas-ink: rgba(35, 39, 47, 0.82);
   --canvas-ink-soft: rgba(35, 39, 47, 0.4);

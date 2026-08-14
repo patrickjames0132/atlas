@@ -2,17 +2,22 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * Atlas — the shell. Composes the header, the drawers, the graph explorer,
- * and the teacher panel; owns only what it alone renders: drawer visibility,
- * the library count, the seed-search instance (its three render sites — the
- * header form, the hit-list overlay, the submit routing — all live here),
- * and the loading/error/hint overlays.
+ * Atlas — the shell. Composes the header, the drawers, and the body; owns only
+ * what it alone renders: drawer visibility, the seed-search instance (its
+ * three render sites — the header form, the hit-list overlay, the submit
+ * routing — all live here), and the loading/error overlays.
+ *
+ * **The body has two states, and the seam matters.** With no graph the
+ * assistant is the landing surface (a centred chat, the app's front door) and
+ * the overlays get their own layer over the body; with a graph it's the
+ * explorer, and the assistant docks beside it. The `Teacher` element stays at
+ * one position in the tree across both, so that transition never remounts it
+ * and the conversation survives — see its own docstring.
  *
  * Everything cross-cutting lives in the store (see `store/README.md`):
  * the workspace (graph + discoveries + layout), the transcript, and the
  * highlight ids. The old Atlas's transcript-duplicating refs and remount
- * plumbing died with that move — the teacher remounts per workspace epoch,
- * and Save reads the store, not a hoisted copy.
+ * plumbing died with that move — Save reads the store, not a hoisted copy.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -20,7 +25,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { getSettings, listSources, PROVIDER_LABEL } from './api'
+import { getSettings, PROVIDER_LABEL } from './api'
 import { getBuildShape, sameBuild, useBuildShape } from './graph/buildShape'
 import { ID_RE } from './graph/model'
 import { applyConfiguredDefault, setTheme, useTheme } from './ui/theme'
@@ -62,22 +67,16 @@ export default function Atlas() {
   const [showSessions, setShowSessions] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const theme = useTheme()
-  const [assistantOpen, setAssistantOpen] = useState(false)
-  // Gates the graph-free library-chat entry point; refreshed when the
-  // Sources drawer closes (they may have added/removed sources).
-  const [libraryCount, setLibraryCount] = useState(0)
-
-  const refreshLibraryCount = useCallback(() => {
-    listSources()
-      .then((res) => setLibraryCount(res.sources.length))
-      .catch(() => {})
-  }, [])
+  // Open by default, because the assistant is now where you start: the
+  // landing chat is always on screen, and entering graph mode should dock the
+  // conversation beside the map rather than hide it. (It can't be derived from
+  // `epoch` any more — that stopped bumping on graph loads in v6.11.0 so the
+  // panel survives a chat-seeded jump, which would leave this stuck closed.)
+  const [assistantOpen, setAssistantOpen] = useState(true)
   // Latest graph, readable from the mount-only effect below without making it
   // a dependency (that would re-fire the settings fetch on every graph load).
   const graphRef = useRef(graph)
   graphRef.current = graph
-
-  useEffect(refreshLibraryCount, [refreshLibraryCount])
 
   // The build shape as it was when the settings modal opened. The modal's shape
   // rows write through immediately (they're browser state, not config draft), so
@@ -144,8 +143,9 @@ export default function Atlas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, [])
 
-  // Surface the teacher whenever a graph loads or a session restores. (Home
-  // also bumps the epoch, but with no graph there's nothing to surface.)
+  // Re-surface the teacher on a session restore, in case it was collapsed
+  // before. A graph *load* no longer bumps the epoch (v6.11.0), which is fine:
+  // the panel defaults open and a load never closes it.
   useEffect(() => {
     if (epoch > 0 && graph) setAssistantOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -234,8 +234,71 @@ export default function Atlas() {
     dispatch(workspaceCleared())
     clearHits()
     setQuery('')
-    setAssistantOpen(false)
+    setAssistantOpen(true)
   }, [dispatch, clearHits, setQuery])
+
+  // The floating layer over whichever surface is up — search hits, the build
+  // progress, the error. Built once here rather than inline so the graph and
+  // landing branches below can't drift apart. (The old "Search for a paper…"
+  // hint is gone: the landing chat says what to do by being a chat.)
+  const overlays = (
+    <>
+      <HitList
+        hits={hits}
+        localHits={localHits}
+        searching={searching}
+        liveFailed={liveFailed}
+        providerLabel={PROVIDER_LABEL[provider]}
+        onPick={pickSeed}
+        onClose={clearHits}
+      />
+
+      {/* Dim whatever is behind — a graph mid-re-seed, or the chat you were
+          reading. The card alone was only ever legible against an empty canvas;
+          over live content it has to push that content back to read at all. */}
+      {(loading || (error && !hits)) && <div className="canvas-scrim" />}
+      {loading && (
+        <div className="overlay overlay-card">
+          <div className="overlay-loading">
+            <span className="spin" /> {buildProgress?.label ?? 'Building graph…'}
+          </div>
+          {buildProgress && (
+            <div
+              className="build-progress"
+              role="progressbar"
+              aria-valuenow={buildProgress.done}
+              aria-valuemin={0}
+              aria-valuemax={buildProgress.total}
+            >
+              <div
+                className="build-progress-fill"
+                style={{
+                  width: `${Math.round((buildProgress.done / buildProgress.total) * 100)}%`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {error && !hits && (
+        <div className="overlay error overlay-card">
+          {error}
+          {/* A build failure used to be a dead end: the card and its scrim sat
+              over the page with nothing to dismiss them, so the only way back
+              was to start another build. */}
+          <button
+            type="button"
+            className="overlay-close"
+            onClick={() => dispatch(errorSet(null))}
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </>
+  )
 
   return (
     <div className="atlas">
@@ -252,7 +315,7 @@ export default function Atlas() {
         seedTitle={graph?.seed.title ?? null}
         onHome={goHome}
         onOpenSources={() => setShowSources(true)}
-        assistantAvailable={hasGraph || libraryCount > 0}
+        assistantAvailable={hasGraph}
         assistantOpen={assistantOpen}
         onToggleAssistant={() => setAssistantOpen((prev) => !prev)}
         onOpenSessions={() => setShowSessions(true)}
@@ -274,13 +337,7 @@ export default function Atlas() {
         }}
       />
 
-      <Sources
-        open={showSources}
-        onClose={() => {
-          setShowSources(false)
-          refreshLibraryCount()
-        }}
-      />
+      <Sources open={showSources} onClose={() => setShowSources(false)} />
 
       <Sessions
         open={showSessions}
@@ -295,67 +352,25 @@ export default function Atlas() {
       />
 
       <div className="atlas-body">
-        <GraphExplorer tourStage={tourOpen ? tourStage : undefined}>
-          <HitList
-            hits={hits}
-            localHits={localHits}
-            searching={searching}
-            liveFailed={liveFailed}
-            providerLabel={PROVIDER_LABEL[provider]}
-            onPick={pickSeed}
-            onClose={clearHits}
-          />
-
-          {(loading || (error && !hits)) && hasGraph && <div className="canvas-scrim" />}
-          {loading && (
-            <div className={`overlay${hasGraph ? ' overlay-card' : ''}`}>
-              <div className="overlay-loading">
-                <span className="spin" /> {buildProgress?.label ?? 'Building graph…'}
-              </div>
-              {buildProgress && (
-                <div
-                  className="build-progress"
-                  role="progressbar"
-                  aria-valuenow={buildProgress.done}
-                  aria-valuemin={0}
-                  aria-valuemax={buildProgress.total}
-                >
-                  <div
-                    className="build-progress-fill"
-                    style={{
-                      width: `${Math.round((buildProgress.done / buildProgress.total) * 100)}%`,
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          {error && !hits && (
-            <div className={`overlay error${hasGraph ? ' overlay-card' : ''}`}>{error}</div>
-          )}
-          {!hasGraph && !loading && !hits && !error && (
-            <div className="overlay hint">
-              Search for a paper to map its citations, references, and similar work.
-              {libraryCount > 0 && (
-                <>
-                  <div className="hint-or">— or —</div>
-                  <button className="hint-cta" onClick={() => setAssistantOpen(true)}>
-                    💬 Chat with your library
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </GraphExplorer>
-
-        {/* Mounted (not just rendered) whenever there's something to assist
-            with, and merely hidden when collapsed — so toggling the panel
-            preserves the conversation. Remounts per workspace epoch for a
-            fresh per-graph run state (the transcript itself lives in the
-            store and resets/restores via the load/restore thunks). */}
-        {(hasGraph || libraryCount > 0) && (
-          <Teacher key={epoch} collapsed={!assistantOpen} onClose={() => setAssistantOpen(false)} />
+        {/* The overlays belong to whichever surface is up: over the canvas in
+            graph mode, over the landing chat before one exists. */}
+        {graph ? (
+          <GraphExplorer tourStage={tourOpen ? tourStage : undefined}>{overlays}</GraphExplorer>
+        ) : (
+          <div className="landing-overlays">{overlays}</div>
         )}
+
+        {/* One instance, two shapes. Kept at a single position in the tree so
+            entering graph mode collapses the landing chat into the side panel
+            without remounting it — the conversation, its scroll position and
+            its run state all survive the transition (see store/README.md on
+            why a remount would undo exactly that). */}
+        <Teacher
+          key={epoch}
+          landing={!graph}
+          collapsed={!!graph && !assistantOpen}
+          onClose={graph ? () => setAssistantOpen(false) : undefined}
+        />
       </div>
     </div>
   )

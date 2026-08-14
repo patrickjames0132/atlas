@@ -195,13 +195,17 @@ The Vite dev server proxies `/api/*` to Flask.
      your sources, which papers — computed from what the agent did, not from
      what it claims. When nothing grounded it, it says that too: Atlas grounds
      answers in real material, and is honest when it can't.
-   - **No graph open?** The same panel is the same agent, seedless: it searches
-     your library through its tools rather than being handed passages, so a
-     greeting stays a greeting and a real question gets looked up first. Its
-     citations are the way *in*: clicking one **maps that paper** — builds its
-     graph and opens its details — and the conversation comes with you rather
-     than being cleared, so a survey answer is a doorway into the graph instead
-     of a list of links out to someone else's site.
+   - **No graph open? Then the assistant *is* the page.** Atlas opens on a
+     centred chat bar — no graph and no uploaded library required — and the
+     same agent answers seedless, searching your library through its tools
+     rather than being handed passages, so a greeting stays a greeting and a
+     real question gets looked up first. Its citations are the way *in*:
+     clicking one **maps that paper** — builds its graph and opens its details
+     — and the conversation comes with you rather than being cleared, so a
+     survey answer is a doorway into the graph instead of a list of links out
+     to someone else's site. When a graph appears the chat collapses into the
+     side panel beside it (and an **Assistant** tab appears in the header to
+     bring it back) without dropping the thread or your place in it.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
 6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.
