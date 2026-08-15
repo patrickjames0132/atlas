@@ -40,6 +40,8 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  └─ figure lightbox           figures/Lightbox.tsx
    └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked
       ├─ scope picker              teacher/ScopePicker.tsx (in the ask bar)
+      ├─ "working" dots            teacher/HopDots.tsx (lecture button, send
+      │                             control, and a bubble awaiting its first token)
       ├─ lecture beats             teacher/transcript/BeatList.tsx
       ├─ chat turns                teacher/transcript/ChatMessage.tsx
       │  └─ inline figures         teacher/figures/FigCard.tsx
