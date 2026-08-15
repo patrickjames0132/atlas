@@ -940,8 +940,11 @@
 .trace-spin {
   position: absolute;
   right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* Centred by arithmetic, NOT by translateY(-50%): `.spin`'s keyframe
+     animates `transform`, so a centering transform on the same element is
+     what the rotation interpolates *from* — the spinner bobbed up and down
+     instead of turning. Keep transform free for the animation. */
+  top: calc(50% - 5px);
   width: 10px;
   height: 10px;
   border-width: 1.5px;
