@@ -15,8 +15,8 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from .. import factory
-from ..models import LectureMode
+from ... import factory
+from ...models import LectureMode
 
 AGENT_ID = "lecturer"
 

@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from atlas.agents import events
 from atlas.agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
-from atlas.agents.orchestrator import main as orchestrator_main
-from atlas.agents.orchestrator import run
+from atlas.agents.orchestrators.orchestrator import main as orchestrator_main
+from atlas.agents.orchestrators.orchestrator import run
 from atlas.services.graph import Node
 
 

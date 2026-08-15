@@ -31,7 +31,8 @@ from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
-from ..agents import events, orchestrator
+from ..agents import events
+from ..agents.orchestrators import orchestrator
 from ..agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
 from ..config import config
 from ..services.graph import Node, resolve_provider

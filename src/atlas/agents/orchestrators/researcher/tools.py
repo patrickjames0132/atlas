@@ -29,14 +29,14 @@ from typing import Literal
 
 from pydantic_ai import RunContext
 
-from ...integrations import openalex
-from ...integrations import semantic_scholar as s2
-from ...integrations.arxiv import figures as figures_mod
-from ...integrations.arxiv import fulltext
-from ...services import pdf as pdf_service
-from ...services.graph import Edge, Node, Provider
-from ...services.sources import retrieval
-from .. import captions, events, library_figures, prompts, traversal
+from ....integrations import openalex
+from ....integrations import semantic_scholar as s2
+from ....integrations.arxiv import figures as figures_mod
+from ....integrations.arxiv import fulltext
+from ....services import pdf as pdf_service
+from ....services.graph import Edge, Node, Provider
+from ....services.sources import retrieval
+from ... import captions, events, library_figures, prompts, traversal
 from .config import BUDGETS
 
 # A hop or search can fail on either provider's client; both come back to the

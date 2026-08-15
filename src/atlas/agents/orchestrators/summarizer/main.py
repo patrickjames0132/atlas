@@ -26,7 +26,7 @@ import logging
 from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
-from .. import factory, prompts
+from ... import factory, prompts
 from .config import AGENT_ID, SKILLS, SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)

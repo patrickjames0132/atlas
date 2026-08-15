@@ -38,10 +38,10 @@ from pydantic_ai.messages import (
 from pydantic_ai.run import AgentRunResultEvent
 from pydantic_ai.tools import RunContext, ToolDefinition
 
-from ...services.graph import Node, Provider
-from ...services.sources import store
-from .. import events, factory, prompts, streams
-from ..models import PlayedLecture
+from ....services.graph import Node, Provider
+from ....services.sources import store
+from ... import events, factory, prompts, streams
+from ...models import PlayedLecture
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 from .tools import (
     ResearcherDeps,

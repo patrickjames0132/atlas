@@ -49,12 +49,12 @@ from pydantic_ai.messages import (
 from pydantic_ai.run import AgentRunResultEvent
 from pydantic_core import from_json
 
-from ...integrations.arxiv import figures as figures_mod
-from ...integrations.arxiv import fulltext as fulltext_mod
-from ...services.graph import Node
-from ...services.sources import retrieval
-from .. import events, factory, prompts, streams
-from ..models import LectureMode
+from ....integrations.arxiv import figures as figures_mod
+from ....integrations.arxiv import fulltext as fulltext_mod
+from ....services.graph import Node
+from ....services.sources import retrieval
+from ... import events, factory, prompts, streams
+from ...models import LectureMode
 from .config import AGENT_ID, MODE_INTENTS, SKILLS, SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)

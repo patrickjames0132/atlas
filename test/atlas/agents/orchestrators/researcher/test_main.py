@@ -15,9 +15,10 @@ import json
 
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
-from atlas.agents import events, researcher
+from atlas.agents import events
+from atlas.agents.orchestrators import researcher
 from atlas.agents.models import PlayedBeat, PlayedLecture
-from atlas.agents.researcher import config as researcher_config
+from atlas.agents.orchestrators.researcher import config as researcher_config
 from atlas.services.graph import Node
 
 

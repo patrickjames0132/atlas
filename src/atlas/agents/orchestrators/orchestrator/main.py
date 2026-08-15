@@ -34,9 +34,10 @@ from __future__ import annotations
 import logging
 from typing import Iterator
 
-from ...services.graph import Node, Provider
-from .. import events, lecturer, researcher
-from ..models import Intent, LectureMode, PlayedLecture
+from ....services.graph import Node, Provider
+from .. import lecturer, researcher
+from ... import events
+from ...models import Intent, LectureMode, PlayedLecture
 
 log = logging.getLogger(__name__)
 
