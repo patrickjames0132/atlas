@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LECTURE_TITLES, streamAsk, streamAskSources, streamLecture } from '../api'
-import type { Beat, GraphNode, LectureMode, PlayedLecture } from '../api'
+import type { Beat, GraphNode, LectureMode, PlayedLecture, Provider } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { highlightSet, selectHighlightSet } from '../store/highlight'
 import {
@@ -101,8 +101,9 @@ export function useConversation() {
   // graph it was written against, so `[n]` chips are checked before they
   // render as controls.
   const onGraphIds = useAppSelector(selectWorkspaceNodeIds)
-  // The graph's provider — so the researcher's expand/search/hydrate use the
-  // same backend (and id space) as the graph the question is grounded in.
+  // The selected provider — so the researcher's expand/search/hydrate use the
+  // same backend (and id space) as the graph the question is grounded in, and
+  // so the graph-free chat searches the backend the dropdown actually names.
   const provider = useAppSelector((state) => state.workspace.provider)
   const chatLength = useAppSelector((state) => state.transcript.chat.length)
   const lectures = useAppSelector((state) => state.transcript.lectures)
@@ -226,10 +227,13 @@ export function useConversation() {
 
   /** Click a cited paper in a graph-free answer: build that paper's graph and
    * open its detail panel. `fromChat` is what keeps the conversation alive
-   * across the jump — see the `loadGraph` thunk. */
+   * across the jump — see the `loadGraph` thunk. `refProvider` is the backend
+   * that minted the id (absent on pre-v6.14.0 saves, where the selected one is
+   * the best guess available); building under anything else looks the id up in
+   * a namespace it was never in, and the build simply fails. */
   const onPaperSeed = useCallback(
-    (nodeId: string) => {
-      dispatch(loadGraph({ seed: nodeId, fromChat: true }))
+    (nodeId: string, refProvider?: Provider) => {
+      dispatch(loadGraph({ seed: nodeId, fromChat: true, provider: refProvider }))
     },
     [dispatch],
   )
@@ -453,9 +457,12 @@ export function useConversation() {
           dispatch(graphRefsSet(resolveGraphRefs(answerText, numberedIds)))
         } else {
           // No graph: the same researcher, seedless — it reaches for the
-          // library (and S2) through its tools instead of a numbered graph.
+          // library (and the provider) through its tools instead of a numbered
+          // graph. `provider` matters as much here as with a graph even though
+          // there's no graph to match: it decides which backend the paper
+          // search hits, and therefore whose ids come back on the citations.
           await streamAskSources(
-            { question, session_id: sessionId.current, source_ids: sourceIds },
+            { question, session_id: sessionId.current, provider, source_ids: sourceIds },
             {
               signal: ctrl.signal,
               onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
@@ -491,6 +498,7 @@ export function useConversation() {
     onRefClick,
     onGraphIds,
     onPaperSeed,
+    provider,
     toggleLecture,
     ask,
     stopAsk,

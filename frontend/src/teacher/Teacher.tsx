@@ -103,6 +103,7 @@ export default function Teacher({
     onRefClick,
     onGraphIds,
     onPaperSeed,
+    provider,
     toggleLecture,
     ask,
     stopAsk,
@@ -397,6 +398,7 @@ export default function Teacher({
                   onRefClick={onRefClick}
                   onGraphIds={onGraphIds}
                   onPaperSeed={onPaperSeed}
+                  provider={provider}
                   onEnlarge={setLightbox}
                 />
               )

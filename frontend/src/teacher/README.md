@@ -82,6 +82,13 @@ structure rule's nesting case (the `graph/hooks` precedent).
   reader back to the top. In-flight streams are aborted on the seed change
   rather than on an unmount that no longer happens; the transcript resets or
   restores via the store, not via remount props.
+- **The provider rides on every question, graph or not.** With a graph it
+  keeps the researcher's expand/search/hydrate in the same id space as the
+  nodes on screen; graph-free there's no graph to match, but it still decides
+  which backend the paper search hits — and therefore whose ids come back on
+  the citations a reader may click to build a graph from. `streamAskSources`
+  omitted it until v6.14.0, which pinned the landing chat to the default
+  backend whatever the dropdown said (see `docs/bugs.md`).
 - **Wire deltas absorbed here:** `onDiscovery` (was `onNodes`), error
   `{message}`, no `discard` handler (the researcher's pre-answer narration is
   never streamed). Lectures stream beats only — they never expand the

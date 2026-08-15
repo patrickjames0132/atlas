@@ -14,6 +14,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode, GraphResponse } from '../../src/api'
 import reducer, {
+  loadGraph,
   nodeSelectionAdded,
   nodeSelectionCleared,
   nodeSelectionSet,
@@ -142,6 +143,30 @@ describe('provider selection', () => {
     state = reducer(state, workspaceCleared())
     expect(state.graph).toBeNull() // the graph is cleared…
     expect(state.provider).toBe('openalex') // …but the provider choice stays
+  })
+
+  it('follows a graph built under an overriding backend', () => {
+    // Only a chat citation overrides: its node id resolves nowhere but the
+    // provider that issued it. Once the graph is up under that backend, the
+    // dropdown has to agree — otherwise the header names one provider while
+    // every expand off the graph runs on another.
+    let state = reducer(initial(), providerSet('openalex'))
+    state = reducer(state, {
+      type: loadGraph.fulfilled.type,
+      payload: makeGraph([makeNode('a')]),
+      meta: { arg: { seed: 'a', provider: 's2' } },
+    })
+    expect(state.provider).toBe('s2')
+  })
+
+  it('leaves the backend alone on an ordinary load', () => {
+    let state = reducer(initial(), providerSet('openalex'))
+    state = reducer(state, {
+      type: loadGraph.fulfilled.type,
+      payload: makeGraph([makeNode('a')]),
+      meta: { arg: { seed: 'a' } },
+    })
+    expect(state.provider).toBe('openalex')
   })
 })
 

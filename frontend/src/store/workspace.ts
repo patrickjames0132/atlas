@@ -117,8 +117,9 @@ const initialState: WorkspaceState = {
 
 /**
  * Load (or re-seed) the graph for an arXiv id, pasted URL, or provider node id.
- * The build always uses the workspace's currently-selected `provider` (the
- * header dropdown), so a re-seed and a Refresh stay on the same backend.
+ * The build uses the workspace's currently-selected `provider` (the header
+ * dropdown) unless the caller names one, so a re-seed and a Refresh stay on
+ * the same backend.
  *
  * @param seed     The paper reference to build the neighborhood around.
  * @param refresh  Bypass the server's day-cached snapshot for this seed and
@@ -129,13 +130,21 @@ const initialState: WorkspaceState = {
  *                 arrival, because the click asked to *see that paper*. (It no
  *                 longer gates the transcript: every graph load keeps the
  *                 conversation now — see `store/transcript`.)
+ * @param provider Build under this backend instead of the selected one, and
+ *                 leave the workspace on it. Only a chat citation passes this:
+ *                 its `node_id` came from whichever provider answered, and an
+ *                 id means nothing anywhere else — so a dropdown switched
+ *                 mid-conversation would otherwise turn a live chip into a
+ *                 failed build. The switch is the honest outcome, not a side
+ *                 effect: the graph on screen really is from that backend, and
+ *                 every expand from here follows it.
  */
 export const loadGraph = createAsyncThunk<
   GraphResponse,
-  { seed: string; refresh?: boolean; fromChat?: boolean },
+  { seed: string; refresh?: boolean; fromChat?: boolean; provider?: Provider },
   { state: { workspace: WorkspaceState } }
->('workspace/loadGraph', ({ seed, refresh = false }, { dispatch, getState }) =>
-  fetchGraphStream(seed, getState().workspace.provider, refresh, (progress) =>
+>('workspace/loadGraph', ({ seed, refresh = false, provider }, { dispatch, getState }) =>
+  fetchGraphStream(seed, provider ?? getState().workspace.provider, refresh, (progress) =>
     dispatch(buildProgressSet(progress)),
   ),
 )
@@ -455,6 +464,10 @@ const workspaceSlice = createSlice({
         // aborts in-flight streams on the seed change instead of relying on
         // an unmount that no longer happens.
         state.revealSeedDetail = action.meta.arg.fromChat === true
+        // An override built under a different backend; the dropdown has to
+        // follow, or the header would claim one provider while the graph and
+        // every expand off it run on another.
+        if (action.meta.arg.provider) state.provider = action.meta.arg.provider
         state.loading = false
       })
       .addCase(loadGraph.rejected, (state, action) => {

@@ -297,8 +297,11 @@ def api_ask_sources() -> ResponseReturnValue:
     store, kept separate from the graph chat's.
 
     Body:
-        ``{question, session_id, source_ids?}`` — ``source_ids`` scopes
-        retrieval to a subset of sources.
+        ``{question, session_id, provider?, source_ids?}`` — ``provider``
+        (``s2``/``openalex``) is the backend the agent's paper search runs
+        against, sent by the header's Data source dropdown exactly as
+        ``/api/ask`` does; ``source_ids`` scopes retrieval to a subset of
+        sources.
 
     Returns:
         An SSE stream: a ``source_refs`` frame when a library is in play,
@@ -312,12 +315,23 @@ def api_ask_sources() -> ResponseReturnValue:
         return jsonify({"error": "question is required"}), 400
     session_id = payload.get("session_id") or ""
     source_ids = _opt_source_ids(payload)
+    # The graph-free chat has no graph to inherit a backend from, so the
+    # provider rides on the request like everything else here. Omitting it
+    # (as this route did until v6.14.0) doesn't leave the agent backend-less
+    # — it silently pins it to the default, which is how a chat under the
+    # OpenAlex dropdown ended up searching Semantic Scholar and handing back
+    # citations no OpenAlex seed build could resolve.
+    provider = resolve_provider(payload.get("provider"))
     history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
 
     return sse_response(
         _relay(
             orchestrator.run(
-                Intent.RESEARCH, question=question, history=history, source_ids=source_ids
+                Intent.RESEARCH,
+                question=question,
+                history=history,
+                source_ids=source_ids,
+                provider=provider,
             ),
             store=_SOURCES_SESSIONS,
             session_id=session_id,

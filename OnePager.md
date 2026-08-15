@@ -128,38 +128,6 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **The graph-free chat ignores the provider dropdown — and that breaks
-      citation seeding** *(diagnosed 2026-08-14, not yet fixed)* — two symptoms,
-      one root cause, both confirmed in `data/atlas.log`.
-
-      **The cause.** `streamAskSources` (`api/agents.ts`) has no `provider`
-      field in its body, and `api_ask_sources` (`routes/agents.py`) never reads
-      one — its `orchestrator.run(Intent.RESEARCH, …)` call omits it entirely.
-      So the graph-free researcher always runs on the default backend no matter
-      what the header's "Data source" dropdown says. The graph-mode path
-      (`streamAsk` → `/api/ask`) *does* send it, which is why this only bites
-      the landing chat.
-
-      **Symptom 1: the agent queries the wrong backend.** Switch to OpenAlex,
-      ask a question, and the log fills with `semantic_scholar.client` requests
-      (Patrick confirmed; the S2 429 backoffs are unmistakable).
-
-      **Symptom 2: seeding a graph from a citation fails.** Because the search
-      ran on S2, the answer's `PaperRef.node_id`s are 40-hex S2 paperIds — and
-      the seeding click (v6.11.0) builds with the *workspace's* provider, so
-      the request is `?seed=<S2 id>&provider=openalex`, which
-      `openalex.resolve_seed_work` can't resolve: *"Could not build that
-      graph."* Logged as `graph build failed for 9ecbd3cf…`.
-
-      **Fix, in two parts.** (a) Thread `provider` through the graph-free ask,
-      matching what `/api/ask` already does — that alone fixes both symptoms in
-      the common case. (b) Even so, a `node_id` is only meaningful in the
-      provider that produced it, and nothing binds them: switching the dropdown
-      *after* an answer, or restoring a session saved under the other backend,
-      leaves live chips pointing at ids the current provider can't resolve. So
-      carry the provider on the `PaperRef` and seed with *that*, or grey the
-      chip when they disagree — the same treatment stale graph refs already get.
-      *(Filed 2026-08-14.)*
 - [ ] **Does the header search bar still earn its place?** — an open design
       question, not yet a decision. The chat bar now does much of what the seed
       search does: ask about a topic, get papers back, click a citation chip to
@@ -582,6 +550,28 @@ optional, behind a key.
   relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
 ### UI & rendering polish
+
+- [ ] **Make the provenance line a control, not a caption** — the quiet
+      summary under an answer ("grounded in 1 of your sources + 1 paper ✦",
+      `teacher/transcript/provenance.ts`) reads as a label, but it names the
+      one thing a reader most wants to act on. **Ask:** when the paper it
+      cites isn't on screen, the line becomes clickable and *seeds the graph*
+      on it — tinted like a seeding `[n]` chip and ending in the graph glyph
+      instead of the ✦. When the answer's papers **are** already on the graph,
+      it stays exactly as it is: current colour, current diamond, because the
+      whole-bubble click already re-lights them and a second affordance saying
+      the same thing is noise.
+
+      **What to settle first:** which paper it seeds when the answer cites
+      more than one. The line is a *count* ("+ 3 papers"), not a reference, so
+      there's no single target — options are seeding the first cited paper,
+      splitting the count into per-paper chips, or only offering the click in
+      the unambiguous one-paper case. The reuse is otherwise clean: the
+      chip's colour, glyph and seed handler all exist (`AnswerMarkdown`'s
+      `cite-ref-seed` + `GraphGlyph` + `onPaperSeed`), and the
+      already-on-the-graph test is the same `onGraphIds` set that greys stale
+      chips. Any provider stamp on the seeded id has to come along too — see
+      the graph-free provider ticket above. *(Patrick's ask, 2026-08-14.)*
 
 - [ ] **The Data Provider dropdown's text sits off-centre** — minor, and the
       cause is already visible: `.provider-select select`

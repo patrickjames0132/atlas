@@ -92,6 +92,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
       node_id: 'node-atari',
       title: 'Playing Atari with Deep RL',
       url: 'https://example.org/atari',
+      provider: 's2' as const,
     },
   }
 
@@ -139,7 +140,41 @@ describe('AnswerMarkdown paper citations with no graph', () => {
       <AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} onPaperSeed={onPaperSeed} />,
     )
     screen.getByRole('button', { name: '[1]' }).click()
-    expect(onPaperSeed).toHaveBeenCalledWith('node-atari')
+    expect(onPaperSeed).toHaveBeenCalledWith('node-atari', 's2')
+  })
+
+  it('seeds under the backend that minted the id, and says so first', () => {
+    // Switching the dropdown mid-conversation leaves live chips holding ids
+    // the new backend never issued. Building under the ref's own provider is
+    // what keeps the click working — the workspace follows it there, so the
+    // tooltip warns before the click rather than after.
+    const onPaperSeed = vi.fn()
+    render(
+      <AnswerMarkdown
+        text="As shown in [1]."
+        paperRefs={PAPER_REFS}
+        onPaperSeed={onPaperSeed}
+        provider="openalex"
+      />,
+    )
+    const chip = screen.getByRole('button', { name: '[1]' })
+    expect(chip.getAttribute('title')).toContain('Semantic Scholar')
+    chip.click()
+    expect(onPaperSeed).toHaveBeenCalledWith('node-atari', 's2')
+  })
+
+  it('says nothing about the backend when the citation is from this one', () => {
+    render(
+      <AnswerMarkdown
+        text="As shown in [1]."
+        paperRefs={PAPER_REFS}
+        onPaperSeed={vi.fn()}
+        provider="s2"
+      />,
+    )
+    expect(screen.getByRole('button', { name: '[1]' }).getAttribute('title')).not.toContain(
+      'switching',
+    )
   })
 
   it('keeps the marker compact and puts the title in the tooltip', () => {

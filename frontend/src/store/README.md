@@ -41,7 +41,12 @@ store/
   the `switchProvider` thunk (which re-seeds the current graph), read by
   `loadGraph` (sent on every build) and `useSeedSearch` (scopes the local cache
   search), and persisted in a Save. Unlike the graph, it **survives Home** — an
-  app-wide setting, not per-graph.
+  app-wide setting, not per-graph. `loadGraph` takes an optional `provider`
+  that both builds under that backend *and* moves the dropdown to it; only a
+  chat citation passes it, carrying the provider that minted the id it's
+  seeding on (see `teacher/transcript/README.md`). The dropdown has to follow
+  or the header would name one backend while the graph and every expand off it
+  ran on another.
 - **`transcript`** — written by the teacher's stream dispatches; read by the
   panel to render and by `saveWorkspace` to persist. This slice is why the
   old `onStateChange` → `teacherStateRef` plumbing died: the transcript used
