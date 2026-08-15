@@ -10,6 +10,16 @@ bounding.** A single query against a lexical, citation-weighted search answers
 "what's new in quantum computing" with landmarks from a decade ago; the scout
 sees that come back, sets a year floor, and asks again.
 
+Since v7.4.0 it has **two channels rather than one**, which is the same
+judgment applied to the other failure mode. ``search`` matches words;
+``more_like`` matches meaning, hopping from a paper the scout has already
+found (SPECTER2 recommendations under S2, ``related_works`` under OpenAlex).
+The second exists because the first one's weakness is written into this
+module's own prompt — a paper matches only words that literally appear in its
+title or abstract — and re-phrasing the query is a workaround for not having
+the other channel. It cannot start a run: with nothing found there is nothing
+to be *like*, so it is always a second move.
+
 It never assigns an index and never writes prose for the reader. It returns
 the raw provider nodes it found plus a short summary of the search itself,
 and the researcher — which owns the numbered list — decides what those
@@ -59,7 +69,10 @@ class ScoutDeps:
     #: nodes and deliberately un-numbered: turning these into numbered graph
     #: nodes is the researcher's job.
     found: list[dict] = field(default_factory=list)
-    #: Every query actually issued, for the trace the reader sees.
+    #: Every lookup actually made, in the reader's words, for the trace they
+    #: see. Not all of them are queries: a semantic hop has no query string, so
+    #: it records what it did instead ("similar to: <title>"), named for the
+    #: provider's own notion of the relation — see ``_HOP_LABEL``.
     queries: list[str] = field(default_factory=list)
 
 
@@ -78,6 +91,50 @@ class PaperFindings(BaseModel):
     #: result is a real finding ("nothing indexed after 2021"), and the
     #: researcher needs it to answer honestly rather than silently.
     summary: str
+
+
+#: What the semantic hop is called *in the reader's trace*, per provider —
+#: because the two aren't the same thing and shouldn't claim to be. Under S2 it
+#: is SPECTER2 embedding neighbours, which is what "similar" means there; under
+#: OpenAlex it is ``related_works``, concept and citation overlap. Borrowing
+#: each provider's own word keeps the chip honest about how strong the claim
+#: behind it is. The tool the model calls stays one ``more_like`` — the model
+#: chooses the move, the provider decides what the move means.
+_HOP_LABEL: dict[Provider, str] = {"s2": "similar to", "openalex": "related to"}
+
+
+def _keep(deps: ScoutDeps, hits: list[dict]) -> list[str]:
+    """Take the genuinely-new papers out of a hop or search, and list them back.
+
+    **On the numbers.** These are the scout's own, and they never leave it: they
+    are how the model says "more like *that* one" to ``more_like``, which needs
+    a handle on a paper and can't be given ids (a model handed ids starts
+    inventing them). They are emphatically NOT the ``[n]`` the reader sees —
+    that numbering is the researcher's, assigned when it accepts these papers,
+    and the two must never be confused. What keeps them apart is that a scout
+    number indexes ``deps.found`` (only what THIS run turned up) while ``[n]``
+    indexes the whole numbered list, and nothing carries a scout number across
+    the boundary: ``ScoutResult`` hands back raw node dicts, and the prompt
+    forbids naming a number in the summary.
+
+    Args:
+        deps: The run's state — its ``known_ids`` and ``found`` grow here.
+        hits: Provider entries, ``[{"node": {...}}, ...]``.
+
+    Returns:
+        One display line per newly-kept paper, numbered by its position in
+        ``found``. Empty when everything was a duplicate.
+    """
+    lines = []
+    for hit in hits:
+        node = hit["node"]
+        if node["id"] in deps.known_ids:
+            continue
+        deps.known_ids.add(node["id"])
+        deps.found.append(node)
+        # len(found) is this paper's position, since it was just appended.
+        lines.append(f"{len(deps.found)}. ({node.get('year') or 'n.d.'}) {node['title']}")
+    return lines
 
 
 def search(
@@ -113,27 +170,65 @@ def search(
         log.warning("paper scout search failed for %r: %s", query, exc)
         return f'Couldn\'t search "{query}": {exc}'
 
-    lines = []
-    for hit in hits:
-        node = hit["node"]
-        if node["id"] in deps.known_ids:
-            continue
-        deps.known_ids.add(node["id"])
-        deps.found.append(node)
-        lines.append(f"({node.get('year') or 'n.d.'}) {node['title']}")
+    lines = _keep(deps, hits)
     if not lines:
         return f'"{query}" returned nothing new.'
     return f'"{query}" — {len(lines)} paper(s):\n' + "\n".join(lines)
 
 
+def more_like(ctx: RunContext[ScoutDeps], result: int) -> str:
+    """Find papers semantically similar to one you have ALREADY found — the
+    other way to search, and the one that doesn't care what words a paper uses.
+    Reach for it when a result is clearly on-target and you suspect the
+    vocabulary is hiding its neighbours from the query, or when the request is
+    "papers like X" in the first place. It costs the same as a search.
+
+    Args:
+        ctx: The run context carrying the scout's deps (framework-injected).
+        result: Which paper to match, by its number in the lists above.
+
+    Returns:
+        The similar papers as numbered title + year lines, or a
+        budget/validity note.
+    """
+    deps = ctx.deps
+    if not 1 <= result <= len(deps.found):
+        return f"No result {result} — use the numbers from the lists above."
+    if deps.searches_left <= 0:
+        return "Search budget spent — summarize what you have and stop."
+    deps.searches_left -= 1
+    origin = deps.found[result - 1]
+    label = _HOP_LABEL[deps.provider]
+    # Recorded in reader-facing words, not as a query, because there isn't one:
+    # this shares the researcher's search trace rather than getting one of its
+    # own. Which paper found a paper is the agent's business, not the reader's
+    # (Patrick's call, 2026-08-15) — but "what is it doing right now" is, and
+    # a chip reading `more like "…"` answers that honestly.
+    # No inner quotes: the reader's trace chip wraps this in curly quotes of
+    # its own, and `“similar to "X"”` reads like a typo.
+    deps.queries.append(f"{_HOP_LABEL[deps.provider]}: {origin['title']}")
+
+    try:
+        hits = traversal.neighbors(origin["id"], "similar", deps.limit, deps.provider)
+    except _SEARCH_ERRORS as exc:
+        log.warning("paper scout similar-hop failed for %r: %s", origin["id"], exc)
+        return f'Couldn\'t find papers {label} "{origin["title"]}": {exc}'
+
+    lines = _keep(deps, hits)
+    if not lines:
+        return f'Nothing new {label} "{origin["title"]}".'
+    return f'{label.capitalize()} "{origin["title"]}" — {len(lines)} paper(s):\n' + "\n".join(lines)
+
+
 # sequential=True for the same reason the researcher's tools use it: the deps
-# this mutates (the budget, the found list) are shared across the run's calls.
+# these mutate (the budget, the found list, and the numbering that indexes into
+# it) are shared across the run's calls.
 agent: Agent[ScoutDeps, PaperFindings] = Agent(
     factory.build_model(AGENT_ID),
     deps_type=ScoutDeps,
     output_type=PaperFindings,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
-    tools=[Tool(search, sequential=True)],
+    tools=[Tool(search, sequential=True), Tool(more_like, sequential=True)],
 )
 
 

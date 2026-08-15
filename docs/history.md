@@ -254,6 +254,51 @@
 
 ### AI teacher & lectures
 
+- [x] **Give the paper scout a semantic channel — "more like this one"**
+      *(v7.4.0)* — the scout searched one way: lexical, over titles and
+      abstracts. Its own prompt is where the weakness was already written down
+      — "a paper matches only words that literally appear in its title or
+      abstract, so an acronym or nickname finds nothing when the papers spell
+      it out" — and reformulating the words was a workaround for not having the
+      other channel. Now it has two that fail differently: `search` matches
+      words, `more_like` matches meaning by hopping off a paper it has already
+      found (SPECTER2 recommendations under S2, `related_works` under
+      OpenAlex). The plumbing already existed — `traversal.neighbors(id,
+      "similar", …)`, the researcher's own similar hop — so this is a second
+      *consumer* of it rather than new reach.
+
+      **It is not a peer of `search`, and the prompt has to teach that.** It
+      takes a paper id, not a query, so it can't start a run: with nothing
+      found there is nothing to be *like*. The shape it teaches is search →
+      find one paper that is clearly the right kind of thing → ask for more
+      like it, worth its cost exactly when the vocabulary is the problem (a
+      field that renames itself, an idea with three names, a request phrased in
+      the reader's words rather than the literature's). Both channels spend the
+      same `searches` budget.
+
+      **Whatever it finds is a plain `[n]` paper — no new chip, colour, glyph
+      or node kind.** A chip's appearance says what the *click* does, not which
+      API answered; both seed a graph, so a second visual axis would teach a
+      distinction that never pays off at click time, and the reader doesn't
+      need to know how the agent got there. Settled, don't re-litigate.
+
+      The one design call worth remembering: `more_like` needs a **handle** on
+      a paper, and ids are the obvious answer and the wrong one — a model
+      handed ids starts inventing them. So the scout numbers its own results
+      and takes that number. Those numbers are scout-local and never leave:
+      they index `deps.found` (only what this run turned up), `ScoutResult`
+      still hands back raw node dicts, and the prompt forbids naming one in the
+      summary — because the researcher renumbers on its own terms and a number
+      from one side would name a different paper on the other. The reader-facing
+      trace borrows each provider's own word for the relation (`similar to:` /
+      `related to:`), since SPECTER2 neighbours and concept overlap are not the
+      same claim and the chip shouldn't say they are.
+
+      Side effect worth noting: the workers had **no test package at all** —
+      the researcher stubs them, so nothing exercised the scout's own logic.
+      `test/atlas/agents/workers/search/papers/test_main.py` now mirrors it.
+      *(Patrick's ask, 2026-08-15; shipped 2026-08-15.)*
+
 - [x] **Retire the `search` node type — a discovered paper should attach to
       the graph, not float beside it** *(v7.3.0)* — free-text search results
       entered the graph as pink `search` nodes with **no edges**: a topic

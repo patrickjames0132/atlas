@@ -87,13 +87,16 @@ node id (a `DOI:`/`ARXIV:`/`W…` id) to a work, then hits `cited_by:` /
 
 One consumer today:
 
-- **The researcher's `expand_node` tool and the paper scout's `search`** wrap
-  `neighbors` / `search` with everything agentic: budgets, visited-sets, numbering the
-  finds, building `Discovery` events. The provider comes from the graph the
-  question is grounded in — threaded `route → orchestrator.run → researcher.answer
-  → ResearcherDeps.provider → the tools`. (The lecture backfill walks that
-  also used to loop over `neighbors` are gone — lectures never expand the
-  graph.)
+- **The researcher's `expand_node`** wraps `neighbors`, and **the paper
+  scout's `search` / `more_like`** wrap `search` and the `similar` hop of
+  `neighbors` — adding everything agentic on top: budgets, visited-sets,
+  numbering the finds, building `Discovery` events. Note the two callers of
+  the *same* `similar` hop, doing different things with it: the researcher
+  draws it on the graph, the scout treats it as a second way to search and
+  hands back plain papers. The provider comes from the graph the question is
+  grounded in — threaded `route → researcher.answer → ResearcherDeps.provider
+  → the tools → papers.scout`. (The lecture backfill walks that also used to
+  loop over `neighbors` are gone — lectures never expand the graph.)
 
 Design points worth knowing:
 
