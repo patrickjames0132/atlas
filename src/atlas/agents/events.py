@@ -262,6 +262,13 @@ class Provenance(BaseModel):
     #: web of papers and cited none of them was indistinguishable from one
     #: written purely from the model's own knowledge.
     paper_searches: int
+    #: How many times the agent sent the web scout looking, and how many
+    #: pages came back with a usable URL across those runs. The web is the
+    #: third grounded source, so it gets its own pair rather than being
+    #: folded into the paper counts: "searched the literature" and "searched
+    #: the web" answer different questions about an answer's footing.
+    web_searches: int = 0
+    web_pages: int = 0
     #: Distinct library sources the finished prose actually cites (``[Sn]``
     #: markers), and graph papers it cites (``[n]``). Zero on both means
     #: nothing grounded the answer but the model's own knowledge.
@@ -356,6 +363,25 @@ class SourceSearchTrace(BaseModel):
     found: int | None = None
 
 
+class WebSearchTrace(BaseModel):
+    """The researcher sent the web scout looking.
+
+    ``need`` is what the researcher *asked for*, in its own words, not a
+    search string — the scout writes the queries itself, and there may have
+    been several. Showing the need keeps the chip honest about which agent
+    decided what: the reader sees the question that was delegated.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["trace"] = "trace"
+    action: Literal["search_web"] = "search_web"
+    ok: bool
+    need: str
+    #: How many pages came back carrying a usable URL.
+    found: int | None = None
+
+
 class FigureTrace(BaseModel):
     """An agent attached (or failed to attach) a figure — a paper's
     (``show_figure``) or an uploaded source's (``show_source_figure``).
@@ -380,6 +406,7 @@ Trace: TypeAlias = Annotated[
     | ExpandTrace
     | SearchTrace
     | SourceSearchTrace
+    | WebSearchTrace
     | FigureTrace,
     Field(discriminator="action"),
 ]

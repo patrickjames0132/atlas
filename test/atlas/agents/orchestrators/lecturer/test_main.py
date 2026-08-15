@@ -18,9 +18,9 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from atlas.agents import events
+from atlas.agents.models import LectureMode
 from atlas.agents.orchestrators import lecturer
 from atlas.agents.orchestrators.lecturer import main as lecturer_main
-from atlas.agents.models import LectureMode
 from atlas.services.graph import Node
 
 

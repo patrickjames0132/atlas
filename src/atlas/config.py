@@ -308,9 +308,19 @@ class ResearcherExtras(ConfigModel):
         default=8, description="Neighbors fetched per expand_node hop."
     )
     searches: NonNegativeInt = Field(
-        default=3, description="search_papers calls per question — bounds off-graph reach."
+        default=3, description="find_papers calls per question — bounds off-graph reach. "
+        "Each one is a whole paper-scout run, which issues several queries of its own "
+        "(see the paper_scout entry), so this is cheaper to raise than it looks and "
+        "more expensive to spend.",
     )
     search_limit: PositiveInt = Field(default=8, description="Hits fetched per search.")
+    web_searches: NonNegativeInt = Field(
+        default=2,
+        description="search_web calls per question — each is a whole web-scout run. "
+        "This is also the web's on/off switch: 0 unregisters the tool AND drops the web "
+        "from the coverage guard, so answers stop reaching for it entirely rather than "
+        "being asked for a source they can't get.",
+    )
     source_searches: NonNegativeInt = Field(
         default=5, description="Library-retrieval calls per question."
     )
@@ -323,6 +333,34 @@ class ResearcherExtras(ConfigModel):
     )
 
 
+class PaperScoutExtras(ConfigModel):
+    """The paper scout's per-run ceilings.
+
+    Small on purpose. The scout's value is *re*-formulation — try, look, try
+    again with better words or a year floor — which takes two or three
+    attempts, not ten. A wide budget buys diminishing hits at real latency,
+    since every attempt is a live provider call the reader waits on.
+    """
+
+    searches: PositiveInt = Field(
+        default=4, description="Queries one scouting run may issue before it must report."
+    )
+    search_limit: PositiveInt = Field(default=8, description="Hits fetched per query.")
+
+
+class WebScoutExtras(ConfigModel):
+    """The web scout's per-run ceiling.
+
+    Unlike every other budget here, this one is enforced by the *provider*:
+    it is passed to Anthropic's native ``WebSearchTool`` as ``max_uses``, so
+    the model cannot exceed it however it's prompted.
+    """
+
+    max_uses: PositiveInt = Field(
+        default=4, description="Web searches one run may make, enforced provider-side."
+    )
+
+
 #: Which typed knob model validates each agent's ``extras`` — the registry
 #: ``AgentConfig`` looks itself up in. An agent absent from here has no
 #: tunable knobs and must leave ``extras`` empty. Adding a knob means adding
@@ -331,6 +369,8 @@ class ResearcherExtras(ConfigModel):
 AGENT_EXTRAS: dict[str, type[ConfigModel]] = {
     "lecturer": LecturerExtras,
     "researcher": ResearcherExtras,
+    "paper_scout": PaperScoutExtras,
+    "web_scout": WebScoutExtras,
 }
 
 

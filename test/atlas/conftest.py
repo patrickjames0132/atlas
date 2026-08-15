@@ -25,6 +25,7 @@ import math
 import pytest
 from pydantic_ai import models as ai_models
 
+from atlas.agents.orchestrators.researcher import config as researcher_config
 from atlas.config import config
 from atlas.services.sources import embeddings
 
@@ -62,6 +63,14 @@ def _isolate(monkeypatch, tmp_path):
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
     monkeypatch.setattr(config.storage, "s2_corpus", None)
     monkeypatch.setattr(config.sources, "semantic_enabled", False)
+    # The web scout is forced **off**, for the third time and the same reason:
+    # a capability configured on the developer's machine must not silently
+    # become part of every test. Here it also changes what the researcher's
+    # coverage guard demands — with the web on, every scripted `answered` turn
+    # gets bounced for not searching it, which is correct behavior and pure
+    # noise in a test about something else. A web test opts back in (see the
+    # researcher package's tests) and stubs the scout.
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 0)
     monkeypatch.setattr(config.providers.s2, "min_interval", 0.0)
     monkeypatch.setattr(config.providers.openalex, "min_interval", 0.0)
 

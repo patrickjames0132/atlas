@@ -76,6 +76,21 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
         )}
       </div>
     )
+  if (trace.action === 'search_web')
+    return (
+      <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
+        🌐 {trace.ok ? 'Searched the web' : 'Tried the web'}
+        {trace.need ? (
+          <>
+            {' '}
+            for <b>“{trace.need}”</b>
+          </>
+        ) : null}
+        {trace.ok && (
+          <em>{trace.found ? `${trace.found} page${trace.found > 1 ? 's' : ''}` : 'nothing'}</em>
+        )}
+      </div>
+    )
   if (trace.action === 'search')
     return (
       <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>

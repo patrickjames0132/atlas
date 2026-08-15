@@ -24,7 +24,7 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
      visited-sets, read cache, event queue                     tools.py
   2  agent.run_stream_events(...) driven one event at a time
      on a private loop (the sync bridge)
-  3  tools fire: read_paper / expand_node / search_papers /
+  3  tools fire: read_paper / expand_node / find_papers / search_web /
      show_figure / search_sources / show_source_figure —
      each pushes Trace /
      Discovery / Figure events onto deps.queue, drained into
@@ -34,6 +34,31 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
      deltas mid-generation
   5  Cited = papers actually read + papers named by index
 ```
+
+## The two scouts (v6.16.0)
+
+`find_papers` and `search_web` don't do the searching — they hand a **need**,
+in the researcher's own words, to a worker under
+[`agents/workers/`](../../workers/README.md), and number or format whatever
+comes back. Three things about that seam are load-bearing:
+
+- **The scout finds; the researcher numbers.** The paper scout returns raw
+  provider node dicts and `find_papers` assigns every index. `[n]` has to
+  mean the same paper to the prose, the citation resolver and the frontend
+  chip that builds a graph from it, and that only holds while one agent owns
+  the list.
+- **A tool call spends one of *this* agent's budgets and then runs a whole
+  scout**, which has budgets of its own. So `searches: 3` is three scouting
+  runs, not three queries — each may issue several.
+- **Dedupe keys on the need, not the query.** The researcher no longer writes
+  query strings, so the visited-set holds lower-cased needs; asking for the
+  same thing twice is a cache hit and never re-runs the scout.
+
+Web pages are cited as **inline markdown links**, never `[n]` — that marker
+belongs to papers, and the numbered list is what makes it resolvable. This
+also means web grounding is *counted* in provenance (`web_searches`,
+`web_pages`) rather than counted off the finished prose the way `[Sn]` and
+`[n]` citations are: there is no marker to count.
 
 - **`config.py`** — `AGENT_ID`, `SKILLS` (all four — the only agent that
   loads `figures`), the strategy `SYSTEM_PROMPT`, and `BUDGETS`

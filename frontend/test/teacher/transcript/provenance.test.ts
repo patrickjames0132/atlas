@@ -75,3 +75,58 @@ describe('provenanceLine', () => {
     )
   })
 })
+
+describe('provenanceLine with the web in play', () => {
+  it('counts web pages alongside sources and papers', () => {
+    // Pages are *counted*, never "cited": the researcher links them inline in
+    // its prose rather than through the [n] machinery, so there is no marker
+    // to count afterwards — what's honest is that the web was read.
+    expect(
+      provenanceLine({
+        kind: 'answered',
+        had_library: false,
+        searches: 0,
+        passages: 0,
+        paper_searches: 1,
+        web_searches: 1,
+        web_pages: 2,
+        cited_sources: 0,
+        cited_papers: 1,
+      }),
+    ).toBe('grounded in 1 paper + 2 web pages')
+  })
+
+  it('names the web among what was searched when nothing was cited', () => {
+    expect(
+      provenanceLine({
+        kind: 'answered',
+        had_library: false,
+        searches: 0,
+        passages: 0,
+        paper_searches: 1,
+        web_searches: 1,
+        web_pages: 0,
+        cited_sources: 0,
+        cited_papers: 0,
+      }),
+    ).toBe(
+      'searched the literature and the web, cited nothing — answered from background knowledge',
+    )
+  })
+
+  it('renders a session saved before the web fields existed', () => {
+    // Both fields are absent on pre-v6.16.0 saves; the line must not go blank
+    // or claim a web search that never happened.
+    expect(
+      provenanceLine({
+        kind: 'answered',
+        had_library: false,
+        searches: 0,
+        passages: 0,
+        paper_searches: 1,
+        cited_sources: 0,
+        cited_papers: 1,
+      }),
+    ).toBe('grounded in 1 paper')
+  })
+})

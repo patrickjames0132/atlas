@@ -46,9 +46,10 @@ from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 from .tools import (
     ResearcherDeps,
     expand_node,
+    find_papers,
     read_paper,
-    search_papers,
     search_sources,
+    search_web,
     show_figure,
     show_source_figure,
 )
@@ -86,6 +87,13 @@ async def _if_sources(
     return tool_def if ctx.deps.has_sources else None
 
 
+async def _if_web(
+    ctx: RunContext[ResearcherDeps], tool_def: ToolDefinition
+) -> ToolDefinition | None:
+    """Offer search_web only when the web scout has a budget to spend."""
+    return tool_def if ctx.deps.web_enabled else None
+
+
 # The explicit annotation is load-bearing: with the prepare= kwarg in play,
 # mypy can't jointly infer the Tool's ParamSpec without a declared target.
 _search_sources_tool: Tool[ResearcherDeps] = Tool(
@@ -95,22 +103,58 @@ _search_sources_tool: Tool[ResearcherDeps] = Tool(
 _show_source_figure_tool: Tool[ResearcherDeps] = Tool(
     show_source_figure, prepare=_if_sources, sequential=True
 )
+# The web rides its own: a zero budget is how an operator turns the web off,
+# and it must remove the tool rather than leave one that always refuses.
+_search_web_tool: Tool[ResearcherDeps] = Tool(search_web, prepare=_if_web, sequential=True)
 
 # sequential=True everywhere: PydanticAI runs a turn's tool calls
 # concurrently by default, but these tools mutate shared deps state —
 # budgets, and above all the numbered list, whose indices must be assigned
 # in call order.
-#: What the model is told when it answered substantively without ever
-#: consulting a library it had. Phrased as an instruction, not a scolding —
-#: it's a retry prompt, and the next attempt has to know what to do.
-_MUST_SEARCH_RETRY = (
-    "You answered without searching the student's library. Their own uploaded "
-    "sources may cover this, and an answer that ignores the textbook they "
-    "uploaded is a worse answer. Call search_sources first, then answer — "
-    "drawing on what it returns where it speaks to the question, and saying "
-    "so plainly if it doesn't. (If this turn was only conversational, set "
-    "kind to 'conversational' instead.)"
-)
+#: What each source is called when the guard names it in a retry. Phrased as
+#: the instruction to follow, not the rule that was broken — this is a retry
+#: prompt, and the next attempt has to know what to *do*.
+_SOURCE_INSTRUCTIONS = {
+    "library": (
+        "call search_sources — the student's own uploaded sources may cover this, "
+        "and an answer that ignores the textbook they uploaded is a worse answer"
+    ),
+    "papers": (
+        "call find_papers — there is no graph open, so the literature has not been "
+        "consulted at all unless you go looking"
+    ),
+    "web": (
+        "call search_web — the web carries announcements, releases and documentation "
+        "that no paper indexes, and it is the only source that can be current"
+    ),
+}
+
+
+def _unconsulted(deps: ResearcherDeps) -> list[str]:
+    """Which available sources this run has neither consulted nor been handed.
+
+    A source counts as consulted when the agent actually reached it, **or**
+    when its material is already in front of the model — which is the whole
+    distinction that keeps this from becoming a mandatory sweep. The graph's
+    numbered papers came from the provider, so a question about them has
+    already consulted the paper source; the library is only ever *listed* in
+    the prompt, so having one is not the same as having read it.
+
+    Args:
+        deps: The run's deps, carrying the observed counters.
+
+    Returns:
+        The unconsulted source names, in the order they'll be named.
+    """
+    missing = []
+    if deps.has_sources and deps.source_searches_run == 0:
+        missing.append("library")
+    # No numbered papers at all means graph-free: nothing was handed over.
+    if not deps.nodes and deps.paper_searches_run == 0:
+        missing.append("papers")
+    if deps.web_enabled and deps.web_searches_run == 0:
+        missing.append("web")
+    return missing
 
 
 agent: Agent[ResearcherDeps, Answer] = Agent(
@@ -121,7 +165,8 @@ agent: Agent[ResearcherDeps, Answer] = Agent(
     tools=[
         Tool(read_paper, sequential=True),
         Tool(expand_node, sequential=True),
-        Tool(search_papers, sequential=True),
+        Tool(find_papers, sequential=True),
+        _search_web_tool,
         Tool(show_figure, sequential=True),
         _search_sources_tool,
         _show_source_figure_tool,
@@ -131,7 +176,7 @@ agent: Agent[ResearcherDeps, Answer] = Agent(
 
 @agent.output_validator
 def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer:
-    """Reject a substantive answer that never consulted an available library.
+    """Reject a substantive answer that never consulted an available source.
 
     This is what replaces the librarian's grounding-by-construction. When
     retrieval ran *before* the model, the model could not answer without the
@@ -139,14 +184,24 @@ def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer
     from memory, and the student will reasonably believe the answer came from
     their book. Prompting alone is known to be insufficient here — the agent
     already skips ``show_figure`` when asked outright — so the guard is
-    structural: an ``answered`` turn that never reached retrieval is bounced
-    back for another attempt.
+    structural: an ``answered`` turn that skipped a source is bounced back for
+    another attempt.
 
-    Two deliberate limits. It asks whether the library was **consulted**, not
-    whether it *helped*: a search returning nothing still satisfies it, or an
-    empty library would make every answer unreachable. And it never fires
-    without a library — there is nothing to look in, and ``search_sources``
-    isn't even registered.
+    **Coverage, not routing.** Since v6.16.0 this spans every source rather
+    than only the library, which is deliberately the answer to "how do we make
+    sure it asks all of them?" — an output guard, not a router that decides
+    for the model which sources a question needs. The model still chooses the
+    order, the phrasing and what to do with the results; it just cannot
+    quietly skip one.
+
+    Three deliberate limits. It asks whether a source was **consulted**, not
+    whether it *helped*: a search returning nothing satisfies it, or an empty
+    library would make every answer unreachable. It counts a source already in
+    front of the model as consulted (see ``_unconsulted``), so a question
+    about the open graph doesn't have to re-search the literature it came
+    from. And it only ever fires on ``answered`` — a mandatory sweep on every
+    turn is exactly the v6.7.0 bug where saying "hi" searched the student's
+    books, and it would now do it three times over.
 
     Args:
         ctx: The run context carrying the researcher's deps.
@@ -156,12 +211,21 @@ def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer
         The answer unchanged, when the guard is satisfied.
 
     Raises:
-        ModelRetry: When a substantive answer skipped an available library.
+        ModelRetry: When a substantive answer skipped an available source.
     """
-    deps = ctx.deps
-    if output.kind == "answered" and deps.has_sources and deps.source_searches_run == 0:
-        raise ModelRetry(_MUST_SEARCH_RETRY)
-    return output
+    if output.kind != "answered":
+        return output
+    missing = _unconsulted(ctx.deps)
+    if not missing:
+        return output
+    instructions = "; ".join(_SOURCE_INSTRUCTIONS[name] for name in missing)
+    raise ModelRetry(
+        f"You answered without consulting every source available to you "
+        f"({', '.join(missing)}). Before answering: {instructions}. Then answer, "
+        "drawing on what comes back where it speaks to the question and saying "
+        "plainly where it doesn't. (If this turn was only conversational, set "
+        "kind to 'conversational' instead.)"
+    )
 
 
 def _doomed(args_buffer: str, deps: ResearcherDeps) -> bool:
@@ -182,13 +246,16 @@ def _doomed(args_buffer: str, deps: ResearcherDeps) -> bool:
 
     Args:
         args_buffer: The output tool call's JSON args accumulated so far.
-        deps: The run's deps, for the observed search count.
+        deps: The run's deps, for the observed source counters.
 
     Returns:
         True while this attempt would be rejected, so its prose must be held.
     """
-    if not (deps.has_sources and deps.source_searches_run == 0):
-        return False  # nothing to violate — no library, or it already looked
+    # Shares `_unconsulted` with the guard rather than restating it: these two
+    # predicates must agree exactly, and the way that stops being true is
+    # someone extending one of two copies.
+    if not _unconsulted(deps):
+        return False  # nothing to violate — every source is accounted for
     return not streams.partial_text(args_buffer, "kind").startswith("c")
 
 
@@ -261,7 +328,7 @@ def _prompt(
         seed: The seed paper (heads the grounding context), or None when no
             graph is open — the graph-free chat that replaced the librarian.
         nodes: The visible graph nodes, as the numbered grounding list. Empty
-            in graph-free mode; ``search_papers`` can still fill it.
+            in graph-free mode; ``find_papers`` can still fill it.
         library: The user's source library (listed so the model can scope
             search_sources); empty when there is none.
         question: The user's question.
@@ -277,7 +344,7 @@ def _prompt(
             f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}"
         )
     else:
-        # Graph-free: no seed, no numbered papers yet. search_papers still
+        # Graph-free: no seed, no numbered papers yet. find_papers still
         # works and numbers what it finds, so the list starts empty rather
         # than being absent — this is the researcher with an empty graph.
         # An earlier version told the model to prefer its own knowledge here
@@ -290,7 +357,7 @@ def _prompt(
         context = (
             "No citation graph is open — the student is asking outside any "
             "paper neighborhood. There are no numbered papers yet; "
-            "search_papers can find some and they'll be numbered as they "
+            "find_papers can find some and they'll be numbered as they "
             "arrive, and can be cited [n] as usual."
         )
     if library:
@@ -333,7 +400,7 @@ def answer(
             may build on, so it doesn't re-derive a lecture the student saw.
             ``None``/empty when no lecture has played.
         provider: The graph's academic-data provider (``s2`` / ``openalex``) —
-            expand_node, search_papers, and lazy detail hydration follow it, so
+            expand_node, find_papers, and lazy detail hydration follow it, so
             the agent stays in the same backend (and id space) as the graph.
 
     Yields:
@@ -365,6 +432,8 @@ def answer(
         sources=library,
         provider=provider,
         steps_left=BUDGETS["max_steps"],
+        web_searches_left=BUDGETS["web_searches"],
+        web_enabled=BUDGETS["web_searches"] > 0,
         full_reads_left=BUDGETS["full_reads"],
         summary_reads_left=BUDGETS["summary_reads"],
         hops_left=BUDGETS["hops"],
@@ -448,12 +517,15 @@ def answer(
     # output guard cannot catch (it only fires on `answered`), so the
     # classification needs to be greppable in data/atlas.log after the fact.
     log.info(
-        "answer kind=%s library=%s searches=%d passages=%d paper_searches=%d",
+        "answer kind=%s library=%s searches=%d passages=%d paper_searches=%d "
+        "web_searches=%d web_pages=%d",
         final.kind,
         deps.has_sources,
         deps.source_searches_run,
         deps.source_hits,
         deps.paper_searches_run,
+        deps.web_searches_run,
+        deps.web_pages_found,
     )
     yield events.Provenance(
         kind=final.kind,
@@ -461,6 +533,8 @@ def answer(
         searches=deps.source_searches_run,
         passages=deps.source_hits,
         paper_searches=deps.paper_searches_run,
+        web_searches=deps.web_searches_run,
+        web_pages=deps.web_pages_found,
         # Counted off the finished prose, not claimed: which [Sn] markers the
         # answer actually kept, and which papers it cites.
         cited_sources=len(prompts.source_refs(deps.sources, final.text)),

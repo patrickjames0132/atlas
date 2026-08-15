@@ -101,7 +101,23 @@
           "search_limit": 8,
           "source_searches": 5,
           "figures": 3,
-          "fulltext_max_chars": 8000
+          "fulltext_max_chars": 8000,
+          "web_searches": 2
+        }
+      },
+      {
+        "id": "paper_scout",
+        "model": "anthropic:claude-haiku-4-5",
+        "extras": {
+          "searches": 4,
+          "search_limit": 8
+        }
+      },
+      {
+        "id": "web_scout",
+        "model": "anthropic:claude-sonnet-4-6",
+        "extras": {
+          "max_uses": 4
         }
       }
     ]

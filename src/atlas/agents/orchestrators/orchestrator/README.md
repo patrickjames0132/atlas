@@ -25,7 +25,7 @@ orchestrator.run(intent, **payload)                    main.py
 **Lectures never expand the graph.** Every lecture mode — history,
 intuition, evolution, frontier, bridge — narrates only nodes the user can see. Only
 the **researcher** (explicit Q&A) may pull new papers onto the canvas, via
-its `expand_node`/`search_papers` tools. (The deterministic "backfill"
+its `expand_node`/`find_papers` tools. (The deterministic "backfill"
 walks that used to enrich history/evolution lectures were removed for
 exactly this reason — a lecture should tell the story of the graph you
 built, not silently grow it.)

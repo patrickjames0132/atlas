@@ -32,8 +32,8 @@ from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
 from ..agents import events
-from ..agents.orchestrators import orchestrator
 from ..agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
+from ..agents.orchestrators import orchestrator
 from ..config import config
 from ..services.graph import Node, resolve_provider
 from .sse import sse, sse_response

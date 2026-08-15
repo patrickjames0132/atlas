@@ -35,9 +35,9 @@ import logging
 from typing import Iterator
 
 from ....services.graph import Node, Provider
-from .. import lecturer, researcher
 from ... import events
 from ...models import Intent, LectureMode, PlayedLecture
+from .. import lecturer, researcher
 
 log = logging.getLogger(__name__)
 
