@@ -1257,6 +1257,51 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **Retire `similar` from the graph too — a citation map should be made of
+      citations** *(v7.5.0)* — the purple papers `expand_node` pulled in were
+      related by *embedding*, not by an edge anyone wrote, so they asserted a
+      relationship the literature never did. They also arrived with edges,
+      which is why v7.3.0's attach rule didn't catch them: this needed its own
+      rule, and the rule is the sentence in the title.
+
+      **The change is one type.** `expand_node` takes a `traversal.CitationHop`
+      (`"references" | "citations"`) instead of a `Relation`, and that
+      narrowing *is* the enforcement — a similar hop isn't refused at runtime,
+      it can't be **asked for**, because the tool schema the model sees offers
+      two values. The dead `else` branch that built `type="similar"` edges went
+      with it. The capability didn't move out of reach: the paper scout hops
+      the same data as a second way to *search* (v7.4.0), handing back ordinary
+      papers, so related work still reaches the answer — as `[n]` citations
+      rather than as canvas furniture. That's why the scout's semantic channel
+      had to land first. Widening the Literal back would silently restore the
+      old behaviour and break nothing else, so a test reads the *schema*.
+
+      **Then both retired relations were deleted outright**, on Patrick's call.
+      The first cut kept `search`'s pink and `similar`'s purple against saved
+      sessions from before — but checking the data rather than assuming showed
+      there were none (the one saved session held `seed` and `latest` only), so
+      that was two dead concepts carried for a hypothesis the data disproved.
+      Gone: both colours, `EdgeType`/`Edge.type`'s `similar` member, `REL_TAG`'s
+      entry, both cluster-force sector headings, the legend's "Found by search"
+      row and its `selectHasSearchHits` selector, the always-on filter entries,
+      the canvas arrow exception, the `rels=["search"]` stamp `find_papers` put
+      on a paper it doesn't draw, and `Counts.similar`.
+
+      One rule replaced the two exceptions: **`primaryRel` is total**, drawing
+      any relation this build has no meaning for as grey `unknown`, with
+      `UNKNOWN_EDGE` as the edge twin — so retiring a relation can never
+      produce an undefined fill, now or next time. `Counts.similar` was the
+      one field with an argument for keeping it: `Graph` is what the day-cached
+      snapshot is validated back through, so under `extra="forbid"` dropping a
+      field turns every stored snapshot into a *validation error* rather than a
+      miss. The real fix was the one the repo already used elsewhere
+      (`expand:v4:`) — the graph cache key carries a **schema version** now
+      (`graph:v2:…`), so an incompatible entry is unreadable instead of
+      poisonous and ages out on the TTL. Bump it whenever `Graph` loses a
+      field. Falling out of the same sweep: an edge-less node is now simply
+      *shown* rather than gated on a filter chip it has no relation for.
+      *(Patrick's ask, 2026-08-15; shipped 2026-08-15.)*
+
 - [x] **Corpus ingest degrades ~3x across a release — the partitioned write
       re-examines what's already on disk** *(v5.13.1 — patch; the ticket's
       hypothesis **refuted**, the real cause found and fixed)* — v5.6.0 fixed

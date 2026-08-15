@@ -128,6 +128,34 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
+- [ ] **A lecture narrates papers the seed never cited — `rels` says the
+      relation but not *whose*** — spotted 2026-08-15: expand the graph a few
+      hops, then play a lecture, and it covers the pulled-in papers as though
+      they were the seed's own neighbourhood. They aren't; they're two hops
+      out, related to something the reader expanded rather than to the paper
+      the lecture is about.
+
+      **The mechanism is exact and it's in `_story_nodes`.** Each mode is
+      scoped by **relation tag** — HISTORY keeps nodes carrying `reference`,
+      EVOLUTION keeps `citation`, FRONTIER keeps `latest` — and a paper
+      `expand_node` pulled in carries the same tag for the *expanded* paper's
+      relation. `rels` records what the relation is, never what it is *to*, so
+      a reference-of-a-reference is indistinguishable from a reference of the
+      seed. It's been latent since expansion shipped and only bites once the
+      reader expands, which is why it took this long to notice.
+
+      **The shape question is where the answer comes from.** The edges know
+      (a paper is a seed reference iff a `reference` edge runs seed → it), but
+      the lecturer is handed **nodes only** — `lecture(seed, nodes, mode)` —
+      so either the edges come along, or nodes carry their origin. Note the
+      frontend already has this distinction as `_origin` on `VNode`, set by
+      the discovery merge when the anchor isn't the seed and deliberately
+      *not* persisted; that's a hint about the natural shape, not a thing to
+      reuse directly. Then decide what a lecture *should* do with satellites —
+      silently ignore them, or say plainly that it's covering the seed's own
+      neighbourhood and the graph has grown past it. The second is more
+      honest and costs a sentence. *(Patrick's report, 2026-08-15.)*
+
 - [ ] **Does the header search bar still earn its place?** — an open design
       question, not yet a decision. The chat bar now does much of what the seed
       search does: ask about a topic, get papers back, click a citation chip to
@@ -309,35 +337,6 @@ optional, behind a key.
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
 
 ### Citations & graph data
-
-- [ ] **Retire `similar` from the graph too — a citation map should be made of
-      citations** *(next up, AFTER the scout's semantic channel above)* — the
-      purple `similar` papers `expand_node` pulls in are related by *embedding*,
-      not by a citation anyone wrote. They draw edges, so v7.3.0's rule ("the
-      canvas grows only where a new paper attaches") doesn't touch them — and
-      that's the point worth noticing: **this needs a different rule, not the
-      same one again.** Something like *only citation-semantic edges are
-      drawn*, or simply dropping `similar` from `expand_node`'s relation set.
-      Decide which, because the second is much smaller and may be the whole
-      job.
-
-      The work is already half done historically: `similar` was **retired from
-      the seed-graph build in v5.0.0** and survives only on papers the
-      researcher pulls in, which is why it has no filter chip. This finishes
-      that.
-
-      **What to watch.** `primaryRel` returns `'similar'` as its **fallback**,
-      not only for genuine similar papers — so the colour can't simply be
-      deleted, and whatever replaces the fallback needs a look. Same rule as
-      last time on saved sessions: old saves hold `similar` nodes and edges and
-      must keep rendering, so this is a change to what's *emitted*, not a
-      removal of what can be *drawn* (`EDGE_COLOR.similar` and the cluster-force
-      satellite handling stay). Sequencing matters: the similar hop is today
-      the only way to reach these papers at all, so land the scout's semantic
-      channel first or the capability just disappears for a while. Check what a
-      lecture does with a graph that has no similar cluster — the screenshot
-      that prompted this had one narrating "Similar works — 7 new papers".
-      *(Patrick's ask, 2026-08-15.)*
 
 - [ ] **Surveys as a first-class node kind** — a review/survey paper is a
       different animal from a primary result: it's the field's own overlook of

@@ -337,7 +337,13 @@ def build_graph(
     # (see ``BuildShape.cache_suffix``), so the default path keeps the pre-shape
     # key byte for byte and every snapshot cached before shapes existed still
     # hits; each distinct non-adaptive shape caches beside it, not over it.
-    cache_key = f"graph:{provider}:{seed_ref}{shape.cache_suffix()}"
+    # v2: the key carries a schema version because the cached value is
+    # validated back through `Graph`, which is `extra="forbid"` — so removing a
+    # field (v7.5.0 dropped `Counts.similar`) turns every stored snapshot into
+    # a validation error rather than a miss. Bumping this makes old entries
+    # unreadable instead of poisonous; they age out on the TTL. Bump it again
+    # whenever the Graph schema loses a field.
+    cache_key = f"graph:v2:{provider}:{seed_ref}{shape.cache_suffix()}"
     if not refresh:
         cached = cache.get(cache_key, config.graph.cache_ttl)
         if cached:
@@ -481,11 +487,9 @@ def build_graph(
         # Post-dedupe edge counts per relation (what each slider can actually
         # reveal) plus the final node count. Note ``nodes`` < the relation sum
         # whenever a paper appeared in more than one relation and got merged.
-        # ``similar`` is retired from the build (kept at 0 for schema stability).
         counts=Counts(
             references=reference_rank,
             citations=citation_rank,
-            similar=0,
             latest=latest_rank,
             nodes=len(nodes),
         ),

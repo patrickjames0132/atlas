@@ -17,26 +17,32 @@ import Legend from '../../../src/graph/controls/Legend'
 
 describe('Legend', () => {
   it('always shows the four relation entries', () => {
-    render(<Legend hasDiscovered={false} hasSearchHits={false} />)
+    render(<Legend hasDiscovered={false} />)
     for (const label of ['Seed', 'References', 'Field Landmarks', 'Latest Publications']) {
       expect(screen.getByText(label)).toBeTruthy()
     }
   })
 
   it('no longer shows a Similar entry (relation retired from the build)', () => {
-    render(<Legend hasDiscovered={false} hasSearchHits={false} />)
+    render(<Legend hasDiscovered={false} />)
     expect(screen.queryByText('Similar')).toBeNull()
   })
 
-  it('hides the agent entries until the agent has actually acted', () => {
-    render(<Legend hasDiscovered={false} hasSearchHits={false} />)
+  it('hides the discovered entry until the agent has actually acted', () => {
+    render(<Legend hasDiscovered={false} />)
     expect(screen.queryByText('Discovered by teacher')).toBeNull()
-    expect(screen.queryByText('Found by search')).toBeNull()
   })
 
-  it('shows each agent entry once its flag flips', () => {
-    render(<Legend hasDiscovered={true} hasSearchHits={true} />)
+  it('shows the discovered entry once its flag flips', () => {
+    render(<Legend hasDiscovered={true} />)
     expect(screen.getByText('Discovered by teacher')).toBeTruthy()
-    expect(screen.getByText('Found by search')).toBeTruthy()
+  })
+
+  // The legend lists what the graph can contain. A "Found by search" entry sat
+  // here until v7.5.0, when the `search` and `similar` relations were removed
+  // outright — an entry for a colour nothing can be is worse than no entry.
+  it('no longer offers an entry for a retired relation', () => {
+    render(<Legend hasDiscovered={true} />)
+    expect(screen.queryByText('Found by search')).toBeNull()
   })
 })

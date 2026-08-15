@@ -626,11 +626,3 @@ export const selectHasDiscovered = createSelector(
   (graph, discovered) =>
     discovered.length > 0 || (graph?.nodes.some((node) => node.discovered) ?? false),
 )
-
-export const selectHasSearchHits = createSelector(
-  (state: StateWithWorkspace) => state.workspace.graph,
-  (state: StateWithWorkspace) => state.workspace.discoveredNodes,
-  (graph, discovered) =>
-    discovered.some((node) => node.rels.includes('search')) ||
-    (graph?.nodes.some((node) => node.discovered && node.rels.includes('search')) ?? false),
-)

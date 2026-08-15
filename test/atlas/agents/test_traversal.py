@@ -102,12 +102,10 @@ def test_s2_errors_propagate_uncaught(monkeypatch):
         traversal.neighbors("p1", "references", 5)
 
 
-def test_rel_tag_maps_every_relation():
-    assert traversal.REL_TAG == {
-        "references": "reference",
-        "citations": "citation",
-        "similar": "similar",
-    }
+def test_rel_tag_maps_every_drawable_relation():
+    """Only the citation hops: a similar hop produces no graph edge to tag,
+    since v7.5.0 it produces no graph node either."""
+    assert traversal.REL_TAG == {"references": "reference", "citations": "citation"}
 
 
 # --- OpenAlex provider ------------------------------------------------------------

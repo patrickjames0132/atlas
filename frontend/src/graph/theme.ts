@@ -62,12 +62,13 @@ export const REL_COLOR: Record<string, string> = {
   citation: '#22c55e', // green — landmark descendants that cite it (darkened a
   //                       shade to stand apart from `latest`'s pale green)
   latest: '#86efac', // light green — recent citers (the recent-years frontier)
-  similar: '#c084fc', // purple — embedding-similar papers
-  // Pink — a paper pulled in by the teacher's topic search. LEGACY since
-  // v7.3.0, and deliberately kept: find_papers no longer draws its hits, so
-  // nothing new is ever this colour, but saved sessions from before the change
-  // still hold `search` nodes and must keep rendering. Don't sweep it out.
-  search: '#f472b6',
+  // Grey — a node whose relations this build doesn't recognise. Not a relation
+  // of its own: it's the catch-all that lets `primaryRel` stay total, and the
+  // reason retiring a relation can never produce an uncoloured node. It also
+  // renders the two retired ones — `search` (v7.3.0) and `similar` (v7.5.0) —
+  // should a session saved before those changes turn up, which is the honest
+  // treatment for a paper whose relation the app no longer has a meaning for.
+  unknown: '#8b93a7',
 }
 
 /** Relation colours for the detail-panel badges. Mirrors REL_COLOR, but both
@@ -94,8 +95,12 @@ export const EDGE_COLOR: Record<EdgeType, string> = {
   reference: 'rgba(110,168,254,0.30)',
   citation: 'rgba(34,197,94,0.30)',
   latest: 'rgba(134,239,172,0.32)',
-  similar: 'rgba(192,132,252,0.24)',
 }
+
+/** Stroke for an edge whose type this build doesn't recognise — the edge twin
+ * of `REL_COLOR.unknown`, and why a retired edge type can't draw an invisible
+ * line on an old save. */
+export const UNKNOWN_EDGE = 'rgba(139,147,167,0.22)'
 
 /** Ring for a node hand-picked into the teacher's scope (the alt-drag marquee /
  * shift-click selection). Cyan — deliberately unlike the gold highlight, white
@@ -116,11 +121,11 @@ export const YEAR_SPACING = 120
 
 /**
  * The relation types the user can filter by, in colour-priority order. `seed`
- * and `search` are always shown (no chip — and `search` only ever appears on a
- * pre-v7.3.0 save now); `similar` is no longer a seed-graph
- * relation (retired from the build in v5.0.0) — it survives only on papers the
- * researcher's `expand_node` pulls in, which stay visible with no chip, so it's
- * out of this list too. Its colour is still defined below for those nodes/edges.
+ * is always shown (no chip). Two relations used to sit alongside it here and
+ * are gone entirely now: `search` (v7.3.0) and `similar` (v7.5.0), neither of
+ * which can be created any more. A session saved before those changes still
+ * carries them, and they fall through to `REL_COLOR.unknown` rather than to a
+ * colour — and a chip — of their own.
  */
 export const REL_TYPES = ['reference', 'citation', 'latest'] as const
 

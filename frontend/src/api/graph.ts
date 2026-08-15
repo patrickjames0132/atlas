@@ -27,7 +27,7 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
 }
 
 /** How two papers on the graph relate. */
-export type EdgeType = 'reference' | 'citation' | 'similar' | 'latest'
+export type EdgeType = 'reference' | 'citation' | 'latest'
 
 /**
  * One paper on the graph. Shape mirrors the backend's `services.graph.Node`
@@ -66,12 +66,13 @@ export interface GraphNode {
    *  when there's no ar5iv render. Detail-tier under S2; absent on
    *  pre-v5.27 sessions/snapshots. */
   oa_pdf?: string | null
-  /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest' | 'similar' | 'search'. */
+  /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest'.
+   * A restored session may also carry 'similar' or 'search', both retired
+   * (v7.5.0, v7.3.0) — `primaryRel` renders anything it doesn't know as
+   * `unknown` rather than uncoloured, which is why this stays `string[]`. */
   rels: string[]
   is_seed: boolean
-  /** Added mid-conversation by the researcher's expand_node tool. (Also
-   * `find_papers`, before v7.3.0 stopped drawing free-text hits — saved
-   * sessions from then still carry those, edgeless and `search`-relation.) */
+  /** Added mid-conversation by the researcher's expand_node tool. */
   discovered?: boolean
   /**
    * The [n] index the researcher knows the paper by (discovered papers only;
@@ -85,11 +86,7 @@ export interface GraphEdge {
   source: string
   target: string
   type: EdgeType
-  /**
-   * S2 flagged this as an influential citation (drawn heavier). Explicitly
-   * null on 'similar' edges — they aren't citations, so the flag doesn't
-   * apply.
-   */
+  /** S2 flagged this as an influential citation (drawn heavier). */
   influential?: boolean | null
   /**
    * 0-based position within this edge's relation, in the relation's own order
@@ -110,7 +107,6 @@ export interface GraphResponse {
   counts: {
     references: number
     citations: number
-    similar: number
     latest: number
     nodes: number
   }

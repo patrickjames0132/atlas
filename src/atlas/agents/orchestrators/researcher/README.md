@@ -89,10 +89,42 @@ actually see. `tools._canvas_growth` is the only place a `Discovery` is emitted.
   drawn — keeping its original number and gaining the relation that brought it
   in, so it colours as that rather than staying search-pink.
 
-Nothing was deleted for this. The `search` relation and its pink still exist
-frontend-side, because sessions saved before the change hold those nodes and
-must keep rendering; the legend row is gated on their presence and disappears
-by itself.
+**And what the graph is made of** *(v7.5.0)* — `expand_node` now takes a
+`traversal.CitationHop`, not a `Relation`: references and citations, no
+`similar`. Those purple papers were related by *embedding*, so they asserted a
+relationship the literature never did — and because they arrived with edges,
+the attach rule above didn't catch them. This needed its own rule, which is
+simply that **a citation map is made of citations**. The capability went
+nowhere: the paper scout hops the same data as a second way to *search*
+(v7.4.0) and hands back ordinary papers, so "related work" still reaches the
+answer — as `[n]` citations rather than as canvas furniture.
+
+The narrowing is the whole enforcement. A similar hop isn't refused at runtime;
+it can't be *asked for*, because the tool schema the model sees offers two
+values. Widening that Literal back would restore the old behaviour and break
+nothing — which is why a test reads the schema.
+
+**Both relations are then gone outright, not merely unused.** The first cut of
+each change kept the frontend's `search` pink and `similar` purple against old
+saves — but there were none (the one saved session held `seed` and `latest`
+only), so keeping them would have been carrying two dead concepts for a
+hypothesis the data disproved. Deleted: both colours, the legend's "Found by
+search" row and its `selectHasSearchHits` selector, both cluster-force sector
+headings, the always-on filter entries, `EdgeType`'s `similar` member, and the
+`rels=["search"]` stamp `find_papers` used to put on a paper it doesn't draw.
+
+What replaced them is one rule instead of two exceptions: `primaryRel` is
+**total**, returning `unknown` (grey) for any relation this build has no
+meaning for, with `UNKNOWN_EDGE` as the edge twin. So a session saved before
+the change still renders — visibly foreign, which is the honest treatment —
+and so would any relation a future version retires. `Counts.similar` went too
+— it was the last trace of the relation anywhere, and the only thing arguing
+for it was that `Graph` is what the day-cached snapshot is validated back
+through, so under `extra="forbid"` removing a field turns every stored
+snapshot into a *validation error* rather than a miss. The fix for that is the
+fix it always was: the graph cache key carries a **schema version** now
+(`graph:v2:…`), so an incompatible entry is unreadable instead of poisonous
+and ages out on the TTL. Bump it whenever `Graph` loses a field.
 
 ## The join: the web feeds the literature (v7.1.0)
 
