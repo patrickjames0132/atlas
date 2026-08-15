@@ -254,6 +254,41 @@
 
 ### AI teacher & lectures
 
+- [x] **The graph-free chat follows the provider dropdown — and its citations
+      carry the backend that minted them** *(v6.14.0)* — two symptoms, one root
+      cause, both confirmed in `data/atlas.log`. `streamAskSources` had no
+      `provider` field and `api_ask_sources` never read one, so the landing
+      chat always ran on the *default* backend no matter what the header's
+      "Data source" dropdown said. Symptom 1: switch to OpenAlex, ask a
+      question, and the log fills with `semantic_scholar.client` requests.
+      Symptom 2: the v6.11.0 seeding click then fails — the answer's
+      `PaperRef.node_id`s are 40-hex S2 paperIds while the click builds with
+      the *workspace's* provider, so the request is
+      `?seed=<S2 id>&provider=openalex` and `openalex.resolve_seed_work` has
+      nothing to resolve. Threading the provider through, via the same
+      `resolve_provider` every other provider-keyed route uses, fixes both.
+
+      **The second half is the interesting one.** Threading it through fixes
+      the common case but not the *class* of bug: a `node_id` means nothing
+      outside the provider that issued it, and nothing bound the two. Switch
+      the dropdown after an answer, or restore a session saved under the other
+      backend, and live chips still point at ids the current provider can't
+      resolve. So `PaperRef` now carries its own `provider`, stamped by
+      `prompts.paper_refs` from the run that produced it, and the click builds
+      under *that* — taking the workspace's dropdown with it, because the
+      alternative is a header naming one backend while the graph and every
+      expand off it run on another.
+
+      Choosing that over the other option on the table — greying the chip when
+      the providers disagree, the treatment stale graph refs already get — was
+      the one judgement call, approved on test. A dead chip on an answer you
+      can still read is a worse outcome than a click that works; what the grey
+      would have bought is *no surprise*, and that's bought more cheaply by
+      naming the consequence before the click. A chip from the other backend
+      reads "Map this paper's citations, **switching to Semantic Scholar** —
+      {title}" on hover. Refs saved before v6.14.0 carry no provider and fall
+      back to the selected one, which is exactly the old behaviour.
+
 - [x] **A chat citation maps the paper — and brings the conversation with
       it** *(v6.11.0)* — in graph-free mode the agent's `[n]` markers rendered
       as external links to Semantic Scholar: the app's whole reason to exist

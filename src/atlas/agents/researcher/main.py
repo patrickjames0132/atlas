@@ -439,7 +439,7 @@ def answer(
     # The papers the prose actually names, resolved to title + URL. With a
     # graph the frontend resolves [n] itself and this is redundant; with none
     # it's the only thing standing between the reader and a dead marker.
-    paper_refs = prompts.paper_refs(deps.nodes, final.text)
+    paper_refs = prompts.paper_refs(deps.nodes, final.text, deps.provider)
     if paper_refs:
         yield events.PaperRefs(
             refs={key: events.PaperRef(**ref) for key, ref in paper_refs.items()}

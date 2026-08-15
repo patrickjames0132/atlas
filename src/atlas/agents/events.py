@@ -33,7 +33,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..services.graph import Edge, Node
+from ..services.graph import Edge, Node, Provider
 
 
 class BeatFigure(BaseModel):
@@ -199,6 +199,11 @@ class PaperRef(BaseModel):
     #: The paper's landing page (Semantic Scholar / arXiv / publisher), for a
     #: citation that can't point at a graph node. May be empty.
     url: str
+    #: Which backend minted ``node_id``. A paper id means nothing outside the
+    #: provider that issued it — an S2 paperId handed to OpenAlex resolves to
+    #: nothing — so the reference carries its own, and the click that maps it
+    #: builds under this backend rather than whatever the dropdown says now.
+    provider: Provider
 
 
 class PaperRefs(BaseModel):

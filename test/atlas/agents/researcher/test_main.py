@@ -588,6 +588,16 @@ def test_paper_refs_resolve_the_markers_the_prose_used(monkeypatch):
     assert refs["2"].title == "Q-learning"
 
 
+def test_paper_refs_carry_the_backend_that_minted_the_ids(monkeypatch):
+    """A node id resolves only in the provider that issued it, so the reference
+    carries its own — the click that maps it has nothing else to go on once the
+    dropdown has moved on."""
+    model = scripted([final("As shown in [2].", [])])
+    out = run(model, monkeypatch, provider="openalex")
+    refs = next(event for event in out if isinstance(event, events.PaperRefs)).refs
+    assert refs["2"].provider == "openalex"
+
+
 def test_no_paper_refs_when_the_prose_cites_nothing(monkeypatch):
     out = run(scripted([final("No papers needed.", [])]), monkeypatch)
     assert not any(isinstance(event, events.PaperRefs) for event in out)

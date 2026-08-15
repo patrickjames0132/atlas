@@ -51,6 +51,18 @@ transcript/
   the sentence, twice over when two papers back one claim) with the title on
   hover, and carries a small node-and-edge glyph.
 
+  **The seed click builds under the citation's own provider**, not the
+  dropdown's. A `PaperRef` carries the backend that minted its `node_id`
+  (since v6.14.0), because that id resolves nowhere else: switch the Data
+  source mid-conversation, or restore a session saved under the other
+  backend, and building with the selected provider looks the id up in a
+  namespace it was never in — the graph just fails to build. Following the
+  ref instead takes the workspace to that backend, which is the honest
+  outcome (the graph on screen really is from there, and every expand off it
+  follows), so the chip's tooltip names the switch *before* the click rather
+  than letting the dropdown change under the reader. Refs from before v6.14.0
+  carry no provider and fall back to the selected one — the old behaviour.
+
   **The glyphs are not decoration.** After a chat→graph jump one transcript
   holds both kinds of chip, and they do different things — a spotlight is a
   reversible highlight, a seed rebuilds the workspace — so a reader must be

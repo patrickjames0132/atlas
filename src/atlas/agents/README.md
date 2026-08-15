@@ -35,7 +35,7 @@ protocol for every workflow, declared in one file.
 | `Figure`    | researcher | a real figure attached to the answer — a paper's, or one mined from an uploaded PDF (`index=None`) |
 | `Cited`     | researcher            | the node ids the answer draws on                               |
 | `SourceRefs` | researcher, lecturer | `[Sn]` marker index → library source, sent *before* the prose  |
-| `PaperRefs` | researcher            | `[n]` marker index → paper (title + URL), for when there's no graph to resolve against |
+| `PaperRefs` | researcher            | `[n]` marker index → paper (title + URL + the provider that minted the id), for when there's no graph to resolve against |
 | `Provenance` | researcher           | what actually grounded the answer — observed, not claimed      |
 | `Done`      | every workflow        | clean finish — always last on success                          |
 | `Error`     | every workflow        | failure — always last, so the frontend never hangs             |
@@ -174,6 +174,16 @@ resolve them itself. The **researcher** is the mirror case: it gets the full,
 unfiltered node list, so the frontend resolves its answer's `[n]` markers
 directly (grounding order + idx-tagged discoveries) and no backend `graph_refs` is
 emitted.
+
+`paper_refs(nodes, text, provider)` is the graph-free sibling — same scan,
+same numbering, but it carries title, URL, and **the provider that issued
+each id**. That last field is the load-bearing one: a paper id is only
+resolvable in the backend that minted it, and the frontend's click *builds a
+graph* from it, so a reference that travelled (a dropdown switched
+mid-conversation, a session restored under the other backend) needs to say
+where it came from or the build looks up an id in a namespace it was never
+in. See `frontend/src/teacher/transcript/README.md` for what the click does
+with it.
 
 **Library citations work the other way round.** `source_lines(sources)`
 numbers the user's uploaded sources (`[S1] "Title"`), `format_passages(hits,

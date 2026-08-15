@@ -261,6 +261,14 @@ Design decisions worth knowing:
   not poison the follow-up context), `<<FIG n>>` markers stripped (render
   directives, not conversation content), trimmed to
   `config.server.history_turns` pairs.
+- **Both research routes carry a `provider`.** `/api/ask` takes it from the
+  graph it's grounded in; `/api/ask_sources` has no graph, so it takes the
+  header dropdown's choice straight off the request. Leaving it off — as
+  `ask_sources` did until v6.14.0 — doesn't leave the agent backend-less, it
+  silently pins it to the default, so a chat under OpenAlex searched Semantic
+  Scholar and handed back ids no OpenAlex build could resolve. Both go
+  through `resolve_provider`, which degrades anything unrecognized to the
+  configured default rather than erroring.
 - **No availability gate on `/api/ask_sources`** (the old route 400'd when
   embeddings didn't load): retrieval self-degrades to lexical-only, and an
   empty library just means the agent's source search finds nothing — a working

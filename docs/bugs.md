@@ -22,6 +22,49 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### "OpenAlex doesn't build these graphs" — an id handed to the wrong namespace
+
+*Found 2026-08-14 by Patrick, reported as a graph-build failure. Fixed in
+v6.14.0.*
+
+- **Symptom.** With the Data source dropdown on OpenAlex, clicking a citation
+  in a landing-page chat answer failed with *"Could not build that graph."*
+  Every S2 click worked. The obvious reading — and the one the error text
+  invites — is that the OpenAlex graph builder is broken.
+- **Root cause.** It wasn't the builder; it was handed an id that never
+  existed in OpenAlex. `streamAskSources` (`api/agents.ts`) had no `provider`
+  field, and `api_ask_sources` (`routes/agents.py`) never read one, so its
+  `orchestrator.run(Intent.RESEARCH, …)` call omitted it and the researcher
+  fell to the default backend — Semantic Scholar. The chat therefore searched
+  S2 while the header said OpenAlex, and its citations carried 40-hex S2
+  paperIds. The seeding click (v6.11.0) built with the *workspace's* provider,
+  producing `?seed=<S2 paperId>&provider=openalex`, which
+  `openalex.resolve_seed_work` correctly found nothing for. `data/atlas.log`
+  had both halves in plain sight: `semantic_scholar.client` requests during an
+  OpenAlex session, then `graph build failed for 9ecbd3cf…`.
+- **Why it hid.** `/api/ask` and `/api/ask_sources` are siblings serving the
+  same agent, and the graph-mode one *did* send the provider — so the feature
+  looked implemented. And nothing failed loudly at the boundary: a wrong
+  provider isn't a type error, it's a lookup in the wrong namespace, which
+  returns "not found" and is indistinguishable from a genuinely missing paper.
+- **Fix.** Two parts, because the missing field was only the proximate cause.
+  (a) Thread `provider` through the graph-free ask, via the same
+  `resolve_provider` every other provider-keyed route uses. (b) Bind ids to
+  their namespace: `events.PaperRef` now carries the `provider` that minted
+  its `node_id` (stamped by `prompts.paper_refs`), and the seeding click
+  builds under *that*, moving the dropdown with it. Without (b) the same
+  failure returns the moment the dropdown is switched mid-conversation, or a
+  session saved under one backend is restored under the other — neither of
+  which (a) touches.
+- **Lesson / guard.** *A bare id is not a reference.* Two providers, two id
+  spaces, one `str` type — so the compiler, the schema, and the route
+  boundary are all blind to a mix-up, and the failure surfaces far from its
+  origin as "not found." Anything that crosses a provider boundary (stored,
+  saved, or streamed to the frontend) should carry its provider with it. Two
+  tests guard the halves: `test_ask_sources_runs_on_the_requested_provider`
+  (routes) and `test_paper_refs_carry_the_backend_that_minted_the_ids`
+  (researcher), plus the frontend's seed-under-the-ref's-provider case.
+
 ### The "fully offline" test suite was loading a real BERT model — and it took Windows CI to notice
 
 *Found 2026-08-09 by the very first CI run (v6.10.0), on `windows-latest`.

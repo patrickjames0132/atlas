@@ -28,7 +28,8 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
-import type { PaperRef, SourceRef } from '../../api'
+import type { PaperRef, Provider, SourceRef } from '../../api'
+import { PROVIDER_LABEL } from '../../api'
 import { remarkCite } from './remarkCite'
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
@@ -94,6 +95,7 @@ export default function AnswerMarkdown({
   onRefClick,
   onGraphIds,
   onPaperSeed,
+  provider,
 }: {
   text: string
   /** `[n]` → node-id map for this answer (undefined on old saves / none). */
@@ -113,7 +115,11 @@ export default function AnswerMarkdown({
   /** Build a graph seeded on a cited paper — the graph-free counterpart of
    *  `onRefClick`, which needs a graph to point at. Undefined falls back to
    *  linking out to the paper's own page. */
-  onPaperSeed?: (nodeId: string) => void
+  onPaperSeed?: (nodeId: string, refProvider?: Provider) => void
+  /** The backend currently selected. Only used to warn, in the tooltip, when a
+   *  citation was minted by the *other* one — mapping it moves the workspace
+   *  there, and a reader deserves to know that before clicking. */
+  provider?: Provider
 }) {
   const components = useMemo<Components>(
     () => ({
@@ -168,14 +174,23 @@ export default function AnswerMarkdown({
         const paper = index && paperRefs ? paperRefs[index] : undefined
         if (!paper) return <>{children}</>
         if (onPaperSeed) {
+          // A citation minted by the other backend still maps — it just takes
+          // the workspace with it, since its id resolves nowhere else. Say so
+          // in the tooltip rather than letting the dropdown change under them.
+          const elsewhere =
+            paper.provider && provider && paper.provider !== provider ? paper.provider : null
           return (
             <button
               type="button"
               className="cite-ref cite-ref-seed"
-              title={`Map this paper's citations — ${paper.title}`}
+              title={
+                elsewhere
+                  ? `Map this paper's citations, switching to ${PROVIDER_LABEL[elsewhere]} — ${paper.title}`
+                  : `Map this paper's citations — ${paper.title}`
+              }
               onClick={(event) => {
                 event.stopPropagation() // don't also trigger the whole-answer re-light
-                onPaperSeed(paper.node_id)
+                onPaperSeed(paper.node_id, paper.provider)
               }}
             >
               {children}
@@ -223,7 +238,7 @@ export default function AnswerMarkdown({
         )
       },
     }),
-    [graphRefs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed],
+    [graphRefs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed, provider],
   )
 
   return (

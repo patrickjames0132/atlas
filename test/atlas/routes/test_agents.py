@@ -215,3 +215,23 @@ def test_ask_sources_runs_the_researcher_without_a_graph(client, monkeypatch):
     assert "seed" not in seen["kwargs"] and "nodes" not in seen["kwargs"]
 
     assert client.post("/api/ask_sources", json={}).status_code == 400  # question required
+
+
+def test_ask_sources_runs_on_the_requested_provider(client, monkeypatch):
+    """The graph-free chat has no graph to inherit a backend from, so the
+    dropdown's choice has to ride on the request — until v6.14.0 it didn't, and
+    a chat under OpenAlex quietly searched Semantic Scholar instead."""
+    seen: dict = {}
+
+    def fake_run(intent, **kwargs):
+        seen.update(kwargs)
+        yield events.Token(text="ok")
+        yield events.Done()
+
+    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    client.post("/api/ask_sources", json={"question": "q", "provider": "openalex"}).data
+    assert seen["provider"] == "openalex"
+    # Junk degrades to the configured default rather than erroring, same as
+    # every other provider-keyed route.
+    client.post("/api/ask_sources", json={"question": "q", "provider": "nonsense"}).data
+    assert seen["provider"] == config.providers.default_provider

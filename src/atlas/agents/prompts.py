@@ -31,7 +31,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from ..services.graph import Node
+from ..services.graph import Node, Provider
 
 SKILLS_DIR = Path(__file__).parent / "skills"
 
@@ -235,7 +235,7 @@ def source_lines(sources: Sequence[dict]) -> str:
     return "\n".join(lines)
 
 
-def paper_refs(nodes: Sequence[Node], text: str) -> dict[str, dict]:
+def paper_refs(nodes: Sequence[Node], text: str, provider: Provider) -> dict[str, dict]:
     """Resolve the ``[n]`` markers prose used to readable paper references.
 
     The richer sibling of ``graph_refs_from_text``: same scan, same numbering, but
@@ -248,15 +248,23 @@ def paper_refs(nodes: Sequence[Node], text: str) -> dict[str, dict]:
     Args:
         nodes: The same node sequence ``node_lines`` numbered.
         text: The finished answer prose.
+        provider: The backend the run searched — stamped on every reference,
+            since the ids are only resolvable there (see ``events.PaperRef``).
 
     Returns:
-        ``{"3": {"node_id": ..., "title": ..., "url": ...}, ...}`` — keyed by
-        the marker's number as a string, referenced in-range indices only.
+        ``{"3": {"node_id": ..., "title": ..., "url": ..., "provider": ...},
+        ...}`` — keyed by the marker's number as a string, referenced in-range
+        indices only.
     """
     paper_refs: dict[str, dict] = {}
     for token, node_id in graph_refs_from_text(nodes, text).items():
         node = nodes[int(token) - 1]
-        paper_refs[token] = {"node_id": node_id, "title": node.title, "url": node.url or ""}
+        paper_refs[token] = {
+            "node_id": node_id,
+            "title": node.title,
+            "url": node.url or "",
+            "provider": provider,
+        }
     return paper_refs
 
 

@@ -11,7 +11,7 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import type { AnswerFigure, ChatMsg, TraceEvent } from '../../api'
+import type { AnswerFigure, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import { splitAnswer } from '../figures/split'
@@ -118,6 +118,7 @@ export default function ChatMessage({
   onRefClick,
   onGraphIds,
   onPaperSeed,
+  provider,
   onEnlarge,
 }: {
   message: ChatMsg
@@ -132,7 +133,9 @@ export default function ChatMessage({
   /** Paper ids still on the graph; a `[n]` outside it greys out. */
   onGraphIds?: Set<string>
   /** Build a graph seeded on a cited paper (graph-free answers only). */
-  onPaperSeed?: (nodeId: string) => void
+  onPaperSeed?: (nodeId: string, refProvider?: Provider) => void
+  /** The selected backend, so a citation from the other one says so. */
+  provider?: Provider
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   const clickable = !!onActivate
@@ -191,6 +194,7 @@ export default function ChatMessage({
                     onRefClick={onRefClick}
                     onGraphIds={onGraphIds}
                     onPaperSeed={onPaperSeed}
+                    provider={provider}
                   />
                 ) : (
                   // The user's own question — plain text, math typeset, no Markdown.

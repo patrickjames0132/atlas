@@ -292,6 +292,13 @@ export interface PaperRef {
   title: string
   /** The paper's landing page; may be empty. */
   url: string
+  /**
+   * The backend that minted `node_id` — a paper id resolves only there, so a
+   * click that maps this paper must build under *this* provider and not
+   * whatever the dropdown has since been switched to. Absent on sessions
+   * saved before v6.14.0; the workspace's own provider stands in then.
+   */
+  provider?: Provider
 }
 
 /**
@@ -358,12 +365,15 @@ export interface AskSourcesHandlers {
  * A single retrieve event, then prose tokens — interleaved with figure
  * traces/attachments when the agent pulls a figure from an uploaded PDF.
  *
- * @param body     The question, a session id for follow-up context, and
- *                 optional source_ids to scope retrieval to a subset of sources.
+ * @param body     The question, a session id for follow-up context, the
+ *                 provider its paper search should run against (there is no
+ *                 graph to inherit one from, so the dropdown's choice has to
+ *                 ride on the request), and optional source_ids to scope
+ *                 retrieval to a subset of sources.
  * @param handlers Event handlers; see {@link AskSourcesHandlers}.
  */
 export async function streamAskSources(
-  body: { question: string; session_id: string; source_ids?: string[] },
+  body: { question: string; session_id: string; provider: Provider; source_ids?: string[] },
   handlers: AskSourcesHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask_sources', {
