@@ -551,6 +551,46 @@ optional, behind a key.
 
 ### UI & rendering polish
 
+- [ ] **Give the chat surface real motion** — the landing chat is visually
+      finished (v6.13.0) but it *arrives* all at once: the greeting, the
+      composer, and every answer just appear. The reference is ChatGPT, where
+      nothing pops — things ease in, and the interface feels like it's
+      responding rather than repainting. Worth a ticket of its own rather than
+      being smuggled into the next feature, because motion is easy to add
+      badly and hard to remove once it's everywhere.
+
+      **The asks, concretely.** The greeting ("What do you want to explore?")
+      **fades in and rises** — opacity plus a small upward translate, not a
+      slide from off-screen. Chat bubbles get an entrance too, most likely the
+      same fade-and-rise so the whole surface shares one gesture; the streaming
+      placeholder's ellipsis could **cascade** rather than sitting still.
+
+      **What already exists, and what it implies.** There's one motion idiom
+      in the panel today — `.hop-dot` (`teacher.css`), three dots on a 0.9s
+      `hop` keyframe staggered 0.15s apart, used for a lecture button and the
+      send/stop control while an answer streams. A cascading ellipsis is that
+      same stagger, so **reuse it rather than inventing a second rhythm**; if
+      the timing wants to change, change it once and let both follow. Note the
+      existing `@media (prefers-reduced-motion: reduce)` block right beneath
+      it: every animation this ticket adds needs a line there too, and the
+      pattern is already set (`detail.css` does the same for its shimmer).
+
+      **The two hazards.** (1) *Don't animate streaming content.* An entrance
+      on the assistant bubble must fire once, when the turn starts — not on
+      every token, or the answer will visibly twitch for the length of the
+      response. (2) *Don't animate the transcript on a graph load.* The
+      conversation deliberately survives a re-seed with its scroll position
+      intact (v6.11.0); a re-entrance on every bubble would undo exactly what
+      that was for. Both point the same way: the trigger is a turn appearing,
+      not a render.
+
+      **Where the decision is.** Whether the docked (graph-mode) panel gets
+      the same motion as the landing surface. They're one component in two
+      shapes and should feel like one thing — but a side panel beside a live
+      force-graph is already a busy view, and the same entrance may read as
+      restless there. Worth trying both before committing. *(Patrick's ask,
+      2026-08-14.)*
+
 - [ ] **Make the provenance line a control, not a caption** — the quiet
       summary under an answer ("grounded in 1 of your sources + 1 paper ✦",
       `teacher/transcript/provenance.ts`) reads as a label, but it names the
