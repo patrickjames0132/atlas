@@ -32,7 +32,7 @@ NODES = [SEED, {**SEED, "id": "node02", "title": "Q-learning", "is_seed": False}
 def patch_agents(monkeypatch, fake):
     """Swap both agents the routes call, so one fake serves either endpoint.
 
-    The routes dispatch directly since v6.16.0 (the orchestrator that used to
+    The routes dispatch directly since v7.0.0 (the orchestrator that used to
     sit between them is gone), so there is no single seam left to patch — and
     that is the point: a test now names the agent it means.
 

@@ -132,7 +132,8 @@ _SOURCE_INSTRUCTIONS = {
 
 
 def _unconsulted(deps: ResearcherDeps) -> list[str]:
-    """Which available sources this run has neither consulted nor been handed.
+    """Which sources this run has neither consulted nor been handed — **and
+    can still reach**.
 
     A source counts as consulted when the agent actually reached it, **or**
     when its material is already in front of the model — which is the whole
@@ -141,19 +142,34 @@ def _unconsulted(deps: ResearcherDeps) -> list[str]:
     already consulted the paper source; the library is only ever *listed* in
     the prompt, so having one is not the same as having read it.
 
+    **Reachability is the other half, and it is not optional** (v7.1.0). A
+    source whose tool would now refuse must not be demanded: the guard's
+    retry says "call search_web", the tool answers "step budget exhausted",
+    the model writes another answer, the guard bounces it again — and the run
+    dies on the ``UsageLimits`` backstop with the reader getting *nothing*.
+    That is strictly worse than the ungrounded answer the guard was protecting
+    them from, and the provenance line reports the missing source honestly
+    either way. So a spent step budget, or a spent per-tool budget, ends the
+    obligation. The guard exists to stop the model *choosing* to skip a
+    source, never to punish it for a budget it doesn't control.
+
     Args:
-        deps: The run's deps, carrying the observed counters.
+        deps: The run's deps, carrying the observed counters and what's left
+            of every budget.
 
     Returns:
-        The unconsulted source names, in the order they'll be named.
+        The unconsulted-but-still-reachable source names, in the order they'll
+        be named. Empty once the step budget is gone, whatever was skipped.
     """
+    if deps.steps_left <= 0:
+        return []  # every tool refuses now — there is nothing left to demand
     missing = []
-    if deps.has_sources and deps.source_searches_run == 0:
+    if deps.has_sources and deps.source_searches_run == 0 and deps.source_searches_left > 0:
         missing.append("library")
     # No numbered papers at all means graph-free: nothing was handed over.
-    if not deps.nodes and deps.paper_searches_run == 0:
+    if not deps.nodes and deps.paper_searches_run == 0 and deps.searches_left > 0:
         missing.append("papers")
-    if deps.web_enabled and deps.web_searches_run == 0:
+    if deps.web_enabled and deps.web_searches_run == 0 and deps.web_searches_left > 0:
         missing.append("web")
     return missing
 
@@ -188,21 +204,25 @@ def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer
     structural: an ``answered`` turn that skipped a source is bounced back for
     another attempt.
 
-    **Coverage, not routing.** Since v6.16.0 this spans every source rather
+    **Coverage, not routing.** Since v7.0.0 this spans every source rather
     than only the library, which is deliberately the answer to "how do we make
     sure it asks all of them?" — an output guard, not a router that decides
     for the model which sources a question needs. The model still chooses the
     order, the phrasing and what to do with the results; it just cannot
     quietly skip one.
 
-    Three deliberate limits. It asks whether a source was **consulted**, not
+    Four deliberate limits. It asks whether a source was **consulted**, not
     whether it *helped*: a search returning nothing satisfies it, or an empty
     library would make every answer unreachable. It counts a source already in
     front of the model as consulted (see ``_unconsulted``), so a question
     about the open graph doesn't have to re-search the literature it came
-    from. And it only ever fires on ``answered`` — a mandatory sweep on every
-    turn is exactly the v6.7.0 bug where saying "hi" searched the student's
-    books, and it would now do it three times over.
+    from. It demands only what the model can **still reach** — a spent budget
+    ends the obligation, because a guard that insists on a refused tool
+    deadlocks the run into the usage backstop and the reader gets no answer at
+    all (also ``_unconsulted``; v7.1.0). And it only ever fires on
+    ``answered`` — a mandatory sweep on every turn is exactly the v6.7.0 bug
+    where saying "hi" searched the student's books, and it would now do it
+    three times over.
 
     Args:
         ctx: The run context carrying the researcher's deps.

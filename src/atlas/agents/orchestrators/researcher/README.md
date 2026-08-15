@@ -35,7 +35,7 @@ researcher.answer(question, seed, nodes, history, source_ids)      main.py
   5  Cited = papers actually read + papers named by index
 ```
 
-## The two scouts (v6.16.0)
+## The two scouts (v7.0.0)
 
 `find_papers` and `search_web` don't do the searching — they hand a **need**,
 in the researcher's own words, to a worker under
@@ -60,6 +60,48 @@ also means web grounding is *counted* in provenance (`web_searches`,
 `web_pages`) rather than counted off the finished prose the way `[Sn]` and
 `[n]` citations are: there is no marker to count.
 
+## The join: the web feeds the literature (v7.1.0)
+
+Two scouts that each answer their own question leave the reader with a link
+to an announcement *and*, separately, some papers — and nothing between them.
+The paper behind the announcement is what they actually want, because it is
+the only one of the two that can be seeded into a graph. So the researcher is
+asked to run `find_papers` **again** on whatever specific thing the web named.
+
+The measurement that shaped it is worth keeping, because it says the join
+isn't a nicety the model does anyway. Grepping `data/atlas.log` across a
+week of real runs, every paper search restated the user's question at topic
+level (`quantum computing advances 2024`, `quantum physics breakthroughs
+2023 2024 2025`) — not one carried a name the web had just supplied. Three
+things in the code explained it: the prompt said "each source is one call",
+nothing ordered the web before the papers, and the web tool's result told the
+model what to do with the pages for the *prose* and nothing about the graph.
+
+The fix is prompt-only, in four places, and deliberately so — a
+reconciliation *worker* was the alternative, and the rule against speculative
+agents is the one that killed the orchestrator. Each place earns its keep:
+
+1. **`config.SYSTEM_PROMPT`** — states the join and the ordering rule (web
+   first when the question is about what's new, so the paper search has names
+   to work with rather than the topic words it started from).
+2. **`tools._WEB_HANDOFF`**, appended to the web tool's *result* — the same
+   instruction at the moment the decision is made, with the pages in front of
+   the model, where a rule read a thousand tokens earlier competes with
+   everything else in the prompt. Withheld when `searches_left` is 0: an
+   instruction the model can't follow burns a step being refused.
+3. **The web scout** is asked to *name things* — the system, chip or lab as
+   the page spells it, and the paper's own title where a page gives one. It
+   can't join what it never carried across.
+4. **The paper scout** is told a need may name a thing rather than a topic,
+   and that the paper is titled after the *result*, not the product
+   ("Quantum error correction below the surface code threshold", not
+   "Willow") — so the name is one attempt, and the claim is the next.
+
+`find_papers` and `search_web` log their `need` at INFO for exactly this
+reason: the trace shows the reader one query, while "did the web's names
+reach the paper search?" is answered by the need, after the fact, on a run
+nobody was watching. Two log lines in sequence are the measurement.
+
 - **`config.py`** — `AGENT_ID`, `SKILLS` (all four — the only agent that
   loads `figures`), the strategy `SYSTEM_PROMPT`, and `BUDGETS`
   (defaults overridden by the agent entry's `extras`; unknown extras keys
@@ -75,6 +117,19 @@ also means web grounding is *counted* in provenance (`web_searches`,
   same way: once `max_steps` tool calls are spent, every tool answers
   `STEPS_EXHAUSTED`, so the model lands the answer itself inside the same
   run. A `UsageLimits` request cap backstops pathological loops only.
+- **The coverage guard demands only what's *reachable*.** `_must_have_looked`
+  bounces a substantive answer that skipped an available source — but
+  "available" has to mean *the model can still go get it*, not just *the
+  operator left it switched on*. A run that spends its step budget before the
+  sweep finishes would otherwise deadlock: the guard says "call search_web",
+  the tool refuses (no steps), the model answers, the guard bounces it again,
+  and the `UsageLimits` backstop ends the run with the reader getting nothing
+  — strictly worse than the ungrounded answer being prevented, which
+  provenance reports honestly anyway. So `_unconsulted` checks the step budget
+  and each source's own remaining budget (v7.1.0; see
+  [`docs/bugs.md`](../../../../../docs/bugs.md)). `_doomed` shares that
+  function rather than restating it, so what streams and what passes can't
+  drift apart.
 - **`sequential=True` on every tool.** PydanticAI runs a turn's tool calls
   concurrently by default; these tools mutate shared deps state — budgets,
   visited-sets, and above all the numbered list, whose indices must be
@@ -128,16 +183,13 @@ also means web grounding is *counted* in provenance (`web_searches`,
 
 ## Who uses it, and how/why
 
-- **`agents/orchestrator` (Phase 4d).** The `research` intent per
-  `skills/workflows/research.md`: a pure delegation to `answer(...)`, relaying
-  its event stream and appending `Done`/`Error`.
-- **Old repo, traced (not yet ported):** `routes/teacher.py`'s
-  `POST /api/ask` validates the question, pulls the graph-chat history from
-  its session store, calls `teacher.answer_agentic(question, seed, nodes,
-  history, source_ids)`, and serializes the tuples as SSE frames
-  (`trace`/`nodes`/`figure`/`token`/`discard`/`cited`). Phase 5 rewrites it
-  to call the orchestrator with intent `research`; the `discard` frame dies with
-  the sentinel, and `nodes` frames become `discovery` events.
+- **`routes/agents.py`** — both chat surfaces call `answer(...)` directly,
+  per `skills/workflows/research.md`: `POST /api/ask` with a graph open (seed
+  + visible nodes + provider), `POST /api/ask_sources` without one. Each
+  wraps the stream in `streams.terminated` for the `Done`/`Error` contract
+  and serializes it as SSE. There is no router in between — the `orchestrator`
+  that used to own that dispatch was deleted in v7.0.0 (see
+  [`../README.md`](../README.md)).
 
 ## Testing
 

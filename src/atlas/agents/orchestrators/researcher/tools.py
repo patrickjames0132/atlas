@@ -453,10 +453,16 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
     scout writes and re-writes the queries itself and reports back. Whatever it
     finds gets numbered and added for you to read.
 
+    Call it more than once when the question earns it — in particular, after
+    the web scout names a specific system, model or result, send this one
+    after the paper behind that name.
+
     Args:
         ctx: The run context carrying the researcher's deps (framework-injected).
         need: What you're looking for, in plain words — a description, not a
-            query string.
+            query string. A thing's name is a fine need ("the paper behind
+            Google's Willow chip"); the scout knows the paper is usually
+            titled after the result rather than the product.
 
     Returns:
         The newly numbered papers (title + year each) plus the scout's own
@@ -499,6 +505,14 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
         new_nodes.append(discovered)
         lines.append(f"[{discovered.idx}] ({discovered.year or 'n.d.'}) {discovered.title}")
 
+    # Logged, not only traced: the trace shows the reader one query, while the
+    # question "did the web's names reach the paper search?" is answered by the
+    # need — and only after the fact, from a run nobody was watching. Grepping
+    # data/atlas.log for these two lines in sequence is how the join is
+    # measured (the alternative, asking the model whether it joined, is a
+    # self-report with nothing behind it).
+    log.info("find_papers need=%r queries=%r new=%d", need, result.queries, len(lines))
+
     # The trace shows the scout's LAST query rather than the need: the reader
     # is watching a search happen, and "quantum error correction 2024–" is
     # what a search looks like. The need is the researcher's words, not the
@@ -515,6 +529,25 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
     else:
         found_text = "no new papers."
     return f"Scout searched for \"{need}\" — {found_text}\n\nScout's note: {result.summary}"
+
+
+#: The hand-off from the web back to the literature, appended to a web result
+#: that has something to hand off and a paper-search budget left to spend.
+#:
+#: It lives in the tool *result* rather than only in the system prompt because
+#: this is the moment the decision is made: the pages are in front of the
+#: model, and a rule read a thousand tokens earlier competes with everything
+#: else in the prompt. The measurement that motivated it (v7.1.0) found the
+#: paper search restating the user's question at topic level in every logged
+#: run — never once carrying a name the web had just supplied.
+_WEB_HANDOFF = (
+    "\n\nNow finish the join: if any of this names something specific — a "
+    "system, model, chip, dataset, benchmark or lab result — call find_papers "
+    "on THAT name. A page is a link the student can read; the paper behind it "
+    "is a node they can seed a whole graph from, which is what they came here "
+    "for. If none of it names anything a paper would be written about, say so "
+    "and move on."
+)
 
 
 async def search_web(ctx: RunContext[ResearcherDeps], need: str) -> str:
@@ -553,14 +586,19 @@ async def search_web(ctx: RunContext[ResearcherDeps], need: str) -> str:
 
     findings = await web.scout(need)
     deps.web_pages_found += len(findings.sources)
+    log.info("search_web need=%r pages=%d", need, len(findings.sources))
     deps.emit(events.WebSearchTrace(ok=True, need=need, found=len(findings.sources)))
     if not findings.sources:
         return f"Web scout found nothing usable. Scout's note: {findings.summary}"
     pages = "\n".join(f"- [{src.title}]({src.url}) — {src.note}" for src in findings.sources)
-    return (
+    result = (
         f"Web scout on \"{need}\":\n{findings.summary}\n\nPages (cite these as "
         f"markdown links):\n{pages}"
     )
+    # Only when there is a search left to spend it on: an instruction the model
+    # cannot follow is worse than none — it burns a step to be refused, and
+    # teaches the model its next instruction may be fiction too.
+    return result + _WEB_HANDOFF if deps.searches_left > 0 else result
 
 
 def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str:

@@ -181,8 +181,15 @@ The Vite dev server proxies `/api/*` to Flask.
      header + beats) or the Q&A chat; asking a question tucks the lecture away
      (still cached) so the two never pile up.
    - **Ask** — the research agent answers grounded in what it actually
-     reads, streaming its tool steps live (read / expand / search / search
-     your sources / show a figure). Answers render in full **Markdown + math**,
+     reads, streaming its tool steps live (read / expand / search the
+     literature / search the web / search your sources / show a figure). It
+     consults **every source it has** before it commits to an answer — it
+     can't know which one holds it until it looks, and an answer written from
+     memory over the textbook you uploaded is the failure that matters. The
+     sources also feed each other: the web names things (a chip, a model, a
+     lab result) and the literature indexes them, so a web finding sends the
+     agent back after **the paper behind the announcement** — the one thing of
+     the two you can seed a whole graph on. Answers render in full **Markdown + math**,
      and their inline `[n]` citations are **clickable** — click one to spotlight
      that paper on the graph, click it again to clear. (Lecture beats cite the
      same way.) A tiny glyph on each chip says which click you're about to
@@ -192,8 +199,8 @@ The Vite dev server proxies `/api/*` to Flask.
      attributed with its real title and page, resolved server-side rather than
      written out by the model.
      Underneath each answer, a line says what actually grounded it — which of
-     your sources, which papers — computed from what the agent did, not from
-     what it claims. When nothing grounded it, it says that too: Atlas grounds
+     your sources, which papers, how much of the web — computed from what the
+     agent did, not from what it claims. When nothing grounded it, it says that too: Atlas grounds
      answers in real material, and is honest when it can't.
    - **No graph open? Then the assistant *is* the page.** Atlas opens on a
      centred chat bar — no graph and no uploaded library required — and the

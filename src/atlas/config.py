@@ -293,7 +293,12 @@ class ResearcherExtras(ConfigModel):
     """
 
     max_steps: PositiveInt = Field(
-        default=12, description="Total tool calls per question, across all tools."
+        default=16,
+        description="Total tool calls per question, across all tools. Raised from 12 in "
+        "v7.1.0: the agent is now asked to sweep three sources and then follow the web's "
+        "names back into the literature, and 12 was chosen when it had fewer obligations. "
+        "Running out isn't fatal (every tool then answers 'answer now', and the coverage "
+        "guard stops demanding what it can no longer reach) — it just lands a thinner answer.",
     )
     full_reads: NonNegativeInt = Field(
         default=4, description="Full-text paper reads per question — the priciest tokens."

@@ -135,7 +135,7 @@ def terminated(events_in: Iterator[Any]) -> Iterator[Any]:
     The one contract the frontend depends on: a stream that simply stops looks
     identical to one still working, and the panel waits forever. This used to
     live in an ``orchestrator.run`` that every workflow was funnelled through;
-    with the routes calling agents directly (v6.16.0) it belongs here, as the
+    with the routes calling agents directly (v7.0.0) it belongs here, as the
     shared plumbing it always was — a workflow is responsible for its events,
     not for how a transport learns it finished.
 

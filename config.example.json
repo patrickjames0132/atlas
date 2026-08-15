@@ -92,7 +92,7 @@
         "id": "researcher",
         "model": "anthropic:claude-sonnet-4-6",
         "extras": {
-          "max_steps": 12,
+          "max_steps": 16,
           "full_reads": 4,
           "summary_reads": 12,
           "hops": 5,

@@ -5,7 +5,7 @@ Mode scoping: which visible nodes each lecture mode may narrate, and in what
 order. A lecture never expands the graph, and each directional mode is pinned
 to exactly ONE graph relation so the four lectures don't overlap.
 
-This scoping lived in the orchestrator until v6.16.0, when that router was
+This scoping lived in the orchestrator until v7.0.0, when that router was
 deleted and the routes began calling agents directly — it is the lecturer's
 own business, so it (and its tests) moved here.
 

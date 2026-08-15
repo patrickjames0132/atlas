@@ -69,7 +69,7 @@ def test_beats_map_indices_to_node_ids():
     with lecturer.agent.override(model=model):
         out = list(lecturer.lecture(SEED, NODES))
     # The numbered list is the mode-scoped, CHRONOLOGICAL one the lecturer
-    # builds itself (`_story_nodes`, since v6.16.0 — see test_scoping.py), so
+    # builds itself (`_story_nodes`, since v7.0.0 — see test_scoping.py), so
     # [1] is the oldest paper and the 2015 seed sits at [3].
     assert out == [
         events.Beat(heading="The roots", text="It began with TD.", node_ids=["seed01", "node02"]),

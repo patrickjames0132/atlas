@@ -70,6 +70,28 @@ else's paper.
 The web worker returns sources with **real URLs**, which is the same rule in
 its other form: a claim the reader can't check isn't a finding.
 
+## The workers don't talk to each other — the orchestrator joins them
+
+Worth stating, because the obvious reading of "one source each" is that the
+sources stay apart. They don't: a web announcement's real value to this app
+is the **paper behind it**, since only a paper can be seeded into a graph. So
+the web's findings have to reach the paper search.
+
+That join is the **researcher's** job, not a worker's, and it shows up here
+as two prompt obligations rather than as a channel between the two scouts:
+the web scout must *name things* (the system, chip, lab, and the paper title
+where a page gives one) so the name survives the hand-back, and the paper
+scout must expect a need that names a **thing** rather than a topic — where
+the paper is titled after the result, not the product. Neither knows the
+other exists.
+
+Keeping the wiring out of the workers is what leaves the door open for the
+alternative if prompting measures badly: a *reconciliation* worker ("given
+these pages and these papers, which pair up?") is a different job from
+searching, so it would earn its own group beside `search/` rather than
+joining it. See the researcher's README, "The join", for the measurement
+that chose prompting first (v7.1.0).
+
 ## Design decisions worth knowing
 
 - **A failed worker costs the answer its source, never the answer.** Both

@@ -254,6 +254,68 @@
 
 ### AI teacher & lectures
 
+- [x] **Connect the web result to the paper — the scouts don't talk to each
+      other** *(v7.1.0)* — the workers ticket shipped two scouts that each
+      answered their own question and handed findings back separately. What
+      was missing was the join: ask about Google's Willow chip and you got a
+      web link to the announcement *and*, separately, some papers — but
+      nothing connected the announcement to the paper behind it, and that
+      paper is exactly what the reader wants to seed a graph on. The whole
+      product claim is that a link becomes a map.
+
+      **The measurement decided it.** The ticket offered two shapes —
+      prompt-only, or a reconciliation worker running after both scouts — and
+      said to try prompting first and measure, because the rule against
+      speculative agents is the one that killed the orchestrator. Grepping
+      `data/atlas.log` across a week of real runs settled whether prompting
+      was already half-working: it wasn't working at all. Every paper search
+      restated the user's question at topic level (`quantum computing advances
+      2024`, `quantum physics breakthroughs 2023 2024 2025`), never once
+      carrying a name the web had just supplied. Three causes, all in the
+      code: the system prompt said *"each source is one call"*, nothing
+      ordered the web before the papers, and the web tool's result told the
+      model what to do with its pages **for the prose** and nothing about the
+      graph.
+
+      **Shipped prompt-only, in four places.** The researcher's system prompt
+      states the join and the ordering rule (web first when the question is
+      about what's new, so the paper search has names rather than topic
+      words). `tools._WEB_HANDOFF` repeats it in the web tool's *result*,
+      where the pages are in front of the model and the decision is actually
+      made — withheld when no search is left, since an instruction the model
+      can't follow just burns a step being refused. The web scout must now
+      **name things** (the chip, the lab, the paper's own title where a page
+      gives one, quoted verbatim, never invented) — it can't join what it
+      never carried across. And the paper scout expects a need that names a
+      *thing* rather than a topic, knowing the paper is titled after the
+      result, not the product ("Quantum error correction below the surface
+      code threshold", not "Willow") — so the name is one attempt and the
+      claim is the next. `find_papers`/`search_web` log their `need` at INFO,
+      which is the measuring instrument: two lines in sequence say whether the
+      names crossed over, after the fact, on a run nobody watched.
+
+      Measured after: one web search produced three name-carrying paper
+      searches (`Google Willow quantum chip below-threshold error correction
+      2024`, `Microsoft topological qubit majorana fermion quantum processor
+      2025`, `IBM Quantinuum error rate reduction logical qubits 2024`),
+      against zero in every run before. The reconciliation worker stays
+      unbuilt and the door stays open — it's a different job from searching,
+      so it would earn its own group beside `search/` rather than joining it.
+
+      Testing turned up a **deadlock in the coverage guard** that predated
+      this work: `_must_have_looked` read "available source" from config, so a
+      run that spent its step budget before reaching the web was bounced for
+      skipping a source, told to call a tool that could only refuse, and
+      looped until the `UsageLimits` backstop ended it with the reader getting
+      **nothing**. Fixed by making `_unconsulted` demand only what's still
+      reachable — see [Bugs](bugs.md). `max_steps` went 12 → 16 alongside, for
+      the separate reason that v7.0.0 and v7.1.0 gave the agent more to do per
+      turn than 12 was chosen for. Two doc sweeps rode along: the two-tier
+      split was documented as `v6.16.0` in 11 files (a tag that never existed
+      — it shipped as v7.0.0 after the major-bump call), and `search_papers`
+      still named the tool in eight places, one of them user-visible in
+      Settings. *(From the `todos.md` inbox, 2026-08-15; shipped 2026-08-15.)*
+
 - [x] **Ground the chat in the web too — workers and orchestrators**
       *(v7.0.0)* — the graph-free chat could only find *papers*, so "what's new
       in quantum computing" answered from Semantic Scholar's citation-weighted

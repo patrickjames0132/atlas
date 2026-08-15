@@ -15,7 +15,7 @@ the visible nodes, the provider, and any lectures already played:
   entirely.
 
 **No seed and no nodes is legitimate**, not an error — that's the graph-free
-chat. The researcher runs with an empty numbered list, which `search_papers`
+chat. The researcher runs with an empty numbered list, which `find_papers`
 can still fill.
 
 **Steps:**
@@ -26,8 +26,11 @@ can still fill.
    turn with a library present, it **must reach retrieval before it commits
    to an answer**; an output validator bounces one that doesn't (see
    `researcher/main.py`'s `_must_have_looked`). It then investigates via its
-   tools — reading papers, expanding the graph, searching S2 and the library,
-   attaching figures — each step within its budget.
+   tools — reading papers, expanding the graph, searching S2, the web and the
+   library, attaching figures — each step within its budget. The sources feed
+   each other: when the web scout names something specific, the researcher
+   sends the paper scout after the paper behind that name, because only a
+   paper can be seeded into a graph (see the researcher's README, "The join").
 2. Forward its events as they arrive: `SourceRefs` (the numbered library the
    answer's `[Sn]` markers resolve against, ahead of the prose), `Trace`
    (each tool step, so the user watches the agent work), `Discovery` (papers

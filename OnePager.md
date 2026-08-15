@@ -128,30 +128,20 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **Connect the web result to the paper — the scouts don't talk to each
-      other** *(next up)* — the workers ticket shipped two scouts that each
-      answer their own question and hand findings back separately. What's
-      missing is the join: ask about Google's Willow chip and you get a web
-      link to the announcement *and*, separately, some papers — but nothing
-      connects the announcement to the paper behind it, and that paper is
-      exactly what the reader wants to seed a graph on. The whole product
-      claim is that a link becomes a map.
-
-      **Two candidate shapes, and the choice is the ticket.** (a) *Prompt
-      only* — tell the researcher to take names, systems and labs out of the
-      web findings and run a second `find_papers` on them. Cheap, no new
-      agents, and it may already half-happen; the honest first step is to
-      look at real transcripts and see. (b) *A second pass* — a worker (or a
-      second round of the existing two) that runs **after** both scouts
-      return, whose entire job is reconciliation: given these pages and these
-      papers, which pair up? That's a different job from searching, so under
-      the membership rule it would earn its own worker rather than joining
-      `search/`.
-
-      Try (a) first and measure it — the rule against speculative agents is
-      the same one that killed the orchestrator. Whatever wins, the output
-      has to end as a numbered paper, since the seeding click needs a real
-      `node_id`. *(From the `todos.md` inbox, 2026-08-15.)*
+- [ ] **A lone source hides its own filter — so the agent can't be told to
+      leave it alone** *(next up)* — the source-scope control disappears when
+      the library holds exactly **one** source, which is precisely the case
+      where the reader most likely wants it: with one book uploaded, there is
+      no way to ask a question *without* it. The empty-list scope
+      (`source_ids: []`, "no sources selected") is already plumbed end to end
+      and disables source search outright — the researcher's `scope` honours
+      it and the coverage guard reads the same fact — so this is a UI gate
+      that hides a working control, not a missing capability. Presumably the
+      filter renders only when there's a choice to make between sources;
+      "use it / don't" is a choice too. Check what the chip row looks like
+      with one entry, and that unticking it actually stops the agent reaching
+      retrieval (the `searches=0` line in `data/atlas.log` is the proof).
+      *(From the `todos.md` inbox, 2026-08-15.)*
 
 - [ ] **Retire the `search` node type — a discovered paper should attach to
       the graph, not float beside it** *(next up)* — free-text search results
@@ -600,6 +590,37 @@ optional, behind a key.
 
 ### UI & rendering polish
 
+- [ ] **Collapse the lecture buttons behind a caret** — the lecture-mode
+      buttons sit permanently expanded above the chat, taking prime vertical
+      space next to the thing the reader actually types into. Fold them into a
+      collapsible section with a little caret to expand. Two things to get
+      right: the **default state** (collapsed is the point, but a first-time
+      reader must still discover lectures exist — the tour teaches them, so
+      check `tour/steps.ts` still lands on a visible target), and the
+      **animation**, which should reuse the chat surface's existing motion
+      vocabulary (`--ease-rise`/`--ease-fade`, and honouring
+      `prefers-reduced-motion`) rather than inventing a third easing.
+      *(From the `todos.md` inbox, 2026-08-15.)*
+
+- [ ] **The references lecture keeps opening with "The story begins…"** — a
+      verbal tic in HOW WE GOT HERE, and the reader sees it every time. Worth
+      knowing before anyone starts: **it is not a string in the codebase** —
+      grep finds nothing, because the lecturer is *writing* it. So the fix is
+      in `lecturer/config.py`'s mode prompt, and the shape of it is a rule
+      about openings rather than a banned phrase (ban the sentence and the
+      model reaches for the next stock opening). The `teaching-voice` skill is
+      the other candidate home, if the tic turns out to span modes rather than
+      living in this one. Check the other three modes before deciding which.
+      *(From the `todos.md` inbox, 2026-08-15.)*
+
+- [ ] **Rename "AI teacher" above the graph chat to "Discover"** — a one-word
+      change, but the word is doing work: "AI teacher" names the *implementation*
+      (there's an agent, it teaches), while "Discover" names what the reader
+      came to do. Worth a grep rather than a single edit — the phrase appears
+      in the panel header, and possibly in the tour text and control tooltips,
+      all of which have to move together per the in-app-help rule.
+      *(From the `todos.md` inbox, 2026-08-15.)*
+
 - [ ] **The chat bar's two icons sit small inside their circles** — both
       buttons are the same 34px disc (`.teacher-ask > button` and its
       `.ask-clear` variant, `teacher.css`), which was the point; what's off is
@@ -691,6 +712,59 @@ optional, behind a key.
       already-on-the-graph test is the same `onGraphIds` set that greys stale
       chips. Any provider stamp on the seeded id has to come along too — see
       the graph-free provider ticket above. *(Patrick's ask, 2026-08-14.)*
+
+- [ ] **A lecture that grounded an answer should say so in the provenance
+      line** — the line under a bubble already names papers, web pages and
+      the reader's own sources; **lectures are the one grounding it stays
+      silent about**. They're real material and they're already in the
+      prompt: `answer(lectures=...)` folds every played lecture's beats in as
+      context to build on (`_lectures_context`, budgeted by
+      `_LECTURES_MAX_CHARS`), so an answer can lean on a lecture the reader
+      watched and report itself as ungrounded.
+
+      **The catch, and it's the ticket's real work:** every other count on
+      that line is *observed* — a tool call the server watched happen — while
+      lecture context is **pushed into the prompt**, so there is nothing to
+      count. Whether the answer used it is exactly the thing `Provenance`'s
+      docstring refuses to ask the model, because a model can't reliably tell
+      which of its sentences came from context and which from its weights. So
+      either the honest version is weaker than the others ("2 lectures in
+      context", a fact about the prompt, not the answer), or lectures need a
+      citation marker of their own so usage can be counted off the finished
+      prose the way `[Sn]` and `[n]` are. Settle that before building.
+
+      **Trace chips too**, on the same terms — the reader should watch the
+      agent reach for a lecture the way they watch it search their library.
+      Note this has the same problem in sharper form: a trace chip reports a
+      *tool call*, and there is no lecture tool to call — the material is
+      already in the prompt. A chip saying "read the lecture" when nothing
+      was read would be the first dishonest chip in the panel. Which may
+      argue for making lecture material a real retrieval tool rather than
+      prompt stuffing — a bigger change, and the honest one.
+      *(From the `todos.md` inbox, 2026-08-15.)*
+
+- [ ] **A "quick answer" toggle for a run in progress** — the agentic sweep is
+      thorough by construction: since v7.0.0 an `answered` turn consults every
+      available source, and v7.1.0 has it follow the web's names back into the
+      literature. That's right by default and sometimes not what the reader
+      wants *right now* — they asked something small and are watching a
+      full sweep run. **The ask:** a control in the chat, live during
+      execution, that says "wrap up".
+
+      **The mechanism already exists**, which is what makes this cheap: every
+      tool answers `STEPS_EXHAUSTED` once the step budget is gone and the
+      model lands the answer itself inside the same run — no cancel, no lost
+      work. So "quick answer" is *zeroing `deps.steps_left` mid-run* rather
+      than any new stopping machinery. **Two things to settle.** The
+      coverage guard must not then bounce the answer for skipping a source
+      — as of v7.1.0 it already stops demanding what a spent budget can't
+      reach, so this composes, but it needs a test saying so *deliberately*
+      rather than by luck. And the plumbing: the SSE stream is
+      server→client only, so a mid-run signal needs a side channel (a second
+      endpoint keyed on the run, or a cancellable flag in the deps the route
+      can reach). Cheaper alternative worth pricing first: a "quick" flag sent
+      **with** the question, which needs no side channel at all and may cover
+      most of the want. *(From the `todos.md` inbox, 2026-08-15.)*
 
 - [ ] **The Data Provider dropdown's text sits off-centre** — minor, and the
       cause is already visible: `.provider-select select`

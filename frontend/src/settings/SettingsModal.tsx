@@ -672,7 +672,7 @@ const ROW_DEFS: RowDef[] = [
     section: 'agents',
     group: 'Researcher',
     label: 'Topic searches',
-    hint: 'search_papers calls per question — bounds off-graph reach.',
+    hint: 'find_papers calls per question — bounds off-graph reach.',
     control: (draft, edit) => (
       <ExtrasNumber
         draft={draft}

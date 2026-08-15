@@ -186,7 +186,7 @@ class PaperRef(BaseModel):
 
     The frontend normally resolves ``[n]`` itself — it holds the same
     numbered grounding list the model was shown. That breaks in graph-free
-    mode, where every paper arrives mid-answer from ``search_papers`` and
+    mode, where every paper arrives mid-answer from ``find_papers`` and
     there is no canvas to merge it into: the marker would render as dead
     text with no way to learn what paper ``[1]`` even was. ``title``/``url``
     make the citation readable and reachable without a graph.

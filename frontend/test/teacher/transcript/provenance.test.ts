@@ -115,7 +115,7 @@ describe('provenanceLine with the web in play', () => {
   })
 
   it('renders a session saved before the web fields existed', () => {
-    // Both fields are absent on pre-v6.16.0 saves; the line must not go blank
+    // Both fields are absent on pre-v7.0.0 saves; the line must not go blank
     // or claim a web search that never happened.
     expect(
       provenanceLine({

@@ -22,6 +22,52 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### The grounding guard deadlocked the agent into losing the whole answer
+
+*Found 2026-08-15 by Patrick, testing the web→papers join. Fixed in v7.1.0.*
+
+- **Symptom.** A question about a paper already on the graph. The agent read
+  four papers, then the trace filled with **failures** — a refused read, then
+  two refused web searches — and the panel ended in red: *"The next request
+  would exceed the request_limit of 16."* No answer at all, after 87 seconds.
+- **Root cause — a guard demanding what the run could no longer reach.** The
+  coverage guard (`_must_have_looked`) bounces a substantive answer that
+  skipped an available source. "Available" was read from *config*: the web is
+  available when its budget is non-zero. But budgets are also spent at
+  *runtime*, and this run spent all 12 steps on reads before it ever reached
+  the web. From there it was a closed loop, and each lap cost two requests:
+  `search_web` refused (`STEPS_EXHAUSTED` — it never reached the scout, which
+  is how `data/atlas.log` proves it, with no `search_web need=` line for the
+  whole run) → the model wrote an answer → the guard saw `web_searches_run ==
+  0` and bounced it with *"call search_web"* → the model obeyed. Twice, until
+  the `UsageLimits` backstop fired. The 16 model requests in the log are the
+  whole story: 12 fast ones (the steps), then long-short, long-short — two
+  full answers written and thrown away.
+- **The near miss.** `web_enabled` exists *for this exact failure* and its
+  comment says so — "availability is one fact, and both consumers must read
+  the same one or the guard demands a source the model has no way to reach."
+  It was written for the operator's off switch and stopped there. The hazard
+  was correctly identified and then guarded in only one of its two forms.
+- **Fix.** `_unconsulted` now returns only sources that are **still
+  reachable** — a spent step budget returns the empty list outright, and each
+  source additionally checks its own remaining budget. `_doomed` shares that
+  function, so held-back streaming stayed consistent for free. `max_steps`
+  went 12 → 16 in the same change, for the separate reason that v7.0.0 and
+  v7.1.0 gave the agent more to do per turn (three sources to sweep, then the
+  join) than 12 was chosen for.
+- **Lesson / guard.** *An enforcement rule must be satisfiable by the agent it
+  polices.* The guard's job is to stop the model **choosing** to skip a
+  source; punishing it for a budget it doesn't control turns a
+  quality check into a liveness bug — and the failure mode is the worst one
+  available, since an ungrounded answer (which provenance reports honestly
+  anyway) beats no answer. Note that the deadlock needed no exotic state: any
+  run that spends its steps before the sweep finishes reproduces it.
+  `test_a_spent_step_budget_ends_the_coverage_obligation` and
+  `test_a_spent_source_budget_ends_the_library_obligation` pin both halves —
+  the second because the library is where the two counters genuinely diverge
+  (`search_sources` charges its budget before retrieval and counts the consult
+  after, so a retrieval that throws spends one without earning the other).
+
 ### The agent looked hung whenever it delegated — and the obvious fix made it worse
 
 *Found 2026-08-15 by Patrick, testing the workers ticket. Fixed in v7.0.0.*
