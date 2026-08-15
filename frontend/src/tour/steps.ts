@@ -304,9 +304,10 @@ export const GRAPH_TOUR: TourStep[] = [
     presentIf: '[data-tour="source-scope"]',
     title: 'Which sources it may search',
     body:
-      'Scope the researcher’s library reach (shown once you have two or more sources): ' +
-      'all of them, a subset, or none at all. Checked means searchable — answers cite ' +
-      'whatever passages they use by page.',
+      'Scope the researcher’s library reach: all of your sources, a subset, or none at ' +
+      'all. Checked means searchable — answers cite whatever passages they use by page. ' +
+      'Untick everything and the assistant leaves your library alone, which works with ' +
+      'a single uploaded source too.',
   },
   {
     target: '[data-tour="lectures"]',

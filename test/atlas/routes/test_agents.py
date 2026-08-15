@@ -121,6 +121,30 @@ def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
     assert seen["kwargs"]["history"] == convo[:2]
 
 
+def test_an_empty_scope_survives_the_wire_as_an_empty_list(client, monkeypatch):
+    """"No sources selected" and "no scope at all" are opposite instructions
+    that both look falsy, and only the list/None distinction tells them apart.
+
+    This is what the source picker's None button is worth: with the picker now
+    shown at a *single* source (v7.2.0), unticking it is a reader's only way to
+    ask a question without their one uploaded book in play. If `[]` collapsed
+    to `None` anywhere along the wire it would mean the exact opposite —
+    search everything."""
+    seen = {}
+
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
+        yield events.Token(text="Answering without your library.")
+
+    patch_agents(monkeypatch, fake_run)
+    client.post(
+        "/api/ask",
+        json={"question": "why?", "session_id": "sess-noscope", "seed": SEED,
+              "nodes": NODES, "source_ids": []},
+    )
+    assert seen["kwargs"]["source_ids"] == []  # NOT None — that would search everything
+
+
 def test_ask_parses_played_lectures_into_typed_context(client, monkeypatch):
     seen = {}
 
