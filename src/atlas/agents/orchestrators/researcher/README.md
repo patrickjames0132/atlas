@@ -49,7 +49,12 @@ comes back. Three things about that seam are load-bearing:
   the list.
 - **A tool call spends one of *this* agent's budgets and then runs a whole
   scout**, which has budgets of its own. So `searches: 3` is three scouting
-  runs, not three queries — each may issue several.
+  runs, not three queries — each may issue several, and since v7.4.0 a paper
+  scout's lookups aren't all queries: it can also hop semantically off a paper
+  it already found. That difference stays inside the worker. The researcher
+  asks for papers and gets papers; **how** they were found is not something it
+  or the reader is told, because a chip's appearance says what the *click*
+  does, not which API answered.
 - **Dedupe keys on the need, not the query.** The researcher no longer writes
   query strings, so the visited-set holds lower-cased needs; asking for the
   same thing twice is a cache hit and never re-runs the scout.

@@ -32,7 +32,7 @@ re-litigated every time something new is added. Applied:
 | Capability | Verdict | Why |
 | --- | --- | --- |
 | **Web search** | worker | Both criteria, unambiguously. It must phrase the query, judge when it has enough, and compress long low-signal pages into findings — and those pages would crowd out the researcher's own context if they landed there. |
-| **Paper search** | worker | Judgment: *query reformulation and recency bounding*. A lexical, citation-weighted search answers "what's new in X" with landmarks from a decade ago; the fix is to look at what came back and ask again with a year floor. That is a loop with a decision in it, which is exactly what a function isn't. |
+| **Paper search** | worker | Judgment: *query reformulation, recency bounding, and which channel to use*. A lexical, citation-weighted search answers "what's new in X" with landmarks from a decade ago; the fix is to look at what came back and ask again with a year floor — or, when the vocabulary itself is the problem, to stop re-phrasing and hop semantically off a paper already found (`more_like`, v7.4.0). That is a loop with a decision in it, which is exactly what a function isn't. |
 | `traversal.expand` | function | *Which* node to expand is the orchestrator's reasoning about a graph it can see. Delegating it would blind the agent that has the map. |
 | `sources.search` (the library) | function | Passages already come back compact and `[Sn, p.N]`-tagged — there is nothing to compress and no query to reformulate. Promote it later **if measured**, not on principle. |
 | `read_paper`, figure mining | function | Fetch and format. No decision inside. |

@@ -128,37 +128,6 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **Give the paper scout a semantic channel — "more like this one"**
-      *(next up; do this BEFORE retiring similar from the graph, below)* — the
-      scout searches one way: lexical, over titles and abstracts. Its own
-      prompt is where the weakness is written down — "a paper matches only
-      words that literally appear in its title or abstract, so an acronym or
-      nickname finds nothing when the papers spell it out" — and reformulating
-      the words is a workaround for not having the other channel. Semantic
-      similarity is that channel, and it already exists as plumbing:
-      `traversal.neighbors(paper_id, "similar", …)`, SPECTER2 recommendations
-      under S2.
-
-      **Whatever it returns is a plain `[n]` paper — nothing else.** No trace
-      chip of its own, no distinct citation colour or glyph, no new node kind.
-      A chip's appearance says what the **click** does, not which API found the
-      paper; both of these seed a graph, so a second visual axis would teach a
-      distinction that never pays off at click time. How the agent got there is
-      the agent's business. *(Patrick's call, 2026-08-15 — settled, don't
-      re-litigate.)*
-
-      **Two things that make it more than a tool registration.** It takes a
-      **paper id, not a query**, so it is not a peer of `search(query, …)` —
-      the scout can only reach for it *after* a first search gives it a paper
-      to point at ("search lexically, pick the best hit, ask for more like
-      it"). That's a second round with a dependency, and the scout's prompt has
-      to teach when it's worth one. And it is **provider-dependent in a way
-      lexical search isn't**: OpenAlex has no embeddings, so the same tool
-      falls back to `related_works` concept/citation overlap there — the
-      closest analogue, materially weaker. Decide whether that's worth saying
-      in the scout's summary or just accepting. Budget: simplest is to spend
-      from the existing `searches` pool rather than adding a knob.
-
 - [ ] **Does the header search bar still earn its place?** — an open design
       question, not yet a decision. The chat bar now does much of what the seed
       search does: ask about a topic, get papers back, click a citation chip to
@@ -175,6 +144,22 @@ optional, behind a key.
       the honest answer is to keep both and make the split legible. Worth
       deciding *before* more UI is hung off either one. *(Patrick's question,
       2026-08-14.)*
+
+      **Now entangled with a bigger one:** the header is going away entirely,
+      replaced by a **collapsible side menu** in the ChatGPT mould *(from the
+      `todos.md` inbox, 2026-08-15)*. That doesn't answer the question above so
+      much as force it — "does the search bar earn its place" becomes "does it
+      earn a place in the new shell, and where", and the answer shapes the
+      shell rather than the other way round. So decide the search bar first,
+      then design the menu around the answer. Everything the header carries has
+      to land somewhere in that shell: the seed search, the Data Provider
+      dropdown (whose off-centre label is its own small ticket, likely moot
+      here), Sources, Sessions, Settings, and the theme toggle. Two things to
+      settle early because they're easy to lose in a redesign: what the landing
+      surface looks like with no chrome at all (it's currently the app's whole
+      first impression), and where the tour's anchors go — several steps target
+      header elements by `data-tour`, and a step whose target no longer exists
+      is silently skipped by `presentIf` rather than failing loudly.
 
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
