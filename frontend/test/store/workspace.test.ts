@@ -49,7 +49,7 @@ function makeGraph(nodes: GraphNode[]): GraphResponse {
     seed: { id: nodes[0]?.id ?? 'seed', arxiv_id: null, title: 'seed' },
     nodes,
     edges: [],
-    counts: { references: 0, citations: 0, similar: 0, latest: 0, nodes: nodes.length },
+    counts: { references: 0, citations: 0, latest: 0, nodes: nodes.length },
   }
 }
 

@@ -21,7 +21,15 @@ import type { GraphNode } from '../../api'
 import { latexToUnicode } from '../../notation/latexToUnicode'
 import { nodeRadius, primaryRel } from '../model'
 import type { PositionedVNode, VLink, VNode } from '../model'
-import { DIM_EDGE, DIM_NODE, EDGE_COLOR, REL_COLOR, SELECTION_RING, useCanvasInk } from '../theme'
+import {
+  DIM_EDGE,
+  DIM_NODE,
+  EDGE_COLOR,
+  REL_COLOR,
+  SELECTION_RING,
+  UNKNOWN_EDGE,
+  useCanvasInk,
+} from '../theme'
 
 // The lib's generic prop typings fight our accessor signatures; render via an
 // untyped alias so our canvas/link callbacks stay readable.
@@ -103,10 +111,13 @@ export default function GraphCanvas({
       linkColor={(link: VLink) =>
         focusSet && !focusSet.has(link._s) && !focusSet.has(link._t)
           ? DIM_EDGE
-          : EDGE_COLOR[link.type]
+          : (EDGE_COLOR[link.type] ?? UNKNOWN_EDGE)
       }
       linkWidth={(link: { influential?: boolean | null }) => (link.influential ? 1.6 : 0.6)}
-      linkDirectionalArrowLength={(link: VLink) => (link.type === 'similar' ? 0 : 2.4)}
+      // Every edge type is a citation now, so every edge gets an arrow. The
+      // exception this used to carry was `similar`, retired in v7.5.0 —
+      // direction meant nothing on an embedding neighbour.
+      linkDirectionalArrowLength={2.4}
       linkDirectionalArrowRelPos={1}
       nodeCanvasObject={(
         node: PositionedVNode,

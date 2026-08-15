@@ -145,7 +145,7 @@ export interface TraceEvent {
   index?: number | null
   /** 'summary' | 'full' — read_paper. */
   detail?: string
-  /** 'references' | 'citations' | 'similar' — expand_node. */
+  /** 'references' | 'citations' — expand_node, citation hops only. */
   relation?: string | null
   /** New papers discovered / passages found. */
   found?: number | null

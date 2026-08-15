@@ -65,9 +65,8 @@ class Edge(BaseModel):
     Direction encodes citation semantics: an edge always points from the citing
     paper to the cited one — so both ``citation`` (landmark citers) and
     ``latest`` (recent citers, last ~12 months) run citer -> seed.
-    ``influential`` (S2's "highly influential citation" flag) is carried on the
-    citing relations and is ``None`` on ``similar`` edges, which aren't
-    citations. ``latest`` and ``citation`` are disjoint: a citer in the recent
+    ``influential`` (S2's "highly influential citation" flag) is carried on
+    the citing relations only. ``latest`` and ``citation`` are disjoint: a citer in the recent
     window is a ``latest`` edge, everything older competes as a ``citation``.
     """
 
@@ -75,12 +74,12 @@ class Edge(BaseModel):
 
     source: str
     target: str
-    type: Literal["reference", "citation", "similar", "latest"]
+    type: Literal["reference", "citation", "latest"]
     influential: bool | None = None
     rank: int = 0
     """0-based position within this edge's relation, in the relation's own
     order (references by influence, citations by citation count, latest by
-    recency, similar by S2 similarity). The frontend ships the whole ranked set
+    recency). The frontend ships the whole ranked set
     and the per-relation count slider reveals a prefix — ``rank < slider`` — so
     raising a slider shows more without a re-query. Defaults to 0 so snapshots
     cached before this field validate."""
@@ -103,7 +102,6 @@ class Counts(BaseModel):
 
     references: int
     citations: int
-    similar: int
     latest: int
     nodes: int
 

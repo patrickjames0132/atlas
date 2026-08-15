@@ -108,8 +108,7 @@ class Discovery(BaseModel):
     edgeless nodes floating beside the graph — a topic search links to no
     specific paper — which was the only way to surface them back when a chat
     citation couldn't hand a paper back. It can now, so a found paper stays in
-    the numbered list until the reader promotes it by clicking. Saved sessions
-    from before the change still hold those nodes and still render.
+    the numbered list until the reader promotes it by clicking.
     """
 
     model_config = ConfigDict(extra="forbid")

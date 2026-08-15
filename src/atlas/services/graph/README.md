@@ -82,7 +82,7 @@ by both the graph and search routes.
   emits it); `influential` is S2's highly-influential flag (always `None` under
   OpenAlex); `rank` is the edge's 0-based position within its relation's order.
 - **`counts`** (`Counts`) — post-dedupe edge counts per relation plus the final
-  deduped node count. `counts.similar` is always `0` (kept for schema stability).
+  deduped node count.
 - **`citation_source`** (`"corpus"` / `"live"` / `None`) — for an s2 graph, where
   the citer relations came from (the offline corpus vs. the recency-biased live
   endpoint); `None` for OpenAlex (server-sorted, so N/A) and pre-corpus cached

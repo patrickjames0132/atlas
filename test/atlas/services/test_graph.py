@@ -89,7 +89,8 @@ def fake_openalex(monkeypatch):
 
 def test_build_graph_shape_s2(fake_s2):
     """The S2 path: seed + reference + landmark + latest, correct edge directions,
-    ranks, and counts — and no `similar` relation (retired from the build)."""
+    ranks, and counts. The `similar` relation left the build in v5.0.0 and the
+    schema entirely in v7.5.0, so there is no longer a field to assert 0."""
     graph = build.build_graph("1706.03762", provider="s2")
     assert isinstance(graph, Graph)
     assert graph.seed == Seed(arxiv_id=None, id="seed", title="The Seed")
@@ -105,9 +106,7 @@ def test_build_graph_shape_s2(fake_s2):
     assert Edge(source="seed", target="ref1", type="reference", influential=True, rank=0) in graph.edges
     assert Edge(source="cite1", target="seed", type="citation", influential=False, rank=0) in graph.edges
     assert Edge(source="latest1", target="seed", type="latest", influential=False, rank=0) in graph.edges
-    # No similar relation is produced; the count stays 0 for schema stability.
-    assert not any(edge.type == "similar" for edge in graph.edges)
-    assert graph.counts == Counts(references=1, citations=1, similar=0, latest=1, nodes=4)
+    assert graph.counts == Counts(references=1, citations=1, latest=1, nodes=4)
 
 
 def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
@@ -167,7 +166,7 @@ def test_build_graph_shape_openalex(fake_openalex):
     assert by_id["DOI:10/oa-latest"].rels == ["latest"]
     assert Edge(source="DOI:10/oa-cite", target="seed", type="citation",
                 influential=False, rank=0) in graph.edges
-    assert graph.counts == Counts(references=1, citations=1, similar=0, latest=1, nodes=4)
+    assert graph.counts == Counts(references=1, citations=1, latest=1, nodes=4)
     assert graph.citation_source is None  # not applicable to OpenAlex's sorted citers
 
 

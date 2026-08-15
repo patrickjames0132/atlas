@@ -111,11 +111,12 @@ canvas about what "a reference" looks like, and both style via
 ## `Legend` — never explain marks that aren't on screen
 
 The four relation entries (Seed / References / Field Landmarks / Latest
-Publications) are static; the two agent-related entries are conditional: "Discovered by teacher" (dashed ring) appears only once the
-agent has actually pulled a paper in mid-conversation, "Found by search"
-(pink) only once an ungrounded topic-search hit landed. The flags come from
-the workspace slice's selectors (`selectHasDiscovered` /
-`selectHasSearchHits`), via `GraphExplorer`.
+Publications) are static; one entry is conditional — "Discovered by teacher"
+(dashed ring) appears only once the agent has actually pulled a paper in
+mid-conversation, from the workspace slice's `selectHasDiscovered` via
+`GraphExplorer`. A "Found by search" (pink) entry sat beside it until v7.5.0,
+when the `search` and `similar` relations were removed outright; the legend
+lists what the graph can contain, and neither can arrive any more.
 
 ## How it's verified
 

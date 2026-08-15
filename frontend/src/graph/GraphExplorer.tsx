@@ -35,7 +35,6 @@ import {
   nodeSelectionCleared,
   nodeSelectionToggled,
   selectHasDiscovered,
-  selectHasSearchHits,
   seedDetailRevealed,
   selectNodeSelectionSet,
   selectWorkspace,
@@ -118,12 +117,13 @@ export default function GraphExplorer({
   const highlightIds = useAppSelector(selectHighlightSet)
   const selectedIds = useAppSelector(selectNodeSelectionSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
-  const hasSearchHits = useAppSelector(selectHasSearchHits)
 
-  // Declutter controls. 'search' and 'similar' are always on (no filter chip):
-  // both only appear on papers the researcher pulled in mid-conversation (few,
-  // agent-discovered), so they stay visible; the year slider still filters them.
-  const [enabled, setEnabled] = useState<Set<string>>(new Set([...REL_TYPES, 'search', 'similar']))
+  // Declutter controls, one chip per relation. Two relations used to be held
+  // on unconditionally here — `search` and `similar` — because they had no
+  // chip of their own; neither can be created any more (v7.3.0, v7.5.0), so a
+  // node still carrying one comes from a session saved before that and is
+  // shown via the edge-less branch in `nodeOk` below.
+  const [enabled, setEnabled] = useState<Set<string>>(new Set(REL_TYPES))
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
   // The citation-count window's knob positions (0…CITE_SLIDER_STEPS). Full-open
@@ -185,7 +185,7 @@ export default function GraphExplorer({
     const years = nodes
       .map((node) => node.year)
       .filter((year): year is number => typeof year === 'number')
-    const counts: Record<string, number> = { reference: 0, citation: 0, latest: 0, similar: 0 }
+    const counts: Record<string, number> = { reference: 0, citation: 0, latest: 0 }
     nodes.forEach((node) =>
       node.rels.forEach((rel) => {
         if (rel in counts) counts[rel]++
@@ -214,7 +214,7 @@ export default function GraphExplorer({
   // pins reset themselves inside their own hooks.)
   useEffect(() => {
     if (!base) return
-    setEnabled(new Set([...REL_TYPES, 'search', 'similar']))
+    setEnabled(new Set(REL_TYPES))
     setYearLo(base.minYear)
     setYearHi(base.maxYear)
     // A fresh graph shows every citation count; the user narrows from there.
@@ -357,9 +357,9 @@ export default function GraphExplorer({
     // live display trim on top of it.
     const citeMin = citationThreshold(citeLo, base.minCitations, base.maxCitations)
     const citeMax = citationThreshold(citeHi, base.minCitations, base.maxCitations)
-    // An edge is allowed when its relation chip is toggled on ('search' edges
-    // have no chip — always on). Node-type filtering now lives entirely in the
-    // chips; the citation slider trims by magnitude on the node side below.
+    // An edge is allowed when its relation chip is toggled on. Node-type
+    // filtering lives entirely in the chips; the citation slider trims by
+    // magnitude on the node side below.
     const linkOk = (link: VLink) => enabled.has(link.type)
     // A neighbor is shown when at least one enabled edge reaches it; the seed is
     // always shown. Nodes reached only via a hidden relation drop out — that's
@@ -389,11 +389,14 @@ export default function GraphExplorer({
       const citations = node.citation_count ?? 0
       if (citations < citeMin || citations > citeMax) return false
       if (reachable.has(node.id)) return true
-      // Ungrounded topic-search hits have NO edge to be reached by — show them
-      // when their own relation ('search', always-on) is enabled. A node hidden
-      // only because its relation is off (it HAS edges, just none enabled) stays
-      // hidden.
-      if (!linked.has(node.id)) return node.rels.some((rel) => enabled.has(rel))
+      // An edge-less node has no relation chip that could hide it, so the
+      // chips don't get to: show it, and let the year and citation sliders
+      // above do the trimming. Nothing can create one any more (the edge-less
+      // `search` hits went in v7.3.0), so in practice this is a paper from a
+      // session saved before then — drawn grey via `primaryRel`'s `unknown`
+      // rather than silently dropped. A node that HAS edges but none enabled
+      // is a different case and stays hidden, below.
+      if (!linked.has(node.id)) return true
       return false
     }
     const filtered = base.nodes.filter(nodeOk)
@@ -651,7 +654,7 @@ export default function GraphExplorer({
             onSelectAll={onFindSelectAll}
           />
         )}
-        {hasGraph && <Legend hasDiscovered={hasDiscovered} hasSearchHits={hasSearchHits} />}
+        {hasGraph && <Legend hasDiscovered={hasDiscovered} />}
       </main>
 
       {selected && (

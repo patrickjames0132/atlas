@@ -40,15 +40,15 @@ import type { VNode } from './model'
 /**
  * Each relation's compass heading around the seed, in radians (canvas y grows
  * downward). References west — the past on the left, matching Timeline —
- * citing relations east (landmarks up-right, latest down-right), the
- * researcher's discoveries on the west diagonals (similar up, search down).
+ * citing relations east (landmarks up-right, latest down-right). A relation
+ * with no heading here falls back to the default orbit — which is what the two
+ * retired relations (`search`, v7.3.0; `similar`, v7.5.0) now do on a session
+ * saved before they went.
  */
 const SECTOR_ANGLE: Record<string, number> = {
   reference: Math.PI,
   citation: -Math.PI / 3,
   latest: Math.PI / 3,
-  similar: (-3 * Math.PI) / 4,
-  search: (3 * Math.PI) / 4,
 }
 
 /** The smallest cluster orbit — clear air between the seed and any cluster. */

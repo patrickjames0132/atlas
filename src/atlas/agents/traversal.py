@@ -35,16 +35,29 @@ from ..services.graph import Provider
 from ..storage import cache
 
 Relation = Literal["references", "citations", "similar"]
-"""The three hop directions an agent can expand along — the graph legend's
-three colors."""
+"""The three hop directions this module can fetch. Not all three are for
+drawing — see ``CitationHop``."""
 
-REL_TAG: dict[Relation, Literal["reference", "citation", "similar"]] = {
+CitationHop = Literal["references", "citations"]
+"""The hops that produce a **citation** — an edge somebody actually wrote —
+and so the only ones the researcher may grow the graph along (v7.5.0).
+
+The narrower type is the whole mechanism of that rule: ``expand_node`` takes a
+``CitationHop``, so a similar-hop expansion isn't refused at runtime, it can't
+be *asked for* — the tool schema the model sees offers two values. ``similar``
+stays in ``Relation`` because the paper scout still hops it, as a second way to
+**search** whose results come back as ordinary papers rather than as graph
+nodes (see ``workers/search/papers``). Same hop, two consumers, and only one of
+them draws."""
+
+REL_TAG: dict[CitationHop, Literal["reference", "citation"]] = {
     "references": "reference",
     "citations": "citation",
-    "similar": "similar",
 }
 """Hop relation (plural, the tool argument) -> the edge type tag (singular)
-stored on discovered nodes and edges."""
+stored on discovered nodes and edges. Keyed on ``CitationHop``, not
+``Relation``: a similar hop produces no edge to tag, because it no longer
+produces graph nodes at all."""
 
 
 def _openalex_neighbors(node_id: str, relation: Relation, limit: int) -> list[dict]:

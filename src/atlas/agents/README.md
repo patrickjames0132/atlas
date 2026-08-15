@@ -112,7 +112,12 @@ Design points worth knowing:
 - **`Relation` is a `Literal`** (`"references" | "citations" | "similar"`)
   and `REL_TAG` maps it to the `Edge.type` tag — so when the researcher builds
   `Edge(type=REL_TAG[relation])`, mypy verifies the whole chain from tool
-  argument to graph edge.
+  argument to graph edge. **`CitationHop` is the narrower one** (`"references"
+  | "citations"`) that `expand_node` takes, and that narrowing IS the v7.5.0
+  rule: a similar-hop expansion isn't refused at runtime, it can't be asked
+  for, because the tool schema the model sees offers two values. `similar`
+  stays in `Relation` for the paper scout, which hops the same data as a
+  second way to search.
 - **Plumbing, not tools.** No model ever calls these directly (see the
   layout rules below), and `S2Error` propagates uncaught — deciding what a
   failed hop means (skip the ancestor, tell the model, spend no budget) is
@@ -384,9 +389,12 @@ grounded in what it actually read.
 - **Tools** (its `tools.py`):
   - `read_paper` — summary (abstract + TL;DR, hydrated from S2 on demand)
     or full text via ar5iv; a full read also lists the paper's figures.
-  - `expand_node` — one hop of references / citations / similar for a
-    numbered paper; new papers get numbered, and streamed to the graph when
-    they attach to a paper already drawn (see "What reaches the canvas").
+  - `expand_node` — one hop of references or citations for a numbered
+    paper; new papers get numbered, and streamed to the graph when they
+    attach to a paper already drawn (see "What reaches the canvas"). Citation
+    hops only, since v7.5.0 — a citation map is made of citations, and
+    embedding-similar work reaches the answer through the paper scout
+    instead.
   - `find_papers` — hands a *need* in plain words to the **paper scout**
     (`workers/papers`), which writes and re-writes the queries itself and
     reports back; the researcher numbers whatever it found. Numbered, not
@@ -425,7 +433,11 @@ grounded in what it actually read.
   Run in the other direction, an expansion that turns up an already-numbered
   but undrawn paper **promotes** it: the edge it was missing now exists.
   `ResearcherDeps.on_canvas` is the bookkeeping; `tools._canvas_growth` is the
-  rule.
+  rule. **v7.5.0 finished the thought**: `expand_node` takes a `CitationHop`,
+  so the graph grows only along citations — and the two relations that could
+  no longer arrive, `search` and `similar`, were removed outright rather than
+  kept for old saves (there were none). `primaryRel` is total instead, drawing
+  any relation this build has no meaning for as grey `unknown`.
 - **Events:** `Trace` (each tool step, including `search_web`), `Discovery`
   (nodes/edges to merge into the live graph), `Figure`, `Token`, `Cited`,
   `Provenance` (which now counts web searches and pages separately from

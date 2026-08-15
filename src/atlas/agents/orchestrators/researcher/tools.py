@@ -422,15 +422,19 @@ def read_paper(
     return text
 
 
-def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal.Relation) -> str:
-    """Pull one hop of neighbors for a numbered paper and add them to the
-    graph as new numbered papers you can then read.
+def expand_node(
+    ctx: RunContext[ResearcherDeps], index: int, relation: traversal.CitationHop
+) -> str:
+    """Follow the citations of a numbered paper, adding what you find to the
+    graph as new numbered papers you can then read. For related work that
+    *isn't* a citation, use find_papers — the scout searches by meaning as well
+    as by words, and hands back papers rather than growing the graph.
 
     Args:
         ctx: The run context carrying the researcher's deps (framework-injected).
         index: The [n] index of the paper to expand from.
-        relation: "references" (papers it cites), "citations" (papers citing
-            it), or "similar" (related work).
+        relation: "references" (papers it cites) or "citations" (papers citing
+            it).
 
     Returns:
         The newly numbered neighbors (title + year each), or a
@@ -474,15 +478,15 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
         if neighbor_id == node.id:
             continue
         # Direction encodes citation semantics, same rules as build_graph:
-        # reference = expanded paper cites neighbor; citation = neighbor cites it.
+        # reference = expanded paper cites neighbor; citation = neighbor cites
+        # it. Two cases and no fallback, because `relation` is a CitationHop:
+        # every edge this tool can draw is one somebody actually wrote.
         if rel_tag == "reference":
             edge = Edge(source=node.id, target=neighbor_id, type="reference",
                         influential=hit.get("influential", False))
-        elif rel_tag == "citation":
+        else:
             edge = Edge(source=neighbor_id, target=node.id, type="citation",
                         influential=hit.get("influential", False))
-        else:
-            edge = Edge(source=node.id, target=neighbor_id, type="similar")
         new_edges.append(edge)
 
         if neighbor_id in deps.known_ids:
@@ -573,8 +577,12 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
         if found["id"] in deps.known_ids:
             continue
         deps.known_ids.add(found["id"])
+        # No relation: it has none. It isn't on the canvas, and if an
+        # expansion later promotes it there, it gains the relation that
+        # brought it in (see _canvas_growth). The `search` rel this used to
+        # carry existed only to colour a node that is no longer drawn.
         discovered = events.DiscoveredNode(
-            **found, rels=["search"], is_seed=False, idx=len(deps.nodes) + 1
+            **found, rels=[], is_seed=False, idx=len(deps.nodes) + 1
         )
         deps.nodes.append(discovered)
         lines.append(f"[{discovered.idx}] ({discovered.year or 'n.d.'}) {discovered.title}")

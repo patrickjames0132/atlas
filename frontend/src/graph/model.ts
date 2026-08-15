@@ -134,18 +134,19 @@ export function formatPubDate(pubDate?: string | null, year?: number | null): st
 
 /**
  * The single relation that decides a node's color: seed wins, then the first
- * graph relation in priority order, then topic-search hits get their own
- * color, falling back to 'similar'.
+ * graph relation in priority order, then `unknown`.
  *
  * @param node The paper node.
- * @returns The relation key into `REL_COLOR`.
+ * @returns The relation key into `REL_COLOR` — always one it holds.
  */
 export function primaryRel(node: GraphNode): string {
   if (node.is_seed) return 'seed'
   for (const rel of REL_TYPES) if (node.rels.includes(rel)) return rel
-  // Ungrounded topic-search hits (no graph relation) get their own color.
-  if (node.rels.includes('search')) return 'search'
-  return 'similar'
+  // Everything else — including the two retired relations (`search`, `similar`)
+  // on a session saved before they went. Keeping this function TOTAL is the
+  // point: a node whose relation the build has no meaning for still gets
+  // drawn, in a colour that says so, rather than with an undefined fill.
+  return 'unknown'
 }
 
 /**
@@ -223,12 +224,11 @@ export function cleanNode(node: VNode): GraphNode {
  * @returns Per-relation totals plus the node count.
  */
 export function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
-  const counts = { references: 0, citations: 0, similar: 0, latest: 0, nodes: nodes.length }
+  const counts = { references: 0, citations: 0, latest: 0, nodes: nodes.length }
   nodes.forEach((node) =>
     node.rels.forEach((rel) => {
       if (rel === 'reference') counts.references++
       else if (rel === 'citation') counts.citations++
-      else if (rel === 'similar') counts.similar++
       else if (rel === 'latest') counts.latest++
     }),
   )

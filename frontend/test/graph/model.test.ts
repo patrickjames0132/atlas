@@ -93,15 +93,21 @@ describe('primaryRel', () => {
   })
 
   it('picks the first graph relation in priority order', () => {
-    expect(primaryRel(makeNode({ rels: ['similar', 'reference'] }))).toBe('reference')
+    expect(primaryRel(makeNode({ rels: ['latest', 'reference'] }))).toBe('reference')
   })
 
-  it('gives ungrounded topic-search hits their own color', () => {
-    expect(primaryRel(makeNode({ rels: ['search'] }))).toBe('search')
+  // The function has to stay TOTAL: its result indexes REL_COLOR, so a
+  // relation it has no case for would paint an undefined fill rather than
+  // degrade. The two relations that used to have cases here — `search` and
+  // `similar` — were removed in v7.3.0 and v7.5.0 and can no longer be
+  // created, but a session saved before then still carries them.
+  it('renders a retired relation as unknown rather than uncoloured', () => {
+    expect(primaryRel(makeNode({ rels: ['search'] }))).toBe('unknown')
+    expect(primaryRel(makeNode({ rels: ['similar'] }))).toBe('unknown')
   })
 
-  it('falls back to similar when a node has no relation at all', () => {
-    expect(primaryRel(makeNode({ rels: [] }))).toBe('similar')
+  it('falls back to unknown when a node has no relation at all', () => {
+    expect(primaryRel(makeNode({ rels: [] }))).toBe('unknown')
   })
 })
 
@@ -164,6 +170,7 @@ describe('countRels', () => {
   it('rebuilds per-relation counts from restored nodes', () => {
     const nodes = [
       makeNode({ rels: ['reference'] }),
+      // A retired relation counts toward nothing and has no slot to count into.
       makeNode({ rels: ['citation', 'similar'] }),
       makeNode({ rels: ['latest'] }),
       makeNode({ is_seed: true, rels: [] }),
@@ -171,7 +178,6 @@ describe('countRels', () => {
     expect(countRels(nodes)).toEqual({
       references: 1,
       citations: 1,
-      similar: 1,
       latest: 1,
       nodes: 4,
     })

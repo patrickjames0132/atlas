@@ -62,6 +62,7 @@ def scripted(*turns, seen: dict | None = None) -> FunctionModel:
         if seen is not None:
             seen.setdefault("turns", []).append(messages)
             seen["tools"] = [tool.name for tool in info.function_tools]
+            seen["tool_defs"] = {tool.name: tool for tool in info.function_tools}
         calls = turns[state["turn"]]
         state["turn"] += 1
         for index, (name, chunks) in enumerate(calls):
@@ -731,6 +732,27 @@ def test_the_scout_finds_the_papers_and_the_researcher_numbers_them(monkeypatch)
     assert trace.ok and trace.found == 1
 
 
+def test_the_graph_can_only_be_grown_along_a_citation(monkeypatch):
+    """v7.5.0: a citation map should be made of citations.
+
+    `expand_node` used to offer a third hop, "similar" — papers related by
+    *embedding*, not by an edge anyone wrote. They arrived purple, they arrived
+    with edges (so v7.3.0's attach rule didn't touch them), and they claimed a
+    relationship the literature never asserted. The capability didn't go
+    anywhere: the paper scout hops the same data as a second way to **search**
+    (v7.4.0), handing back ordinary papers instead of graph nodes.
+
+    The enforcement is the `CitationHop` type, which is why this test reads the
+    *schema* rather than calling the tool: a similar hop isn't refused at
+    runtime, it can't be asked for. Widening that Literal back to
+    `traversal.Relation` would silently restore the old behaviour and break
+    nothing else — this is what notices."""
+    seen: dict = {}
+    run(scripted([final("Answering.", [])], seen=seen), monkeypatch)
+    schema = seen["tool_defs"]["expand_node"].parameters_json_schema
+    assert schema["properties"]["relation"]["enum"] == ["references", "citations"]
+
+
 def test_a_found_paper_is_numbered_but_not_drawn(monkeypatch):
     """The v7.3.0 rule: **the canvas grows only where a new paper attaches to a
     paper already on it.**
@@ -812,7 +834,10 @@ def test_an_edge_promotes_an_undrawn_paper_onto_the_canvas(monkeypatch):
     discovery = next(event for event in out if isinstance(event, events.Discovery))
     (drawn,) = discovery.nodes
     assert drawn.id == "new1" and drawn.idx == 4  # its original number, kept
-    assert drawn.rels == ["search", "citation"]
+    # It arrived from find_papers with NO relation — it wasn't on the graph, so
+    # it had none — and gains exactly the one that drew it (v7.5.0; it used to
+    # carry a `search` rel purely to colour a node that is no longer drawn).
+    assert drawn.rels == ["citation"]
     assert [(edge.source, edge.target) for edge in discovery.edges] == [("new1", "seed01")]
 
 
