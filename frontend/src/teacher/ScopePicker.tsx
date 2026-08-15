@@ -83,11 +83,17 @@ export default function ScopePicker({
   dataTour?: string
 }) {
   const all = checkedIds.length === items.length
-  const buttonLabel = all
-    ? `All ${labels.unit}s`
-    : checkedIds.length === 0
-      ? `No ${labels.unit}s`
-      : `${checkedIds.length} ${labels.unit}${checkedIds.length > 1 ? 's' : ''}`
+  // `all` still drives the trigger's styling (an off-default scope lights it
+  // up), but it can't drive the *wording* on its own: "All sources" claims a
+  // breadth a one-source library hasn't got, and the label is often the only
+  // thing the reader sees — the ask bar hides it down to its tooltip. With a
+  // single item the honest label is just what it is: "1 source" / "No sources".
+  const buttonLabel =
+    all && items.length > 1
+      ? `All ${labels.unit}s`
+      : checkedIds.length === 0
+        ? `No ${labels.unit}s`
+        : `${checkedIds.length} ${labels.unit}${checkedIds.length > 1 ? 's' : ''}`
   return (
     <div className="scope-wrap" data-tour={dataTour}>
       <button
@@ -110,7 +116,10 @@ export default function ScopePicker({
                 the 240px popover — heading wrapped, ✕ pushed out of view, a
                 horizontal scrollbar underneath. */}
             <span className="scope-pop-actions">
-              {checkedIds.length < items.length && (
+              {/* Bulk actions need something to act on in bulk: with one item
+                  "All"/"None" duplicate the checkbox sitting directly beneath
+                  them, so they're just two more things to read. */}
+              {items.length > 1 && checkedIds.length < items.length && (
                 <button
                   className="link-btn"
                   onClick={onSelectAll}
@@ -119,7 +128,7 @@ export default function ScopePicker({
                   All
                 </button>
               )}
-              {checkedIds.length > 0 && (
+              {items.length > 1 && checkedIds.length > 0 && (
                 <button
                   className="link-btn"
                   onClick={onDeselectAll}

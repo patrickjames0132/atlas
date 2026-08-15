@@ -1102,6 +1102,37 @@
       checked = search no sources**. Threaded a `None` (no scope → all) vs `[]`
       (explicit empty → nothing) distinction through `sources.search`, both ask
       routes, `answer_agentic`, and the `search_sources` tool.
+- [x] **A lone source hid its own filter — so the agent couldn't be told to
+      leave it alone** *(v7.2.0)* — completes the pair above, three years
+      later. v1.20.2 made "none checked" mean *search nothing*; this makes it
+      reachable. `Teacher.tsx` gated the source picker at
+      `libraryItems.length > 1`, on the reading that a lone source leaves no
+      choice to make — but "use it / don't" is a choice, and it's exactly the
+      one a reader with a single uploaded book wants: without the picker there
+      was no way to ask a question *without* their textbook in play.
+
+      **The fix was one token** (`> 1` → `> 0`). Everything behind it already
+      worked end to end: unticking sets `scopeArg = []`, the route preserves
+      the empty list against `None`, `answer()` filters the library to nothing,
+      `search_sources` is never registered, and the coverage guard stops
+      counting a library the reader just excluded. The lecture picker beside it
+      had always rendered at `> 0`, so the two had quietly disagreed since the
+      Phase 6 split.
+
+      **`ScopePicker` had never been rendered at one item**, though, and needed
+      to read sensibly at that size: a single item now drops the All/None bulk
+      actions (they sat directly above one checkbox doing the identical thing)
+      and labels itself "1 source" rather than claiming "All sources" — which
+      matters more than it sounds, because in the ask bar the trigger is its
+      icon alone and that label survives only in the tooltip. The tour step
+      taught the old rule ("shown once you have two or more sources") and moved
+      in the same change.
+
+      Two tests filled gaps the ticket exposed rather than gaps it created:
+      `[]` and `None` are opposite instructions that both look falsy, and
+      nothing pinned the empty list surviving the wire, nor the far end where
+      an empty scope must *remove* the tool rather than merely return nothing.
+      *(From the `todos.md` inbox, 2026-08-15; shipped 2026-08-15.)*
 - [x] **Windows PDF upload fix** *(v1.10.1)* — source ingest used a
       `NamedTemporaryFile` whose exclusive lock on Windows made the reopen fail
       with `[Errno 13] Permission denied`; switched to `mkstemp` + manual cleanup.

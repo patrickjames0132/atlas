@@ -186,7 +186,13 @@ anyway: it qualifies the question you are about to ask, so it travels with the
 ask. In the bar the scope trigger is its icon alone (the popover shows the
 truth once open, an accent fill marks a narrowed scope, and the tooltip spells
 it out), and its popover opens **upward**, since the bar sits at the bottom of
-the page. Clear takes the send button's round shape but stays muted: it is the
+the page. It appears at **one** source, not two (v7.2.0): the old `> 1` gate
+read a lone source as leaving no choice to make, but "use it / don't" is a
+choice, and hiding the control meant a reader with one uploaded book had no
+way to ask a question *without* it. `ScopePicker` adapts to that size rather
+than being shown as-is — a single item drops the All/None bulk actions, which
+would only duplicate the checkbox beneath them, and labels itself "1 source"
+instead of claiming "All sources". Clear takes the send button's round shape but stays muted: it is the
 destructive one and must not compete with the control you came to press. The
 send itself doubles as **stop** while an answer streams — hopping dots at
 rest, a stop square on hover — so the thing that says "working" is also the

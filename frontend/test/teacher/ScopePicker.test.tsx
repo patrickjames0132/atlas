@@ -128,6 +128,35 @@ describe('ScopePicker bulk actions', () => {
     expect(onDeselectAll).toHaveBeenCalledTimes(1)
   })
 
+  // A one-source library is the case the picker used to be hidden for
+  // entirely (Teacher gated it at `> 1`), which left a reader with one
+  // uploaded book no way to ask a question without it. Now it renders — and
+  // has to read sensibly at that size.
+  it('a lone item drops the bulk actions and labels itself honestly', () => {
+    const single = [{ id: 'a', title: 'Only source' }]
+    render(
+      <ScopePicker
+        items={single}
+        checkedIds={['a']}
+        open={true}
+        onOpenChange={() => {}}
+        onToggle={() => {}}
+        onSelectAll={() => {}}
+        onDeselectAll={() => {}}
+        labels={LABELS}
+      />,
+    )
+    // "All sources" claims a breadth one source hasn't got — and the trigger's
+    // label is often all the reader sees, since the ask bar hides it to a
+    // tooltip.
+    expect(screen.getByRole('button', { name: /1 source/ })).toBeTruthy()
+    expect(screen.queryByText('All')).toBeNull()
+    // "None" would duplicate the single checkbox directly beneath it.
+    expect(screen.queryByText('None')).toBeNull()
+    // The checkbox itself is still there — unticking it is the whole point.
+    expect(screen.getByRole('checkbox')).toBeTruthy()
+  })
+
   it('everything checked hides All; nothing checked hides None', () => {
     renderWithChecked(['a', 'b'])
     expect(screen.queryByText('All')).toBeNull()

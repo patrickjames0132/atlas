@@ -138,11 +138,12 @@ export default function Teacher({
 
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  // The uploaded library, powering the source-scope picker (shown at more than
-  // one source). Read LIVE from the library slice — the Sources drawer reloads
+  // The uploaded library, powering the source-scope picker (shown whenever
+  // there is anything to scope — see the render site for why one source
+  // counts). Read LIVE from the library slice — the Sources drawer reloads
   // the slice on every upload/delete, so the picker appears the moment a
-  // second source lands (it used to sit on a stale mount-time fetch until a
-  // page reload).
+  // source lands (it used to sit on a stale mount-time fetch until a page
+  // reload).
   const dispatch = useAppDispatch()
   const { sources: libraryItems, loaded: libraryLoaded } = useAppSelector(selectLibrary)
   // Sources the assistant may NOT search — tracked by EXCLUSION (mirroring
@@ -504,7 +505,14 @@ export default function Teacher({
         {/* Which sources the researcher may search, inset in the bar rather than
             floating above it: it belongs to the question you're about to ask,
             so it sits with the ask. */}
-        {libraryItems.length > 1 && (
+        {/* At ONE source too, not two. The gate used to be `> 1` on the
+            reading that a lone source leaves no choice to make — but "use it /
+            don't" is a choice, and it's the one a reader with a single
+            uploaded book most wants: without the picker there was no way to
+            ask a question *without* their textbook in play. Nothing else had
+            to change; the empty scope (`scopeArg = []`) was already plumbed
+            end to end. */}
+        {libraryItems.length > 0 && (
           <ScopePicker
             items={libraryItems}
             checkedIds={scopeIds}

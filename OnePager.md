@@ -128,21 +128,6 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **A lone source hides its own filter — so the agent can't be told to
-      leave it alone** *(next up)* — the source-scope control disappears when
-      the library holds exactly **one** source, which is precisely the case
-      where the reader most likely wants it: with one book uploaded, there is
-      no way to ask a question *without* it. The empty-list scope
-      (`source_ids: []`, "no sources selected") is already plumbed end to end
-      and disables source search outright — the researcher's `scope` honours
-      it and the coverage guard reads the same fact — so this is a UI gate
-      that hides a working control, not a missing capability. Presumably the
-      filter renders only when there's a choice to make between sources;
-      "use it / don't" is a choice too. Check what the chip row looks like
-      with one entry, and that unticking it actually stops the agent reaching
-      retrieval (the `searches=0` line in `data/atlas.log` is the proof).
-      *(From the `todos.md` inbox, 2026-08-15.)*
-
 - [ ] **Retire the `search` node type — a discovered paper should attach to
       the graph, not float beside it** *(next up)* — free-text search results
       currently enter the graph as pink `search` nodes with **no edges**: a

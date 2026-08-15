@@ -260,6 +260,29 @@ def test_user_scope_overrides_the_models_source_pick(monkeypatch):
     assert calls["kwargs"]["source_ids"] == ["s2"]  # the model asked for s1; scope wins
 
 
+def test_unticking_your_only_source_takes_the_tool_away(monkeypatch):
+    """The far end of the picker's None button, for the case that motivated
+    showing the picker at one source at all (v7.2.0).
+
+    An empty scope must not merely make retrieval return nothing — it has to
+    remove `search_sources` from the tool list, so the model can't spend a step
+    being refused and, more importantly, the coverage guard stops counting a
+    library the reader has just excluded."""
+    seen: dict = {}
+    model = scripted([final("From the papers alone: [1].", [1])], seen=seen)
+    out = run(
+        model,
+        monkeypatch,
+        library=[{"id": "s1", "title": "My Only Book", "kind": "pdf", "pages": 300}],
+        source_ids=[],
+    )
+    assert "search_sources" not in seen["tools"]
+    # Not bounced for skipping the library, and reported as having none.
+    text = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert text == "From the papers alone: [1]."
+    assert provenance_of(out).had_library is False
+
+
 def test_step_budget_steers_the_model_to_answer(monkeypatch):
     monkeypatch.setitem(researcher_config.BUDGETS, "max_steps", 1)
     seen: dict = {}
