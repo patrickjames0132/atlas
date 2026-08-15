@@ -551,6 +551,39 @@ optional, behind a key.
 
 ### UI & rendering polish
 
+- [ ] **The chat bar's two icons sit small inside their circles** — both
+      buttons are the same 34px disc (`.teacher-ask > button` and its
+      `.ask-clear` variant, `teacher.css`), which was the point; what's off is
+      the *glyph inside* each. The send arrow is a 16px text character in a
+      34px circle and the bin is a 19px SVG, and both read as undersized for
+      the disc around them. Scale each up — the arrow via `font-size`, the bin
+      via its `svg` width/height — and check the pair together rather than one
+      at a time: they sit side by side, so what matters is that they look like
+      the same weight of control, not that either hits a particular number.
+      Watch the stop square (`.stop-glyph`, 9px) too — it shares the send
+      button and has to grow with it or the hover swap will jump.
+      *(From the `todos.md` inbox, 2026-08-14.)*
+
+- [ ] **Reorder the landing tour — it still teaches the old front door** —
+      `HOME_TOUR` (`frontend/src/tour/steps.ts`) opens with "Start with a
+      paper" on the header search, then search options, then the data source,
+      then the library, and only reaches the chat bar at step 6 ("Start
+      here"). That order was right when home *was* the search box; since
+      v6.13.0 the chat bar is the front door, so the tour now spends five
+      steps on secondary controls before naming the thing the page is built
+      around — and the step that finally does is titled as if it were the
+      beginning. Lead with the chat bar and let the rest follow it.
+
+      **Two things to decide while reordering.** The step copy is written to
+      be read *in sequence* ("This is the front door…", "Once a map is up this
+      chat collapses…"), so moving steps means rewriting the connective
+      tissue, not just permuting an array. And this overlaps the open question
+      of whether the header search bar still earns its place (see "Teacher &
+      agent reach") — if that resolves toward folding search into the chat
+      bar, the first three steps stop existing rather than moving. Worth
+      settling that first if it's close; otherwise reorder now and accept the
+      rework. *(From the `todos.md` inbox, 2026-08-14.)*
+
 - [ ] **Animate the arrival of the graph** — the sibling of the chat-motion
       work that shipped in v6.15.0 (see [docs/history.md](docs/history.md)),
       and the bigger of the two. Today the landing→graph
