@@ -118,3 +118,39 @@ describe('useDiscovery origin tracking', () => {
     expect(merged.fx).toBe(2020 * 10)
   })
 })
+
+describe('useDiscovery edge safety', () => {
+  // The server upholds this invariant itself (the researcher's
+  // `_canvas_growth` only ever draws growth that attaches to a drawn paper),
+  // but a dangling link is not a cosmetic defect that shows up as a stray
+  // line: d3-force raises `missing: <id>` while resolving link endpoints and
+  // takes the whole graph down. Too severe to rest on a server-side rule.
+  it('drops an edge whose endpoint is not on the canvas', () => {
+    const base = makeBase([makeNode('seed', { is_seed: true })])
+    runDiscover(
+      base,
+      'force',
+      [discovery('found')],
+      [
+        { source: 'seed', target: 'found', type: 'reference' } as GraphEdge,
+        // Points at a paper that was numbered for the agent but never drawn.
+        { source: 'undrawn', target: 'found', type: 'reference' } as GraphEdge,
+      ],
+    )
+    expect(base.links.map((link) => `${link._s}->${link._t}`)).toEqual(['seed->found'])
+  })
+
+  it('keeps an edge between two papers arriving in the same discovery', () => {
+    const base = makeBase([makeNode('seed', { is_seed: true })])
+    runDiscover(
+      base,
+      'force',
+      [discovery('first'), discovery('second')],
+      [
+        { source: 'seed', target: 'first', type: 'reference' } as GraphEdge,
+        { source: 'first', target: 'second', type: 'reference' } as GraphEdge,
+      ],
+    )
+    expect(base.links).toHaveLength(2)
+  })
+})

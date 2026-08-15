@@ -128,30 +128,6 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **Retire the `search` node type — a discovered paper should attach to
-      the graph, not float beside it** *(next up)* — free-text search results
-      currently enter the graph as pink `search` nodes with **no edges**: a
-      topic search links its hits to no specific paper, so they sit
-      disconnected. That was the only way to surface them when the chat
-      couldn't hand a paper back; it isn't any more. A chat citation seeds its
-      own graph (v6.11.0) and carries its provider (v6.14.0), so **the reader
-      already has a way to get from a found paper to a map of it**.
-
-      **The ask:** `find_papers` stops adding nodes to the canvas. Search
-      becomes what it always was — a way for the agent to *find* a paper —
-      and the reader promotes one deliberately by clicking its citation.
-      Papers found via `expand_node` **stay**: those arrive with a real edge
-      to a paper already on screen, which is the whole difference.
-
-      **What this touches:** the `search` rel and its colour (graph theme,
-      filter chips, legend), the `Discovery` event `find_papers` emits, and
-      the frontend's merge. Check what a *lecture* does with a graph that has
-      no search nodes, and check the filter chip disappears cleanly rather
-      than rendering an always-empty row. Worth confirming against a saved
-      session from before the change — old saves still hold search nodes, and
-      they should keep rendering rather than vanishing.
-      *(From the `todos.md` inbox, 2026-08-15.)*
-
 - [ ] **Does the header search bar still earn its place?** — an open design
       question, not yet a decision. The chat bar now does much of what the seed
       search does: ask about a topic, get papers back, click a citation chip to

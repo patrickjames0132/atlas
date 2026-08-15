@@ -254,6 +254,50 @@
 
 ### AI teacher & lectures
 
+- [x] **Retire the `search` node type — a discovered paper should attach to
+      the graph, not float beside it** *(v7.3.0)* — free-text search results
+      entered the graph as pink `search` nodes with **no edges**: a topic
+      search links its hits to no specific paper, so they sat disconnected.
+      That was the only way to surface them back when the chat couldn't hand a
+      paper back; it hasn't been since v6.11.0 (a chat citation seeds its own
+      graph) and v6.14.0 (it carries its provider). So `find_papers` now
+      numbers its hits without drawing them — they stay readable, expandable
+      and citable — and the reader promotes one deliberately by clicking `[n]`.
+
+      **The rule came out broader than the ticket, because the narrow version
+      shipped a crash.** The agent can `expand_node` a paper that
+      `find_papers` found; that expansion hangs its edges off a paper the
+      frontend hasn't got, and a link with a missing endpoint is not a stray
+      line — d3-force raises while resolving link endpoints and takes the whole
+      graph down. So the invariant is:
+
+      > **The graph grows only where a new paper attaches to a paper already
+      > on it.**
+
+      One rule applied twice, rather than a special case per tool. Expanding an
+      undrawn paper numbers its neighbours and draws nothing.
+      `ResearcherDeps.on_canvas` tracks what the reader can actually see (the
+      numbered list and the canvas are no longer the same thing), and
+      `tools._canvas_growth` is the only place a `Discovery` is emitted.
+
+      Read in the other direction the rule gives something back: when an
+      expansion of a *drawn* paper turns up a paper that is numbered but
+      undrawn, the edge it was missing now exists — so it's **promoted**,
+      keeping its original number and gaining the relation that brought it in,
+      so it colours as that rather than staying search-pink. A found paper can
+      still reach the graph; it just has to earn it.
+
+      **Nothing was deleted**, which is what keeps old saves working. The
+      `search` relation, its pink and `primaryRel` all stay — the theme comment
+      now says outright that it's legacy-but-load-bearing, so a later cleanup
+      doesn't sweep it. The legend row and the filter behaviour were already
+      gated on search nodes being *present*, so they vanish by themselves for
+      new sessions and still render for old ones. The frontend merge also
+      gained an endpoint check of its own: the server upholds the invariant,
+      but a whole-graph crash is too severe a failure to leave resting on a
+      server-side rule. *(From the `todos.md` inbox, 2026-08-15; shipped
+      2026-08-15.)*
+
 - [x] **Connect the web result to the paper — the scouts don't talk to each
       other** *(v7.1.0)* — the workers ticket shipped two scouts that each
       answered their own question and handed findings back separately. What

@@ -31,7 +31,7 @@ protocol for every workflow, declared in one file.
 | `Beat`      | lecturer              | one narration paragraph + heading + nodes to light up          |
 | `Token`     | researcher                 | a chunk of streamed answer prose                               |
 | `Trace`     | researcher, orchestrator   | "watch the agent work" — one variant per action (below) |
-| `Discovery` | researcher, orchestrator   | papers + edges to merge into the live graph                    |
+| `Discovery` | researcher            | papers + edges to merge into the live graph — only growth that *attaches* (see below) |
 | `Figure`    | researcher | a real figure attached to the answer — a paper's, or one mined from an uploaded PDF (`index=None`) |
 | `Cited`     | researcher            | the node ids the answer draws on                               |
 | `SourceRefs` | researcher, lecturer | `[Sn]` marker index → library source, sent *before* the prose  |
@@ -382,11 +382,12 @@ grounded in what it actually read.
   - `read_paper` — summary (abstract + TL;DR, hydrated from S2 on demand)
     or full text via ar5iv; a full read also lists the paper's figures.
   - `expand_node` — one hop of references / citations / similar for a
-    numbered paper; new papers get numbered and streamed to the graph.
+    numbered paper; new papers get numbered, and streamed to the graph when
+    they attach to a paper already drawn (see "What reaches the canvas").
   - `find_papers` — hands a *need* in plain words to the **paper scout**
     (`workers/papers`), which writes and re-writes the queries itself and
-    reports back; the researcher numbers whatever it found and adds it
-    (nodes only, no edges — a topic search links to no specific paper).
+    reports back; the researcher numbers whatever it found. Numbered, not
+    drawn — the reader promotes a found paper by clicking its citation.
     Replaced the one-shot `search_papers` in v7.0.0: a single query against
     a lexical, citation-weighted search answers "what's new in X" with
     landmarks from a decade ago, and reformulating is a loop with a decision
@@ -407,6 +408,21 @@ grounded in what it actually read.
   cache, and remaining budgets live in the run's deps.
 - **Output:** streamed answer prose, with `cited` (the papers it read plus
   any it named) as a structured field of the final result.
+- **What reaches the canvas** *(v7.3.0)* — **the graph grows only where a new
+  paper attaches to a paper already on it.** `find_papers` numbers its hits and
+  draws none of them: a topic search links to no specific paper, so they used
+  to arrive as edgeless dots floating beside the graph, which was the only way
+  to surface them back when a chat citation couldn't hand a paper back. It can
+  now (v6.11.0, provider-stamped in v6.14.0), so the reader promotes a found
+  paper deliberately by clicking `[n]`. The same rule covers the case that
+  makes it *one* rule rather than a quirk of one tool: expanding a paper that
+  isn't itself drawn produces edges pointing at a node the frontend hasn't got,
+  and a link with a missing endpoint makes d3-force raise and takes the graph
+  down — so that expansion numbers its neighbours and draws nothing either.
+  Run in the other direction, an expansion that turns up an already-numbered
+  but undrawn paper **promotes** it: the edge it was missing now exists.
+  `ResearcherDeps.on_canvas` is the bookkeeping; `tools._canvas_growth` is the
+  rule.
 - **Events:** `Trace` (each tool step, including `search_web`), `Discovery`
   (nodes/edges to merge into the live graph), `Figure`, `Token`, `Cited`,
   `Provenance` (which now counts web searches and pages separately from

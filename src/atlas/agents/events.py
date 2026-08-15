@@ -99,10 +99,17 @@ class DiscoveredNode(Node):
 class Discovery(BaseModel):
     """Papers (and the edges linking them) to merge into the live graph.
 
-    Emitted when the researcher's expansion or search tools find papers not
-    yet on screen — only the researcher ever grows the graph; lectures
-    narrate it as-is. A free-text search discovery carries no edges — a
-    topic search links its hits to no specific paper.
+    Emitted by the researcher's ``expand_node`` — and only when the growth
+    genuinely **attaches** to a paper already on the canvas (v7.3.0; see
+    ``researcher/tools.py``'s ``_canvas_growth``). Only the researcher ever
+    grows the graph; lectures narrate it as-is.
+
+    ``find_papers`` no longer emits one at all. Its hits used to arrive as
+    edgeless nodes floating beside the graph — a topic search links to no
+    specific paper — which was the only way to surface them back when a chat
+    citation couldn't hand a paper back. It can now, so a found paper stays in
+    the numbered list until the reader promotes it by clicking. Saved sessions
+    from before the change still hold those nodes and still render.
     """
 
     model_config = ConfigDict(extra="forbid")

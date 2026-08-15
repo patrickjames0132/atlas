@@ -67,6 +67,14 @@ class ResearcherDeps:
     #: the same list ``prompts.source_lines`` renders into the prompt, so a
     #: citation and a tool call can't disagree about which source ``S3`` is.
     sources: list[dict] = field(default_factory=list)
+    #: Which of ``nodes`` the reader can actually **see** — the canvas, as
+    #: opposed to the numbered list. The two diverged in v7.3.0, when
+    #: ``find_papers`` stopped putting its hits on the graph: a searched paper
+    #: is numbered, readable, expandable and citable, and simply isn't drawn
+    #: until the reader promotes it by clicking its citation. Tracked rather
+    #: than inferred, because the edge cases all live here — see
+    #: ``_canvas_growth``.
+    on_canvas: set[str] = field(default_factory=set)
     provider: Provider = "s2"  # the graph provider — expand/search/hydrate follow it
     #: Whether the web scout is on this run at all. False turns the tool off
     #: AND takes the web out of the coverage guard's reckoning — availability
@@ -162,6 +170,62 @@ def _node_at(deps: ResearcherDeps, index: int) -> Node | None:
 def _record_cited(deps: ResearcherDeps, node_id: str) -> None:
     if node_id not in deps.cited_ids:
         deps.cited_ids.append(node_id)
+
+
+def _off_canvas(deps: ResearcherDeps, node_id: str) -> events.DiscoveredNode | None:
+    """A numbered paper the reader can't see yet, if that's what this id is.
+
+    Args:
+        deps: The run's deps.
+        node_id: The paper id to look up.
+
+    Returns:
+        Its ``DiscoveredNode``, or None when the paper is already drawn (or
+        isn't one this run discovered — a paper handed in with the graph is on
+        the canvas by definition and isn't a ``DiscoveredNode`` at all).
+    """
+    if node_id in deps.on_canvas:
+        return None
+    for candidate in deps.nodes:
+        if candidate.id == node_id and isinstance(candidate, events.DiscoveredNode):
+            return candidate
+    return None
+
+
+def _canvas_growth(
+    deps: ResearcherDeps,
+    origin_id: str,
+    nodes: list[events.DiscoveredNode],
+    edges: list[Edge],
+) -> None:
+    """Emit a ``Discovery`` — but only for growth that actually attaches.
+
+    **The invariant, since v7.3.0: the canvas grows only where a new paper
+    attaches to a paper already on it.** Before, free-text hits were drawn as
+    edgeless pink dots floating beside the graph, which was the only way to
+    surface them back when the chat couldn't hand a paper back. It can now (a
+    citation seeds its own graph, v6.11.0, carrying its provider, v6.14.0), so
+    a found paper is numbered and citable and the reader promotes it
+    deliberately instead of finding it already scattered on their canvas.
+
+    That leaves one thing this function exists to prevent. If the expanded
+    paper is itself off-canvas, its edges point at a node the frontend hasn't
+    got — and a link with a missing endpoint is not a cosmetic problem:
+    d3-force raises on it and takes the whole graph down. So an expansion from
+    an unseen paper still numbers its neighbors for the model and simply draws
+    nothing. One rule, applied twice, rather than a special case per tool.
+
+    Args:
+        deps: The run's deps — its ``on_canvas`` set is updated here.
+        origin_id: The paper the growth hangs off (the expanded node).
+        nodes: The papers to draw, newly discovered or promoted.
+        edges: The edges to draw. Every endpoint is either ``origin_id`` or one
+            of ``nodes``, which is what makes the on-canvas check sufficient.
+    """
+    if origin_id not in deps.on_canvas or not (nodes or edges):
+        return
+    deps.on_canvas.update(node.id for node in nodes)
+    deps.emit(events.Discovery(nodes=nodes, edges=edges))
 
 
 def _oa_pdf_url(node: Node, provider: Provider) -> str | None:
@@ -422,6 +486,15 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
         new_edges.append(edge)
 
         if neighbor_id in deps.known_ids:
+            # Already numbered — but possibly only in the list, never drawn (a
+            # find_papers hit). This edge is exactly what it was missing, so
+            # promote it: the rule is "attached papers are drawn", and it just
+            # became attached. The extra rel makes it colour as the relation
+            # that brought it in rather than staying search-pink.
+            promoted = _off_canvas(deps, neighbor_id)
+            if promoted is not None:
+                promoted.rels.append(rel_tag)
+                new_nodes.append(promoted)
             continue
         deps.known_ids.add(neighbor_id)
         discovered = events.DiscoveredNode(
@@ -436,8 +509,7 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
             ok=True, index=index, title=node.title, relation=relation, found=len(lines)
         )
     )
-    if new_nodes or new_edges:
-        deps.emit(events.Discovery(nodes=new_nodes, edges=new_edges))
+    _canvas_growth(deps, node.id, new_nodes, new_edges)
     if not lines:
         return f'No new papers — {relation} of "{node.title}" is already on the graph.'
     return (
@@ -492,7 +564,10 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
     # provider nodes precisely so it cannot number them: `[n]` must mean the
     # same paper to the prose, the citation resolver and the frontend, and
     # that invariant only holds while one agent owns the list.
-    new_nodes = []
+    #
+    # What it does NOT do is put them on the canvas — see ``_canvas_growth``.
+    # They are numbered, readable, expandable and citable; they're just not
+    # drawn until the reader clicks the citation that maps one.
     lines = []
     for found in result.found:
         if found["id"] in deps.known_ids:
@@ -502,7 +577,6 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
             **found, rels=["search"], is_seed=False, idx=len(deps.nodes) + 1
         )
         deps.nodes.append(discovered)
-        new_nodes.append(discovered)
         lines.append(f"[{discovered.idx}] ({discovered.year or 'n.d.'}) {discovered.title}")
 
     # Logged, not only traced: the trace shows the reader one query, while the
@@ -522,10 +596,8 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
             ok=True, query=result.queries[-1] if result.queries else need, found=len(lines)
         )
     )
-    if new_nodes:
-        # No edges: a topic search links its hits to no specific paper.
-        deps.emit(events.Discovery(nodes=new_nodes, edges=[]))
-        found_text = f"{len(lines)} new paper(s) added:\n" + "\n".join(lines)
+    if lines:
+        found_text = f"{len(lines)} new paper(s) added to your numbered list:\n" + "\n".join(lines)
     else:
         found_text = "no new papers."
     return f"Scout searched for \"{need}\" — {found_text}\n\nScout's note: {result.summary}"
