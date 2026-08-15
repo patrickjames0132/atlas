@@ -35,7 +35,7 @@ raw provider nodes from the paper scout and numbers them itself.
 
 There used to be an `orchestrator/` in this folder: one `run(intent, ...)`
 entry point that every route funnelled through, dispatching on an `Intent`
-enum. It was **deleted in v6.16.0**, along with the enum, because it had
+enum. It was **deleted in v7.0.0**, along with the enum, because it had
 stopped earning its place — it dispatched two known intents to two agents and
 never grew the model half it was designed around. Every caller already knew
 which workflow it wanted, so the enum was a string round-trip between a route
@@ -59,7 +59,7 @@ neither belonged to it:
 
 ## What moved here, and what it cost
 
-All five packages moved from `agents/` in v6.16.0 with **no behavior change**
+All five packages moved from `agents/` in v7.0.0 with **no behavior change**
 (the fifth, `orchestrator/`, was then deleted — see above).
 Worth knowing if you're grepping history: `AGENT_ID` is a string constant
 independent of package path, so no `config.llm.agents` entry moved and no

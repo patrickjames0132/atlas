@@ -53,7 +53,7 @@ export function provenanceLine(provenance: ProvenanceEvent): string | null {
   // in its prose rather than through the `[n]` machinery, so there is no
   // marker to count afterwards. What's honest to report is that the web was
   // read and how much came back, which is what this says. (Sessions saved
-  // before v6.16.0 carry neither field; `?? 0` keeps them rendering.)
+  // before v7.0.0 carry neither field; `?? 0` keeps them rendering.)
   const pages = web_pages ?? 0
   if (pages > 0) {
     drew.push(`${pages} web page${pages > 1 ? 's' : ''}`)

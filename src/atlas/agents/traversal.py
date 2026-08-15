@@ -7,7 +7,7 @@ references / citations / similar work, and a free-text paper search.
 This is the cached, agent-tuned layer over the ``integrations`` traversal
 clients (which talk to the live API and cache nothing) — same name, different
 job, and the cache is the point: the researcher's ``expand_node`` /
-``search_papers`` tools re-hit the same hops constantly within a session, and
+``find_papers`` tools re-hit the same hops constantly within a session, and
 the rate-limited APIs must not pay for each repeat. Results are cached for
 ``config.graph.cache_ttl`` (the same day-long TTL as a graph snapshot).
 

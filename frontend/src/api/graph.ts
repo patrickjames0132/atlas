@@ -69,7 +69,7 @@ export interface GraphNode {
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean
-  /** Added mid-conversation by the researcher's expand_node / search_papers tools. */
+  /** Added mid-conversation by the researcher's expand_node / find_papers tools. */
   discovered?: boolean
   /**
    * The [n] index the researcher knows the paper by (discovered papers only;

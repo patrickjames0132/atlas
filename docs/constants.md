@@ -94,18 +94,21 @@ staging area is validated (unknown keys fail at import).
 
 | Name | Agent | What it is | Why it's needed | Value | Referenced in |
 |---|---|---|---|---|---|
-| `frontier_window_months` | lecturer | THE CURRENT FRONTIER's recency window | The lecture must narrate the same window the graph shows as Latest bands | 60 | `src/atlas/agents/lecturer/config.py` |
-| `min_beats` / `max_beats` | lecturer | Lecture length bounds (in beats) | Keeps lectures shaped: room for both ends of a long history without rambling | 7 / 12 | `src/atlas/agents/lecturer/config.py` |
-| `max_steps` | researcher | Total tool calls per question | The hard stop on an agentic run's cost/latency | 12 | `src/atlas/agents/researcher/config.py` (consumed via `BUDGETS` in `tools.py`/`main.py`) |
+| `frontier_window_months` | lecturer | THE CURRENT FRONTIER's recency window | The lecture must narrate the same window the graph shows as Latest bands | 60 | `src/atlas/agents/orchestrators/lecturer/config.py` |
+| `min_beats` / `max_beats` | lecturer | Lecture length bounds (in beats) | Keeps lectures shaped: room for both ends of a long history without rambling | 7 / 12 | `src/atlas/agents/orchestrators/lecturer/config.py` |
+| `max_steps` | researcher | Total tool calls per question | The hard stop on an agentic run's cost/latency (raised from 12 in v7.1.0 — three sources to sweep plus the web→papers join) | 16 | `src/atlas/agents/orchestrators/researcher/config.py` (consumed via `BUDGETS` in `tools.py`/`main.py`) |
 | `full_reads` | researcher | Full-text reads per question | Full texts are the priciest tokens | 4 | same |
 | `summary_reads` | researcher | Abstract/TL;DR reads per question | Cheap reads still need a ceiling | 12 | same |
 | `hops` | researcher | `expand_node` calls per question | Bounds graph growth per answer | 5 | same |
 | `expand_limit` | researcher | Neighbors fetched per hop | Bounds each hop's payload | 8 | same |
-| `searches` | researcher | `search_papers` calls per question | Bounds off-graph reach | 3 | same |
+| `searches` | researcher | `find_papers` calls per question | Bounds off-graph reach | 3 | same |
 | `search_limit` | researcher | Hits fetched per search | Bounds each search's payload | 8 | same |
 | `source_searches` | researcher | Library-retrieval calls per question | Bounds local-library reads | 5 | same |
+| `web_searches` | researcher | `search_web` calls per question | Bounds web reach — and doubles as the web's **off switch**: 0 unregisters the tool and drops the web from the coverage guard | 2 | same |
 | `figures` | researcher | `show_source_figure` calls per answer | Bounds inline images per answer | 3 | same |
 | `fulltext_max_chars` | researcher | Chars per full-text read | Keeps one read from flooding the context | 8000 | same |
+| `searches` / `search_limit` | paper_scout | Queries per scouting run / hits per query | The scout's value is two or three *aimed* attempts, not ten — every one is a live provider call the reader waits on | 4 / 8 | `src/atlas/agents/workers/search/papers/config.py` |
+| `max_uses` | web_scout | Web searches per scouting run | Enforced **provider-side** on the native tool, so unlike every other budget here the model cannot exceed it however it's prompted | 2 | `src/atlas/agents/workers/search/web/config.py` |
 
 ## Defaults with a parameter seam — caller decides, code holds the default
 

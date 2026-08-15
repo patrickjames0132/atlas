@@ -3,7 +3,7 @@
  *
  * Description:
  * Mid-conversation graph growth: the papers the AI teacher pulls in via its
- * expand_node / search_papers tools (and the history lecture's backward
+ * expand_node / find_papers tools (and the history lecture's backward
  * walk), merged into the live graph without disturbing the simulation.
  *
  * The core constraint: `base`'s node/link objects are mutated by

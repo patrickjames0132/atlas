@@ -748,6 +748,63 @@ def test_the_web_tool_is_offered_when_it_has_a_budget(monkeypatch):
     assert trace.ok and trace.need == "did it ship"
 
 
+def tool_return(seen: dict, turn: int) -> str:
+    """The tool-result text the model saw at the start of a given turn.
+
+    Args:
+        seen: The dict `scripted` recorded the model's requests into.
+        turn: Which model request to read the incoming tool results from.
+
+    Returns:
+        Every tool-return part of that request's last message, joined.
+    """
+    parts = seen["turns"][turn][-1].parts
+    return "\n".join(part.content for part in parts if part.part_kind == "tool-return")
+
+
+WEB_PAGE = web_worker.WebSource(
+    title="Meet Willow", url="https://blog.test/willow", note="the chip announcement"
+)
+
+
+def test_the_web_result_hands_the_search_back_to_the_literature(monkeypatch):
+    """The join, and why it lives in the tool result. Measured on real
+    transcripts before this shipped: every logged paper search restated the
+    user's question at topic level, never once carrying a name the web had
+    just supplied. The system prompt asks for the join too, but this is the
+    moment the decision is made — the pages are in front of the model, and a
+    rule read a thousand tokens earlier competes with everything else there."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    stub_web(monkeypatch, sources=[WEB_PAGE])
+    seen: dict = {}
+    model = scripted(
+        [("search_web", ['{"need": "did it ship"}'])],
+        [final("It shipped.", [])],
+        seen=seen,
+    )
+    run(model, monkeypatch)
+    assert "call find_papers" in tool_return(seen, 1)
+
+
+def test_the_hand_off_is_withheld_when_no_search_is_left_to_make(monkeypatch):
+    """An instruction the model cannot follow is worse than none: it burns a
+    step to be refused, and teaches the model that the next one may be fiction
+    too."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    monkeypatch.setitem(researcher_config.BUDGETS, "searches", 0)
+    stub_web(monkeypatch, sources=[WEB_PAGE])
+    seen: dict = {}
+    model = scripted(
+        [("search_web", ['{"need": "did it ship"}'])],
+        [final("It shipped.", [])],
+        seen=seen,
+    )
+    run(model, monkeypatch)
+    result = tool_return(seen, 1)
+    assert "blog.test/willow" in result  # the pages still came back
+    assert "find_papers" not in result
+
+
 def test_answering_without_searching_the_web_is_retried(monkeypatch):
     """Coverage, extended: the guard now spans every available source, not just
     the library. Same shape as the library rule — bounce the substantive answer,
@@ -762,6 +819,60 @@ def test_answering_without_searching_the_web_is_retried(monkeypatch):
     out = run(model, monkeypatch)
     text = "".join(event.text for event in out if isinstance(event, events.Token))
     assert text == "Now grounded."  # the bounced attempt never reached the reader
+
+
+def test_a_spent_step_budget_ends_the_coverage_obligation(monkeypatch):
+    """The deadlock this guard walked into, and the reason reachability is
+    checked (v7.1.0).
+
+    Observed live: a graph question spent all 12 steps on reads before it ever
+    reached the web. `search_web` then refused (step budget), so
+    `web_searches_run` stayed 0, so the guard bounced the answer telling it to
+    call search_web, so it called search_web, so it was refused... until the
+    `UsageLimits` backstop killed the run and the reader got NOTHING — which is
+    strictly worse than the ungrounded answer the guard was protecting them
+    from. A guard may demand a source the model skipped; it may not demand one
+    the model can no longer reach."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    monkeypatch.setitem(researcher_config.BUDGETS, "max_steps", 1)
+    stub_web(monkeypatch)
+    model = scripted(
+        [("read_paper", ['{"index": 2, "detail": "summary"}'])],  # spends the only step
+        [final("Grounded in what I could reach.", [2])],
+    )
+    out = run(model, monkeypatch)
+    text = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert text == "Grounded in what I could reach."  # answered, not bounced
+    # ...and the provenance still reports the gap honestly, which is what makes
+    # letting the answer through safe.
+    assert provenance_of(out).web_searches == 0
+
+
+def test_a_spent_source_budget_ends_the_library_obligation(monkeypatch):
+    """The same rule one budget down — and the library is where it genuinely
+    bites, because its two counters can diverge.
+
+    Everywhere else, "budget spent" and "source consulted" move together, so a
+    source can't be both unreached and unreachable. `search_sources` charges
+    its budget *before* retrieval and counts the consult only *after* it
+    returns, so a retrieval that throws spends the budget without satisfying
+    the guard. With one source search configured, that left the old guard
+    demanding a library the model had no call left to reach."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "source_searches", 1)
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 0)
+
+    def explode(query, **kwargs):
+        raise RuntimeError("the embedder fell over")
+
+    monkeypatch.setattr(researcher.tools.retrieval, "search", explode)
+    model = scripted(
+        [("search_sources", ['{"query": "gap engineering"}'])],  # spends it, counts nothing
+        [final("Your library is unreachable right now; from the papers: [1].", [1])],
+    )
+    out = run(model, monkeypatch, library=LIBRARY)
+    text = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert text.startswith("Your library is unreachable")
+    assert provenance_of(out).searches == 0  # honestly reported as never consulted
 
 
 def test_a_conversational_turn_never_triggers_the_sweep(monkeypatch):

@@ -80,7 +80,7 @@ export interface PlayedLecture {
 
 /**
  * New papers (+ the edges connecting them) the researcher pulled in via its
- * expand_node / search_papers tools — to be merged into the live graph.
+ * expand_node / find_papers tools — to be merged into the live graph.
  * (Lectures never emit these: a lecture narrates the visible graph as-is.)
  */
 export interface Discovery {
@@ -169,7 +169,7 @@ export interface TraceEvent {
    *  sessions (the chip then falls back to the number in `figure`). */
   label?: string | null
   /**
-   * Why a failed search never turned anything up — search_papers only, and
+   * Why a failed search never turned anything up — find_papers only, and
    * only when `ok` is false. Undefined on success, and on saved sessions
    * from before this field existed (renders as a generic "Tried" then).
    */
@@ -335,7 +335,7 @@ export interface ProvenanceEvent {
    *  Separate from `searches`, which counts the student's own library. */
   paper_searches: number
   /** How many times it sent the web scout looking, and how many pages came
-   *  back with a usable URL. Absent on sessions saved before v6.16.0. */
+   *  back with a usable URL. Absent on sessions saved before v7.0.0. */
   web_searches?: number
   web_pages?: number
   /** Distinct library sources the finished prose cites. */

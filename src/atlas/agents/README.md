@@ -276,7 +276,7 @@ agents/
 - **The package root *is* the shared directory.** Anything sitting directly
   at the root (`events.py`, `traversal.py`, `skills/`) is shared
   infrastructure available to every agent.
-- **Agents sit in two tiers, flat, and no deeper** (v6.16.0).
+- **Agents sit in two tiers, flat, and no deeper** (v7.0.0).
   `orchestrators/` own an outcome and may delegate; `workers/` each own one
   source and answer a bounded question about it. Which tier something belongs
   in is decided by one rule, kept in
@@ -288,7 +288,7 @@ agents/
   (`search/` today), so the grouping folder — not the worker — is what sits
   under `workers/`.
 - **No router.** Routes call the agent they mean. The `orchestrator`
-  package and the `Intent` enum were deleted in v6.16.0; see
+  package and the `Intent` enum were deleted in v7.0.0; see
   [`orchestrators/README.md`](orchestrators/README.md) for what happened to
   the two things it carried.
 - **`tools.py` appears only inside an agent** and only ever means "this
@@ -387,7 +387,7 @@ grounded in what it actually read.
     (`workers/papers`), which writes and re-writes the queries itself and
     reports back; the researcher numbers whatever it found and adds it
     (nodes only, no edges — a topic search links to no specific paper).
-    Replaced the one-shot `search_papers` in v6.16.0: a single query against
+    Replaced the one-shot `search_papers` in v7.0.0: a single query against
     a lexical, citation-weighted search answers "what's new in X" with
     landmarks from a decade ago, and reformulating is a loop with a decision
     in it. It **replaced** rather than joined it — two paths to one source is
