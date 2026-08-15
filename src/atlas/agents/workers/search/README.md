@@ -1,4 +1,4 @@
-# `agents/workers`
+# `agents/workers/search`
 
 One source each, one bounded question each. A worker is handed a *need* in
 plain words, goes to its source, and comes back with findings — it never
@@ -6,11 +6,17 @@ addresses the student, never writes the answer, and never decides what the
 turn is about.
 
 ```
-workers/
+workers/search/
   papers/     — the academic-paper source (Semantic Scholar / OpenAlex),
                 searched with reformulation and recency bounding
   web/        — the open web, via Anthropic's provider-side WebSearchTool
 ```
+
+Grouped under `search/` because "go look something up somewhere" is one job
+with several backends: the next one (an arXiv listing, a code index, the
+reader's own notes) belongs here beside them, not as another top-level
+worker. A worker of a different *kind* — one that transforms rather than
+retrieves — would get its own group next to this one.
 
 The other tier is `orchestrators/`. The split is **flat and deliberately two
 levels deep, no more** — see "Why not deeper" below.

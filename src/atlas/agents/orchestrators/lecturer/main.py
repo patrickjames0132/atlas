@@ -357,6 +357,72 @@ def _beat(beat: LectureBeat, nodes: list[Node], figures: list[dict]) -> events.B
     )
 
 
+# Which graph relation each directional lecture narrates. A mode is now pinned
+# to exactly ONE kind of neighbor (the tag ``build.py`` writes into a node's
+# ``rels``) rather than to a slice of the timeline: HISTORY tells the story of
+# the seed's references, LANDMARKS ("evolution") of the landmark citers, and
+# FRONTIER of the recent "Latest Publications" bands. INTUITION and BRIDGE
+# aren't relation-scoped (see ``_story_nodes``).
+_MODE_RELATION: dict[LectureMode, str] = {
+    LectureMode.HISTORY: "reference",
+    LectureMode.EVOLUTION: "citation",
+    LectureMode.FRONTIER: "latest",
+}
+
+
+def _chronological(nodes: list[Node]) -> list[Node]:
+    """The nodes sorted oldest-first, undated ones last.
+
+    The ordering half of the full-span guardrail: the lecturer numbers the
+    story in this order and (via ``prompts.node_lines_by_era``) can band it by
+    era, so a beat's papers read left-to-right in time instead of by citation
+    count. ``node_lines``/``idx_to_id`` stay consistent because the same
+    ordered list is both numbered and mapped back.
+
+    Args:
+        nodes: The story's nodes, in arbitrary order.
+
+    Returns:
+        The nodes sorted by year ascending, undated papers pushed to the end.
+    """
+    return sorted(nodes, key=lambda node: (node.year is None, node.year or 0))
+
+
+def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]:
+    """The node set a lecture mode may narrate.
+
+    A lecture never expands the graph — and each mode is pinned to exactly one
+    kind of neighbor so the four lectures don't overlap. Scoping is by
+    *relation*, not by year: HISTORY narrates the seed's **references**,
+    EVOLUTION ("The landmark papers since") the **landmark citers**,
+    and FRONTIER the recent **Latest Publications** — each keeping only nodes
+    carrying that ``rels`` tag (plus the seed itself), then sorted
+    chronologically (see ``_chronological``). INTUITION stays on the **seed
+    alone**, so it structurally can't wander onto another paper. BRIDGE sees
+    the whole visible set.
+
+    Args:
+        seed: The seed paper (always included in every mode's set).
+        nodes: The visible graph nodes.
+        mode: The lecture mode being narrated.
+
+    Returns:
+        The mode-scoped node list to hand the lecturer.
+    """
+    if mode is LectureMode.INTUITION:
+        return [node for node in nodes if node.is_seed or node.id == seed.id]
+    relation = _MODE_RELATION.get(mode)
+    if relation is None:  # BRIDGE (and any future non-directional mode)
+        return list(nodes)
+    return _chronological(
+        [
+            node
+            for node in nodes
+            if node.is_seed or node.id == seed.id or relation in node.rels
+        ]
+    )
+
+
 def lecture(
     seed: Node,
     nodes: list[Node],
@@ -367,8 +433,10 @@ def lecture(
 
     Args:
         seed: The seed paper.
-        nodes: The visible graph nodes — the lecture's entire world; the
-            lecturer narrates them as-is and never expands the graph.
+        nodes: The visible graph nodes. The lecture's entire world — it
+            narrates them as-is and never expands the graph — and it scopes
+            them to the mode itself (``_story_nodes``), so callers pass
+            everything on screen rather than pre-filtering.
         mode: ``history``, ``intuition``, ``evolution``, or ``bridge``.
         target: The bridge target paper (bridge mode only), or None.
 
@@ -385,6 +453,7 @@ def lecture(
         Exception: Model/stream failures propagate — the caller ends the
             event stream with ``Error``.
     """
+    nodes = _story_nodes(seed, nodes, mode)
     # Every storytelling mode gets a figure pool (the seed's own figures for
     # intuition; the story's landmark papers' for history/evolution — see
     # _figure_pool); library passages and the seed's full text ground the

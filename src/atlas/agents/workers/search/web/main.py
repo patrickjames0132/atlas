@@ -32,7 +32,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 from pydantic_ai.capabilities import WebSearch
 
-from ... import factory, prompts
+from .... import factory, prompts
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)

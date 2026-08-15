@@ -1,14 +1,14 @@
 """Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
 
 Description:
-AI-teacher routes: every workflow streams through the agents orchestrator.
+AI-teacher routes: one endpoint per agent, each streaming typed events.
 
 POST /api/lecture      -> streamed AI lecture over the visible graph
 POST /api/ask          -> the research agent, streamed over the visible graph
 POST /api/ask_sources  -> streamed chat with no graph open (library + search)
 
 Each endpoint validates the request, builds typed inputs, and hands off to
-``orchestrator.run(intent, ...)``; the typed event stream comes back as SSE
+the agent that serves it; the typed event stream comes back as SSE
 frames named by each event's ``type`` tag (``model_dump`` minus the tag),
 always terminated by ``done`` or ``error``. Conversation history lives HERE
 (a locked design decision — agents receive history, they never store it):
@@ -31,9 +31,9 @@ from flask import Blueprint, jsonify, request
 from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
-from ..agents import events
-from ..agents.models import Intent, LectureMode, PlayedBeat, PlayedLecture
-from ..agents.orchestrators import orchestrator
+from ..agents import events, streams
+from ..agents.models import LectureMode, PlayedBeat, PlayedLecture
+from ..agents.orchestrators import lecturer, researcher
 from ..config import config
 from ..services.graph import Node, resolve_provider
 from .sse import sse, sse_response
@@ -154,13 +154,13 @@ def _relay(
 
     Frame name = the event's ``type`` tag; payload = ``model_dump`` minus the
     tag — one rule for every event, replacing the old per-kind tuple
-    matching. The orchestrator guarantees the stream ends with ``Done`` or
+    matching. ``streams.terminated`` guarantees the stream ends with ``Done`` or
     ``Error``; a turn is persisted only when it ended with ``Done`` (a failed
     answer must not poison the follow-up context), with figure markers
     stripped and the window trimmed to ``config.server.history_turns`` pairs.
 
     Args:
-        workflow: The orchestrator's event stream.
+        workflow: The agent's event stream, already terminated.
         store: The history store to persist into (None = no persistence —
             lectures aren't chat).
         session_id: The client's session key; blank disables persistence.
@@ -177,7 +177,7 @@ def _relay(
                 answer_parts.append(event.text)
             succeeded = isinstance(event, events.Done)
             yield sse(event.type, event.model_dump(exclude={"type"}))
-    except Exception:  # the orchestrator catches its own; this guards serialization
+    except Exception:  # `terminated` catches the workflow's; this guards serialization
         log.exception("agent stream failed")
         yield sse("error", {"message": "The teacher hit an unexpected error."})
         return
@@ -224,7 +224,7 @@ def api_lecture() -> ResponseReturnValue:
         return jsonify({"error": "seed/nodes are malformed"}), 400
 
     return sse_response(
-        _relay(orchestrator.run(Intent.LECTURE, seed=seed, nodes=nodes, mode=mode, target=target))
+        _relay(streams.terminated(lecturer.lecture(seed=seed, nodes=nodes, mode=mode, target=target)))
     )
 
 
@@ -270,15 +270,16 @@ def api_ask() -> ResponseReturnValue:
 
     return sse_response(
         _relay(
-            orchestrator.run(
-                Intent.RESEARCH,
-                question=question,
-                seed=seed,
-                nodes=nodes,
-                history=history,
-                source_ids=source_ids,
-                lectures=lectures,
-                provider=provider,
+            streams.terminated(
+                researcher.answer(
+                    question=question,
+                    seed=seed,
+                    nodes=nodes,
+                    history=history,
+                    source_ids=source_ids,
+                    lectures=lectures,
+                    provider=provider,
+                )
             ),
             store=_QA_SESSIONS,
             session_id=session_id,
@@ -327,12 +328,13 @@ def api_ask_sources() -> ResponseReturnValue:
 
     return sse_response(
         _relay(
-            orchestrator.run(
-                Intent.RESEARCH,
-                question=question,
-                history=history,
-                source_ids=source_ids,
-                provider=provider,
+            streams.terminated(
+                researcher.answer(
+                    question=question,
+                    history=history,
+                    source_ids=source_ids,
+                    provider=provider,
+                )
             ),
             store=_SOURCES_SESSIONS,
             session_id=session_id,

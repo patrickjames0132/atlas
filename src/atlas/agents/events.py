@@ -349,6 +349,12 @@ class SearchTrace(BaseModel):
     year_from: int | None = None
     year_to: int | None = None
     reason: Literal["empty_query", "steps_exhausted", "budget_exhausted", "error"] | None = None
+    #: Emitted *before* the work starts, so the reader sees the search begin
+    #: rather than a silent gap. A scouting run is several provider calls
+    #: deep and nothing else reaches the stream while it runs. The frontend
+    #: replaces a pending chip with its finished twin — see
+    #: ``store/transcript.ts``.
+    pending: bool = False
 
 
 class SourceSearchTrace(BaseModel):
@@ -380,6 +386,9 @@ class WebSearchTrace(BaseModel):
     need: str
     #: How many pages came back carrying a usable URL.
     found: int | None = None
+    #: Emitted before the run starts — see ``SearchTrace.pending``. It matters
+    #: most here: a web scout is the longest-running thing in the app.
+    pending: bool = False
 
 
 class FigureTrace(BaseModel):

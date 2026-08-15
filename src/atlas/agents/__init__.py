@@ -1,8 +1,8 @@
 """Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
 
 Description:
-The AI teacher as a crew of agents: an orchestrator delegating to focused
-sub-agents, every workflow streaming typed events.
+The AI teacher as a crew of agents: orchestrators that own an outcome and
+workers that each own one source, every workflow streaming typed events.
 
 Layout rule: the package root is the shared directory — ``events`` (the typed
 event stream), ``traversal`` (day-cached S2 hops), ``factory`` (config entry

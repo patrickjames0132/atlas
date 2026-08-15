@@ -261,14 +261,14 @@ agents/
       lecture.md              the lecturer (narrates the visible graph as-is)
       research.md             the researcher Q&A (with a graph, or without)
   orchestrators/     ← tier 1: agents that own an outcome (README.md)
-    orchestrator/      ← an agent: main.py, tools.py, config.py, README.md
-    lecturer/          ← an agent:    "        "         "          "
-    researcher/        ← an agent:    "        "         "          "
-    query_analyst/     ← an agent:    "        "         "          "
-    summarizer/        ← an agent: main.py, config.py, README.md (no tools)
-  workers/           ← tier 2: one source each, one question each (README.md)
-    papers/            ← an agent: main.py, config.py (the provider search)
-    web/               ← an agent: main.py, config.py (the open web)
+    lecturer/          ← an agent: main.py, config.py, README.md
+    researcher/        ← an agent: main.py, tools.py, config.py, README.md
+    query_analyst/     ← an agent: main.py, config.py, README.md
+    summarizer/        ← an agent: main.py, config.py, README.md
+  workers/           ← tier 2: one source each, one question each
+    search/            ← workers that go and look something up (README.md)
+      papers/            ← an agent: main.py, config.py (the provider search)
+      web/               ← an agent: main.py, config.py (the open web)
 ```
 
 ### Layout rules
@@ -284,7 +284,13 @@ agents/
   capability earns worker status when it needs judgment or context
   isolation — otherwise it stays a plain function.** That file also holds the
   return-shape contract (structured findings, never prose, never indices) and
-  why depth beyond two tiers was rejected.
+  why depth beyond two tiers was rejected. Workers are grouped by *kind*
+  (`search/` today), so the grouping folder — not the worker — is what sits
+  under `workers/`.
+- **No router.** Routes call the agent they mean. The `orchestrator`
+  package and the `Intent` enum were deleted in v6.16.0; see
+  [`orchestrators/README.md`](orchestrators/README.md) for what happened to
+  the two things it carried.
 - **`tools.py` appears only inside an agent** and only ever means "this
   agent's model-callable tool surface" — functions registered on the
   PydanticAI agent whose signatures become schemas the LLM sees. Shared

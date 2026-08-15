@@ -5,7 +5,6 @@ parts of it, and is answerable for what the user finally sees.
 
 ```
 orchestrators/
-  orchestrator/   — the workflow router: one `run(intent, ...)` entry point
   researcher/     — agentic Q&A, with or without a graph
   lecturer/       — the streaming lecture over the visible graph
   summarizer/     — one-shot paper TL;DRs
@@ -32,9 +31,36 @@ frontend chip that builds a graph from it. That invariant holds exactly as
 long as one agent assigns the indices — which is why `find_papers` receives
 raw provider nodes from the paper scout and numbers them itself.
 
+## The router that isn't here
+
+There used to be an `orchestrator/` in this folder: one `run(intent, ...)`
+entry point that every route funnelled through, dispatching on an `Intent`
+enum. It was **deleted in v6.16.0**, along with the enum, because it had
+stopped earning its place — it dispatched two known intents to two agents and
+never grew the model half it was designed around. Every caller already knew
+which workflow it wanted, so the enum was a string round-trip between a route
+and the function next to it.
+
+Routing lives in the routes now, which is where the intent already was:
+`/api/lecture` calls the lecturer, `/api/ask` and `/api/ask_sources` call the
+researcher. Two things the router carried had to land somewhere real, and
+neither belonged to it:
+
+- **The Done/Error termination contract** — a stream that simply stops looks
+  identical to one still working, so the panel would wait forever. It is now
+  `streams.terminated`, shared plumbing wrapping any workflow. A workflow is
+  responsible for its events, not for how a transport learns it finished.
+- **Lecture mode scoping** (`_story_nodes`, `_chronological`) — which visible
+  nodes a mode may narrate, and in what order. That is lecture domain logic
+  and moved into `lecturer/main.py`, which now scopes its own input: callers
+  pass everything on screen rather than pre-filtering. (One visible
+  consequence: a lecture's numbered list is chronological, so `[1]` is the
+  oldest paper.)
+
 ## What moved here, and what it cost
 
-All five packages moved from `agents/` in v6.16.0 with **no behavior change**.
+All five packages moved from `agents/` in v6.16.0 with **no behavior change**
+(the fifth, `orchestrator/`, was then deleted — see above).
 Worth knowing if you're grepping history: `AGENT_ID` is a string constant
 independent of package path, so no `config.llm.agents` entry moved and no
 config churn was involved. The only mechanical cost was relative-import

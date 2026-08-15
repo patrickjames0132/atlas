@@ -34,6 +34,7 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from typing import Any, AsyncIterator, Coroutine, Iterator, TypeVar
 
@@ -41,6 +42,8 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import AgentStreamEvent
 from pydantic_ai.run import AgentRunResultEvent
 from pydantic_core import from_json
+
+log = logging.getLogger(__name__)
 
 OUTPUT_TOOL = "final_result"
 """PydanticAI's default output-tool name — structured final results stream
@@ -124,6 +127,34 @@ async def _anext_or_done(stream: AsyncIterator[Any]) -> Any:
         return await anext(stream)
     except StopAsyncIteration:
         return _STREAM_DONE
+
+
+def terminated(events_in: Iterator[Any]) -> Iterator[Any]:
+    """Wrap a workflow's events so the stream always ends with Done or Error.
+
+    The one contract the frontend depends on: a stream that simply stops looks
+    identical to one still working, and the panel waits forever. This used to
+    live in an ``orchestrator.run`` that every workflow was funnelled through;
+    with the routes calling agents directly (v6.16.0) it belongs here, as the
+    shared plumbing it always was — a workflow is responsible for its events,
+    not for how a transport learns it finished.
+
+    Args:
+        events_in: The workflow's own event stream.
+
+    Yields:
+        Every event the workflow produced, then exactly one ``Done`` on
+        success or ``Error`` on failure — always last, whatever happens.
+    """
+    from . import events as events_mod
+
+    try:
+        yield from events_in
+    except Exception as exc:
+        log.exception("workflow failed")
+        yield events_mod.Error(message=str(exc))
+        return
+    yield events_mod.Done()
 
 
 def drive(

@@ -37,7 +37,7 @@ from ....services import pdf as pdf_service
 from ....services.graph import Edge, Node, Provider
 from ....services.sources import retrieval
 from ... import captions, events, library_figures, prompts, traversal
-from ...workers import papers, web
+from ...workers.search import papers, web
 from .config import BUDGETS
 
 # A hop or search can fail on either provider's client; both come back to the

@@ -10,7 +10,7 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from ... import factory
+from .... import factory
 
 AGENT_ID = "web_scout"
 

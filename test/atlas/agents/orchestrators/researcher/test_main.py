@@ -19,8 +19,8 @@ from atlas.agents import events
 from atlas.agents.models import PlayedBeat, PlayedLecture
 from atlas.agents.orchestrators import researcher
 from atlas.agents.orchestrators.researcher import config as researcher_config
-from atlas.agents.workers import papers as papers_worker
-from atlas.agents.workers import web as web_worker
+from atlas.agents.workers.search import papers as papers_worker
+from atlas.agents.workers.search import web as web_worker
 from atlas.services.graph import Node
 
 
@@ -289,7 +289,11 @@ def test_search_budget_exhausted_is_distinguished_from_an_error(monkeypatch):
         [final("Answering with what I have.", [])],
     )
     out = run(model, monkeypatch)
-    traces = [event for event in out if isinstance(event, events.SearchTrace)]
+    # Pending traces are filtered out: this test is about the *outcomes*, and
+    # each search now also announces itself before it starts.
+    traces = [
+        event for event in out if isinstance(event, events.SearchTrace) and not event.pending
+    ]
     assert [(trace.ok, trace.reason) for trace in traces] == [
         (True, None),
         (False, "budget_exhausted"),
@@ -689,7 +693,11 @@ def test_the_scout_finds_the_papers_and_the_researcher_numbers_them(monkeypatch)
     # NODES is three papers long, so the scout's find takes index 4 — assigned
     # here, never by the worker.
     assert [(node.idx, node.title) for node in discovery.nodes] == [(4, "A Very Recent Result")]
-    trace = next(event for event in out if isinstance(event, events.SearchTrace))
+    trace = next(
+        event
+        for event in out
+        if isinstance(event, events.SearchTrace) and not event.pending
+    )
     assert trace.ok and trace.found == 1
 
 
@@ -793,3 +801,22 @@ def test_provenance_carries_the_web_counts(monkeypatch):
     provenance = provenance_of(out)
     assert provenance.web_searches == 1
     assert provenance.web_pages == 1
+
+
+def test_a_scout_announces_itself_before_it_runs(monkeypatch):
+    """Nothing reaches the stream while a tool executes — `answer` drains the
+    deps queue between run events, and a tool call produces none until it
+    returns. A scouting run several provider calls deep therefore showed an
+    empty panel for its whole duration, which reads as a hang. The pending
+    trace rides the tool-CALL event, which arrives before execution."""
+    stub_scout(monkeypatch)
+    model = scripted(
+        [("find_papers", ['{"need": "recent work"}'])],
+        [final("Answering.", [])],
+    )
+    out = run(model, monkeypatch)
+    traces = [event for event in out if isinstance(event, events.SearchTrace)]
+    assert [(trace.pending, trace.query) for trace in traces] == [
+        (True, "recent work"),   # announced, before the scout ran
+        (False, "recent work"),  # and reported, after
+    ]

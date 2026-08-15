@@ -27,10 +27,10 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent, RunContext, Tool
 
-from ....integrations import openalex
-from ....integrations import semantic_scholar as s2
-from ....services.graph import Provider
-from ... import factory, prompts, traversal
+from .....integrations import openalex
+from .....integrations import semantic_scholar as s2
+from .....services.graph import Provider
+from .... import factory, prompts, traversal
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)

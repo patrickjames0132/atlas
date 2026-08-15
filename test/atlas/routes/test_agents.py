@@ -15,7 +15,6 @@ import json
 import pytest
 
 from atlas.agents import events
-from atlas.agents.models import Intent
 from atlas.config import config
 from atlas.routes import agents as agents_routes
 
@@ -28,6 +27,21 @@ SEED = {
     "x": 12.5, "vy": -0.3, "index": 0,
 }
 NODES = [SEED, {**SEED, "id": "node02", "title": "Q-learning", "is_seed": False}]
+
+
+def patch_agents(monkeypatch, fake):
+    """Swap both agents the routes call, so one fake serves either endpoint.
+
+    The routes dispatch directly since v6.16.0 (the orchestrator that used to
+    sit between them is gone), so there is no single seam left to patch — and
+    that is the point: a test now names the agent it means.
+
+    Args:
+        monkeypatch: The test's monkeypatch fixture.
+        fake: A generator taking keyword arguments, standing in for either.
+    """
+    monkeypatch.setattr(agents_routes.researcher, "answer", fake)
+    monkeypatch.setattr(agents_routes.lecturer, "lecture", fake)
 
 
 def frames(response) -> list[tuple[str, dict]]:
@@ -50,19 +64,18 @@ def _fresh_stores():
 def test_lecture_types_the_payload_and_relays_by_event_type(client, monkeypatch):
     seen = {}
 
-    def fake_run(intent, **kwargs):
-        seen["intent"], seen["kwargs"] = intent, kwargs
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
         yield events.Beat(heading="Roots", text="It began.", node_ids=["node02"])
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "intuition"})
     assert frames(response) == [
         ("beat", {"heading": "Roots", "text": "It began.", "node_ids": ["node02"],
                   "graph_refs": {}, "figure": None}),
         ("done", {}),
     ]
-    assert seen["intent"] == "lecture" and seen["kwargs"]["mode"] == "intuition"
+    assert seen["kwargs"]["mode"] == "intuition"
     # The route delivered typed Nodes, sim baggage stripped, annotations kept.
     typed_seed = seen["kwargs"]["seed"]
     assert typed_seed.id == "seed01" and typed_seed.is_seed is True
@@ -85,18 +98,16 @@ def test_lecture_input_validation(client):
 def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
     seen = {}
 
-    def fake_run(intent, **kwargs):
-        seen["intent"], seen["kwargs"] = intent, kwargs
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
         yield events.Token(text="As the figure shows.\n<<FIG 1>>\nSo it works.")
         yield events.Cited(node_ids=["seed01"])
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     body = {"question": "why?", "session_id": "sess1", "seed": SEED, "nodes": NODES,
             "source_ids": ["s1", 42, ""]}
     response = client.post("/api/ask", json=body)
     assert [name for name, _ in frames(response)] == ["token", "cited", "done"]
-    assert seen["intent"] == "research"
     assert seen["kwargs"]["source_ids"] == ["s1"]  # non-strings dropped
     assert seen["kwargs"]["history"] == []
     # Persisted turn: marker stripped, both roles recorded.
@@ -113,13 +124,12 @@ def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
 def test_ask_parses_played_lectures_into_typed_context(client, monkeypatch):
     seen = {}
 
-    def fake_run(intent, **kwargs):
+    def fake_run(**kwargs):
         seen["kwargs"] = kwargs
         yield events.Token(text="Building on the lecture.")
         yield events.Cited(node_ids=["seed01"])
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     body = {
         "question": "why?", "session_id": "sess-lec", "seed": SEED, "nodes": NODES,
         "lectures": [
@@ -140,11 +150,10 @@ def test_ask_parses_played_lectures_into_typed_context(client, monkeypatch):
 def test_ask_without_lectures_passes_none(client, monkeypatch):
     seen = {}
 
-    def fake_run(intent, **kwargs):
+    def fake_run(**kwargs):
         seen["kwargs"] = kwargs
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     client.post(
         "/api/ask", json={"question": "q", "session_id": "s", "seed": SEED, "nodes": NODES}
     ).data
@@ -152,11 +161,11 @@ def test_ask_without_lectures_passes_none(client, monkeypatch):
 
 
 def test_failed_answers_do_not_poison_history(client, monkeypatch):
-    def fake_run(intent, **kwargs):
+    def fake_run(**kwargs):
         yield events.Token(text="starting...")
-        yield events.Error(message="Semantic Scholar is unavailable — try again.")
+        raise RuntimeError("Semantic Scholar is unavailable — try again.")
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     response = client.post(
         "/api/ask", json={"question": "why?", "session_id": "sess1", "seed": SEED, "nodes": NODES}
     )
@@ -169,11 +178,10 @@ def test_failed_answers_do_not_poison_history(client, monkeypatch):
 def test_history_window_is_trimmed(client, monkeypatch):
     monkeypatch.setattr(config.server, "history_turns", 1)
 
-    def fake_run(intent, **kwargs):
+    def fake_run(**kwargs):
         yield events.Token(text="answer")
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     for question in ("first?", "second?"):
         # .data consumes the stream — persistence happens during iteration.
         client.post("/api/ask_sources", json={"question": question, "session_id": "lib1"}).data
@@ -183,11 +191,10 @@ def test_history_window_is_trimmed(client, monkeypatch):
 
 
 def test_the_two_chats_use_separate_stores(client, monkeypatch):
-    def fake_run(intent, **kwargs):
+    def fake_run(**kwargs):
         yield events.Token(text="ok")
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     client.post("/api/ask", json={"question": "graph q", "session_id": "same-id",
                                   "seed": SEED, "nodes": NODES}).data
     client.post("/api/ask_sources", json={"question": "library q", "session_id": "same-id"}).data
@@ -200,18 +207,16 @@ def test_ask_sources_runs_the_researcher_without_a_graph(client, monkeypatch):
     still has no embedder probe or availability refusal."""
     seen: dict = {}
 
-    def fake_run(intent, **kwargs):
-        seen["intent"], seen["kwargs"] = intent, kwargs
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
         yield events.SourceSearchTrace(ok=True, query="anything", found=0)
         yield events.Token(text="Nothing in your library covers that.")
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     response = client.post("/api/ask_sources", json={"question": "anything"})
     assert response.status_code == 200  # no embedder probe, no 400 refusal
     assert frames(response)[0][0] == "trace"
-    # Routed as research, with no seed/nodes — that absence IS the graph-free mode.
-    assert seen["intent"] is Intent.RESEARCH
+    # No seed and no nodes — that absence IS the graph-free mode.
     assert "seed" not in seen["kwargs"] and "nodes" not in seen["kwargs"]
 
     assert client.post("/api/ask_sources", json={}).status_code == 400  # question required
@@ -223,12 +228,11 @@ def test_ask_sources_runs_on_the_requested_provider(client, monkeypatch):
     a chat under OpenAlex quietly searched Semantic Scholar instead."""
     seen: dict = {}
 
-    def fake_run(intent, **kwargs):
+    def fake_run(**kwargs):
         seen.update(kwargs)
         yield events.Token(text="ok")
-        yield events.Done()
 
-    monkeypatch.setattr(agents_routes.orchestrator, "run", fake_run)
+    patch_agents(monkeypatch, fake_run)
     client.post("/api/ask_sources", json={"question": "q", "provider": "openalex"}).data
     assert seen["provider"] == "openalex"
     # Junk degrades to the configured default rather than erroring, same as

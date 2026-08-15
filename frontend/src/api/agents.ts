@@ -152,7 +152,14 @@ export interface TraceEvent {
    *  query string, since the scout writes those itself and may write several.
    *  search_web only. */
   need?: string
-  /** Year filter — search_papers. */
+  /**
+   * This step has been *started*, not finished — a scout announcing itself
+   * before a run that takes a visible while. The store replaces it with the
+   * finished trace when that lands, so a pending chip fills in rather than
+   * doubling up.
+   */
+  pending?: boolean
+  /** Year filter — find_papers. */
   year_from?: number | null
   year_to?: number | null
   /** Figure number the agent showed — show_figure. */

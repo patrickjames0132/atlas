@@ -79,29 +79,37 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
   if (trace.action === 'search_web')
     return (
       <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
-        🌐 {trace.ok ? 'Searched the web' : 'Tried the web'}
+        🌐 {trace.pending ? 'Searching the web' : trace.ok ? 'Searched the web' : 'Tried the web'}
         {trace.need ? (
           <>
             {' '}
             for <b>“{trace.need}”</b>
           </>
         ) : null}
-        {trace.ok && (
-          <em>{trace.found ? `${trace.found} page${trace.found > 1 ? 's' : ''}` : 'nothing'}</em>
+        {trace.pending ? (
+          <HopDots label="Searching" />
+        ) : (
+          trace.ok && (
+            <em>{trace.found ? `${trace.found} page${trace.found > 1 ? 's' : ''}` : 'nothing'}</em>
+          )
         )}
       </div>
     )
   if (trace.action === 'search')
     return (
       <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>
-        🔎 {trace.ok ? 'Searched' : 'Tried'} <b>“{trace.query}”</b>
+        🔎 {trace.pending ? 'Searching for' : trace.ok ? 'Searched' : 'Tried'}{' '}
+        <b>“{trace.query}”</b>
         {trace.year_from || trace.year_to ? (
           <span>
             {' '}
             ({trace.year_from ?? '…'}–{trace.year_to ?? 'now'})
           </span>
         ) : null}
-        {trace.ok && <em>{trace.found ? `${trace.found} new` : 'nothing new'}</em>}
+        {trace.pending && <HopDots label="Searching" />}
+        {!trace.pending && trace.ok && (
+          <em>{trace.found ? `${trace.found} new` : 'nothing new'}</em>
+        )}
         {!trace.ok && searchFailReason(trace.reason) && <em>{searchFailReason(trace.reason)}</em>}
       </div>
     )

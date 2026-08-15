@@ -115,9 +115,9 @@
       },
       {
         "id": "web_scout",
-        "model": "anthropic:claude-sonnet-4-6",
+        "model": "anthropic:claude-haiku-4-5",
         "extras": {
-          "max_uses": 4
+          "max_uses": 2
         }
       }
     ]

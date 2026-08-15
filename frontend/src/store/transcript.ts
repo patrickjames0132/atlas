@@ -179,7 +179,20 @@ const transcriptSlice = createSlice({
      */
     traceAdded(state, action: PayloadAction<TraceEvent>) {
       const msg = lastMsg(state)
-      if (msg) msg.trace = [...(msg.trace ?? []), action.payload]
+      if (!msg) return
+      const trace = msg.trace ?? []
+      // A scout announces itself before it starts (a `pending` trace) so a run
+      // several provider calls deep isn't a silent gap, then reports back when
+      // it lands. Those are one step, so the finished trace REPLACES its
+      // pending twin rather than appending beside it — otherwise every scouted
+      // search leaves two chips saying the same thing.
+      const incoming = action.payload
+      const twin = trace.findIndex((event) => event.pending && event.action === incoming.action)
+      if (!incoming.pending && twin !== -1) {
+        msg.trace = trace.map((event, index) => (index === twin ? incoming : event))
+        return
+      }
+      msg.trace = [...trace, incoming]
     },
     /**
      * An inline answer figure lands on the turn.

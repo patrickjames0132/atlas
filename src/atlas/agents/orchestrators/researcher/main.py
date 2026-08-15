@@ -31,6 +31,7 @@ from pydantic_ai import Agent, Tool, UsageLimits
 from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.messages import (
     PartDeltaEvent,
+    PartEndEvent,
     PartStartEvent,
     ToolCallPart,
     ToolCallPartDelta,
@@ -226,6 +227,42 @@ def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer
         "plainly where it doesn't. (If this turn was only conversational, set "
         "kind to 'conversational' instead.)"
     )
+
+
+def _pending_trace(call: ToolCallPart) -> events.Event | None:
+    """The "starting now" trace for a tool that will take a visible while.
+
+    Both scout tools run a whole sub-agent — several provider calls deep for
+    papers, a provider-side web search for the web — and **nothing reaches the
+    stream while a tool executes**: ``answer`` drains the deps queue between
+    *run* events, and a tool call produces none until it returns. So a scouting
+    run showed the reader an empty panel for however long it took, which reads
+    as a hang rather than as work.
+
+    It rides ``PartEndEvent`` — the moment the model finishes writing the
+    tool call, which is genuinely before the tool runs. ``FunctionToolCallEvent``
+    is the obvious candidate and is **wrong**: it is delivered *after*
+    execution, so the pending chip arrived behind the result it was meant to
+    precede (caught by the ordering assertion in this module's tests). The
+    finished trace replaces this one frontend-side (see
+    ``store/transcript.ts``), so the reader sees one chip that fills in rather
+    than two.
+
+    Args:
+        call: The tool call the model just made.
+
+    Returns:
+        The pending trace, or None for tools that return promptly enough not
+        to need one.
+    """
+    need = call.args_as_dict().get("need") if isinstance(call.args, (str, dict)) else None
+    if not isinstance(need, str) or not need.strip():
+        return None
+    if call.tool_name == "find_papers":
+        return events.SearchTrace(ok=True, query=need, pending=True)
+    if call.tool_name == "search_web":
+        return events.WebSearchTrace(ok=True, need=need, pending=True)
+    return None
 
 
 def _doomed(args_buffer: str, deps: ResearcherDeps) -> bool:
@@ -471,7 +508,11 @@ def answer(
         yield from deps.drain()
 
         answer_grew = False
-        if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
+        if isinstance(event, PartEndEvent) and isinstance(event.part, ToolCallPart):
+            pending = _pending_trace(event.part)
+            if pending is not None:
+                yield pending
+        elif isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
             if event.part.tool_name == streams.OUTPUT_TOOL:
                 output_part = event.index
                 args = event.part.args
