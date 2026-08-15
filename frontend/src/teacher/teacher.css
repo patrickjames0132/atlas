@@ -16,6 +16,13 @@
      more of it. */
   --lecture-wash: 0.06;
   --lecture-wash-strong: 0.1;
+  /* The two entrance curves (see "entrances" below). The rise eases OUT —
+     quick off the mark, settling gently into place. The fade eases IN — it
+     holds low and resolves late, which is what makes the element look like
+     it's surfacing rather than sliding. They're named because they're used
+     in four places and only make sense as a pair. */
+  --ease-rise: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-fade: cubic-bezier(0.55, 0, 0.75, 0.35);
   position: relative; /* anchors the .panel-resize-handle on the left edge */
   width: 340px;
   flex-shrink: 0;
@@ -86,6 +93,84 @@
   font-weight: 400;
   line-height: 1.25;
   color: var(--text-strong);
+}
+
+/* --- entrances ---------------------------------------------------------
+   One gesture, used everywhere something arrives: fade up from 16px below,
+   with the fade deliberately *lagging* the rise so the thing resolves out of
+   the background rather than sliding in already-formed.
+
+   TWO animations, not one keyframe set, and that split is the whole trick.
+   A timing function applies *between each pair of keyframes*, so expressing
+   the lag as a mid-keyframe (`55% { opacity: 0.25 }`, the first attempt)
+   makes the fade decelerate into that stop and accelerate out of it — a
+   visible hitch that reads as dropped frames. Run as two animations the
+   curves stay independent and each is a single smooth interval: the rise
+   eases out, the fade eases *in* (slow to start, resolving late), and
+   nothing has to compromise. Retune each on its own; just don't merge them
+   back into one keyframe block.
+
+   `both` holds the from-state before the first frame, which is what stops
+   the flash of final-position content that a bare `forwards` leaves. */
+@keyframes rise {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* The front door: the greeting arrives, then the composer and its context
+   note together a beat later — the note sits above the bar and belongs to
+   it, so they have to move as one thing or the note reads as a caption that
+   forgot to leave.
+   Scoped to the *empty* landing state — the one moment there is nothing to
+   read yet — so it plays when you arrive at the app and never replays on a
+   docked panel being toggled open (display:none → block restarts CSS
+   animations, which would re-run this on every ✕ and re-open). */
+.teacher.landing.empty .landing-greeting {
+  animation:
+    rise 0.7s var(--ease-rise) both,
+    fade 0.7s var(--ease-fade) both;
+}
+.teacher.landing.empty .ask-context-note,
+.teacher.landing.empty .teacher-ask {
+  animation:
+    rise 0.7s var(--ease-rise) 0.12s both,
+    fade 0.7s var(--ease-fade) 0.12s both;
+}
+/* Each turn arrives the same way. Deliberately a plain CSS animation and not
+   state-driven: it fires when the element is *created*, which is exactly the
+   trigger we want — once per turn. A streaming answer re-renders on every
+   token and an answer can be re-lit, resized, or re-themed, and none of that
+   restarts an animation (only a remount or an animation-name change does), so
+   the prose can never twitch mid-stream. It also means a graph load leaves
+   the transcript alone: the conversation survives a re-seed without
+   remounting (see `store/README.md`), so nothing re-animates. A restore is
+   the one case where every bubble plays at once — which is fine, because
+   that IS the panel arriving. */
+.chat {
+  animation:
+    rise 0.5s var(--ease-rise) both,
+    fade 0.5s var(--ease-fade) both;
+}
+/* Each step the agent takes arrives on its own, mid-answer, so every chip
+   gets the same entrance the turn around it had. This is the one place the
+   motion is doing real work rather than polish: the chips ARE the progress
+   report, and one rising into place reads as "something just happened" in a
+   way that a chip silently appearing in a stack does not. */
+.trace-line {
+  animation:
+    rise 0.45s var(--ease-rise) both,
+    fade 0.45s var(--ease-fade) both;
 }
 
 /* The source scope, inset in the ask bar. It used to sit in the panel head,
@@ -420,11 +505,23 @@
     opacity: 1;
   }
 }
-/* Respect users who'd rather not have motion — the dots just sit and pulse. */
+/* Respect users who'd rather not have motion. The dots just sit and pulse;
+   the entrances are dropped outright rather than shortened — an entrance has
+   no job beyond the motion itself, so with the motion gone there's nothing
+   left worth playing. Everything lands in its final state immediately, which
+   is why each of these needs the reset: `both` would otherwise pin the
+   elements at `opacity: 0` forever. */
 @media (prefers-reduced-motion: reduce) {
   .hop-dot {
     animation: none;
     opacity: 0.7;
+  }
+  .teacher.landing.empty .landing-greeting,
+  .teacher.landing.empty .ask-context-note,
+  .teacher.landing.empty .teacher-ask,
+  .trace-line,
+  .chat {
+    animation: none;
   }
 }
 
@@ -513,6 +610,8 @@
 }
 
 /* --- Q&A chat --- */
+/* (Its entrance animation lives up with the other entrances, under
+   `.landing-greeting` — one gesture, described in one place.) */
 .chat {
   font-size: 13.5px;
   line-height: 1.55;

@@ -33,13 +33,14 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, KeyboardEvent } from 'react'
 import { LECTURE_TITLES, type AnswerFigure, type LectureMode } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { loadLibrary, selectLibrary } from '../store/library'
 import { selectVisibleBeats, selectVisibleSourceRefs } from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
+import HopDots from './HopDots'
 import ScopePicker from './ScopePicker'
 import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
@@ -58,6 +59,23 @@ const MODES: { key: LectureMode; label: string; rel: string; tag: string }[] = [
   { key: 'evolution', label: LECTURE_TITLES.evolution, rel: 'citation', tag: 'Landmarks' },
   { key: 'frontier', label: LECTURE_TITLES.frontier, rel: 'latest', tag: 'Latest' },
 ]
+
+/**
+ * Whether the reader has asked the OS for less motion.
+ *
+ * The CSS entrances answer this with a `prefers-reduced-motion` block; the
+ * composer's FLIP is scripted, so it has to ask directly. Read at call time,
+ * never at module scope — this module is imported by tests running in the
+ * node environment, where there is no `window` at all.
+ *
+ * @returns True when motion should be skipped.
+ */
+function prefersStill(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  )
+}
 
 /**
  * Render the assistant panel: lecture buttons, transcript, and the ask form.
@@ -201,6 +219,69 @@ export default function Teacher({
     if (field.scrollHeight > 0) field.style.height = `${field.scrollHeight}px`
   }, [input])
 
+  // Follow the bottom while an answer builds. Trace chips, tokens and beats all
+  // arrive at the end of the transcript, and without this they simply grow past
+  // the fold — the reader watches the agent work right up until the moment the
+  // work scrolls out of sight.
+  //
+  // Conditional on purpose: it follows only while the reader is already AT the
+  // bottom. Scroll up mid-answer to re-read something and the transcript stops
+  // chasing, because yanking someone back down is worse than the problem this
+  // solves; scroll back down and it resumes. The threshold is generous — a few
+  // pixels of rounding, or a half-line of overshoot, still counts as "at the
+  // bottom", and `.chat`'s entrance transform means the last element is briefly
+  // 16px lower than its resting place while it animates in.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const following = useRef(true)
+  const onTranscriptScroll = () => {
+    const box = scrollRef.current
+    if (box) following.current = box.scrollHeight - box.scrollTop - box.clientHeight < 40
+  }
+  useEffect(() => {
+    const box = scrollRef.current
+    if (!box || !following.current) return
+    // Instant, never smooth: a smooth scroll can't keep up with SSE frames, and
+    // several in flight at once fight each other into a visible judder.
+    box.scrollTop = box.scrollHeight
+  }, [chat, beats])
+
+  // The composer's drop, on the first question of a landing session. Empty, it
+  // sits optically centred with the greeting; the moment a conversation starts
+  // it belongs at the bottom with the transcript filling in above. That move is
+  // a flex-layout change, which CSS cannot transition — so this is a FLIP:
+  // remember where the bar *was* on the last commit, and once the browser has
+  // put it in its new place, animate it from the old position to the new one.
+  // Nothing in the layout is faked; only a transform is played over the top.
+  //
+  // Keyed on `empty` alone, and deliberately not on every render: reading
+  // getBoundingClientRect forces layout, and this component re-renders on every
+  // streamed token.
+  const askRef = useRef<HTMLFormElement>(null)
+  const askTop = useRef<number | null>(null)
+  const wasEmpty = useRef(false)
+  const empty = landing && chat.length === 0
+  useLayoutEffect(() => {
+    const bar = askRef.current
+    if (!bar) return
+    const from = askTop.current
+    if (wasEmpty.current && !empty && from !== null && !prefersStill()) {
+      const travelled = from - bar.getBoundingClientRect().top
+      // `animate` is optional-called: jsdom has no Web Animations API, so a
+      // component test would otherwise die on a purely decorative flourish.
+      if (travelled) {
+        bar.animate?.(
+          [{ transform: `translateY(${travelled}px)` }, { transform: 'translateY(0)' }],
+          // Paced with the CSS entrances (`rise-in`, teacher.css) and eased
+          // the same way — this travels much further than any of them, so it
+          // gets the longer end of the range. Retune the two together.
+          { duration: 560, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)' },
+        )
+      }
+    }
+    wasEmpty.current = empty
+    askTop.current = bar.getBoundingClientRect().top
+  }, [empty])
+
   // What the ask bar invites, which is not always the same offer. The old copy
   // promised books and PDFs whenever there was no graph — fine back when a
   // library was the price of admission, and a lie now that the assistant is
@@ -328,15 +409,7 @@ export default function Teacher({
                     aria-label={mode.label}
                     title={`${mode.label} — ${stateHint}`}
                   >
-                    {loading ? (
-                      <span className="hop-dots" aria-label="Loading lecture">
-                        <span className="hop-dot" />
-                        <span className="hop-dot" />
-                        <span className="hop-dot" />
-                      </span>
-                    ) : (
-                      mode.tag
-                    )}
+                    {loading ? <HopDots label="Loading lecture" /> : mode.tag}
                   </button>
                 )
               })}
@@ -345,7 +418,7 @@ export default function Teacher({
         )}
       </div>
 
-      <div className="teacher-scroll">
+      <div className="teacher-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
         {/* One panel, two views: a shown lecture takes over the scroll (its
             "Now playing" header + beats); otherwise it's the Q&A chat. Asking a
             question hides the lecture, so the two never stack on top of each
@@ -427,7 +500,7 @@ export default function Teacher({
       {askContextParts.length > 0 && (
         <p className="ask-context-note">Answers also draw on {askContextParts.join(' · ')}.</p>
       )}
-      <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
+      <form className="teacher-ask" data-tour="ask" onSubmit={onAsk} ref={askRef}>
         {/* Which sources the researcher may search, inset in the bar rather than
             floating above it: it belongs to the question you're about to ask,
             so it sits with the ask. */}
@@ -508,11 +581,7 @@ export default function Teacher({
         >
           {asking ? (
             <>
-              <span className="hop-dots" aria-hidden="true">
-                <span className="hop-dot" />
-                <span className="hop-dot" />
-                <span className="hop-dot" />
-              </span>
+              <HopDots />
               <span className="stop-glyph" aria-hidden="true" />
             </>
           ) : (

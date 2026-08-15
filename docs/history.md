@@ -1782,6 +1782,50 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The chat surface got real motion** *(v6.15.0)* — the landing chat was
+      visually finished but *arrived* all at once: greeting, composer and every
+      answer simply appeared. Now everything that arrives shares one gesture —
+      fade up from 16px below, with the fade deliberately lagging the rise so a
+      thing surfaces out of the background instead of sliding in
+      already-formed. The front door cascades (greeting, then the composer and
+      its context note a beat later, moving as one because the note belongs to
+      the bar); each chat turn rises in; and each agent trace chip does too,
+      which is the one place the motion does real work rather than polish — the
+      chips *are* the progress report, and one rising into place reads as
+      "something just happened" where a chip silently joining a stack does not.
+
+      **The composer's drop is a FLIP**, because it can't be anything else:
+      going from optically centred with the greeting to pinned at the bottom is
+      a flex-layout change, and CSS cannot transition those. The bar's position
+      is recorded whenever the empty/non-empty state settles, and once the
+      browser has placed it anew it's animated from where it *was*. Nothing
+      about the layout is faked; only a transform plays over the top.
+
+      **The turn entrance is plain CSS and not state-driven**, which is the
+      design rather than the shortcut. A CSS animation fires when an element is
+      *created* — exactly once per turn — so the two hazards become structurally
+      impossible instead of merely avoided: a streaming answer re-renders on
+      every token without restarting anything, and a graph load leaves the
+      transcript untouched because the conversation survives a re-seed *without
+      remounting*. `HopDots` was extracted at its third caller so the waiting
+      bubble, the generating lecture button and the send control share one
+      rhythm; `prefers-reduced-motion` drops the CSS entrances and short-circuits
+      the FLIP.
+
+      **Two things only testing found.** The lagged fade was first written as a
+      mid-keyframe (`55% { opacity: 0.25 }`) — but a timing function applies
+      between each *pair* of keyframes, so the fade decelerated into that stop
+      and accelerated out of it, a hitch that reads as dropped frames. Splitting
+      it into two animations (`rise` eased out, `fade` eased in) gives the same
+      look with each curve a single smooth interval. And the transcript turned
+      out never to have auto-scrolled at all: the animation merely made it
+      visible, since you now watch each chip arrive and then leave. It follows
+      its own bottom now, conditionally — scroll up mid-answer and it stops
+      chasing, because being yanked back down is worse than the problem it
+      solves. The bottom test carries a 40px tolerance precisely *because* of
+      the entrance: the last element sits 16px low for the length of its rise,
+      and a tight test would disable the follow exactly when a turn arrives.
+
 - [x] **The landing page is a chat bar** *(v6.13.0)* — home was a sentence and
       a button in a lot of empty space, with the assistant filed behind a
       header toggle and gated on owning a library. Now Atlas opens on a centred

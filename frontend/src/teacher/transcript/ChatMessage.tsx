@@ -14,6 +14,7 @@
 import type { AnswerFigure, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
+import HopDots from '../HopDots'
 import { splitAnswer } from '../figures/split'
 import AnswerMarkdown from './AnswerMarkdown'
 import { provenanceLine } from './provenance'
@@ -169,12 +170,18 @@ export default function ChatMessage({
       )}
       {(() => {
         if (!message.text) {
+          // Waiting on the first token, with nothing else yet to show. The
+          // same hopping dots the send button and a generating lecture use —
+          // one "working" rhythm across the panel, rather than a static `…`
+          // here and a cascade everywhere else.
           return message.role === 'assistant' &&
             streaming &&
             !message.trace?.length &&
-            !message.retrieve
-            ? '…'
-            : ''
+            !message.retrieve ? (
+            <HopDots label="Thinking" />
+          ) : (
+            ''
+          )
         }
         // Interleave the prose with the figures the agent placed via
         // <<FIG n>> markers; unplaced figures fall back to the end.

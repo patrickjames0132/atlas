@@ -13,6 +13,9 @@ teacher/
   Teacher.tsx        — the slim shell: header, modes, scroll, ask form
   useConversation.ts — the stream engine: runs the 3 streams, dispatches
                        events into the store, owns panel run-state
+  HopDots.tsx        — the one "working on it" indicator, shared by a
+                       generating lecture button, the send/stop control, and
+                       an assistant bubble awaiting its first token
   ScopePicker.tsx    — generic checkbox-scope popover: which sources the
                        assistant searches AND which lectures it uses as context
                        (open state controlled by Teacher — the two popovers
@@ -47,13 +50,29 @@ structure rule's nesting case (the `graph/hooks` precedent).
   (`excludedSources`/`excludedLectures` — exclusion-tracked so a new
   source/lecture is in scope by default) plus which picker's popover is open
   (`openScope`, one shared slot so the two popovers can't overlap), the
-  lightbox, and the abort/session refs. The **source list itself** is NOT
+  lightbox, the abort/session refs, and whether the transcript is currently
+  following its own bottom (a ref, not state — it changes on every scroll
+  event and nothing renders from it). The **source list itself** is NOT
   local anymore: it reads live from the store's `library` slice, which the
   Sources drawer reloads on every upload/delete — the picker used to sit on
   a mount-time fetch and not appear until a page reload (Patrick's
   2026-07-11 report).
 
 ## Design decisions worth knowing
+
+- **The transcript follows the bottom while an answer builds — but only if
+  you're already there.** Trace chips, tokens and beats all arrive at the end,
+  and without this they grow past the fold: the reader watches the agent work
+  right up until the work scrolls out of sight. So a content change scrolls
+  to the bottom *conditionally*, gated on a `following` ref that a scroll
+  handler keeps up to date. Scroll up mid-answer to re-read something and the
+  transcript stops chasing — being yanked back down is worse than the problem
+  this solves — and scrolling back down resumes it. The bottom test carries a
+  40px tolerance, which is not slop: `.chat`'s entrance leaves the last
+  element 16px below its resting place for the length of the animation, so a
+  tight test would read "not at the bottom" exactly while a turn arrives. The
+  scroll is instant, never smooth: smooth can't keep up with SSE frames, and
+  several in flight at once judder against each other.
 
 - **`Lightbox.tsx` moved out to `../figures/`** (root-level, not nested here)
   once the detail panel's own paper figures became a second consumer — the
@@ -172,6 +191,64 @@ destructive one and must not compete with the control you came to press. The
 send itself doubles as **stop** while an answer streams — hopping dots at
 rest, a stop square on hover — so the thing that says "working" is also the
 thing that ends it, and it is never disabled mid-flight.
+
+## Motion
+
+One gesture, one rhythm, both defined in `teacher.css`.
+
+- **`rise` + `fade`** — up from 16px below, the entrance for everything that
+  arrives: the landing greeting, the composer and its context note a beat
+  later (they move as one thing — the note belongs to the bar), every chat
+  turn, and every agent trace chip.
+- **They are two animations on purpose, and must stay that way.** The fade
+  should *lag* the rise, so the element surfaces out of the background
+  instead of sliding in already-formed. Expressing that as a mid-keyframe
+  (`55% { opacity: 0.25 }`) doesn't work: a timing function applies between
+  each *pair* of keyframes, so the fade decelerated into that stop and
+  accelerated out of it — a hitch that reads as dropped frames, which is
+  exactly how it was reported. Split in two, each curve is a single smooth
+  interval: `--ease-rise` eases out, `--ease-fade` eases in. Retune either
+  alone; don't merge them back.
+- **Tuning history**, since this took three passes: 8px over 0.32–0.45s read
+  as a flicker; 16px over 0.45–0.7s with the lagged fade is the current
+  setting. The knobs are the travel, the two curves (named on `.teacher`),
+  and the durations.
+- **Trace chips are the one place the motion does real work** rather than
+  polish. They arrive one at a time while the agent runs, and they *are* the
+  progress report — one rising into place reads as "something just
+  happened", where a chip silently appearing in a stack does not.
+- **The turn entrance is plain CSS, not state-driven** — and that is the
+  design, not laziness. A CSS animation fires when an element is *created*,
+  which is exactly the trigger: once per turn. A streaming answer re-renders
+  on every token, and an answer can be re-lit or re-themed; none of that
+  restarts an animation, so prose can never twitch mid-stream. It also means
+  a graph load leaves the transcript still — the conversation survives a
+  re-seed *without remounting*, so there is nothing to replay. A restore is
+  the one case where every bubble plays at once, which is right: that is the
+  panel arriving.
+- **The greeting/composer entrance is scoped to `.landing.empty`** so it
+  can't replay on the docked panel. `display: none` → `block` restarts CSS
+  animations, so an unscoped rule would re-run the entrance on every ✕ and
+  re-open of the side panel.
+- **The composer's drop is a FLIP** (`Teacher.tsx`), because it can't be
+  anything else: going from optically centred with the greeting to pinned at
+  the bottom is a flex-layout change, and CSS cannot transition those. So the
+  bar's position is recorded each time the empty/non-empty state settles, and
+  once the browser has placed it anew it's animated from where it *was*.
+  Nothing about the layout is faked — only a transform plays over the top.
+  Its duration is paced with `rise-in` and eased identically, at the longer
+  end of the range because it travels much further; retune the two together.
+  Keyed on that state flip alone and never on every render: reading
+  `getBoundingClientRect` forces layout, and this component re-renders on
+  every streamed token.
+- **`HopDots`** is the one wait indicator, so the panel never shows two
+  almost-matching rhythms at once. Its `label` prop is the a11y contract:
+  named where the dots *are* the message (a generating lecture, a bubble
+  waiting on its first token), silent inside a control that already announces
+  the state (the send button becomes "Stop generating").
+- **Everything has a `prefers-reduced-motion` path.** The CSS entrances drop
+  out in the block beside the keyframes; the FLIP checks `prefersStill()`
+  itself, since a scripted animation can't be reached by a media query.
 
 ## How it's verified
 
