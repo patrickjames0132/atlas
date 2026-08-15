@@ -591,6 +591,42 @@ optional, behind a key.
       restless there. Worth trying both before committing. *(Patrick's ask,
       2026-08-14.)*
 
+- [ ] **Animate the arrival of the graph** — the sibling of the chat-motion
+      ticket above, and the bigger of the two. Today the landing→graph
+      transition is a cut: the chat is the page, then the graph simply *is*
+      there and the chat is a side panel. The ask is a **zoom-in fade into the
+      graph while the composer glides out of the way to the side** — one
+      continuous move that says the conversation became the map, rather than
+      two surfaces swapping places.
+
+      **What makes it feasible.** The Teacher element deliberately stays at a
+      single position in the tree across the switch (v6.13.0) — only its class
+      changes, `.teacher.landing` → docked — precisely so entering graph mode
+      doesn't remount it. So the composer's journey is a style change on one
+      persistent element, which is the one case CSS can actually animate. The
+      catch is *what* changes: `width: 100%` + `flex: 1` + `padding` →
+      `width: 340px` + `flex-shrink: 0` + a left border, plus an inner
+      `width: min(720px, 100%)` reading column that has to narrow at the same
+      time. Some of that transitions cleanly and some doesn't (flex shorthand
+      changes don't), so the first task is finding the subset that does — or
+      committing to a FLIP-style transform, which animates smoothly regardless
+      but needs the before/after boxes measured.
+
+      **The graph half.** `GraphExplorer` already has the hook: a one-shot
+      `zoomToFit(400, 60)` latch fired from `onEngineStop` once the force sim
+      settles (`fitDone`). A zoom-in entrance is that same camera move started
+      from further out, plus an opacity ramp on the canvas — so the sequencing
+      question is whether the fade waits for the sim to settle (clean, but the
+      first layout tick is the slowest) or overlaps it (livelier, but the user
+      watches nodes shuffle into place). Worth trying both; the honest answer
+      may be that a settling graph is *worth* watching.
+
+      **Constraints inherited from the ticket above:** one motion language for
+      both, a `prefers-reduced-motion` path for everything added, and no
+      re-animation on a *re-seed* — a graph already on screen being replaced is
+      a different, quieter event than the first one arriving, and the
+      transcript survives it on purpose. *(Patrick's ask, 2026-08-14.)*
+
 - [ ] **Make the provenance line a control, not a caption** — the quiet
       summary under an answer ("grounded in 1 of your sources + 1 paper ✦",
       `teacher/transcript/provenance.ts`) reads as a label, but it names the
