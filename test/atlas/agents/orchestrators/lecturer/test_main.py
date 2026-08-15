@@ -17,9 +17,10 @@ import pytest
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from atlas.agents import events, lecturer
-from atlas.agents.lecturer import main as lecturer_main
+from atlas.agents import events
 from atlas.agents.models import LectureMode
+from atlas.agents.orchestrators import lecturer
+from atlas.agents.orchestrators.lecturer import main as lecturer_main
 from atlas.services.graph import Node
 
 
@@ -67,9 +68,12 @@ def test_beats_map_indices_to_node_ids():
     )
     with lecturer.agent.override(model=model):
         out = list(lecturer.lecture(SEED, NODES))
+    # The numbered list is the mode-scoped, CHRONOLOGICAL one the lecturer
+    # builds itself (`_story_nodes`, since v6.16.0 — see test_scoping.py), so
+    # [1] is the oldest paper and the 2015 seed sits at [3].
     assert out == [
-        events.Beat(heading="The roots", text="It began with TD.", node_ids=["node03", "node02"]),
-        events.Beat(heading="The leap", text="Then Atari fell.", node_ids=["seed01"]),
+        events.Beat(heading="The roots", text="It began with TD.", node_ids=["seed01", "node02"]),
+        events.Beat(heading="The leap", text="Then Atari fell.", node_ids=["node03"]),
         events.Beat(heading="Closing", text="And so on.", node_ids=[]),
     ]
 
@@ -83,8 +87,8 @@ def test_beats_resolve_inline_ref_markers_for_clickable_citations():
     )
     with lecturer.agent.override(model=model):
         out = list(lecturer.lecture(SEED, NODES))
-    assert out[0].node_ids == ["node03"]  # the structured highlight set
-    assert out[0].graph_refs == {"3": "node03", "2": "node02"}  # every inline [n] used
+    assert out[0].node_ids == ["seed01"]  # the structured highlight set
+    assert out[0].graph_refs == {"3": "seed01", "2": "node02"}  # every inline [n] used
 
 
 def test_blank_text_beats_are_dropped():
@@ -343,7 +347,7 @@ def test_frontier_intent_is_thematic_and_forward():
     """The frontier lecture is a THEMATIC survey (grouped into current threads),
     but still oriented forward in time, and — like the other many-paper modes —
     carries the full-span guardrail."""
-    from atlas.agents.lecturer.config import MODE_INTENTS
+    from atlas.agents.orchestrators.lecturer.config import MODE_INTENTS
 
     frontier = MODE_INTENTS[LectureMode.FRONTIER]
     assert "threads" in frontier  # thematic
@@ -377,6 +381,6 @@ def test_every_lecture_mode_has_an_intent():
     """The prompt does ``MODE_INTENTS[mode]`` with no fallback, so a mode
     missing its intent paragraph is a KeyError at lecture time. Guard it: every
     LectureMode must have an entry (catches a new mode added without a prompt)."""
-    from atlas.agents.lecturer.config import MODE_INTENTS
+    from atlas.agents.orchestrators.lecturer.config import MODE_INTENTS
 
     assert set(MODE_INTENTS) == set(LectureMode)

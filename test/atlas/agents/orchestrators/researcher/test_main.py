@@ -15,9 +15,12 @@ import json
 
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
-from atlas.agents import events, researcher
+from atlas.agents import events
 from atlas.agents.models import PlayedBeat, PlayedLecture
-from atlas.agents.researcher import config as researcher_config
+from atlas.agents.orchestrators import researcher
+from atlas.agents.orchestrators.researcher import config as researcher_config
+from atlas.agents.workers.search import papers as papers_worker
+from atlas.agents.workers.search import web as web_worker
 from atlas.services.graph import Node
 
 
@@ -76,6 +79,40 @@ def final(text: str, cited: list[int], kind: str = "answered") -> tuple[str, lis
     look-before-you-answer guard set it explicitly.
     """
     return ("final_result", [json.dumps({"kind": kind, "text": text, "cited": cited})])
+
+
+def stub_scout(monkeypatch, found=None, summary="nothing new"):
+    """Swap the paper scout for a fixed result.
+
+    The researcher's dependency is the *worker*, not the provider call two
+    levels down — stubbing `traversal.search` would leave a real scout agent
+    running (and, with model requests barred, failing) in between.
+
+    Args:
+        monkeypatch: The test's monkeypatch fixture.
+        found: Raw provider node dicts the scout "found"; empty by default.
+        summary: The scout's own note about the search.
+    """
+
+    async def fake_scout(need, provider, known_ids):
+        return papers_worker.ScoutResult(found=list(found or []), summary=summary, queries=[need])
+
+    monkeypatch.setattr(researcher.tools.papers, "scout", fake_scout)
+
+
+def stub_web(monkeypatch, sources=(), summary="nothing on the web"):
+    """Swap the web scout for a fixed result.
+
+    Args:
+        monkeypatch: The test's monkeypatch fixture.
+        sources: WebSource models the scout "found".
+        summary: The scout's own note.
+    """
+
+    async def fake_scout(need):
+        return web_worker.WebFindings(summary=summary, sources=list(sources))
+
+    monkeypatch.setattr(researcher.tools.web, "scout", fake_scout)
 
 
 def run(model, monkeypatch, library=None, **kwargs) -> list:
@@ -243,16 +280,20 @@ def test_step_budget_steers_the_model_to_answer(monkeypatch):
 
 def test_search_budget_exhausted_is_distinguished_from_an_error(monkeypatch):
     monkeypatch.setitem(researcher_config.BUDGETS, "searches", 1)
-    monkeypatch.setattr(researcher.tools.traversal, "search", lambda *args, **kwargs: [])
+    stub_scout(monkeypatch)
     model = scripted(
         [
-            ("search_papers", ['{"query": "momentum methods"}']),
-            ("search_papers", ['{"query": "second order optimizers"}']),
+            ("find_papers", ['{"need": "momentum methods"}']),
+            ("find_papers", ['{"need": "second order optimizers"}']),
         ],
         [final("Answering with what I have.", [])],
     )
     out = run(model, monkeypatch)
-    traces = [event for event in out if isinstance(event, events.SearchTrace)]
+    # Pending traces are filtered out: this test is about the *outcomes*, and
+    # each search now also announces itself before it starts.
+    traces = [
+        event for event in out if isinstance(event, events.SearchTrace) and not event.pending
+    ]
     assert [(trace.ok, trace.reason) for trace in traces] == [
         (True, None),
         (False, "budget_exhausted"),
@@ -618,16 +659,164 @@ def test_provenance_counts_paper_searches_separately(monkeypatch):
     """A trip to Semantic Scholar and an answer written from the model's own
     weights are very different things to report — and were indistinguishable
     until paper searches were counted."""
-    monkeypatch.setattr(
-        researcher.tools.traversal,
-        "search",
-        lambda query, limit, year_from, year_to, provider: [],
-    )
+    stub_scout(monkeypatch)
     model = scripted(
-        [("search_papers", ['{"query": "black holes"}'])],
+        [("find_papers", ['{"need": "black holes"}'])],
         [final("Nothing turned up; here is what I know.", [])],
     )
     out = run(model, monkeypatch, library=None)
     provenance = provenance_of(out)
     assert provenance.paper_searches == 1
     assert provenance.searches == 0  # library searches stay their own count
+
+
+def test_the_scout_finds_the_papers_and_the_researcher_numbers_them(monkeypatch):
+    """The division of labour that keeps `[n]` meaningful: the worker returns
+    raw provider nodes and the researcher assigns every index, so one agent
+    owns the numbered list the prose, the citation resolver and the frontend
+    all read."""
+    # The shape traversal.search hands back: a full node dict, un-numbered.
+    # `url` is a plain str there (never None), which DiscoveredNode enforces.
+    found = [
+        make_node("new1", "A Very Recent Result", year=2026, url="").model_dump(
+            exclude={"rels", "is_seed"}
+        )
+    ]
+    stub_scout(monkeypatch, found=found, summary="Two queries; the first was all landmarks.")
+    model = scripted(
+        [("find_papers", ['{"need": "what is new in error correction"}'])],
+        [final("As shown in [4].", [4])],
+    )
+    out = run(model, monkeypatch)
+
+    discovery = next(event for event in out if isinstance(event, events.Discovery))
+    # NODES is three papers long, so the scout's find takes index 4 — assigned
+    # here, never by the worker.
+    assert [(node.idx, node.title) for node in discovery.nodes] == [(4, "A Very Recent Result")]
+    trace = next(
+        event
+        for event in out
+        if isinstance(event, events.SearchTrace) and not event.pending
+    )
+    assert trace.ok and trace.found == 1
+
+
+def test_a_repeated_need_does_not_re_run_the_scout(monkeypatch):
+    """Deduping moved with the query: the researcher writes needs now, not
+    query strings, so the visited-set has to key on the need."""
+    calls: list[str] = []
+
+    async def counting_scout(need, provider, known_ids):
+        calls.append(need)
+        return papers_worker.ScoutResult(found=[], summary="none", queries=[need])
+
+    monkeypatch.setattr(researcher.tools.papers, "scout", counting_scout)
+    model = scripted(
+        [
+            ("find_papers", ['{"need": "recent error correction"}']),
+            ("find_papers", ['{"need": "Recent Error Correction"}']),
+        ],
+        [final("Answering.", [])],
+    )
+    run(model, monkeypatch)
+    assert calls == ["recent error correction"]  # the second was a cache hit
+
+
+def test_the_web_tool_is_absent_when_its_budget_is_zero(monkeypatch):
+    """Zero budget is the web's off switch, and it must remove the tool rather
+    than leave one that always refuses — an offered tool that can never work
+    wastes a step every time the model reaches for it."""
+    seen: dict = {}
+    model = scripted([final("Answering.", [])], seen=seen)
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 0)
+    run(model, monkeypatch)
+    assert "search_web" not in seen["tools"]
+
+
+def test_the_web_tool_is_offered_when_it_has_a_budget(monkeypatch):
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    stub_web(monkeypatch)
+    seen: dict = {}
+    model = scripted(
+        [("search_web", ['{"need": "did it ship"}'])],
+        [final("Answering.", [])],
+        seen=seen,
+    )
+    out = run(model, monkeypatch)
+    assert "search_web" in seen["tools"]
+    trace = next(event for event in out if isinstance(event, events.WebSearchTrace))
+    assert trace.ok and trace.need == "did it ship"
+
+
+def test_answering_without_searching_the_web_is_retried(monkeypatch):
+    """Coverage, extended: the guard now spans every available source, not just
+    the library. Same shape as the library rule — bounce the substantive answer,
+    tell the next attempt what to call."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    stub_web(monkeypatch)
+    model = scripted(
+        [final("Straight from memory.", [])],
+        [("search_web", ['{"need": "the actual state of it"}'])],
+        [final("Now grounded.", [])],
+    )
+    out = run(model, monkeypatch)
+    text = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert text == "Now grounded."  # the bounced attempt never reached the reader
+
+
+def test_a_conversational_turn_never_triggers_the_sweep(monkeypatch):
+    """The v6.7.0 bug, three times worse: a mandatory sweep on every turn would
+    make saying hello search the library, the literature and the web."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    seen: dict = {}
+    model = scripted([final("Hello!", [], kind="conversational")], seen=seen)
+    out = run(model, monkeypatch)
+    text = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert text == "Hello!"
+    assert not [event for event in out if isinstance(event, events.WebSearchTrace)]
+
+
+def test_the_open_graph_counts_as_consulting_the_literature(monkeypatch):
+    """A source already in front of the model is consulted. The graph's papers
+    came from the provider, so a question about them must not be bounced for
+    failing to re-search the literature it was built from."""
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 0)
+    model = scripted([final("Paper [1] covers it.", [1])])
+    out = run(model, monkeypatch)  # NODES is non-empty: a graph is open
+    text = "".join(event.text for event in out if isinstance(event, events.Token))
+    assert text == "Paper [1] covers it."
+
+
+def test_provenance_carries_the_web_counts(monkeypatch):
+    monkeypatch.setitem(researcher_config.BUDGETS, "web_searches", 2)
+    stub_web(
+        monkeypatch,
+        sources=[web_worker.WebSource(title="Release notes", url="https://x.test", note="v2 shipped")],
+    )
+    model = scripted(
+        [("search_web", ['{"need": "did it ship"}'])],
+        [final("It shipped.", [])],
+    )
+    out = run(model, monkeypatch)
+    provenance = provenance_of(out)
+    assert provenance.web_searches == 1
+    assert provenance.web_pages == 1
+
+
+def test_a_scout_announces_itself_before_it_runs(monkeypatch):
+    """Nothing reaches the stream while a tool executes — `answer` drains the
+    deps queue between run events, and a tool call produces none until it
+    returns. A scouting run several provider calls deep therefore showed an
+    empty panel for its whole duration, which reads as a hang. The pending
+    trace rides the tool-CALL event, which arrives before execution."""
+    stub_scout(monkeypatch)
+    model = scripted(
+        [("find_papers", ['{"need": "recent work"}'])],
+        [final("Answering.", [])],
+    )
+    out = run(model, monkeypatch)
+    traces = [event for event in out if isinstance(event, events.SearchTrace)]
+    assert [(trace.pending, trace.query) for trace in traces] == [
+        (True, "recent work"),   # announced, before the scout ran
+        (False, "recent work"),  # and reported, after
+    ]

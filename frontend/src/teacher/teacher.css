@@ -913,6 +913,7 @@
   gap: 3px;
 }
 .trace-line {
+  position: relative; /* anchors .trace-spin */
   font-size: 11.5px;
   color: var(--muted);
   padding: 3px 7px;
@@ -922,6 +923,31 @@
 }
 .trace-line.fail {
   border-left-color: #f78ca0;
+}
+/* A scout is running. The spinner is the app's shared in-flight primitive
+   (`.spin`, atlas.css) rather than the panel's hopping dots: those say "an
+   agent is composing" — the send button, a generating lecture, a bubble
+   waiting on its first token — and a chip is a step in a list, not a voice.
+   Reusing them everywhere flattened the difference.
+   Parked absolutely in the chip's right edge instead of trailing the text:
+   inline it collided with the query it belongs to, and the row's content is
+   variable-length, so the only stable place for it is the corner. Absolute
+   positioning keeps it out of the inline flow entirely — no flex conversion,
+   no wrapping surprises on a long query. */
+.trace-line.pending {
+  padding-right: 26px;
+}
+.trace-spin {
+  position: absolute;
+  right: 8px;
+  /* Centred by arithmetic, NOT by translateY(-50%): `.spin`'s keyframe
+     animates `transform`, so a centering transform on the same element is
+     what the rotation interpolates *from* — the spinner bobbed up and down
+     instead of turning. Keep transform free for the animation. */
+  top: calc(50% - 5px);
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
 }
 .trace-line b {
   color: var(--text);

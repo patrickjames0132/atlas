@@ -128,6 +128,55 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
+- [ ] **Connect the web result to the paper — the scouts don't talk to each
+      other** *(next up)* — the workers ticket shipped two scouts that each
+      answer their own question and hand findings back separately. What's
+      missing is the join: ask about Google's Willow chip and you get a web
+      link to the announcement *and*, separately, some papers — but nothing
+      connects the announcement to the paper behind it, and that paper is
+      exactly what the reader wants to seed a graph on. The whole product
+      claim is that a link becomes a map.
+
+      **Two candidate shapes, and the choice is the ticket.** (a) *Prompt
+      only* — tell the researcher to take names, systems and labs out of the
+      web findings and run a second `find_papers` on them. Cheap, no new
+      agents, and it may already half-happen; the honest first step is to
+      look at real transcripts and see. (b) *A second pass* — a worker (or a
+      second round of the existing two) that runs **after** both scouts
+      return, whose entire job is reconciliation: given these pages and these
+      papers, which pair up? That's a different job from searching, so under
+      the membership rule it would earn its own worker rather than joining
+      `search/`.
+
+      Try (a) first and measure it — the rule against speculative agents is
+      the same one that killed the orchestrator. Whatever wins, the output
+      has to end as a numbered paper, since the seeding click needs a real
+      `node_id`. *(From the `todos.md` inbox, 2026-08-15.)*
+
+- [ ] **Retire the `search` node type — a discovered paper should attach to
+      the graph, not float beside it** *(next up)* — free-text search results
+      currently enter the graph as pink `search` nodes with **no edges**: a
+      topic search links its hits to no specific paper, so they sit
+      disconnected. That was the only way to surface them when the chat
+      couldn't hand a paper back; it isn't any more. A chat citation seeds its
+      own graph (v6.11.0) and carries its provider (v6.14.0), so **the reader
+      already has a way to get from a found paper to a map of it**.
+
+      **The ask:** `find_papers` stops adding nodes to the canvas. Search
+      becomes what it always was — a way for the agent to *find* a paper —
+      and the reader promotes one deliberately by clicking its citation.
+      Papers found via `expand_node` **stay**: those arrive with a real edge
+      to a paper already on screen, which is the whole difference.
+
+      **What this touches:** the `search` rel and its colour (graph theme,
+      filter chips, legend), the `Discovery` event `find_papers` emits, and
+      the frontend's merge. Check what a *lecture* does with a graph that has
+      no search nodes, and check the filter chip disappears cleanly rather
+      than rendering an always-empty row. Worth confirming against a saved
+      session from before the change — old saves still hold search nodes, and
+      they should keep rendering rather than vanishing.
+      *(From the `todos.md` inbox, 2026-08-15.)*
+
 - [ ] **Does the header search bar still earn its place?** — an open design
       question, not yet a decision. The chat bar now does much of what the seed
       search does: ask about a topic, get papers back, click a citation chip to
@@ -145,86 +194,6 @@ optional, behind a key.
       deciding *before* more UI is hung off either one. *(Patrick's question,
       2026-08-14.)*
 
-- [ ] **Ground the chat in the web too — workers and orchestrators** — the
-      graph-free chat can only find *papers*, so "what's new in quantum
-      computing" answers from Semantic Scholar's citation-weighted relevance
-      ranking, which structurally favours old, well-cited work — the opposite
-      of what was asked — and can't see the announcement, blog post, or
-      release note where the news actually broke.
-
-      **This is not the ambition cut in v6.8.0, and the distinction is the
-      whole ticket.** What was killed there was *recall* — a soft prompt rule
-      preferring the model's own knowledge over `search_papers`, with nothing
-      structural behind it and an instrument that couldn't even measure it.
-      Web search is not recall: it is a **third grounded source**, as real,
-      citable and retrievable as a paper or a page of the user's book. It
-      *extends* the grounding boundary ("Atlas grounds; the line tells you in
-      what") rather than abandoning it. Keep that reasoning in the history
-      entry when this ships, or a future session will read v6.8.0 and undo it.
-
-      **Architecture, settled 2026-08-13 after a long design conversation:
-      flat.** Two tiers, no deeper:
-      - **`agents/workers/`** — an agent per source, each owning *one* source
-        and answering a bounded question about it.
-      - **`agents/orchestrators/`** — where `researcher`, `lecturer`,
-        `summarizer`, `query_analyst` and today's `orchestrator` move.
-      The membership rule, which belongs in `agents/workers/README.md` so it
-      isn't re-litigated: **a capability earns worker status when it needs
-      judgment or context isolation — otherwise it stays a plain function.**
-      Depth beyond these two tiers is deliberately rejected: Anthropic's own
-      Managed Agents enforces single-level delegation (a roster containing a
-      rostered agent fails validation), and the current Opus guidance is to
-      delegate *less*, because every sub-agent re-establishes context and
-      reports back.
-
-      **Two workers earn it.** **Web** — must phrase the query, judge when it
-      has enough, and compress long low-signal pages into findings; both
-      criteria, unambiguously. PydanticAI's native `WebSearchTool` is
-      Anthropic-supported and carries `max_uses`, which drops straight into
-      the existing per-tool budget model. **Provider (S2/OpenAlex)** — its
-      judgment is *query reformulation and recency bounding*, which is
-      precisely the fix for the failure above: rewrite the query, set
-      `year_from`, look at what came back, try again. It **replaces**
-      `search_papers` rather than sitting beside it — two paths to one source
-      is the bug, not the feature.
-
-      **What stays a function:** `traversal.expand` (and *which* node to
-      expand is the orchestrator's reasoning about a graph it can see —
-      delegating it blinds the agent), `sources.search` (passages already
-      come back compact and `[Sn, p.N]`-tagged; promote it later if measured),
-      `read_paper`, figure mining. No new shared-tools package is needed —
-      `agents/traversal.py` already is that seam.
-
-      **Return shape, decided:** a worker returns **structured findings —
-      never prose, never indices**. The orchestrator owns everything that must
-      be globally consistent: the numbered list and index assignment, citation
-      resolution, provenance, the `Done`/`Error` stream contract, the turn
-      kind, and the answer. This keeps the `sequential=True` ordering
-      invariant in one place and keeps `[n]` resolvable — which the
-      chat-citation ticket below directly depends on.
-
-      **Coverage, not routing.** The worry that a model won't reliably call
-      all its sources is real, but the fix is the one already shipping:
-      `_must_have_looked` bounces an `answered` turn that never reached
-      retrieval. Extend it from one source to **all *available* sources** —
-      and keep it gated on `answered`, because a mandatory sweep on every turn
-      re-creates the v6.7.0 bug where saying "hi" searched the user's books,
-      tripled. Availability keeps working the way it already does: the library
-      tool is `prepare`-gated off when there is no library; graph tools should
-      be gated the same way on whether a graph exists, which also means **one
-      answering agent covers both graph and graph-free mode** — no second
-      orchestrator.
-
-      **Two mechanical notes.** `AGENT_ID` is a string constant independent of
-      package path, so moving the existing agents under `orchestrators/` costs
-      **no** config churn. But each new worker needs an `llm.agents` entry, and
-      `factory.agent_entry` raises `LookupError` at import when an id is
-      missing — so a `config.json` that wasn't updated alongside
-      `config.example.json` is a **hard startup break**, not a soft drift.
-
-      **Supersedes** the former "Orchestrator model fan-out" ticket, whose
-      documented seam in `agents/orchestrator/main.py` this fills.
-      *(Filed 2026-08-13.)*
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
       [docs/history.md](docs/history.md)). Citations now *resolve*: the model

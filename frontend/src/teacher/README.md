@@ -241,11 +241,20 @@ One gesture, one rhythm, both defined in `teacher.css`.
   Keyed on that state flip alone and never on every render: reading
   `getBoundingClientRect` forces layout, and this component re-renders on
   every streamed token.
-- **`HopDots`** is the one wait indicator, so the panel never shows two
-  almost-matching rhythms at once. Its `label` prop is the a11y contract:
-  named where the dots *are* the message (a generating lecture, a bubble
-  waiting on its first token), silent inside a control that already announces
-  the state (the send button becomes "Stop generating").
+- **Two wait indicators, and the split is deliberate.** `HopDots` means *an
+  agent is composing* — the send button mid-answer, a generating lecture, a
+  bubble waiting on its first token. The shared `.spin` primitive
+  (`atlas.css`) means *a step is running*: a scout trace chip while its
+  worker searches. They were briefly the same thing, and using the dots
+  everywhere flattened the difference — a chip is an item in a list, not a
+  voice. `HopDots`' `label` prop is its a11y contract: named where the dots
+  *are* the message, silent inside a control that already announces the state
+  (the send button becomes "Stop generating").
+- **A pending chip's spinner is absolutely positioned in the chip's right
+  edge**, not trailing the text. Inline it collided with the query it belongs
+  to, and a trace row is variable-length — the corner is the only stable
+  place for it. Absolute keeps it out of the inline flow entirely, so no flex
+  conversion and no wrapping surprises on a long query.
 - **Everything has a `prefers-reduced-motion` path.** The CSS entrances drop
   out in the block beside the keyframes; the FLIP checks `prefersStill()`
   itself, since a scripted animation can't be reached by a media query.

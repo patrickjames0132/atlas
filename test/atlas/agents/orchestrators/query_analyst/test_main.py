@@ -13,7 +13,7 @@ from __future__ import annotations
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
-from atlas.agents import query_analyst
+from atlas.agents.orchestrators import query_analyst
 
 PASSTHROUGH = query_analyst.Expansion(expanded_query="DQN", known_titles=[])
 

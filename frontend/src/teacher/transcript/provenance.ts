@@ -27,8 +27,17 @@ import type { ProvenanceEvent } from '../../api'
  * @returns The line to render, or null to render nothing.
  */
 export function provenanceLine(provenance: ProvenanceEvent): string | null {
-  const { kind, had_library, searches, passages, paper_searches, cited_sources, cited_papers } =
-    provenance
+  const {
+    kind,
+    had_library,
+    searches,
+    passages,
+    paper_searches,
+    web_searches,
+    web_pages,
+    cited_sources,
+    cited_papers,
+  } = provenance
 
   const drew: string[] = []
   if (cited_sources > 0) {
@@ -39,6 +48,15 @@ export function provenanceLine(provenance: ProvenanceEvent): string | null {
   }
   if (cited_papers > 0) {
     drew.push(`${cited_papers} paper${cited_papers > 1 ? 's' : ''}`)
+  }
+  // Web pages are counted, never "cited" — the researcher links them inline
+  // in its prose rather than through the `[n]` machinery, so there is no
+  // marker to count afterwards. What's honest to report is that the web was
+  // read and how much came back, which is what this says. (Sessions saved
+  // before v6.16.0 carry neither field; `?? 0` keeps them rendering.)
+  const pages = web_pages ?? 0
+  if (pages > 0) {
+    drew.push(`${pages} web page${pages > 1 ? 's' : ''}`)
   }
   if (drew.length > 0) return `grounded in ${drew.join(' + ')}`
 
@@ -52,6 +70,7 @@ export function provenanceLine(provenance: ProvenanceEvent): string | null {
   if (had_library && searches > 0)
     looked.push(passages > 0 ? 'your library' : 'your library (no matches)')
   if (paper_searches > 0) looked.push('the literature')
+  if ((web_searches ?? 0) > 0) looked.push('the web')
   if (looked.length === 0) return 'answered from background knowledge — nothing was searched'
   return `searched ${looked.join(' and ')}, cited nothing — answered from background knowledge`
 }

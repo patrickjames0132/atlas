@@ -22,6 +22,43 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### The agent looked hung whenever it delegated — and the obvious fix made it worse
+
+*Found 2026-08-15 by Patrick, testing the workers ticket. Fixed in v7.0.0.*
+
+- **Symptom.** Ask "what's new in quantum computing" and the panel sat
+  completely empty for up to 90 seconds, then filled in all at once. Nothing
+  was broken — the answer arrived, the scouts had done their work — but every
+  reader would have concluded the app had frozen and reloaded.
+- **Root cause — a queue with no reader.** Tool-side events reach the stream
+  through `deps.queue`, which `researcher.answer` drains *between run events*:
+  `for event in stream: yield from deps.drain()`. A tool call produces **no run
+  events while it executes**, so nothing queued inside a tool can surface until
+  the tool returns. That was invisible for years because every tool was one
+  quick fetch. A worker delegation is a whole sub-agent — several provider
+  calls for papers, a provider-side web search for the web — so the same
+  structure that had been fine at 200ms became a 90-second silence.
+- **The obvious fix, and why it was wrong.** Announce the step *before* it
+  runs, on `FunctionToolCallEvent` — the event that fires when the model
+  requests a tool. It is named exactly right and it does not work:
+  pydantic-ai delivers it **after** the tool has executed, so the "starting"
+  chip arrived *behind* the result it was meant to precede. This was caught
+  only because the test asserted the order of the two traces rather than their
+  presence. The signal that genuinely precedes execution is `PartEndEvent` —
+  the model finishing writing the tool call.
+- **Fix.** Scouts emit a `pending` trace on `PartEndEvent`; the finished trace
+  **replaces** its pending twin in the store (`traceAdded`) so one chip fills
+  in rather than two stacking up. Separately, the web scout dropped from Sonnet
+  to Haiku with `max_uses` 4 → 2 — it was the slow half, and `data/atlas.log`
+  had one of its calls holding a connection for 86 seconds.
+- **Lesson / guard.** *An event named for a thing is not proof it precedes
+  that thing.* When ordering matters, assert the order — a presence check
+  would have passed on the broken version and shipped a progress indicator
+  that reports the past. `test_a_scout_announces_itself_before_it_runs` pins
+  the sequence. The deeper lesson is about the drain: anything long-running
+  inside a tool is invisible by construction, so a tool that grows from a
+  fetch into a delegation needs its own "starting" signal, not just a result.
+
 ### "OpenAlex doesn't build these graphs" — an id handed to the wrong namespace
 
 *Found 2026-08-14 by Patrick, reported as a graph-build failure. Fixed in

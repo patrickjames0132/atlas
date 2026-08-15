@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import time
 
-from ...agents import query_analyst
+from ...agents.orchestrators import query_analyst
 from ...config import config
 from ...integrations import arxiv, openalex
 from ...integrations import semantic_scholar as s2

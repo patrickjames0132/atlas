@@ -87,8 +87,8 @@ node id (a `DOI:`/`ARXIV:`/`W…` id) to a work, then hits `cited_by:` /
 
 One consumer today:
 
-- **The researcher's `expand_node` / `search_papers` tools** wrap `neighbors` /
-  `search` with everything agentic: budgets, visited-sets, numbering the
+- **The researcher's `expand_node` tool and the paper scout's `search`** wrap
+  `neighbors` / `search` with everything agentic: budgets, visited-sets, numbering the
   finds, building `Discovery` events. The provider comes from the graph the
   question is grounded in — threaded `route → orchestrator.run → researcher.answer
   → ResearcherDeps.provider → the tools`. (The lecture backfill walks that
@@ -260,18 +260,37 @@ agents/
     workflows/              ← the orchestrator's playbooks, one per intent
       lecture.md              the lecturer (narrates the visible graph as-is)
       research.md             the researcher Q&A (with a graph, or without)
-  orchestrator/      ← an agent: main.py, tools.py, config.py, README.md
-  lecturer/          ← an agent:    "        "         "          "
-  researcher/             ← an agent:    "        "         "          "
-  query_analyst/     ← an agent:    "        "         "          "
-  summarizer/        ← an agent: main.py, config.py, README.md (no tools)
+  orchestrators/     ← tier 1: agents that own an outcome (README.md)
+    lecturer/          ← an agent: main.py, config.py, README.md
+    researcher/        ← an agent: main.py, tools.py, config.py, README.md
+    query_analyst/     ← an agent: main.py, config.py, README.md
+    summarizer/        ← an agent: main.py, config.py, README.md
+  workers/           ← tier 2: one source each, one question each
+    search/            ← workers that go and look something up (README.md)
+      papers/            ← an agent: main.py, config.py (the provider search)
+      web/               ← an agent: main.py, config.py (the open web)
 ```
 
 ### Layout rules
 
 - **The package root *is* the shared directory.** Anything sitting directly
   at the root (`events.py`, `traversal.py`, `skills/`) is shared
-  infrastructure available to every agent. Every sub-package *is* an agent.
+  infrastructure available to every agent.
+- **Agents sit in two tiers, flat, and no deeper** (v6.16.0).
+  `orchestrators/` own an outcome and may delegate; `workers/` each own one
+  source and answer a bounded question about it. Which tier something belongs
+  in is decided by one rule, kept in
+  [`workers/README.md`](workers/README.md) so it isn't re-argued: **a
+  capability earns worker status when it needs judgment or context
+  isolation — otherwise it stays a plain function.** That file also holds the
+  return-shape contract (structured findings, never prose, never indices) and
+  why depth beyond two tiers was rejected. Workers are grouped by *kind*
+  (`search/` today), so the grouping folder — not the worker — is what sits
+  under `workers/`.
+- **No router.** Routes call the agent they mean. The `orchestrator`
+  package and the `Intent` enum were deleted in v6.16.0; see
+  [`orchestrators/README.md`](orchestrators/README.md) for what happened to
+  the two things it carried.
 - **`tools.py` appears only inside an agent** and only ever means "this
   agent's model-callable tool surface" — functions registered on the
   PydanticAI agent whose signatures become schemas the LLM sees. Shared
@@ -364,20 +383,35 @@ grounded in what it actually read.
     or full text via ar5iv; a full read also lists the paper's figures.
   - `expand_node` — one hop of references / citations / similar for a
     numbered paper; new papers get numbered and streamed to the graph.
-  - `search_papers` — free-text S2 search with a year window; hits get
-    numbered and added (nodes only, no edges — a topic search links to no
-    specific paper).
+  - `find_papers` — hands a *need* in plain words to the **paper scout**
+    (`workers/papers`), which writes and re-writes the queries itself and
+    reports back; the researcher numbers whatever it found and adds it
+    (nodes only, no edges — a topic search links to no specific paper).
+    Replaced the one-shot `search_papers` in v6.16.0: a single query against
+    a lexical, citation-weighted search answers "what's new in X" with
+    landmarks from a decade ago, and reformulating is a loop with a decision
+    in it. It **replaced** rather than joined it — two paths to one source is
+    the bug, not the feature.
+  - `search_web` — the same shape for the **web scout** (`workers/web`):
+    announcements, releases, documentation, benchmarks — where the news
+    breaks before the paper does. Registered only when its budget is
+    non-zero, which is also the web's off switch.
   - `show_figure` — attach a real ar5iv figure; the model places a
     `<<FIG n>>` marker in its prose where the image belongs.
   - `search_sources` — semantic search over the user's library; registered
     only when a library exists (checked before the embedding model loads).
 - **Budgets:** total steps, wall clock, full/summary reads, hops, searches,
-  source searches, figures — from its agents entry. Visited-sets, the read
+  web searches, source searches, figures — from its agents entry. A
+  `find_papers`/`search_web` call spends one of *these* and then runs a whole
+  scout, which has budgets of its own. Visited-sets, the read
   cache, and remaining budgets live in the run's deps.
 - **Output:** streamed answer prose, with `cited` (the papers it read plus
   any it named) as a structured field of the final result.
-- **Events:** `Trace` (each tool step), `Discovery` (nodes/edges to merge
-  into the live graph), `Figure`, `Token`, `Cited`.
+- **Events:** `Trace` (each tool step, including `search_web`), `Discovery`
+  (nodes/edges to merge into the live graph), `Figure`, `Token`, `Cited`,
+  `Provenance` (which now counts web searches and pages separately from
+  paper searches — "went to the literature" and "went to the web" are
+  different claims about an answer's footing).
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`,
   `figures`.
 

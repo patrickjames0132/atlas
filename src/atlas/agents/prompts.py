@@ -99,7 +99,7 @@ def node_lines_by_era(nodes: Sequence[Node], buckets: int = 3) -> str:
     lines (numbers still come from the list position, so ``idx_to_id`` is
     unchanged), but split into ``buckets`` equal-width year spans with a
     ``--- YEAR1–YEAR2 ---`` header before each. The nodes are assumed already
-    sorted oldest-first (the orchestrator's ``_chronological``), so the headers
+    sorted oldest-first (the lecturer's ``_chronological``), so the headers
     read top-to-bottom in time and an undated tail lands under ``--- undated
     ---``. Seeing the timeline laid out this way nudges the model to give each
     era a beat instead of dwelling on the oldest, most-cited papers.

@@ -35,7 +35,7 @@ from typing import Iterator
 from flask import Blueprint, Response, current_app, jsonify, request
 from flask.typing import ResponseReturnValue
 
-from ..agents import summarizer
+from ..agents.orchestrators import summarizer
 from ..integrations import arxiv, caps, huggingface, openalex, semantic_scholar
 from ..services import graph as graph_service
 from ..services import pdf as pdf_service

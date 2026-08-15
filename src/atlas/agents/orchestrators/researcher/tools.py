@@ -29,14 +29,15 @@ from typing import Literal
 
 from pydantic_ai import RunContext
 
-from ...integrations import openalex
-from ...integrations import semantic_scholar as s2
-from ...integrations.arxiv import figures as figures_mod
-from ...integrations.arxiv import fulltext
-from ...services import pdf as pdf_service
-from ...services.graph import Edge, Node, Provider
-from ...services.sources import retrieval
-from .. import captions, events, library_figures, prompts, traversal
+from ....integrations import openalex
+from ....integrations import semantic_scholar as s2
+from ....integrations.arxiv import figures as figures_mod
+from ....integrations.arxiv import fulltext
+from ....services import pdf as pdf_service
+from ....services.graph import Edge, Node, Provider
+from ....services.sources import retrieval
+from ... import captions, events, library_figures, prompts, traversal
+from ...workers.search import papers, web
 from .config import BUDGETS
 
 # A hop or search can fail on either provider's client; both come back to the
@@ -67,16 +68,26 @@ class ResearcherDeps:
     #: citation and a tool call can't disagree about which source ``S3`` is.
     sources: list[dict] = field(default_factory=list)
     provider: Provider = "s2"  # the graph provider — expand/search/hydrate follow it
+    #: Whether the web scout is on this run at all. False turns the tool off
+    #: AND takes the web out of the coverage guard's reckoning — availability
+    #: is one fact, and both consumers must read the same one or the guard
+    #: demands a source the model has no way to reach.
+    web_enabled: bool = False
     steps_left: int = 0
     full_reads_left: int = 0
     summary_reads_left: int = 0
     hops_left: int = 0
     searches_left: int = 0
+    web_searches_left: int = 0
     source_searches_left: int = 0
     figures_left: int = 0
     read_cache: dict[tuple[str, str], str] = field(default_factory=dict)
     expanded: set[tuple[str, str]] = field(default_factory=set)
-    searched: set[tuple[str, int | None, int | None]] = field(default_factory=set)
+    #: Needs already handed to a scout, lower-cased. Keyed by the *need* now
+    #: rather than by (query, year_from, year_to): the researcher no longer
+    #: writes queries — the scout does, and it may write several per need.
+    searched: set[str] = field(default_factory=set)
+    web_searched: set[str] = field(default_factory=set)
     figures_shown: dict[tuple[str, int], int] = field(default_factory=dict)
     cited_ids: list[str] = field(default_factory=list)
     queue: list[events.Event] = field(default_factory=list)
@@ -87,11 +98,16 @@ class ResearcherDeps:
     #: consulted the student's library, whatever the answer claims.
     source_searches_run: int = 0
     source_hits: int = 0
-    #: How many times ``search_papers`` reached the provider. Counted for the
+    #: How many times ``find_papers`` ran a scout. Counted for the
     #: same reason: an answer that went to Semantic Scholar and an answer that
     #: came from the model's own weights are very different things to report,
     #: and without this they were indistinguishable in the provenance record.
     paper_searches_run: int = 0
+    #: The same observed-fact counters for the web, kept separate because
+    #: "went to the literature" and "went to the web" are different claims
+    #: about an answer's footing (see ``events.Provenance``).
+    web_searches_run: int = 0
+    web_pages_found: int = 0
 
     def source_id(self, number: int) -> str | None:
         """Resolve a model-written ``[Sn]`` index to a real source id.
@@ -430,57 +446,49 @@ def expand_node(ctx: RunContext[ResearcherDeps], index: int, relation: traversal
     )
 
 
-def search_papers(
-    ctx: RunContext[ResearcherDeps],
-    query: str,
-    year_from: int | None = None,
-    year_to: int | None = None,
-) -> str:
-    """Free-text search across the whole academic corpus — NOT limited to the
-    graph's citation neighborhood. Use for recent or topical work that
-    expand_node can't reach; hits get numbered and added for you to read.
+async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
+    """Send a scout to find papers across the whole academic corpus — NOT limited
+    to the graph's citation neighborhood. Say what you need in your own words,
+    including any recency requirement ("work from the last two years on X"); the
+    scout writes and re-writes the queries itself and reports back. Whatever it
+    finds gets numbered and added for you to read.
 
     Args:
         ctx: The run context carrying the researcher's deps (framework-injected).
-        query: Free-text query — keywords or a topic, not an id.
-        year_from: Earliest publication year (inclusive). Omit for no floor.
-        year_to: Latest publication year (inclusive). Omit for no ceiling.
+        need: What you're looking for, in plain words — a description, not a
+            query string.
 
     Returns:
-        The newly numbered hits (title + year each), or a budget/validity
-        message.
+        The newly numbered papers (title + year each) plus the scout's own
+        account of the search, or a budget/validity message.
     """
     deps = ctx.deps
-    query = query.strip()
-    if not query:
-        deps.emit(events.SearchTrace(ok=False, query=query, reason="empty_query"))
-        return "Invalid search_papers call (empty query)."
+    need = need.strip()
+    if not need:
+        deps.emit(events.SearchTrace(ok=False, query=need, reason="empty_query"))
+        return "Invalid find_papers call (empty need)."
     if not _spend_step(deps):
-        deps.emit(events.SearchTrace(ok=False, query=query, reason="steps_exhausted"))
+        deps.emit(events.SearchTrace(ok=False, query=need, reason="steps_exhausted"))
         return STEPS_EXHAUSTED
     if deps.searches_left <= 0:
-        deps.emit(events.SearchTrace(ok=False, query=query, reason="budget_exhausted"))
+        deps.emit(events.SearchTrace(ok=False, query=need, reason="budget_exhausted"))
         return "Search budget exhausted — answer with what you've found."
-
-    visit_key = (query.lower(), year_from, year_to)
-    if visit_key in deps.searched:
-        deps.emit(events.SearchTrace(ok=True, query=query, found=0))
-        return f'Already searched "{query}" — see the numbered papers above.'
-    deps.searched.add(visit_key)
+    if need.lower() in deps.searched:
+        deps.emit(events.SearchTrace(ok=True, query=need, found=0))
+        return f'Already searched for "{need}" — see the numbered papers above.'
+    deps.searched.add(need.lower())
     deps.searches_left -= 1
-
     deps.paper_searches_run += 1
-    try:
-        hits = traversal.search(query, BUDGETS["search_limit"], year_from, year_to, deps.provider)
-    except _TRAVERSAL_ERRORS as exc:
-        log.warning("search_papers failed for %r: %s", query, exc)
-        deps.emit(events.SearchTrace(ok=False, query=query, reason="error"))
-        return f'Couldn\'t search "{query}": {exc}'
 
+    result = await papers.scout(need, deps.provider, deps.known_ids)
+
+    # Index assignment happens HERE and nowhere else. The scout returns raw
+    # provider nodes precisely so it cannot number them: `[n]` must mean the
+    # same paper to the prose, the citation resolver and the frontend, and
+    # that invariant only holds while one agent owns the list.
     new_nodes = []
     lines = []
-    for hit in hits:
-        found = hit["node"]
+    for found in result.found:
         if found["id"] in deps.known_ids:
             continue
         deps.known_ids.add(found["id"])
@@ -491,17 +499,68 @@ def search_papers(
         new_nodes.append(discovered)
         lines.append(f"[{discovered.idx}] ({discovered.year or 'n.d.'}) {discovered.title}")
 
+    # The trace shows the scout's LAST query rather than the need: the reader
+    # is watching a search happen, and "quantum error correction 2024–" is
+    # what a search looks like. The need is the researcher's words, not the
+    # search's.
     deps.emit(
         events.SearchTrace(
-            ok=True, query=query, found=len(lines), year_from=year_from, year_to=year_to
+            ok=True, query=result.queries[-1] if result.queries else need, found=len(lines)
         )
     )
     if new_nodes:
         # No edges: a topic search links its hits to no specific paper.
         deps.emit(events.Discovery(nodes=new_nodes, edges=[]))
-        window = f" ({year_from or ''}–{year_to or ''})" if (year_from or year_to) else ""
-        return f'Search "{query}"{window} — {len(lines)} new paper(s) added:\n' + "\n".join(lines)
-    return f'Search "{query}" returned nothing new.'
+        found_text = f"{len(lines)} new paper(s) added:\n" + "\n".join(lines)
+    else:
+        found_text = "no new papers."
+    return f"Scout searched for \"{need}\" — {found_text}\n\nScout's note: {result.summary}"
+
+
+async def search_web(ctx: RunContext[ResearcherDeps], need: str) -> str:
+    """Send a scout to search the open web — announcements, release notes,
+    project pages, documentation, benchmarks. Use it for anything where the
+    news breaks before the paper does, and for checking whether something
+    described in a paper actually shipped. Cite what it returns as inline
+    markdown links.
+
+    Args:
+        ctx: The run context carrying the researcher's deps (framework-injected).
+        need: What you're looking for, in plain words — a description, not a
+            query string.
+
+    Returns:
+        The scout's summary plus each page it found with its URL, or a
+        budget/validity message.
+    """
+    deps = ctx.deps
+    need = need.strip()
+    if not need:
+        deps.emit(events.WebSearchTrace(ok=False, need=need))
+        return "Invalid search_web call (empty need)."
+    if not _spend_step(deps):
+        deps.emit(events.WebSearchTrace(ok=False, need=need))
+        return STEPS_EXHAUSTED
+    if deps.web_searches_left <= 0:
+        deps.emit(events.WebSearchTrace(ok=False, need=need))
+        return "Web-search budget spent — answer with what you've gathered."
+    if need.lower() in deps.web_searched:
+        deps.emit(events.WebSearchTrace(ok=True, need=need, found=0))
+        return f'Already searched the web for "{need}" — see above.'
+    deps.web_searched.add(need.lower())
+    deps.web_searches_left -= 1
+    deps.web_searches_run += 1
+
+    findings = await web.scout(need)
+    deps.web_pages_found += len(findings.sources)
+    deps.emit(events.WebSearchTrace(ok=True, need=need, found=len(findings.sources)))
+    if not findings.sources:
+        return f"Web scout found nothing usable. Scout's note: {findings.summary}"
+    pages = "\n".join(f"- [{src.title}]({src.url}) — {src.note}" for src in findings.sources)
+    return (
+        f"Web scout on \"{need}\":\n{findings.summary}\n\nPages (cite these as "
+        f"markdown links):\n{pages}"
+    )
 
 
 def show_figure(ctx: RunContext[ResearcherDeps], index: int, figure: int) -> str:

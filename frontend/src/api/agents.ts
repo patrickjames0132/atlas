@@ -136,7 +136,7 @@ export async function streamLecture(
  * the agent works.
  */
 export interface TraceEvent {
-  action: 'read' | 'expand' | 'search' | 'search_sources' | 'figure'
+  action: 'read' | 'expand' | 'search' | 'search_sources' | 'search_web' | 'figure'
   ok: boolean
   title?: string | null
   index?: number | null
@@ -146,9 +146,20 @@ export interface TraceEvent {
   relation?: string | null
   /** New papers discovered / passages found. */
   found?: number | null
-  /** Free-text query — search_papers / search_sources. */
+  /** Free-text query — find_papers (the scout's last one) / search_sources. */
   query?: string
-  /** Year filter — search_papers. */
+  /** What the researcher asked the web scout for, in its own words — not a
+   *  query string, since the scout writes those itself and may write several.
+   *  search_web only. */
+  need?: string
+  /**
+   * This step has been *started*, not finished — a scout announcing itself
+   * before a run that takes a visible while. The store replaces it with the
+   * finished trace when that lands, so a pending chip fills in rather than
+   * doubling up.
+   */
+  pending?: boolean
+  /** Year filter — find_papers. */
   year_from?: number | null
   year_to?: number | null
   /** Figure number the agent showed — show_figure. */
@@ -323,6 +334,10 @@ export interface ProvenanceEvent {
   /** How many times it searched for papers (Semantic Scholar / OpenAlex).
    *  Separate from `searches`, which counts the student's own library. */
   paper_searches: number
+  /** How many times it sent the web scout looking, and how many pages came
+   *  back with a usable URL. Absent on sessions saved before v6.16.0. */
+  web_searches?: number
+  web_pages?: number
   /** Distinct library sources the finished prose cites. */
   cited_sources: number
   /** Graph papers the finished prose cites. */
