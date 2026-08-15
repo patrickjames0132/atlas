@@ -481,6 +481,9 @@ def answer(
     deps = ResearcherDeps(
         nodes=graph_nodes,
         known_ids={node.id for node in graph_nodes},
+        # Everything handed in is by definition already drawn; everything the
+        # agent finds has to earn its place (see tools._canvas_growth).
+        on_canvas={node.id for node in graph_nodes},
         scope=source_ids,
         # No availability probe: retrieval degrades by itself (lexical-only
         # without the embedder), so an existing library is enough — and an

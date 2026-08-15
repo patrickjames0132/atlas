@@ -63,7 +63,11 @@ export const REL_COLOR: Record<string, string> = {
   //                       shade to stand apart from `latest`'s pale green)
   latest: '#86efac', // light green — recent citers (the recent-years frontier)
   similar: '#c084fc', // purple — embedding-similar papers
-  search: '#f472b6', // pink — pulled in by the teacher's topic search (3c.2)
+  // Pink — a paper pulled in by the teacher's topic search. LEGACY since
+  // v7.3.0, and deliberately kept: find_papers no longer draws its hits, so
+  // nothing new is ever this colour, but saved sessions from before the change
+  // still hold `search` nodes and must keep rendering. Don't sweep it out.
+  search: '#f472b6',
 }
 
 /** Relation colours for the detail-panel badges. Mirrors REL_COLOR, but both
@@ -112,7 +116,8 @@ export const YEAR_SPACING = 120
 
 /**
  * The relation types the user can filter by, in colour-priority order. `seed`
- * and `search` are always shown (no chip); `similar` is no longer a seed-graph
+ * and `search` are always shown (no chip — and `search` only ever appears on a
+ * pre-v7.3.0 save now); `similar` is no longer a seed-graph
  * relation (retired from the build in v5.0.0) — it survives only on papers the
  * researcher's `expand_node` pulls in, which stay visible with no chip, so it's
  * out of this list too. Its colour is still defined below for those nodes/edges.

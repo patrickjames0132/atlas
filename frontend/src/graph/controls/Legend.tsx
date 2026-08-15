@@ -16,7 +16,10 @@ import '../graph.css'
 export interface LegendProps {
   /** The teacher has pulled in at least one off-graph paper (dashed ring). */
   hasDiscovered: boolean
-  /** At least one discovered paper came from an ungrounded topic search (pink). */
+  /** At least one discovered paper came from an ungrounded topic search
+   * (pink). Only ever true for a session saved before v7.3.0, which stopped
+   * drawing free-text hits — the row disappears on its own rather than
+   * needing to be removed, which is what keeps those saves rendering. */
   hasSearchHits: boolean
 }
 

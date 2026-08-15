@@ -2,9 +2,13 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * Mid-conversation graph growth: the papers the AI teacher pulls in via its
- * expand_node / find_papers tools (and the history lecture's backward
- * walk), merged into the live graph without disturbing the simulation.
+ * Mid-conversation graph growth: the papers the researcher pulls in via its
+ * expand_node tool, merged into the live graph without disturbing the
+ * simulation. Only the researcher grows the graph — lectures narrate what is
+ * already there — and since v7.3.0 only growth that ATTACHES arrives at all:
+ * `find_papers` numbers its hits without drawing them, so the edgeless
+ * "ungrounded discovery" case below is now reachable only through a saved
+ * session from before that change.
  *
  * The core constraint: `base`'s node/link objects are mutated by
  * react-force-graph (x/y) and by user pins (fx/fy), so discoveries must be
@@ -150,6 +154,14 @@ export function useDiscovery({
       const knownLinkKeys = new Set(base.links.map((link) => `${link._s}|${link._t}|${link.type}`))
       let addedLinks = 0
       for (const edge of newEdges) {
+        // Both endpoints must be on the canvas. The server upholds this (see
+        // the researcher's `_canvas_growth`), but a dangling link is not a
+        // cosmetic defect that shows up as a stray line — d3-force raises
+        // `missing: <id>` while resolving link endpoints and takes the whole
+        // graph down with it. That's too severe a failure to leave resting on
+        // a server-side invariant, and dropping the edge costs nothing: the
+        // paper it pointed at isn't drawn, so neither is its line.
+        if (!knownIds.has(edge.source) || !knownIds.has(edge.target)) continue
         const key = `${edge.source}|${edge.target}|${edge.type}`
         if (knownLinkKeys.has(key)) continue
         knownLinkKeys.add(key)

@@ -80,7 +80,10 @@ export interface PlayedLecture {
 
 /**
  * New papers (+ the edges connecting them) the researcher pulled in via its
- * expand_node / find_papers tools — to be merged into the live graph.
+ * expand_node tool — to be merged into the live graph. Since v7.3.0 only
+ * growth that ATTACHES to a paper already drawn arrives: find_papers numbers
+ * its hits without drawing them, and the reader promotes one by clicking its
+ * citation.
  * (Lectures never emit these: a lecture narrates the visible graph as-is.)
  */
 export interface Discovery {

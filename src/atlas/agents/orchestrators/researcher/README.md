@@ -60,6 +60,35 @@ also means web grounding is *counted* in provenance (`web_searches`,
 `web_pages`) rather than counted off the finished prose the way `[Sn]` and
 `[n]` citations are: there is no marker to count.
 
+## What reaches the canvas (v7.3.0)
+
+> **The graph grows only where a new paper attaches to a paper already on it.**
+
+The numbered list and the canvas were the same thing until this rule; now they
+differ, and `ResearcherDeps.on_canvas` tracks which of `nodes` the reader can
+actually see. `tools._canvas_growth` is the only place a `Discovery` is emitted.
+
+- **`find_papers` draws nothing.** Its hits are numbered, readable, expandable
+  and citable — they just aren't on the canvas. They used to arrive as edgeless
+  dots floating beside the graph (a topic search links to no specific paper),
+  which was the only way to surface them back when a chat citation couldn't
+  hand a paper back. It can since v6.11.0, provider-stamped since v6.14.0, so
+  the reader promotes one deliberately by clicking `[n]`.
+- **Expanding an undrawn paper draws nothing either**, and this is why it's one
+  rule rather than a quirk of one tool. An expansion hangs its edges off the
+  paper it expanded; if that paper isn't drawn, those edges point at a node the
+  frontend hasn't got. A link with a missing endpoint is not a stray line —
+  d3-force raises on it and takes the whole graph down.
+- **An edge promotes.** When an expansion of a *drawn* paper turns up a paper
+  that's numbered but undrawn, the edge it was missing now exists, so it's
+  drawn — keeping its original number and gaining the relation that brought it
+  in, so it colours as that rather than staying search-pink.
+
+Nothing was deleted for this. The `search` relation and its pink still exist
+frontend-side, because sessions saved before the change hold those nodes and
+must keep rendering; the legend row is gated on their presence and disappears
+by itself.
+
 ## The join: the web feeds the literature (v7.1.0)
 
 Two scouts that each answer their own question leave the reader with a link

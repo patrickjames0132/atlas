@@ -693,35 +693,127 @@ def test_provenance_counts_paper_searches_separately(monkeypatch):
     assert provenance.searches == 0  # library searches stay their own count
 
 
+#: The shape traversal.search hands back: a full node dict, un-numbered. `url`
+#: is a plain str there (never None), which DiscoveredNode enforces. It carries
+#: an abstract so a read of it stays offline — a hit with neither abstract nor
+#: TL;DR hydrates from the live provider on first read.
+FOUND = [
+    make_node(
+        "new1", "A Very Recent Result", year=2026, url="", abstract="Below threshold, at last."
+    ).model_dump(exclude={"rels", "is_seed"})
+]
+
+
 def test_the_scout_finds_the_papers_and_the_researcher_numbers_them(monkeypatch):
     """The division of labour that keeps `[n]` meaningful: the worker returns
     raw provider nodes and the researcher assigns every index, so one agent
     owns the numbered list the prose, the citation resolver and the frontend
     all read."""
-    # The shape traversal.search hands back: a full node dict, un-numbered.
-    # `url` is a plain str there (never None), which DiscoveredNode enforces.
-    found = [
-        make_node("new1", "A Very Recent Result", year=2026, url="").model_dump(
-            exclude={"rels", "is_seed"}
-        )
-    ]
-    stub_scout(monkeypatch, found=found, summary="Two queries; the first was all landmarks.")
+    stub_scout(monkeypatch, found=FOUND, summary="Two queries; the first was all landmarks.")
     model = scripted(
         [("find_papers", ['{"need": "what is new in error correction"}'])],
         [final("As shown in [4].", [4])],
     )
     out = run(model, monkeypatch)
 
-    discovery = next(event for event in out if isinstance(event, events.Discovery))
     # NODES is three papers long, so the scout's find takes index 4 — assigned
-    # here, never by the worker.
-    assert [(node.idx, node.title) for node in discovery.nodes] == [(4, "A Very Recent Result")]
+    # here, never by the worker. Since v7.3.0 the numbering is observable
+    # through the paper refs rather than through a graph discovery, which is
+    # also how the reader reaches it: `[4]` becomes the chip that maps it.
+    refs = next(event for event in out if isinstance(event, events.PaperRefs))
+    assert refs.refs["4"].node_id == "new1"
+    assert refs.refs["4"].title == "A Very Recent Result"
     trace = next(
         event
         for event in out
         if isinstance(event, events.SearchTrace) and not event.pending
     )
     assert trace.ok and trace.found == 1
+
+
+def test_a_found_paper_is_numbered_but_not_drawn(monkeypatch):
+    """The v7.3.0 rule: **the canvas grows only where a new paper attaches to a
+    paper already on it.**
+
+    Free-text hits used to arrive as edgeless pink dots floating beside the
+    graph — the only way to surface them back when the chat couldn't hand a
+    paper back. It can now (a citation seeds its own graph, carrying its
+    provider), so a found paper stays in the numbered list until the reader
+    promotes it by clicking. Everything else about it is unchanged: it can be
+    read, expanded and cited."""
+    stub_scout(monkeypatch, found=FOUND)
+    model = scripted(
+        [("find_papers", ['{"need": "what is new"}'])],
+        [("read_paper", ['{"index": 4, "detail": "summary"}'])],  # numbered, so readable
+        [final("As shown in [4].", [4])],
+    )
+    out = run(model, monkeypatch)
+    assert not [event for event in out if isinstance(event, events.Discovery)]
+    read = next(event for event in out if isinstance(event, events.ReadTrace))
+    assert read.ok and read.title == "A Very Recent Result"
+
+
+def test_expanding_an_undrawn_paper_draws_nothing(monkeypatch):
+    """The same rule, and the reason it's one rule rather than a special case
+    in `find_papers`.
+
+    An expansion hangs its edges off the paper it expanded. If that paper isn't
+    on the canvas, those edges point at a node the frontend hasn't got — and a
+    link with a missing endpoint isn't a stray line, it's a d3-force raise that
+    takes the whole graph down. So expanding a found paper still numbers its
+    neighbours for the model and draws nothing."""
+    stub_scout(monkeypatch, found=FOUND)
+    monkeypatch.setattr(
+        researcher.tools.traversal,
+        "neighbors",
+        lambda paper_id, relation, limit, provider="s2": [
+            {"node": dict(id="anc01", arxiv_id=None, title="Bellman 1957", abstract=None,
+                          tldr=None, year=1957, month=None, pub_date=None,
+                          citation_count=50000, authors=None, url="https://example.org/anc01")}
+        ],
+    )
+    model = scripted(
+        [("find_papers", ['{"need": "what is new"}'])],          # numbers [4], undrawn
+        [("expand_node", ['{"index": 4, "relation": "references"}'])],
+        [final("It rests on [5].", [5])],
+    )
+    out = run(model, monkeypatch)
+    assert not [event for event in out if isinstance(event, events.Discovery)]
+    # ...but the neighbour IS numbered, and reachable through its paper ref.
+    refs = next(event for event in out if isinstance(event, events.PaperRefs))
+    assert refs.refs["5"].node_id == "anc01"
+
+
+def test_an_edge_promotes_an_undrawn_paper_onto_the_canvas(monkeypatch):
+    """The far side of the rule, and the reason it's phrased as *attaches*
+    rather than *came from expand_node*.
+
+    A paper found by search is undrawn for want of an edge. When a later
+    expansion of a paper that IS on the canvas turns up that same paper as a
+    neighbour, the edge it was missing now exists — so it's drawn, with the
+    relation that brought it in appended so it colours as that rather than
+    staying search-pink."""
+    stub_scout(monkeypatch, found=FOUND)
+    monkeypatch.setattr(
+        researcher.tools.traversal,
+        "neighbors",
+        lambda paper_id, relation, limit, provider="s2": [
+            {"node": dict(id="new1", arxiv_id=None, title="A Very Recent Result", abstract=None,
+                          tldr=None, year=2026, month=None, pub_date=None,
+                          citation_count=1, authors=None, url="")}
+        ],
+    )
+    model = scripted(
+        [("find_papers", ['{"need": "what is new"}'])],           # numbers [4], undrawn
+        [("expand_node", ['{"index": 1, "relation": "citations"}'])],  # [1] is the seed: drawn
+        [final("Answering.", [])],
+    )
+    out = run(model, monkeypatch)
+    discovery = next(event for event in out if isinstance(event, events.Discovery))
+    (drawn,) = discovery.nodes
+    assert drawn.id == "new1" and drawn.idx == 4  # its original number, kept
+    assert drawn.rels == ["search", "citation"]
+    assert [(edge.source, edge.target) for edge in discovery.edges] == [("new1", "seed01")]
 
 
 def test_a_repeated_need_does_not_re_run_the_scout(monkeypatch):

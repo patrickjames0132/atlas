@@ -69,7 +69,9 @@ export interface GraphNode {
   /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest' | 'similar' | 'search'. */
   rels: string[]
   is_seed: boolean
-  /** Added mid-conversation by the researcher's expand_node / find_papers tools. */
+  /** Added mid-conversation by the researcher's expand_node tool. (Also
+   * `find_papers`, before v7.3.0 stopped drawing free-text hits — saved
+   * sessions from then still carry those, edgeless and `search`-relation.) */
   discovered?: boolean
   /**
    * The [n] index the researcher knows the paper by (discovered papers only;
