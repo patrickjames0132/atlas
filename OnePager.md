@@ -128,6 +128,37 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
+- [ ] **Give the paper scout a semantic channel — "more like this one"**
+      *(next up; do this BEFORE retiring similar from the graph, below)* — the
+      scout searches one way: lexical, over titles and abstracts. Its own
+      prompt is where the weakness is written down — "a paper matches only
+      words that literally appear in its title or abstract, so an acronym or
+      nickname finds nothing when the papers spell it out" — and reformulating
+      the words is a workaround for not having the other channel. Semantic
+      similarity is that channel, and it already exists as plumbing:
+      `traversal.neighbors(paper_id, "similar", …)`, SPECTER2 recommendations
+      under S2.
+
+      **Whatever it returns is a plain `[n]` paper — nothing else.** No trace
+      chip of its own, no distinct citation colour or glyph, no new node kind.
+      A chip's appearance says what the **click** does, not which API found the
+      paper; both of these seed a graph, so a second visual axis would teach a
+      distinction that never pays off at click time. How the agent got there is
+      the agent's business. *(Patrick's call, 2026-08-15 — settled, don't
+      re-litigate.)*
+
+      **Two things that make it more than a tool registration.** It takes a
+      **paper id, not a query**, so it is not a peer of `search(query, …)` —
+      the scout can only reach for it *after* a first search gives it a paper
+      to point at ("search lexically, pick the best hit, ask for more like
+      it"). That's a second round with a dependency, and the scout's prompt has
+      to teach when it's worth one. And it is **provider-dependent in a way
+      lexical search isn't**: OpenAlex has no embeddings, so the same tool
+      falls back to `related_works` concept/citation overlap there — the
+      closest analogue, materially weaker. Decide whether that's worth saying
+      in the scout's summary or just accepting. Budget: simplest is to spend
+      from the existing `searches` pool rather than adding a knob.
+
 - [ ] **Does the header search bar still earn its place?** — an open design
       question, not yet a decision. The chat bar now does much of what the seed
       search does: ask about a topic, get papers back, click a citation chip to
@@ -293,6 +324,35 @@ optional, behind a key.
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
 
 ### Citations & graph data
+
+- [ ] **Retire `similar` from the graph too — a citation map should be made of
+      citations** *(next up, AFTER the scout's semantic channel above)* — the
+      purple `similar` papers `expand_node` pulls in are related by *embedding*,
+      not by a citation anyone wrote. They draw edges, so v7.3.0's rule ("the
+      canvas grows only where a new paper attaches") doesn't touch them — and
+      that's the point worth noticing: **this needs a different rule, not the
+      same one again.** Something like *only citation-semantic edges are
+      drawn*, or simply dropping `similar` from `expand_node`'s relation set.
+      Decide which, because the second is much smaller and may be the whole
+      job.
+
+      The work is already half done historically: `similar` was **retired from
+      the seed-graph build in v5.0.0** and survives only on papers the
+      researcher pulls in, which is why it has no filter chip. This finishes
+      that.
+
+      **What to watch.** `primaryRel` returns `'similar'` as its **fallback**,
+      not only for genuine similar papers — so the colour can't simply be
+      deleted, and whatever replaces the fallback needs a look. Same rule as
+      last time on saved sessions: old saves hold `similar` nodes and edges and
+      must keep rendering, so this is a change to what's *emitted*, not a
+      removal of what can be *drawn* (`EDGE_COLOR.similar` and the cluster-force
+      satellite handling stay). Sequencing matters: the similar hop is today
+      the only way to reach these papers at all, so land the scout's semantic
+      channel first or the capability just disappears for a while. Check what a
+      lecture does with a graph that has no similar cluster — the screenshot
+      that prompted this had one narrating "Similar works — 7 new papers".
+      *(Patrick's ask, 2026-08-15.)*
 
 - [ ] **Surveys as a first-class node kind** — a review/survey paper is a
       different animal from a primary result: it's the field's own overlook of
@@ -550,6 +610,30 @@ optional, behind a key.
   relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
 ### UI & rendering polish
+
+- [ ] **Teach the visual vocabulary — what every colour and glyph means** —
+      the app encodes a lot in colour and shape and explains almost none of it.
+      The graph legend lists node colours by name (References, Field Landmarks,
+      Latest Publications…) with no word on what the relation *is*; the two
+      citation glyphs (one node lit = spotlight a paper already on the canvas,
+      three nodes wired = build that paper's own graph) are explained only in a
+      tooltip you have to hover to find; edge colour, edge thickness
+      (influential citations), node size (citation count), the dashed ring
+      (teacher-discovered) and the cyan selection ring are explained nowhere at
+      all.
+
+      **The ask:** one place that lays out the vocabulary. Candidates worth
+      pricing against each other — a tour step (fits the existing help
+      surface, but the tour is a one-time read and this is reference
+      material); an expandable "what am I looking at" panel off the legend
+      (discoverable exactly when the question occurs); or a help/? overlay.
+      Reference material argues against the tour.
+
+      **Do this after the two `similar` tickets above**, not before: they
+      change the vocabulary, and documenting a palette that's about to lose a
+      colour is work done twice. It's also the reason to keep resisting new
+      colours — the fewer arbitrary hues, the shorter this page is.
+      *(Patrick's ask, 2026-08-15.)*
 
 - [ ] **Collapse the lecture buttons behind a caret** — the lecture-mode
       buttons sit permanently expanded above the chat, taking prime vertical
