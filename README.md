@@ -220,8 +220,9 @@ The Vite dev server proxies `/api/*` to Flask.
 ## The codebase
 
 The rewrite's first principle: **every package documents itself**. Start at
-any folder's `README.md` — e.g. `src/atlas/agents/` (the crew, the
-event protocol, the streaming bridge), `services/sources/` (hybrid retrieval:
+any folder's `README.md` — e.g. `src/atlas/agents/` (the two tiers —
+orchestrators that own an outcome, workers that own one source each — plus
+the event protocol and the streaming bridge), `services/sources/` (hybrid retrieval:
 FTS5 + vectors + RRF), `frontend/src/README.md` (the render-tree map), or
 `frontend/src/store/` (what earns a Redux slice and what stays local).
 

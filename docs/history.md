@@ -254,6 +254,76 @@
 
 ### AI teacher & lectures
 
+- [x] **Ground the chat in the web too — workers and orchestrators**
+      *(v7.0.0)* — the graph-free chat could only find *papers*, so "what's new
+      in quantum computing" answered from Semantic Scholar's citation-weighted
+      ranking, which structurally favours old, well-cited work — the opposite
+      of what was asked — and couldn't see the announcement or release note
+      where the news actually broke.
+
+      **This is not the ambition cut in v6.8.0, and the distinction is the
+      whole ticket.** What was killed there was *recall* — a soft prompt rule
+      preferring the model's own knowledge over paper search, with nothing
+      structural behind it. Web search is not recall: it is a **third grounded
+      source**, as real, citable and retrievable as a paper or a page of the
+      reader's own book. It *extends* the grounding boundary ("Atlas grounds;
+      the line tells you in what") rather than abandoning it. Keep that
+      reasoning in mind before "restoring" v6.8.0's decision over this one.
+
+      **The architecture: flat, two tiers, no deeper.** `agents/orchestrators/`
+      own an outcome and delegate; `agents/workers/search/` each own one source
+      and answer a bounded question about it. The membership rule lives in
+      `workers/search/README.md` so it isn't re-litigated: **a capability earns
+      worker status when it needs judgment or context isolation — otherwise it
+      stays a plain function.** Depth was rejected on two independent grounds:
+      Anthropic's Managed Agents enforces single-level delegation, and current
+      Opus guidance is to delegate *less*, since every hop re-establishes
+      context and blurs the original question.
+
+      **Two workers earned it.** The **paper scout** replaced the one-shot
+      `search_papers` rather than joining it (two paths to one source is the
+      bug): its judgment is reformulation and recency bounding — search, look
+      at what came back, ask again with different words or a year floor. The
+      **web scout** meets both criteria unambiguously, and runs on Anthropic's
+      provider-side `WebSearchTool`, where `max_uses` is enforced by the
+      provider rather than by us.
+
+      **Workers return structured findings — never prose, never indices.** The
+      paper scout hands back raw provider nodes and `find_papers` numbers them,
+      because `[n]` must mean the same paper to the prose, the citation
+      resolver, the provenance count and the frontend chip that builds a graph
+      from it — an invariant that holds exactly as long as one agent owns the
+      list. Web pages are cited as inline markdown links, not `[n]`, and are
+      therefore *counted* in provenance rather than counted off the finished
+      prose.
+
+      **Coverage, not routing.** `_must_have_looked` now spans every available
+      source instead of only the library, still gated on `answered` — a
+      mandatory sweep on every turn is the v6.7.0 bug where saying "hi"
+      searched the student's books, three times over. A source counts as
+      consulted when it is *already in front of the model*, so a question about
+      the open graph isn't bounced for failing to re-search the literature it
+      was built from. A zero web budget unregisters the tool **and** drops it
+      from the guard — one availability fact, two readers.
+
+      **The router went with it.** `orchestrator.run` and the `Intent` enum
+      were deleted: it dispatched two known intents to two agents and never
+      grew the model half it was designed around, so the enum was a string
+      round-trip between a route and the function beside it. Routes call the
+      agent they mean. The two things it genuinely carried landed where they
+      belong — the Done/Error termination contract became `streams.terminated`
+      (shared plumbing: a workflow owns its events, not how a transport learns
+      it finished), and lecture mode scoping moved into the lecturer, which now
+      scopes its own input. One visible consequence: a lecture's numbered list
+      is chronological, so `[1]` is the oldest paper.
+
+      **Major, for one reason.** The package moves and the router's deletion
+      are invisible — the HTTP surface is unchanged and saved sessions still
+      restore. What breaks is `config.json`: the two new `llm.agents` entries
+      and `researcher.extras.web_searches` are required, and their absence is a
+      `LookupError` at startup, not a soft drift. A release that won't boot on
+      the previous release's config is breaking in the way that matters.
+
 - [x] **The graph-free chat follows the provider dropdown — and its citations
       carry the backend that minted them** *(v6.14.0)* — two symptoms, one root
       cause, both confirmed in `data/atlas.log`. `streamAskSources` had no
