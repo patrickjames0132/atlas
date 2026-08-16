@@ -37,8 +37,20 @@ figures.
   figures mined server-side from its open-access PDF — with failures cached
   as `unavailable` so a flaky upstream isn't re-hit; code links (HF Papers)
   and category tags (arXiv's own metadata) each use a requested-set for the
-  same guarantee. A new graph invalidates all four caches and selects its
-  seed.
+  same guarantee. A new graph invalidates all four caches and clears the
+  selection.
+- **A new graph opens with the panel CLOSED** (v7.9.0). It used to select
+  the seed, so every build landed with the panel already covering the
+  canvas — chrome in front of the thing the reader had just asked to see.
+  Nothing is selected now; a click opens a paper, which is what the click
+  is for. Two paths still open it without one: the **chat-citation**
+  re-seed (`workspace.revealSeedDetail`, set by a `fromChat` load and
+  consumed in `GraphExplorer`) — that click *asked* for a paper, so it gets
+  its panel — and the guided tour's `'details'` stops, which select the
+  seed if nothing is open so the walk has a panel to spotlight. Both are
+  effects registered *after* `useSelection`'s, so they set the seed back
+  after the per-graph clear runs on the same change. (The sibling half of
+  the same call: `graph/controls`' panel now starts collapsed.)
 - **The loadable sections reveal together, behind one joint gate.** While
   ANY of the node's fetches is in flight — summary hydration (reported by
   `useSelection`'s `detailLoading` id), arXiv tags, code links, figures —

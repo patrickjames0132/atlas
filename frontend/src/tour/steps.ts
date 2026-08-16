@@ -132,10 +132,9 @@ export const GRAPH_TOUR: TourStep[] = [
     target: '[data-tour="controls-head"]',
     title: 'The controls panel',
     body:
-      'Everything that declutters the map lives under this header. The header is also ' +
-      'a button. Click it to collapse the whole panel to a slim bar when you want the ' +
-      'canvas space back, and click it again to reopen. The next stops walk through ' +
-      'what’s inside.',
+      'Everything that declutters the map lives under this header. It starts folded to ' +
+      'this slim bar so the canvas is yours; the header is a button — click it to open ' +
+      'the panel, and again to fold it away. The next stops walk through what’s inside.',
   },
   {
     target: '[data-tour="layout"]',

@@ -150,7 +150,9 @@ The Vite dev server proxies `/api/*` to Flask.
    papers, tables and algorithms included — code & artifacts);
    **double-click to re-seed** on it — journal papers included. LaTeX math (`$…$`) renders throughout — titles,
    abstracts, lecture beats, answers, and figure captions — via KaTeX.
-3. **Declutter** — Force ↔ Timeline layouts (x = publication date), relation
+3. **Declutter** — a new graph opens onto the *graph*: the controls sit folded
+   to a slim bar (click its header to open them) and no paper is selected until
+   you click one. Inside: Force ↔ Timeline layouts (x = publication date), relation
    on/off **filter chips**, a dual-knob **year slider** and a dual-knob
    **citation-count slider** (a log-scale min…max window over the papers on
    screen — a display filter, no re-query), drag-to-pin, focus-on-hover, and a

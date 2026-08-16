@@ -7,7 +7,9 @@
  * citation-count window slider, the visible-count readout, and the pin/fit
  * actions — all under a header bar that collapses the whole panel to a slim
  * strip (the find control's collapse-until-wanted idea, panel-sized), giving
- * the canvas its ~272px back when the user isn't filtering.
+ * the canvas its ~272px back when the user isn't filtering. That strip is
+ * where the panel *starts*: a freshly built graph should be a graph, not a
+ * canvas already covered by its own controls.
  *
  * Purely presentational — all state lives in GraphExplorer; this just renders
  * it and fires the callbacks. The one exception is the collapsed flag, which
@@ -131,7 +133,13 @@ export default function GraphControls({
 }: GraphControlsProps) {
   // Collapsed to the slim header bar? Local, like the find control's own
   // open/closed — nothing else needs to know.
-  const [collapsed, setCollapsed] = useState(false)
+  //
+  // Starts COLLAPSED: a graph should open onto the graph, not onto its
+  // chrome, and the reader who wants to declutter opens the panel by its
+  // header. Only the initial value — re-seeding while the explorer is up
+  // leaves the panel however the reader left it, because that expansion was
+  // a choice and a re-seed isn't a reason to undo it.
+  const [collapsed, setCollapsed] = useState(true)
   // The tour staging 'controls' expands a collapsed panel so its stops have
   // something to spotlight. It never re-collapses on the way out — the same
   // no-tidy-up call as the detail panel's staged seed selection.
@@ -177,7 +185,7 @@ export default function GraphControls({
         onClick={() => setCollapsed((wasCollapsed) => !wasCollapsed)}
         title={
           collapsed
-            ? 'Reopen the graph controls'
+            ? 'Open the graph controls — layout, filters, and the map’s actions'
             : 'Collapse the controls to a slim bar and free up the canvas'
         }
       >

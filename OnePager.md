@@ -872,26 +872,6 @@ optional, behind a key.
       query — decide the source and its caching before building the UI. *(From
       the `todos.md` inbox, 2026-07-20.)*
 
-- [ ] **A graph should open onto the graph, not onto its panels** — loading a
-      graph currently lands with two boxes already covering the canvas: the
-      **detail panel** (`useSelection`'s per-graph effect selects the seed,
-      so the panel is open before you've looked at anything) and the
-      **graph controls** (`GraphControls`' `collapsed` starts `false`, so the
-      272px declutter panel is expanded). Between them the explorer is
-      crowded at exactly the moment the reader wants to see the map. Both
-      should start out of the way — the reader opens the detail panel by
-      clicking a paper and the controls by their header caret, which is what
-      those affordances are for. **The assistant panel is the deliberate
-      exception and stays visible on graph load:** the conversation is the
-      product, and docking it beside the map is the v7.x shape.
-      Three things to keep honest: the **chat-citation path**
-      (`revealSeedDetail`) must still open the seed's panel — a click that
-      said "show me that paper" is a request, not a default; the **guided
-      tour** already stages both surfaces open (`'details'` selects the seed,
-      `'controls'` expands the panel), so its stops must still land; and the
-      help surfaces that describe the opening state need re-reading.
-      *(From the `todos.md` inbox, 2026-08-16.)*
-
 ### Enhancements & tech debt
 
 - [ ] **Save a conversation with no graph** — Save is graph-gated end to end:

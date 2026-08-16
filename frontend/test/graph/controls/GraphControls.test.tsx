@@ -8,9 +8,11 @@
  * shared reset), the shared readout flips between "papers shown" and
  * "papers selected" in the footer and collapsed bar alike, and Release
  * stays enabled with nothing pinned — it doubles as "re-settle the
- * layout". Plus the header's collapse-to-a-bar: the body hides (but stays
- * in the DOM for the tour's existence checks) and the tour's 'controls'
- * staging re-expands a collapsed panel.
+ * layout". Plus the header's collapse-to-a-bar: the panel STARTS folded
+ * (so a new graph opens onto the canvas, not onto its chrome), the body
+ * hides rather than unmounting (the tour's existence checks rely on it)
+ * and the tour's 'controls' staging expands it. Cases about what's inside
+ * the body render through `renderPanel`, which opens it first.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -55,20 +57,34 @@ function makeProps(overrides: Partial<GraphControlsProps> = {}): GraphControlsPr
   }
 }
 
+/**
+ * Render with the body OPEN — the panel starts folded to its header bar
+ * (v7.9.0), and most cases here are about the controls inside that body,
+ * which a `hidden` body keeps out of the accessibility tree entirely.
+ *
+ * @param overrides Props to override on top of the inert defaults.
+ * @returns The RTL render result, panel expanded.
+ */
+function renderPanel(overrides: Partial<GraphControlsProps> = {}) {
+  const view = render(<GraphControls {...makeProps(overrides)} />)
+  fireEvent.click(screen.getByRole('button', { name: /Graph controls/ }))
+  return view
+}
+
 // No test globals in this suite, so RTL's auto-cleanup never registers —
 // unmount between tests explicitly or renders accumulate in the document.
 afterEach(cleanup)
 
 describe('GraphControls Clear button', () => {
   it('sits disabled in the action row until something is lit', () => {
-    render(<GraphControls {...makeProps()} />)
+    renderPanel()
     const clear = screen.getByRole('button', { name: 'Clear' })
     expect(clear.hasAttribute('disabled')).toBe(true)
   })
 
   it('arms for a teacher highlight alone and fires the one shared reset', () => {
     const onClearAll = vi.fn()
-    render(<GraphControls {...makeProps({ litCount: 3, onClearAll })} />)
+    renderPanel({ litCount: 3, onClearAll })
     const clear = screen.getByRole('button', { name: 'Clear' })
     expect(clear.hasAttribute('disabled')).toBe(false)
     fireEvent.click(clear)
@@ -76,31 +92,42 @@ describe('GraphControls Clear button', () => {
   })
 
   it('arms for a hand-picked selection alone', () => {
-    render(<GraphControls {...makeProps({ selectedCount: 2 })} />)
+    renderPanel({ selectedCount: 2 })
     expect(screen.getByRole('button', { name: 'Clear' }).hasAttribute('disabled')).toBe(false)
   })
 })
 
 describe('GraphControls count readout', () => {
   it('reads "papers shown" in the footer under bare filters', () => {
-    render(<GraphControls {...makeProps()} />)
+    renderPanel()
     expect(screen.getByText('10 / 12 papers shown')).toBeTruthy()
   })
 
   it('flips to the selected count (out of the shown papers) during a hand-pick', () => {
-    render(<GraphControls {...makeProps({ selectedCount: 2 })} />)
+    renderPanel({ selectedCount: 2 })
     expect(screen.getByText('2 / 10 papers selected')).toBeTruthy()
     expect(screen.queryByText('10 / 12 papers shown')).toBeNull()
   })
 })
 
 describe('GraphControls collapse', () => {
-  it('collapses to the slim header bar (body hidden, not unmounted) and back', () => {
+  it('starts folded to the slim bar, so a new graph opens onto the canvas', () => {
+    const { container } = render(<GraphControls {...makeProps()} />)
+    const head = screen.getByRole('button', { name: /Graph controls/ })
+    expect(head.getAttribute('aria-expanded')).toBe('false')
+    expect(container.querySelector('.ctrl-body')!.hasAttribute('hidden')).toBe(true)
+    expect(container.querySelector('.controls')!.className).toContain('collapsed')
+  })
+
+  it('opens on the header click (body hidden, not unmounted) and folds back', () => {
     const { container } = render(<GraphControls {...makeProps()} />)
     const head = screen.getByRole('button', { name: /Graph controls/ })
     const body = container.querySelector('.ctrl-body')!
+
+    fireEvent.click(head)
     expect(head.getAttribute('aria-expanded')).toBe('true')
     expect(body.hasAttribute('hidden')).toBe(false)
+    expect(head.textContent).not.toContain('10 / 12 papers shown')
 
     fireEvent.click(head)
     expect(head.getAttribute('aria-expanded')).toBe('false')
@@ -110,16 +137,11 @@ describe('GraphControls collapse', () => {
     expect(container.querySelector('[data-tour="years"]')).not.toBeNull()
     // The visible-count readout rides the collapsed bar, unit and all.
     expect(head.textContent).toContain('10 / 12 papers shown')
-
-    fireEvent.click(head)
-    expect(body.hasAttribute('hidden')).toBe(false)
-    expect(head.textContent).not.toContain('10 / 12 papers shown')
   })
 
   it('reports the hand-picked selection in the collapsed bar, and reverts on clear', () => {
     const { rerender } = render(<GraphControls {...makeProps({ selectedCount: 3 })} />)
     const head = screen.getByRole('button', { name: /Graph controls/ })
-    fireEvent.click(head)
     expect(head.textContent).toContain('3 / 10 papers selected')
 
     // Deselecting all hands the bar back to the visible-count readout.
@@ -128,9 +150,8 @@ describe('GraphControls collapse', () => {
     expect(head.textContent).not.toContain('selected')
   })
 
-  it('re-expands when the tour stages the panel open', () => {
+  it('expands when the tour stages the panel open', () => {
     const { container, rerender } = render(<GraphControls {...makeProps()} />)
-    fireEvent.click(screen.getByRole('button', { name: /Graph controls/ }))
     const body = container.querySelector('.ctrl-body')!
     expect(body.hasAttribute('hidden')).toBe(true)
 
@@ -142,7 +163,7 @@ describe('GraphControls collapse', () => {
 describe('GraphControls Release button', () => {
   it('stays enabled with nothing pinned and fires the release/reheat', () => {
     const onReleaseAll = vi.fn()
-    render(<GraphControls {...makeProps({ pinnedCount: 0, onReleaseAll })} />)
+    renderPanel({ pinnedCount: 0, onReleaseAll })
     const release = screen.getByRole('button', { name: /Release/ })
     expect(release.hasAttribute('disabled')).toBe(false)
     fireEvent.click(release)
@@ -159,18 +180,18 @@ describe('per-chip count sliders', () => {
   it('shows no sliders while the build is adaptive', () => {
     // The default: the backend already sized the graph, so there is nothing
     // for a second trim to do.
-    render(<GraphControls {...makeProps({ relTotals: withCaps.relTotals })} />)
+    renderPanel({ relTotals: withCaps.relTotals })
     expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
   })
 
   it('gives each enabled relation a slider once sizing is user-controlled', () => {
-    render(<GraphControls {...makeProps(withCaps)} />)
+    renderPanel(withCaps)
     expect(screen.getByRole('slider', { name: /References shown/i })).toBeTruthy()
     expect(screen.getByRole('slider', { name: /Field Landmarks shown/i })).toBeTruthy()
   })
 
   it('bounds a slider by that relation and defaults to showing all of it', () => {
-    render(<GraphControls {...makeProps(withCaps)} />)
+    renderPanel(withCaps)
     const slider = screen.getByRole('slider', { name: /References shown/i }) as HTMLInputElement
     expect(slider.max).toBe('40')
     expect(slider.min).toBe('1') // never trims to nothing
@@ -178,13 +199,13 @@ describe('per-chip count sliders', () => {
   })
 
   it('reports the cap as a fraction of the relation', () => {
-    render(<GraphControls {...makeProps({ ...withCaps, relCaps: { reference: 12 } })} />)
+    renderPanel({ ...withCaps, relCaps: { reference: 12 } })
     expect(screen.getByText('12/40')).toBeTruthy()
   })
 
   it('reports the chosen cap upward', () => {
     const onRelCap = vi.fn()
-    render(<GraphControls {...makeProps({ ...withCaps, onRelCap })} />)
+    renderPanel({ ...withCaps, onRelCap })
     fireEvent.change(screen.getByRole('slider', { name: /References shown/i }), {
       target: { value: '15' },
     })
@@ -193,15 +214,13 @@ describe('per-chip count sliders', () => {
 
   it('drops the slider for a relation whose chip is off', () => {
     // A cap on a hidden relation would trim nothing visible.
-    render(
-      <GraphControls {...makeProps({ ...withCaps, enabled: new Set(['citation', 'latest']) })} />,
-    )
+    renderPanel({ ...withCaps, enabled: new Set(['citation', 'latest']) })
     expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
     expect(screen.getByRole('slider', { name: /Field Landmarks shown/i })).toBeTruthy()
   })
 
   it('drops the slider for a relation with nothing to trim', () => {
-    render(<GraphControls {...makeProps({ ...withCaps, relTotals: { reference: 1 } })} />)
+    renderPanel({ ...withCaps, relTotals: { reference: 1 } })
     expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
   })
 
@@ -209,7 +228,7 @@ describe('per-chip count sliders', () => {
     // The chip is now the slider's label, but it must still fire the on/off
     // toggle — that's the whole reason it stayed a button.
     const onToggleType = vi.fn()
-    render(<GraphControls {...makeProps({ ...withCaps, onToggleType })} />)
+    renderPanel({ ...withCaps, onToggleType })
     fireEvent.click(screen.getByRole('button', { name: 'References' }))
     expect(onToggleType).toHaveBeenCalledWith('reference')
   })
@@ -217,7 +236,7 @@ describe('per-chip count sliders', () => {
   it('still shows the chip for a relation with no slider', () => {
     // Field Landmarks with a single paper: no slider, but the chip must remain
     // so it can still be toggled off/on.
-    render(<GraphControls {...makeProps({ ...withCaps, relTotals: { citation: 1 } })} />)
+    renderPanel({ ...withCaps, relTotals: { citation: 1 } })
     expect(screen.getByRole('button', { name: /Field Landmarks/i })).toBeTruthy()
     expect(screen.queryByRole('slider', { name: /Field Landmarks shown/i })).toBeNull()
   })
