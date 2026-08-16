@@ -215,3 +215,12 @@
   background: var(--accent, #6ea8fe);
   transition: width 0.25s ease;
 }
+
+/* The library as a main-pane view (the left rail switches to it) rather than
+   a floating drawer. Same content and the same vertical rhythm — only the
+   positioning differs, so the drawer's own rules stay untouched. */
+.sources-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

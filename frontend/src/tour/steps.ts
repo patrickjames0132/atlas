@@ -90,24 +90,18 @@ export const HOME_TOUR: TourStep[] = [
     body:
       'Papers the assistant cites are clickable: the chip marked with three linked nodes ' +
       'builds that paper’s graph and opens its details, bringing the conversation with ' +
-      'it. Once a map is up this chat collapses into a side panel — and the header grows ' +
-      'an Assistant tab to bring it back.',
+      'it. Once a map is up this chat collapses into a side panel — the 🎓 button above ' +
+      'the graph brings it back.',
   },
   {
-    target: '[data-tour="sessions-btn"]',
-    title: 'Sessions',
+    target: '[data-tour="rail"]',
+    title: 'Your saved graphs live here',
     body:
-      'Save the whole workspace — the graph as you built it, every paper the teacher ' +
-      'discovered, and the conversation — and come back to it later.',
-  },
-  {
-    target: '[data-tour="sessions-panel"]',
-    stage: 'sessions',
-    title: 'Saved sessions',
-    body:
-      'Save as new or update one in place; reopening rebuilds the exact graph from the ' +
-      'save itself — zero API calls, discovered papers included — and the transcript ' +
-      'comes back with it.',
+      'Save the whole workspace — the graph as you built it, every paper the assistant ' +
+      'discovered, and the conversation — and it appears in this list. Reopening rebuilds ' +
+      'the exact graph from the save itself: zero API calls, discovered papers included, ' +
+      'transcript and all. Hover a row for ⋮ to rename or delete it, and collapse the ' +
+      'whole rail when the map wants the room.',
   },
   {
     target: '[data-tour="settings-btn"]',

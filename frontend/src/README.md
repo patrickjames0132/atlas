@@ -11,14 +11,15 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 
 ```
 <Atlas>                            Atlas.tsx        — the shell
-├─ header bar                      header/AtlasHeader.tsx
-│  ├─ brand ("Atlas" — click = Home: clears the workspace)
-│  └─ seed title · data source · drawer toggles
-│                                   (📚 Library · 🎓 Assistant · 🗂 Sessions · ⚙ Settings · ? tour)
-│                                   — the search box left here in v7.6.0; the
-│                                   chat bar is the app's only text input now
-├─ Library drawer (📚)             library/Sources.tsx
-├─ Sessions drawer (🗂)            sessions/Sessions.tsx
+├─ left rail (collapsible)         shell/SideBar.tsx
+│  ├─ collapse toggle · "Atlas" · the open graph's seed title
+│  ├─ ✎ New graph
+│  ├─ saved graphs (⋮ → rename / delete)   shell/useSessions.ts
+│  └─ data source · ＋ Save · 📚 Library · ⚙ Settings · theme · ? tour
+│                                   — the header died here in v7.8.0; the
+│                                   search box had already left in v7.6.0, so
+│                                   the chat bar is the app's only text input
+├─ Library (a main-pane VIEW)      library/Sources.tsx (variant="pane")
 ├─ Settings modal (⚙)             settings/SettingsModal.tsx (config-file editor)
 ├─ guided tour overlay (?)         tour/Tour.tsx (two phases in tour/steps.ts —
 │                                   search on first launch, graph tools on the
@@ -62,7 +63,7 @@ knows URLs and SSE frames), `store/` (the four slices + typed hooks),
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
-`search/useDirectSearch.ts`, `detail/useSelection.ts`,
+`search/useDirectSearch.ts`, `shell/useSessions.ts`, `detail/useSelection.ts`,
 `teacher/useConversation.ts` (each feature's state/logic hooks).
 
 Every folder has its own README with the full story — this file is just the

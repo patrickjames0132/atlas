@@ -51,7 +51,19 @@ async function runPool<Item>(
  *
  * @returns The drawer, or null while closed.
  */
-export default function Sources({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function Sources({
+  open,
+  onClose,
+  variant = 'drawer',
+}: {
+  open: boolean
+  onClose: () => void
+  /** `drawer` floats over the app (the pre-v7.8.0 shape, kept because the
+   *  tour still stages it that way); `pane` fills the main area, which is
+   *  what the left rail switches to. Same content either way — only the
+   *  wrapper and the dismiss affordance differ. */
+  variant?: 'drawer' | 'pane'
+}) {
   const dispatch = useAppDispatch()
   const { available, sources: items, loading } = useAppSelector(selectLibrary)
   const [busy, setBusy] = useState<string | null>(null) // label of the in-flight URL ingest
@@ -167,8 +179,152 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
     [refresh],
   )
 
+  const pane = variant === 'pane'
   if (!open) return null
 
+  const body = (
+    <>
+      <header className="sources-head">
+        <span>Your library</span>
+        <button className="link-btn" onClick={onClose} aria-label={pane ? 'Back' : 'Close'}>
+          {pane ? '\u2190 Back' : '\u2715'}
+        </button>
+      </header>
+
+      <p className="sources-blurb">
+        Upload a book/PDF or paste a link. It's chunked and embedded <b>locally</b> (nothing leaves
+        your machine), so the teacher can search it during Q&amp;A.
+      </p>
+
+      {!available && (
+        <div className="sources-warn">
+          Local embeddings aren't available, so search over your sources is off. (Is the embedding
+          model able to load?)
+        </div>
+      )}
+
+      <div
+        className={`sources-add ${dragging ? 'dragging' : ''}`}
+        onDragOver={(event) => {
+          event.preventDefault()
+          if (!locked) setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <button className="src-btn" disabled={locked} onClick={() => fileRef.current?.click()}>
+          ⬆ Upload PDFs
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          multiple
+          hidden
+          onChange={onPick}
+        />
+        <form className="src-url" onSubmit={onAddUrl}>
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="…or paste a URL"
+            aria-label="Source URL"
+            disabled={locked}
+          />
+          <button className="src-btn" type="submit" disabled={locked || !url.trim()}>
+            Add
+          </button>
+        </form>
+        <div className="drop-hint">Pick several at once, or drop PDFs here</div>
+      </div>
+
+      {uploads.length > 0 && (
+        <div className="upload-list">
+          {uploads.map((upload, index) => (
+            <div key={index} className={`upload-row ${upload.status}`}>
+              <span className="upload-name" title={upload.name}>
+                {upload.name}
+              </span>
+              <span className="upload-status">
+                {upload.status === 'ingesting' ? (
+                  <>
+                    <span className="spin" />{' '}
+                    {upload.pct != null ? `embedding ${Math.round(upload.pct * 100)}%` : 'reading…'}
+                  </>
+                ) : upload.status === 'done' ? (
+                  '✓ added'
+                ) : (
+                  '✕ failed'
+                )}
+              </span>
+              {upload.status === 'ingesting' && (
+                <div className="upload-bar">
+                  <div
+                    className="upload-bar-fill"
+                    style={{ width: `${Math.round((upload.pct ?? 0) * 100)}%` }}
+                  />
+                </div>
+              )}
+              {upload.status === 'error' && upload.error && (
+                <div className="upload-err">{upload.error}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {busy && (
+        <div className="sources-busy">
+          Ingesting <b>{busy}</b>… <span className="spin" />{' '}
+          {busyPct != null && `${Math.round(busyPct * 100)}%`}
+          <div className="upload-bar">
+            <div
+              className="upload-bar-fill"
+              style={{ width: `${Math.round((busyPct ?? 0) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+      {error && <div className="sources-error">{error}</div>}
+
+      <div className="sources-list">
+        {loading && items.length === 0 ? (
+          <div className="sources-empty">Loading…</div>
+        ) : items.length === 0 ? (
+          <div className="sources-empty">No sources yet.</div>
+        ) : (
+          items.map((source) => (
+            <div key={source.id} className="source-row">
+              <div className="source-meta">
+                <div className="source-title" title={source.origin || source.title}>
+                  {source.kind === 'url' ? '🔗' : '📄'} {source.title}
+                </div>
+                <div className="source-sub">
+                  {source.pages ? `${source.pages} pages · ` : ''}
+                  {source.n_chunks} passages
+                </div>
+              </div>
+              <button
+                className="link-btn"
+                onClick={() => onRemove(source.id)}
+                aria-label={`Remove ${source.title}`}
+              >
+                Remove
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  )
+
+  if (pane) {
+    return (
+      <section className="pane-view" data-tour="library-panel" aria-label="Your library">
+        <div className="pane-view-inner sources-pane">{body}</div>
+      </section>
+    )
+  }
   return (
     <>
       <div className="drawer-backdrop" onClick={onClose} />
@@ -178,139 +334,7 @@ export default function Sources({ open, onClose }: { open: boolean; onClose: () 
         role="dialog"
         aria-label="Your library"
       >
-        <header className="sources-head">
-          <span>Your library</span>
-          <button className="link-btn" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </header>
-
-        <p className="sources-blurb">
-          Upload a book/PDF or paste a link. It's chunked and embedded <b>locally</b> (nothing
-          leaves your machine), so the teacher can search it during Q&amp;A.
-        </p>
-
-        {!available && (
-          <div className="sources-warn">
-            Local embeddings aren't available, so search over your sources is off. (Is the embedding
-            model able to load?)
-          </div>
-        )}
-
-        <div
-          className={`sources-add ${dragging ? 'dragging' : ''}`}
-          onDragOver={(event) => {
-            event.preventDefault()
-            if (!locked) setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-        >
-          <button className="src-btn" disabled={locked} onClick={() => fileRef.current?.click()}>
-            ⬆ Upload PDFs
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            multiple
-            hidden
-            onChange={onPick}
-          />
-          <form className="src-url" onSubmit={onAddUrl}>
-            <input
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="…or paste a URL"
-              aria-label="Source URL"
-              disabled={locked}
-            />
-            <button className="src-btn" type="submit" disabled={locked || !url.trim()}>
-              Add
-            </button>
-          </form>
-          <div className="drop-hint">Pick several at once, or drop PDFs here</div>
-        </div>
-
-        {uploads.length > 0 && (
-          <div className="upload-list">
-            {uploads.map((upload, index) => (
-              <div key={index} className={`upload-row ${upload.status}`}>
-                <span className="upload-name" title={upload.name}>
-                  {upload.name}
-                </span>
-                <span className="upload-status">
-                  {upload.status === 'ingesting' ? (
-                    <>
-                      <span className="spin" />{' '}
-                      {upload.pct != null
-                        ? `embedding ${Math.round(upload.pct * 100)}%`
-                        : 'reading…'}
-                    </>
-                  ) : upload.status === 'done' ? (
-                    '✓ added'
-                  ) : (
-                    '✕ failed'
-                  )}
-                </span>
-                {upload.status === 'ingesting' && (
-                  <div className="upload-bar">
-                    <div
-                      className="upload-bar-fill"
-                      style={{ width: `${Math.round((upload.pct ?? 0) * 100)}%` }}
-                    />
-                  </div>
-                )}
-                {upload.status === 'error' && upload.error && (
-                  <div className="upload-err">{upload.error}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {busy && (
-          <div className="sources-busy">
-            Ingesting <b>{busy}</b>… <span className="spin" />{' '}
-            {busyPct != null && `${Math.round(busyPct * 100)}%`}
-            <div className="upload-bar">
-              <div
-                className="upload-bar-fill"
-                style={{ width: `${Math.round((busyPct ?? 0) * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
-        {error && <div className="sources-error">{error}</div>}
-
-        <div className="sources-list">
-          {loading && items.length === 0 ? (
-            <div className="sources-empty">Loading…</div>
-          ) : items.length === 0 ? (
-            <div className="sources-empty">No sources yet.</div>
-          ) : (
-            items.map((source) => (
-              <div key={source.id} className="source-row">
-                <div className="source-meta">
-                  <div className="source-title" title={source.origin || source.title}>
-                    {source.kind === 'url' ? '🔗' : '📄'} {source.title}
-                  </div>
-                  <div className="source-sub">
-                    {source.pages ? `${source.pages} pages · ` : ''}
-                    {source.n_chunks} passages
-                  </div>
-                </div>
-                <button
-                  className="link-btn"
-                  onClick={() => onRemove(source.id)}
-                  aria-label={`Remove ${source.title}`}
-                >
-                  Remove
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+        {body}
       </aside>
     </>
   )

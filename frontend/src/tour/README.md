@@ -93,3 +93,18 @@ dropped rather than pointing at nothing.
 counter, Back/Next/Done walking, the jump select, all three quit paths,
 arrow-key navigation, and the no-targets-at-all immediate close. Pixel placement and the spotlight
 look are browser-pass items.
+
+
+## Anchors after the shell rewrite (v7.8.0)
+
+The header is gone, so the steps that pointed at it moved. The two Sessions
+steps (a button and its drawer) became one `[data-tour="rail"]` step, since
+saved graphs are now a band in the rail rather than a drawer behind a button;
+`[data-tour="provider"]` moved onto the rail's data-source select; and
+`library-panel` still resolves because `Sources` keeps its drawer variant for
+the tour's staging.
+
+Worth remembering when moving anchors: `presentIf` **silently skips** a step
+whose target is missing. That is the right behaviour at runtime and a poor one
+while editing — a typo'd selector doesn't fail, it just quietly shortens the
+tour.

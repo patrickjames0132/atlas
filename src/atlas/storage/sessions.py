@@ -171,6 +171,57 @@ def save_session(payload: dict, session_id: str | None = None) -> dict:
     }
 
 
+def rename_session(session_id: str, name: str) -> bool:
+    """Give a saved session a new name, leaving its snapshot untouched.
+
+    Renaming used to mean re-saving: ``save_session`` overwrites the whole
+    blob, so the only way to change a name was to hold the entire workspace
+    and write it back — possible for the session you have open, impossible for
+    the other twelve in a list. A name is metadata, and metadata should be
+    editable without rehydrating what it describes.
+
+    ``updated_at`` deliberately does **not** move: the list is ordered by it,
+    and renaming a session is not working on it. A rename that reshuffled the
+    list would lose you the thing you just labelled.
+
+    Args:
+        session_id: The saved session's id.
+        name: The new name; blank falls back to ``"Untitled session"``, the
+            same floor ``save_session`` applies.
+
+    Returns:
+        True when a row was renamed, False when no such session existed.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
+    clean = (name or "").strip() or "Untitled session"
+    with _connect() as conn:
+        # The name also lives inside the stored blob (the frontend round-trips
+        # it), so both copies move together — otherwise a restore would put
+        # the old name back the next time the session was saved.
+        row = conn.execute(
+            "SELECT data FROM saved_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            payload = json.loads(row["data"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, dict):
+            payload["name"] = clean
+            conn.execute(
+                "UPDATE saved_sessions SET name = ?, data = ? WHERE id = ?",
+                (clean, json.dumps(payload), session_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE saved_sessions SET name = ? WHERE id = ?", (clean, session_id)
+            )
+        return True
+
+
 def delete_session(session_id: str) -> bool:
     """Remove a saved session.
 

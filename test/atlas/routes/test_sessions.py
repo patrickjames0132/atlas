@@ -67,3 +67,44 @@ def test_store_failure_returns_a_canned_500(client, monkeypatch):
 def test_get_unknown_session_is_404_and_delete_is_idempotent(client):
     assert client.get("/api/sessions/nope").status_code == 404
     assert client.delete("/api/sessions/nope").json == {"deleted": False}
+
+
+def test_rename_changes_the_name_without_touching_the_snapshot(client):
+    """A name is metadata. Editing it used to mean re-saving the whole blob,
+    which is only possible for the session you have open — not for the other
+    twelve in a list."""
+    saved = client.post("/api/sessions", json={"name": "First try", "nodes": [{"id": "a"}]}).json
+    assert client.patch(f"/api/sessions/{saved['id']}", json={"name": "Attention map"}).json == {
+        "renamed": True
+    }
+    reopened = client.get(f"/api/sessions/{saved['id']}").json
+    assert reopened["name"] == "Attention map"
+    # The snapshot itself is untouched...
+    assert reopened["data"]["nodes"] == [{"id": "a"}]
+    # ...and so is the copy of the name inside it, or the next save would put
+    # the old one back.
+    assert reopened["data"]["name"] == "Attention map"
+
+
+def test_rename_does_not_reshuffle_the_list(client):
+    """The list is ordered by `updated_at`, and renaming a session isn't
+    working on it — a rename that jumped it to the top would lose you the
+    thing you just labelled."""
+    node = [{"id": "a"}]
+    older = client.post("/api/sessions", json={"name": "Older", "nodes": node}).json
+    client.post("/api/sessions", json={"name": "Newer", "nodes": node})
+    before = [row["name"] for row in client.get("/api/sessions").json["sessions"]]
+    client.patch(f"/api/sessions/{older['id']}", json={"name": "Older, renamed"})
+    after = [row["name"] for row in client.get("/api/sessions").json["sessions"]]
+    assert before.index("Older") == after.index("Older, renamed")
+
+
+def test_rename_validation_and_missing_session(client):
+    saved = client.post("/api/sessions", json={"name": "Kept", "nodes": [{"id": "a"}]}).json
+    assert client.patch(f"/api/sessions/{saved['id']}", json={}).status_code == 400
+    assert client.patch(f"/api/sessions/{saved['id']}", json={"name": 7}).status_code == 400
+    # A blank name is allowed — it falls back, like saving does.
+    client.patch(f"/api/sessions/{saved['id']}", json={"name": "   "})
+    assert client.get(f"/api/sessions/{saved['id']}").json["name"] == "Untitled session"
+    # Absence isn't a 404, matching delete.
+    assert client.patch("/api/sessions/nope", json={"name": "x"}).json == {"renamed": False}

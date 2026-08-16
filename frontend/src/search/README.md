@@ -102,7 +102,7 @@ its title-recall half became the scout's `match_title` tool.
 for the same reason: they belong to the thing you are about to send) and owns
 the `direct` / `searchOptions` state. It passes the options to
 `useDirectSearch` **and** to `ask`, which forwards them to the researcher.
-`AtlasHeader` no longer imports anything from here.
+The header that used to hold the search box is gone entirely (v7.8.0).
 
 ## How it's verified
 
