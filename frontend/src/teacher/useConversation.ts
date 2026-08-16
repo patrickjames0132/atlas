@@ -269,34 +269,40 @@ export function useConversation() {
     askCtrl.current?.abort()
   }, [])
 
-  /** The Clear button, contextual on what's selected:
-   *    • a lecture is shown → clear just that lecture (stop it if it's still
-   *      loading, drop its cache, and unlight the graph), leaving the chat and
-   *      the other lectures intact;
-   *    • no lecture shown → clear the Q&A chat (and detach its server session),
-   *      leaving every cached lecture. */
-  const clear = useCallback(() => {
+  /** Clear the shown lecture: stop it if it's still loading, drop its cache,
+   *  and unlight the graph — leaving the chat and the other lectures intact.
+   *  A no-op with no lecture on screen.
+   *
+   *  Two clears, not one contextual one (v7.10.0): the panel now shows the
+   *  lecture and the chat as separate sections at the same time, so a single
+   *  button could no longer say which of the two it would wipe. Each section
+   *  owns its own. */
+  const clearLecture = useCallback(() => {
+    if (!activeMode) return
     setError(null)
-    if (activeMode) {
-      const ctrl = lectureCtrls.current.get(activeMode)
-      // A loading lecture's abort runs runLecture's finally, which drops the
-      // partial and clears activeMode; a finished one is dropped here directly.
-      if (ctrl) ctrl.abort()
-      else dispatch(lectureDropped(activeMode))
-      setActiveBeat(null)
-      setActiveRef(null)
-      highlight([])
-    } else {
-      askCtrl.current?.abort()
-      askCtrl.current = null
-      setAsking(false)
-      dispatch(chatCleared())
-      setActiveChat(null)
-      setActiveRef(null)
-      highlight([])
-      sessionId.current = newSessionId()
-    }
+    const ctrl = lectureCtrls.current.get(activeMode)
+    // A loading lecture's abort runs runLecture's finally, which drops the
+    // partial and clears activeMode; a finished one is dropped here directly.
+    if (ctrl) ctrl.abort()
+    else dispatch(lectureDropped(activeMode))
+    setActiveBeat(null)
+    setActiveRef(null)
+    highlight([])
   }, [activeMode, dispatch, highlight])
+
+  /** Clear the Q&A chat and detach its server session, leaving every cached
+   *  lecture where it is. */
+  const clearChat = useCallback(() => {
+    setError(null)
+    askCtrl.current?.abort()
+    askCtrl.current = null
+    setAsking(false)
+    dispatch(chatCleared())
+    setActiveChat(null)
+    setActiveRef(null)
+    highlight([])
+    sessionId.current = newSessionId()
+  }, [dispatch, highlight])
 
   /** Generate a lecture for `mode` from scratch: stream its beats into the
    *  mode's cache slot and show them live. Runs on its own controller, so it
@@ -411,9 +417,11 @@ export function useConversation() {
       setActiveBeat(null)
       setActiveChat(null)
       setActiveRef(null)
-      // Asking drops into the Q&A view: hide any shown lecture (its cache and
-      // any in-flight stream survive — re-select its button to return to it).
-      if (activeMode) dispatch(lectureHidden())
+      // A shown lecture STAYS shown. It used to be hidden here, because the
+      // lecture and the chat shared one scroll and would otherwise stack on
+      // top of each other; since v7.10.0 they are separate sections of the
+      // panel, so asking a question no longer costs the reader the beats they
+      // were reading.
       askIdxRef.current = chatLength + 1 // the assistant turn we're about to add
       dispatch(turnStarted(question))
       try {
@@ -536,6 +544,7 @@ export function useConversation() {
     toggleLecture,
     ask,
     stopAsk,
-    clear,
+    clearLecture,
+    clearChat,
   }
 }

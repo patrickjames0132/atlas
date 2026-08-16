@@ -237,3 +237,21 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     expect(spotlight.querySelector('.cite-ref-spot svg')).toBeTruthy()
   })
 })
+
+describe('AnswerMarkdown dollars', () => {
+  it('renders money as money, not as one formula spanning the paragraph', () => {
+    // The reported bug: remark-math paired the two currency dollars and
+    // rendered everything between them as inline math — italic nonsense in a
+    // 500px unwrappable box, which scrolled the docked panel sideways.
+    const { container } = render(
+      <AnswerMarkdown text="They raised $3.77 billion, up from $1.8 billion in 2024." />,
+    )
+    expect(container.querySelector('.katex')).toBeNull()
+    expect(screen.getByText(/\$3\.77 billion, up from \$1\.8 billion/)).toBeTruthy()
+  })
+
+  it('still renders a real formula', () => {
+    const { container } = render(<AnswerMarkdown text="The loss $L = x^2$ falls." />)
+    expect(container.querySelector('.katex')).toBeTruthy()
+  })
+})

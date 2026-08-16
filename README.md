@@ -187,10 +187,15 @@ The Vite dev server proxies `/api/*` to Flask.
      The four mode buttons are **colour-coded to the graph nodes** they narrate
      (blue references / green landmarks / light-green latest / gold seed) and are
      **cached show/hide toggles** that generate in parallel: play one, then flip
-     between them instantly (or start another while one still loads). The panel
-     is **one surface with two views** — a playing lecture (its "Now playing"
-     header + beats) or the Q&A chat; asking a question tucks the lecture away
-     (still cached) so the two never pile up.
+     between them instantly (or start another while one still loads). Docked beside a
+     graph the panel is a stack of **two folding sections** — **Lectures** (the
+     four buttons and whichever lecture is playing) and **Chat** (the
+     conversation, its caret row carrying the 🎓 lecture and 📚 source scopes,
+     which bind the researcher answering there). Lectures starts folded so the
+     canvas and the conversation get the room; both headers pin to the top as
+     you scroll, and each reports its own work with a spinner. They were one
+     surface with two views until v7.10.0, which meant asking a question tucked
+     away the lecture you were reading — now the two simply coexist.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search the
      literature / search the web / search your sources / show a figure). It

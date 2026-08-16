@@ -276,6 +276,8 @@
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
 }
+/* The panel's own title row: what this thing is, and the ✕. Nothing else —
+   the controls moved down into the sections that own them (v7.10.0). */
 .teacher-head-top {
   display: flex;
   align-items: center;
@@ -285,6 +287,7 @@
 .teacher-head-right {
   display: flex;
   align-items: center;
+  margin-left: auto;
   gap: 8px;
 }
 .teacher-title {
@@ -387,11 +390,175 @@
   border-top: 1px solid var(--border);
   margin-top: 4px;
 }
-/* The lecture section, ruled off under the panel title with a divider. */
-.teacher-modes {
-  margin-top: 12px;
-  padding-top: 12px;
+/* --- the panel's sections ----------------------------------------------
+   Beside a graph the panel stacks two: Lectures and Q&A, each folding behind
+   its own caret, each owning its own controls. They were one shared scroll
+   until v7.10.0, which meant the lecture and the conversation took turns
+   holding the panel — asking a question put away the beats you were reading.
+   Sections let both stay. A rule separates them; the first needs none, the
+   panel title's own border is right above it. */
+/* One rhythm, everywhere: 12px from a rule to the header below it, and 12px
+   from a header to its content — which is why the rule brings no spacing of
+   its own. The header's own symmetric padding provides all of it, so the gap
+   under the panel title (also a rule) matches the gap under this one. */
+.panel-section + .panel-section {
   border-top: 1px solid var(--border);
+}
+/* The fold row: the toggle takes the width (so the whole row is the hit
+   target) and the section's own controls sit at its right end.
+
+   It is PINNED to the top of the scroller while its own section is in view.
+   A long conversation used to bury its own header — to fold the chat away, or
+   to reach its scope pickers, you first had to scroll all the way back up.
+   Sticky costs nothing and fixes exactly that. Two details it depends on: an
+   opaque background, since turns now pass *behind* it (including through the
+   scroller's own top padding, which `top: 0` covers); and the fact that a
+   sticky box is confined to its own containing block — so the Lectures header
+   leaves with its section rather than stacking up, and the Chat header takes
+   the top from it. */
+.section-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Its own breathing room, since the scroller above gave up its top padding
+     for this row to pin flush — and the background paints all of it, so
+     nothing shows through behind a stuck header. Symmetric, because it is
+     also what separates one section from the next (see the rule above). */
+  padding: 12px 0;
+  background: var(--panel);
+}
+/* The landing surface has no sections, and its scroll box is the page — a
+   pinned row there would hang over the reading column for no reason. It also
+   keeps the top padding the docked scroller gives up. */
+.teacher.landing .section-head {
+  position: static;
+}
+.teacher.landing .teacher-scroll {
+  padding-top: 12px;
+}
+.section-head-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+/* Reads as a section heading you can press, not a button: only the caret and
+   the colour say it's live. */
+.section-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  cursor: pointer;
+}
+.section-toggle:hover,
+.section-toggle:focus-visible {
+  color: var(--text-strong);
+}
+/* A generating lecture, reported on the folded section's own row. `.spin`
+   (atlas.css) rather than the panel's hopping dots — those are a voice, and a
+   section header is a status line — just scaled down to sit on it. */
+.section-spin {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+/* A section's own destructive control (drop the shown lecture). Muted and
+   small — it must not compete with the section it sits on. */
+.section-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.section-clear:hover,
+.section-clear:focus-visible {
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text-strong);
+}
+.section-clear svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+/* In a section head the scope pickers are their icon alone, exactly as they
+   are in the composer: the popover states the truth the moment you open it,
+   the accent fill marks a narrowed scope, and the tooltip spells it out. Two
+   labelled pills would eat the row. */
+.section-head-right .scope-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: transparent;
+  font-size: 14px;
+  line-height: 1;
+}
+.section-head-right .scope-btn-label {
+  display: none;
+}
+.section-head-right .scope-btn:hover,
+.section-head-right .scope-btn:focus-visible {
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--text-strong);
+}
+.section-head-right .scope-btn.on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* The caret turns to point down as the section opens — the one piece of
+   motion the fold needs, and short enough not to delay the reveal below.
+   Sized well above the row's small-caps label: it is the only glyph saying
+   "this opens", so it has to be seen before it can be read. */
+.section-caret {
+  display: inline-block;
+  width: 14px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--accent);
+  transition: transform 0.18s var(--ease-rise);
+}
+.section-toggle.open .section-caret {
+  transform: rotate(90deg);
+}
+/* Opening plays the panel's one entrance — the same rise+fade every arriving
+   thing here uses, just quicker: this is a section unfolding, not a turn
+   arriving. `hidden` → shown restarts a CSS animation, which is exactly the
+   trigger wanted (and folding away stays instant — an exit animation would
+   only hold up the space it is giving back). */
+/* The head and its controls are one band; the content below reads as a
+   separate thing, not as the next line of the same row. The gap is the
+   header's own bottom padding — nothing extra here, so the same 12px shows up
+   above a header and below it. */
+.section-body {
+  animation:
+    rise 0.32s var(--ease-rise) both,
+    fade 0.32s var(--ease-fade) both;
 }
 /* A quiet intro above the lecture grid: what the buttons do (summarize node
    types) and that each lecture's scope is exactly the papers on the graph. */
@@ -519,16 +686,54 @@
   .teacher.landing.empty .landing-greeting,
   .teacher.landing.empty .ask-context-note,
   .teacher.landing.empty .teacher-ask,
+  .section-body,
   .trace-line,
   .chat {
     animation: none;
+  }
+  /* The caret still turns — it is a state readout, not decoration — it just
+     turns at once. */
+  .section-caret {
+    transition: none;
   }
 }
 
 .teacher-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  /* NO top padding, and that is load-bearing: a sticky child sticks below
+     the scroll container's own padding, so 12px here left a band above the
+     pinned section header where turns scrolled past in the open (Patrick,
+     2026-08-16). The row's own padding replaces it, and travels with it. */
+  padding: 0 16px 12px;
+  /* Nothing the transcript holds may be wider than the panel. `overflow-y:
+     auto` with a visible x-axis computes to `overflow-x: auto` — so this box
+     IS a horizontal scroller, and anything unwrappable in it (a bare URL, a
+     DOI, a long identifier) turned the docked chat into a sideways-scrolling
+     one. `anywhere` rather than `break-word` deliberately: it also shrinks the
+     box's min-content width, which is what lets the flex layout above hold the
+     panel to its own width instead of being widened from the inside.
+     Inherited, so every bubble, beat, trace chip and hint below is covered.
+     Not `overflow-x: hidden` — that would hide the symptom and quietly clip
+     the wide content the rules below give a scroller of its own. */
+  overflow-wrap: anywhere;
+}
+/* And a structural backstop under the wrapping rule: no turn, beat or chip in
+   the transcript may be wider than the transcript itself, whatever it holds
+   or asks for. Wide *content* still has somewhere to go — the three rules
+   below and `.md pre` / `.md table` each scroll inside their own box — so
+   this caps the boxes without clipping anything. */
+.teacher-scroll > * {
+  max-width: 100%;
+}
+/* Display math is the one thing here that genuinely cannot wrap: a long
+   derivation is one unbreakable box, so it gets to scroll INSIDE the
+   transcript, the same deal as a code block or a table (`.md pre`, `.md
+   table`). KaTeX ships no overflow of its own. */
+.teacher-scroll .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
 }
 .teacher-hint,
 .teacher-error {
@@ -748,6 +953,14 @@
   border-top: 1px solid var(--border);
   margin: 12px 0;
 }
+/* An image written into the answer as Markdown (the agent's own figures come
+   through `.chat-fig` instead, already width-capped). Nothing bounds its
+   intrinsic size, so without this one wide screenshot would set the panel's
+   width. */
+.md img {
+  max-width: 100%;
+  height: auto;
+}
 
 /* An inline [n] citation, clickable when it resolves to a paper on the graph —
    click spotlights that one node. A non-resolving marker renders as bare text
@@ -810,11 +1023,18 @@
 }
 /* A library citation ([Sn, p.N]) rendered as its source's real title and page.
    Not a button yet — opening the source at that page is the follow-up ticket;
-   until then it reads as a quiet attribution rather than a dead control. */
+   until then it reads as a quiet attribution rather than a dead control.
+
+   It WRAPS, and that is load-bearing (v7.10.0). This element holds a real
+   book/paper title — "(Deep Learning, p.460)", or a whole paper title on the
+   no-URL fallback path — and it used to be `white-space: nowrap`, which
+   forbids wrapping outright: `overflow-wrap` cannot help a nowrap box, so a
+   long title reached straight past the panel's edge and turned the docked
+   transcript into a sideways scroller. Nothing here needs to stay on one
+   line; the parentheses are what hold the citation together visually. */
 .source-ref {
   color: var(--muted);
   font-size: 0.94em;
-  white-space: nowrap;
 }
 /* Figures the agent pulled into its answer (show_figure). */
 .chat-figs {

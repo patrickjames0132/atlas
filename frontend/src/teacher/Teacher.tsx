@@ -23,11 +23,20 @@
  * longer bumps on a graph load for the same reason — only Home and a session
  * restore remount.)
  *
+ * **Docked, the panel is a stack of folding sections** (v7.10.0): *Lectures*
+ * — the four mode buttons and whichever lecture is shown — and *Chat*, the
+ * conversation, whose caret row also carries the 🎓/📚 scope pickers, because
+ * those scope the researcher answering there rather than the lecturer above.
+ * Before this the two shared one scroll and took turns: playing a lecture hid
+ * the chat, asking a question hid the lecture. Sections let a reader keep a
+ * lecture open and ask about it. With no graph there is nothing to divide, so
+ * the conversation simply is the panel.
+ *
  * The conversation itself lives in the store (transcript slice) and the
  * stream orchestration in useConversation; this component owns only what it
- * alone renders — the input box, the scope picker's data, the lightbox. A
- * restored session's transcript arrives via the store, no seeding props
- * needed.
+ * alone renders — the input box, the section folds, the scope picker's data,
+ * the lightbox. A restored session's transcript arrives via the store, no
+ * seeding props needed.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -71,6 +80,27 @@ const MODES: { key: LectureMode; label: string; rel: string; tag: string }[] = [
 ]
 
 /**
+ * The bin the two Clear controls share — the composer's (which wipes the
+ * conversation) and the Lectures row's (which drops the shown lecture).
+ *
+ * @returns The inline glyph.
+ */
+function ClearGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path
+        d="M3.2 4.6h9.6M6.5 4.6V3.3a.8.8 0 0 1 .8-.8h1.4a.8.8 0 0 1 .8.8v1.3M4.8 4.6l.45 7.9a1.1 1.1 0 0 0 1.1 1h3.3a1.1 1.1 0 0 0 1.1-1l.45-7.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/**
  * Whether the reader has asked the OS for less motion.
  *
  * The CSS entrances answer this with a `prefers-reduced-motion` block; the
@@ -95,6 +125,7 @@ function prefersStill(): boolean {
 export default function Teacher({
   collapsed = false,
   landing = false,
+  stagedOpen = false,
   onClose,
 }: {
   /** Hidden (but kept mounted, so the conversation survives) when collapsed. */
@@ -108,6 +139,14 @@ export default function Teacher({
    * answer you were reading keeps its scroll position.
    */
   landing?: boolean
+  /**
+   * The guided tour has staged the assistant open, so expand the lecture
+   * section for the walk — its "Four lectures" step targets the grid, which
+   * is folded away by default. Mirrors GraphControls' prop of the same name,
+   * and like that one it only ever *opens*: a reader who folds the lectures
+   * back mid-tour keeps them folded.
+   */
+  stagedOpen?: boolean
   /** Collapse the panel (the header ✕). */
   onClose?: () => void
 }) {
@@ -138,19 +177,29 @@ export default function Teacher({
     toggleLecture,
     ask,
     stopAsk,
-    clear,
+    clearLecture,
+    clearChat,
   } = useConversation()
 
-  // Clear is contextual: a shown lecture → clear that lecture; otherwise → clear
-  // the chat. Show the button whenever the active context has something to wipe.
-  const clearsLecture = activeMode !== null
-  const showClear = clearsLecture || chat.length > 0
+  // Each section owns its own Clear now that both are on screen at once: the
+  // lecture's sits on the Lectures row, and this one — in the composer, which
+  // belongs to Q&A — wipes the conversation.
   // The shown lecture's metadata (name + relation colour), for the transcript's
   // "Now playing" header. null when no lecture is shown (a Q&A chat, or idle).
   const activeModeMeta = MODES.find((mode) => mode.key === activeMode) ?? null
 
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // The lecture buttons, folded away behind their caret. INITIAL VALUE ONLY —
+  // once opened they stay open for the session, because the four modes are a
+  // menu you come back to. Folded is the default because the grid sat
+  // permanently expanded directly above the ask box, spending the panel's
+  // prime vertical space on four buttons most turns never press; a first-time
+  // reader still meets them through the tour, which stages this open.
+  const [lecturesOpen, setLecturesOpen] = useState(false)
+  // The conversation, on the other hand, starts open: it is what the composer
+  // below writes into, and a reader who folds it away has said so deliberately.
+  const [chatOpen, setChatOpen] = useState(true)
   // The uploaded library, powering the source-scope picker (shown whenever
   // there is anything to scope — see the render site for why one source
   // counts). Read LIVE from the library slice — the Sources drawer reloads
@@ -195,6 +244,15 @@ export default function Teacher({
     if (!libraryLoaded) dispatch(loadLibrary())
   }, [libraryLoaded, dispatch])
 
+  // The tour walks to the lecture grid and to the Q&A row's scope pickers, so
+  // unfold both first — a spotlight on a hidden element has nothing to point at.
+  useEffect(() => {
+    if (stagedOpen) {
+      setLecturesOpen(true)
+      setChatOpen(true)
+    }
+  }, [stagedOpen])
+
   // Checked = the assistant may search that source (everything not excluded).
   const scopeIds = libraryItems
     .filter((source) => !excludedSources.includes(source.id))
@@ -221,6 +279,10 @@ export default function Teacher({
     const question = input.trim()
     if (!question || asking || searching) return
     setInput('')
+    // Whatever this turns into lands in the conversation, so make sure the
+    // reader can see it — asking into a folded section reads as nothing
+    // happening at all.
+    setChatOpen(true)
     // A pasted arXiv id/URL is a statement of intent, not a question: land on
     // that exact paper. Deliberately ahead of the direct-search toggle — you
     // pasted the paper, so there is nothing left to search for, whichever
@@ -351,6 +413,76 @@ export default function Teacher({
     askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
   }
 
+  // Which sources the researcher may search. ONE picker, rendered in one of
+  // two places depending on the shape the panel is in:
+  //   • landing — inset in the ask bar, where it belongs to the question you
+  //     are about to ask (that reasoning is why it moved there in the first
+  //     place, and the wide centred composer has room for it);
+  //   • docked — up in the panel header beside the 🎓 lecture scope, because
+  //     beside a graph the bar is ~300px and 📚 + 🔍 + Filters + the textarea
+  //     + send is more than that width holds. The header already hosts
+  //     exactly this kind of control.
+  // At ONE source too, not two. The gate used to be `> 1` on the reading that
+  // a lone source leaves no choice to make — but "use it / don't" is a choice,
+  // and it's the one a reader with a single uploaded book most wants: without
+  // the picker there was no way to ask a question *without* their textbook in
+  // play. The empty scope (`scopeArg = []`) was already plumbed end to end.
+  const sourcePicker = libraryItems.length > 0 && (
+    <ScopePicker
+      items={libraryItems}
+      checkedIds={scopeIds}
+      dataTour="source-scope"
+      open={openScope === 'sources'}
+      onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
+      onToggle={(id) =>
+        setExcludedSources((prev) =>
+          prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
+        )
+      }
+      onSelectAll={() => setExcludedSources([])}
+      onDeselectAll={() => setExcludedSources(libraryItems.map((source) => source.id))}
+      labels={{
+        icon: '📚',
+        unit: 'source',
+        heading: 'Search in',
+        allHint: 'All sources are searched.',
+        someHint: 'Only the checked sources are searched.',
+        noneHint: "No sources selected — the assistant won't search your library.",
+        buttonTitle: 'Choose which of your sources the assistant may search',
+      }}
+    />
+  )
+
+  // The conversation's turns, rendered identically wherever they land — in
+  // the Q&A section beside a graph, or as the whole panel without one.
+  const chatTurns = chat.map((message, index) => {
+    // Clicking the bubble re-lights the answer's whole grounding set — so it's
+    // only a control while at least one of those papers is actually on the
+    // graph. Since the conversation now outlives the graph it was written
+    // against, an older answer can cite nothing that's still loaded, and a
+    // clickable bubble that highlights nothing is the same dead pointer its
+    // `[n]` chips grey out for. Partial overlap still counts: lighting the
+    // papers that *are* here is useful.
+    const clickable =
+      message.role === 'assistant' &&
+      !!message.cited &&
+      message.cited.some((nodeId) => onGraphIds.has(nodeId))
+    return (
+      <ChatMessage
+        key={`c${index}`}
+        message={message}
+        active={activeChat === index}
+        streaming={asking || searching}
+        onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
+        onRefClick={onRefClick}
+        onGraphIds={onGraphIds}
+        onPaperSeed={onPaperSeed}
+        provider={provider}
+        onEnlarge={setLightbox}
+      />
+    )
+  })
+
   return (
     <section
       className={`teacher${landing ? ' landing' : ''}${landing && chat.length === 0 ? ' empty' : ''}${collapsed ? ' collapsed' : ''}`}
@@ -368,40 +500,14 @@ export default function Teacher({
         />
       )}
       <div className="teacher-head">
-        {/* The landing surface has no panel title and nothing to close, and
-            its source picker moved into the ask bar — so the row would be an
-            empty strip of chrome. */}
+        {/* The landing surface has no panel title and nothing to close — the
+            row would be an empty strip of chrome. */}
         {!landing && (
           <div className="teacher-head-top">
-            <span className="teacher-title">{hasGraph ? 'AI teacher' : 'Ask the assistant'}</span>
+            <span className="teacher-title">
+              {hasGraph ? 'AI Teacher & Discovery' : 'Ask the assistant'}
+            </span>
             <div className="teacher-head-right">
-              {hasGraph && playedModes.length > 0 && (
-                <ScopePicker
-                  items={lectureItems}
-                  checkedIds={lectureScope}
-                  dataTour="lecture-scope"
-                  open={openScope === 'lectures'}
-                  onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
-                  onToggle={(id) =>
-                    setExcludedLectures((prev) =>
-                      prev.includes(id as LectureMode)
-                        ? prev.filter((mode) => mode !== id)
-                        : [...prev, id as LectureMode],
-                    )
-                  }
-                  onSelectAll={() => setExcludedLectures([])}
-                  onDeselectAll={() => setExcludedLectures(playedModes)}
-                  labels={{
-                    icon: '🎓',
-                    unit: 'lecture',
-                    heading: 'Use as context',
-                    allHint: 'Every played lecture is fed to the researcher.',
-                    someHint: 'Only the checked lectures are fed to the researcher.',
-                    noneHint: 'No lectures selected — answers ignore them.',
-                    buttonTitle: 'Choose which played lectures the researcher uses as context',
-                  }}
-                />
-              )}
               {onClose && (
                 <button
                   className="link-btn"
@@ -414,137 +520,226 @@ export default function Teacher({
             </div>
           </div>
         )}
-        {hasGraph && (
-          <div className="teacher-modes">
-            <p className="lecture-intro">
-              Play a lecture to summarize different node types. Each lecture is grounded in the
-              papers currently shown on the graph — filter it, or alt-drag on the canvas to
-              hand-pick a cluster, to narrow what it covers.
-              {/* Said here rather than left for the reader to notice: once you
-                  expand a paper, its own neighbours are on the graph but are
-                  not this seed's references or citers, so no lecture covers
-                  them. Without this line their absence looks like the lecture
-                  quietly skipping papers. */}
-              {satelliteCount > 0 && (
-                <>
-                  {' '}
-                  <strong>
-                    {satelliteCount} paper{satelliteCount > 1 ? 's' : ''} you expanded
-                  </strong>{' '}
-                  {satelliteCount > 1 ? 'sit' : 'sits'} outside this paper’s own neighbourhood — a
-                  lecture won’t cover {satelliteCount > 1 ? 'them' : 'it'}. Re-seed on one to hear
-                  its story.
-                </>
-              )}
-            </p>
-            <div className="lecture-grid" data-tour="lectures">
-              {MODES.map((mode) => {
-                const active = activeMode === mode.key
-                const loading = loadingModes.includes(mode.key)
-                // The "click to show" dot marks a played-but-hidden lecture;
-                // a loading one shows its hopping dots instead.
-                const cached = !loading && (lectures[mode.key]?.length ?? 0) > 0
-                // The button shows only the short node-type word; the full
-                // lecture name rides in the tooltip, the aria-label, and the
-                // "Now playing" header above the transcript.
-                const stateHint = loading
-                  ? active
-                    ? 'click to hide (still loading)'
-                    : 'loading — click to show'
-                  : active
-                    ? 'click to hide'
-                    : cached
-                      ? 'click to show'
-                      : 'click to play'
-                return (
-                  <button
-                    key={mode.key}
-                    className={`teach-btn${active ? ' active' : ''}${
-                      cached && !active ? ' cached' : ''
-                    }`}
-                    style={{ '--c': REL_COLOR[mode.rel] } as CSSProperties}
-                    // Lectures load in parallel — every button stays live so
-                    // you can show/hide or start another while one generates.
-                    onClick={() => toggleLecture(mode.key)}
-                    aria-pressed={active}
-                    aria-label={mode.label}
-                    title={`${mode.label} — ${stateHint}`}
-                  >
-                    {loading ? <HopDots label="Loading lecture" /> : mode.tag}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
+      {/* One scroller, holding the panel's sections. Each section folds behind
+          its own caret, and both can be open at once — which is the whole
+          point of the split: the lecture you are reading and the question you
+          just asked no longer take turns owning this space. The follow-the-
+          bottom effect above watches this box, so a streaming answer still
+          keeps itself in view. */}
       <div className="teacher-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
-        {/* One panel, two views: a shown lecture takes over the scroll (its
-            "Now playing" header + beats); otherwise it's the Q&A chat. Asking a
-            question hides the lecture, so the two never stack on top of each
-            other. Both survive the switch — the lecture stays cached, the chat
-            stays in the store. */}
-        {activeModeMeta ? (
+        {hasGraph ? (
           <>
-            <div
-              className="lecture-now"
-              style={{ '--c': REL_COLOR[activeModeMeta.rel] } as CSSProperties}
-            >
-              <span className="lecture-now-eyebrow">Now playing</span>
-              <span className="lecture-now-title">{activeModeMeta.label}</span>
-            </div>
-            <BeatList
-              beats={beats}
-              sourceRefs={lectureSourceRefs}
-              activeBeat={activeBeat}
-              onBeatClick={onBeatClick}
-              onRefClick={onRefClick}
-              onGraphIds={onGraphIds}
-              onEnlarge={setLightbox}
-            />
-            {beats.length === 0 && loadingModes.includes(activeModeMeta.key) && (
-              <div className="teacher-hint">Preparing the lecture…</div>
-            )}
+            <section className="panel-section">
+              <div className="section-head">
+                <button
+                  type="button"
+                  className={`section-toggle${lecturesOpen ? ' open' : ''}`}
+                  onClick={() => setLecturesOpen((open) => !open)}
+                  aria-expanded={lecturesOpen}
+                  title={
+                    lecturesOpen
+                      ? 'Fold the lectures away'
+                      : 'Play a lecture — four narrated tours of the papers on the graph'
+                  }
+                >
+                  <span className="section-caret" aria-hidden="true">
+                    ▸
+                  </span>
+                  <span className="section-name">Lectures</span>
+                  {/* Folded, this row is the only place a generating lecture
+                      can report itself — its button's dots are out of sight.
+                      The app's shared spinner rather than those dots: the dots
+                      are a *voice* ("an agent is composing" — a lecture button,
+                      the send control, a bubble awaiting its first token), and
+                      a section header is a status line. Same reasoning as the
+                      trace chips. */}
+                  {!lecturesOpen && loadingModes.length > 0 && (
+                    <span
+                      className="spin section-spin"
+                      role="status"
+                      aria-label="Loading lecture"
+                    />
+                  )}
+                </button>
+                {activeModeMeta && (
+                  <button
+                    type="button"
+                    className="section-clear"
+                    onClick={clearLecture}
+                    title={`Clear ${activeModeMeta.label}`}
+                    aria-label="Clear lecture"
+                  >
+                    <ClearGlyph />
+                  </button>
+                )}
+              </div>
+              <div className="section-body" hidden={!lecturesOpen}>
+                <p className="lecture-intro">
+                  Play a lecture to summarize different node types. Each lecture is grounded in the
+                  papers currently shown on the graph — filter it, or alt-drag on the canvas to
+                  hand-pick a cluster, to narrow what it covers.
+                  {/* Said here rather than left for the reader to notice: once you
+                      expand a paper, its own neighbours are on the graph but are
+                      not this seed's references or citers, so no lecture covers
+                      them. Without this line their absence looks like the lecture
+                      quietly skipping papers. */}
+                  {satelliteCount > 0 && (
+                    <>
+                      {' '}
+                      <strong>
+                        {satelliteCount} paper{satelliteCount > 1 ? 's' : ''} you expanded
+                      </strong>{' '}
+                      {satelliteCount > 1 ? 'sit' : 'sits'} outside this paper’s own neighbourhood —
+                      a lecture won’t cover {satelliteCount > 1 ? 'them' : 'it'}. Re-seed on one to
+                      hear its story.
+                    </>
+                  )}
+                </p>
+                <div className="lecture-grid" data-tour="lectures">
+                  {MODES.map((mode) => {
+                    const active = activeMode === mode.key
+                    const loading = loadingModes.includes(mode.key)
+                    // The "click to show" dot marks a played-but-hidden lecture;
+                    // a loading one shows its hopping dots instead.
+                    const cached = !loading && (lectures[mode.key]?.length ?? 0) > 0
+                    // The button shows only the short node-type word; the full
+                    // lecture name rides in the tooltip, the aria-label, and the
+                    // "Now playing" header below.
+                    const stateHint = loading
+                      ? active
+                        ? 'click to hide (still loading)'
+                        : 'loading — click to show'
+                      : active
+                        ? 'click to hide'
+                        : cached
+                          ? 'click to show'
+                          : 'click to play'
+                    return (
+                      <button
+                        key={mode.key}
+                        className={`teach-btn${active ? ' active' : ''}${
+                          cached && !active ? ' cached' : ''
+                        }`}
+                        style={{ '--c': REL_COLOR[mode.rel] } as CSSProperties}
+                        // Lectures load in parallel — every button stays live so
+                        // you can show/hide or start another while one generates.
+                        onClick={() => toggleLecture(mode.key)}
+                        aria-pressed={active}
+                        aria-label={mode.label}
+                        title={`${mode.label} — ${stateHint}`}
+                      >
+                        {loading ? <HopDots label="Loading lecture" /> : mode.tag}
+                      </button>
+                    )
+                  })}
+                </div>
+                {/* The shown lecture reads inside its own section now, rather
+                    than taking over the panel's one scroll. */}
+                {activeModeMeta && (
+                  <>
+                    <div
+                      className="lecture-now"
+                      style={{ '--c': REL_COLOR[activeModeMeta.rel] } as CSSProperties}
+                    >
+                      <span className="lecture-now-eyebrow">Now playing</span>
+                      <span className="lecture-now-title">{activeModeMeta.label}</span>
+                    </div>
+                    <BeatList
+                      beats={beats}
+                      sourceRefs={lectureSourceRefs}
+                      activeBeat={activeBeat}
+                      onBeatClick={onBeatClick}
+                      onRefClick={onRefClick}
+                      onGraphIds={onGraphIds}
+                      onEnlarge={setLightbox}
+                    />
+                    {beats.length === 0 && loadingModes.includes(activeModeMeta.key) && (
+                      <div className="teacher-hint">Preparing the lecture…</div>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
+
+            <section className="panel-section">
+              <div className="section-head">
+                <button
+                  type="button"
+                  className={`section-toggle${chatOpen ? ' open' : ''}`}
+                  onClick={() => setChatOpen((open) => !open)}
+                  aria-expanded={chatOpen}
+                  title={chatOpen ? 'Fold the conversation away' : 'Show the conversation'}
+                >
+                  <span className="section-caret" aria-hidden="true">
+                    ▸
+                  </span>
+                  <span className="section-name">Chat</span>
+                  {/* Unlike the lecture row's, this one shows whether the
+                      section is folded or not: the header is pinned, so while
+                      you scroll back through a long history it is the only
+                      thing still on screen that can tell you the agent is
+                      still writing. */}
+                  {(asking || searching) && (
+                    <span className="spin section-spin" role="status" aria-label="Answering" />
+                  )}
+                </button>
+                {/* The two scopes live HERE, not in the panel header, because
+                    this is whose reach they are: they bind the researcher
+                    answering below, not the lecturer above. */}
+                <div className="section-head-right">
+                  {playedModes.length > 0 && (
+                    <ScopePicker
+                      items={lectureItems}
+                      checkedIds={lectureScope}
+                      dataTour="lecture-scope"
+                      open={openScope === 'lectures'}
+                      onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
+                      onToggle={(id) =>
+                        setExcludedLectures((prev) =>
+                          prev.includes(id as LectureMode)
+                            ? prev.filter((mode) => mode !== id)
+                            : [...prev, id as LectureMode],
+                        )
+                      }
+                      onSelectAll={() => setExcludedLectures([])}
+                      onDeselectAll={() => setExcludedLectures(playedModes)}
+                      labels={{
+                        icon: '🎓',
+                        unit: 'lecture',
+                        heading: 'Use as context',
+                        allHint: 'Every played lecture is fed to the researcher.',
+                        someHint: 'Only the checked lectures are fed to the researcher.',
+                        noneHint: 'No lectures selected — answers ignore them.',
+                        buttonTitle: 'Choose which played lectures the researcher uses as context',
+                      }}
+                    />
+                  )}
+                  {sourcePicker}
+                </div>
+              </div>
+              <div className="section-body" hidden={!chatOpen}>
+                {chatTurns}
+                {chat.length === 0 && (
+                  <div className="teacher-hint">
+                    Ask a question about the papers on the graph — or play a lecture above.
+                  </div>
+                )}
+              </div>
+            </section>
           </>
         ) : (
+          // No graph: no sections to divide, so the conversation is the panel.
           <>
-            {chat.map((message, index) => {
-              // Clicking the bubble re-lights the answer's whole grounding
-              // set — so it's only a control while at least one of those
-              // papers is actually on the graph. Since the conversation now
-              // outlives the graph it was written against, an older answer can
-              // cite nothing that's still loaded, and a clickable bubble that
-              // highlights nothing is the same dead pointer its `[n]` chips
-              // grey out for. Partial overlap still counts: lighting the
-              // papers that *are* here is useful.
-              const clickable =
-                message.role === 'assistant' &&
-                !!message.cited &&
-                message.cited.some((nodeId) => onGraphIds.has(nodeId))
-              return (
-                <ChatMessage
-                  key={`c${index}`}
-                  message={message}
-                  active={activeChat === index}
-                  streaming={asking || searching}
-                  onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
-                  onRefClick={onRefClick}
-                  onGraphIds={onGraphIds}
-                  onPaperSeed={onPaperSeed}
-                  provider={provider}
-                  onEnlarge={setLightbox}
-                />
-              )
-            })}
+            {chatTurns}
             {chat.length === 0 &&
               (landing ? (
                 <h1 className="landing-greeting">What do you want to explore?</h1>
               ) : (
                 <div className="teacher-hint">
-                  {hasGraph
-                    ? 'Ask a question about the papers on the graph — or play a lecture above.'
-                    : 'Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and pages — citing them by page. No graph needed.'}
+                  Ask a question and I’ll answer straight from your uploaded sources — books, PDFs,
+                  and pages — citing them by page. No graph needed.
                 </div>
               ))}
           </>
@@ -562,41 +757,9 @@ export default function Teacher({
         <p className="ask-context-note">Answers also draw on {askContextParts.join(' · ')}.</p>
       )}
       <form className="teacher-ask" data-tour="ask" onSubmit={onAsk} ref={askRef}>
-        {/* Which sources the researcher may search, inset in the bar rather than
-            floating above it: it belongs to the question you're about to ask,
-            so it sits with the ask. */}
-        {/* At ONE source too, not two. The gate used to be `> 1` on the
-            reading that a lone source leaves no choice to make — but "use it /
-            don't" is a choice, and it's the one a reader with a single
-            uploaded book most wants: without the picker there was no way to
-            ask a question *without* their textbook in play. Nothing else had
-            to change; the empty scope (`scopeArg = []`) was already plumbed
-            end to end. */}
-        {libraryItems.length > 0 && (
-          <ScopePicker
-            items={libraryItems}
-            checkedIds={scopeIds}
-            dataTour="source-scope"
-            open={openScope === 'sources'}
-            onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'sources' : null)}
-            onToggle={(id) =>
-              setExcludedSources((prev) =>
-                prev.includes(id) ? prev.filter((other) => other !== id) : [...prev, id],
-              )
-            }
-            onSelectAll={() => setExcludedSources([])}
-            onDeselectAll={() => setExcludedSources(libraryItems.map((source) => source.id))}
-            labels={{
-              icon: '📚',
-              unit: 'source',
-              heading: 'Search in',
-              allHint: 'All sources are searched.',
-              someHint: 'Only the checked sources are searched.',
-              noneHint: "No sources selected — the assistant won't search your library.",
-              buttonTitle: 'Choose which of your sources the assistant may search',
-            }}
-          />
-        )}
+        {/* With no graph there are no sections, so the scope rides in the bar
+            (see `sourcePicker` above for the other half of this). */}
+        {!hasGraph && sourcePicker}
         <SearchControls
           direct={direct}
           onDirectChange={setDirect}
@@ -621,26 +784,15 @@ export default function Teacher({
             control you actually came here to press. Contextual, as it always
             was: with a lecture on screen it clears that instead of the chat,
             which the tooltip says since the icon can't. */}
-        {showClear && (
+        {chat.length > 0 && (
           <button
             type="button"
             className="ask-clear"
-            onClick={clear}
-            title={
-              clearsLecture ? 'Clear this lecture' : 'Clear the chat — start a fresh conversation'
-            }
-            aria-label={clearsLecture ? 'Clear lecture' : 'Clear chat'}
+            onClick={clearChat}
+            title="Clear the chat — start a fresh conversation"
+            aria-label="Clear chat"
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path
-                d="M3.2 4.6h9.6M6.5 4.6V3.3a.8.8 0 0 1 .8-.8h1.4a.8.8 0 0 1 .8.8v1.3M4.8 4.6l.45 7.9a1.1 1.1 0 0 0 1.1 1h3.3a1.1 1.1 0 0 0 1.1-1l.45-7.9"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <ClearGlyph />
           </button>
         )}
         {/* One button, two jobs. While an answer streams it shows the same

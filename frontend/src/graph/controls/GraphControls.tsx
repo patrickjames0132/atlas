@@ -386,9 +386,9 @@ export default function GraphControls({
         <div className="ctrl-select" data-tour="selector">
           <span
             className="select-hint"
-            title="Hand-pick papers to scope the AI teacher's lectures and answers to them"
+            title="Hand-pick papers to scope the assistant's lectures and answers to them"
           >
-            ⌥ alt-drag to add papers to the teacher's scope · ⇧ shift-click one · esc clears all
+            ⌥ alt-drag to add papers to the assistant's scope · ⇧ shift-click one · esc clears all
             highlights
           </span>
         </div>

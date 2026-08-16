@@ -9,6 +9,8 @@ here.
 notation/
   MathText.tsx        the DOM surface: KaTeX-typeset <MathText> component
   splitMath.ts        tokenise text into plain / math runs (the shared parser)
+  prepareMath.ts      the Markdown surface: make splitMath's verdict binding
+                      on remark-math (money escaped, math re-delimited)
   latexToUnicode.ts   the canvas surface: best-effort LaTeX → Unicode
 ```
 
@@ -48,6 +50,17 @@ there are two entry points sharing one parser:
   `$` can't be preceded by whitespace nor immediately followed by a digit.
   Currency fails all three and falls back to text. `$$…$$` is checked before
   `$…$` so display math wins the longer match.
+- **The Markdown surface has to be *told* that rule** (`prepareMath`,
+  v7.10.0). Answers go through react-markdown, whose remark-math pairs dollars
+  far more eagerly than the rule above: one answer's "raised $3.77 billion …
+  up from $1.8 billion" became a single inline formula spanning the prose, a
+  URL and the punctuation between them — italic nonsense, and (since KaTeX
+  output cannot wrap) a 500px box that scrolled the docked panel sideways.
+  `prepareMath` runs `splitMath` first and escapes every dollar it left in
+  text, so remark-math only ever sees runs both agree on. It re-emits math as
+  `$…$`/`$$…$$`, which also gets `\(…\)` and `\[…\]` rendering in answers for
+  the first time, and it skips code runs entirely — `$HOME` in a fenced block
+  is a variable, and inside code a backslash is just a backslash.
 - **Unterminated delimiters fall back to text, never throw.** Chat answers
   stream token-by-token, so mid-stream you'll see a half-typed `$\bet` with no
   closer — that renders as plain text until the closing `$` arrives, so nothing
@@ -72,6 +85,10 @@ caption). Every figure-caption render path is covered — the detail panel's
 inline captions, the teacher's inline `FigCard`, and the shared enlarged
 `Lightbox`.
 
+`prepareMath` (Markdown): `teacher/transcript/AnswerMarkdown.tsx`, the one
+surface that renders math through remark-math rather than `<MathText>` — so it
+is the one surface that needs the two parsers reconciled.
+
 `latexToUnicode` (canvas): `graph/canvas/GraphCanvas.tsx` (node labels + the hover
 tooltip string).
 
@@ -82,7 +99,10 @@ surface.
 
 ## How it's verified
 
-`tsc --noEmit` strict + oxlint. The parser (`splitMath`) and the canvas
-converter (`latexToUnicode`) are pure functions checked headlessly against the
-tricky cases (currency, unterminated runs, unmappable subscripts); the KaTeX
-rendering itself is a browser-milestone item.
+`tsc --noEmit` strict + oxlint. The parser (`splitMath`), the Markdown
+preparer (`prepareMath`) and the canvas converter (`latexToUnicode`) are pure
+functions checked headlessly against the tricky cases (currency, unterminated
+runs, code runs, unmappable subscripts) — and
+`test/teacher/transcript/AnswerMarkdown.test.tsx` pins the end of that chain:
+a paragraph of money renders no `.katex` at all, while a real formula still
+does. The KaTeX rendering itself is a browser-milestone item.

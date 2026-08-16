@@ -42,7 +42,9 @@ inside it, and the graph-controls steps stage `'controls'` to expand a
 collapsed controls panel (via `GraphExplorer` → `GraphControls`'s
 `stagedOpen`) — since v7.9.0 that panel *starts* collapsed, so the staging
 is what the walk relies on rather than a fallback for a reader who folded it
-away. Entering a step with no stage fires `onStage(undefined)`, which is
+away. `'assistant'` does both jobs at once as of v7.10.0: it opens the panel
+*and* reaches `Teacher`'s own `stagedOpen`, which unfolds the lecture section
+— folded by default there too, and for the same reason. Entering a step with no stage fires `onStage(undefined)`, which is
 the caller's cue to put drawers away again (in `Atlas`, the two drawers close;
 the assistant only ever opens — collapsing it mid-walk would hide the graph
 tour's own lecture/ask stops, which stage it too). A staged step's target may
