@@ -592,17 +592,10 @@ optional, behind a key.
       v7.6.0 that window binds the *researcher's* paper searches too, which
       matters more in graph mode, not less.)
 
-      **The idea worth exploring after that** *(Patrick, 2026-08-15)*: if a
-      search runs while a map is open, could a result be **linked into the
-      map** rather than only re-seeding away from it? A paper found by search
-      has no edge to anything on screen — but the provider knows whether one
-      exists, and a "does this cite, or get cited by, anything I'm looking
-      at?" check is one `traversal` call per candidate. That would turn direct
-      search from a way to *leave* the graph into a way to **grow** it toward
-      distant work, which is a genuinely different feature and probably its
-      own ticket. Note the constraint it must respect: the graph only draws
-      edges somebody actually wrote (v7.5.0), so this can add a paper *and its
-      real citation edge*, never a "related to" line.
+      **What comes after it is now its own ticket** — "Grow the map from a
+      search hit, instead of only leaving it" *(Patrick, 2026-08-15; split
+      out 2026-08-16)*, below. Keep them in that order: this one explains
+      what search does today, that one gives it a second mode.
 
 - [ ] **Teach the visual vocabulary — what every colour and glyph means** —
       the app encodes a lot in colour and shape and explains almost none of it.
@@ -613,7 +606,12 @@ optional, behind a key.
       tooltip you have to hover to find; edge colour, edge thickness
       (influential citations), node size (citation count), the dashed ring
       (teacher-discovered) and the cyan selection ring are explained nowhere at
-      all.
+      all. **Two more surfaces joined the list since** *(Patrick,
+      2026-08-16)*: the v7.8.0 **left rail** — its glyphs (✎ new graph, ＋
+      save, 📚 library, ⚙, ☀/☾, ?) and the fact that the list under them is
+      your saved graphs — and the ask bar's **two chat-bar toggles** (🔍 Find
+      papers, and the 📚 source scope), which today only the tour explains,
+      and the tour is a one-time read.
 
       **The ask:** one place that lays out the vocabulary. Candidates worth
       pricing against each other — a tour step (fits the existing help
@@ -622,9 +620,10 @@ optional, behind a key.
       (discoverable exactly when the question occurs); or a help/? overlay.
       Reference material argues against the tour.
 
-      **Do this after the two `similar` tickets above**, not before: they
-      change the vocabulary, and documenting a palette that's about to lose a
-      colour is work done twice. It's also the reason to keep resisting new
+      **Do this after the two tickets that change the vocabulary itself** —
+      "A filter chip for teacher-discovered nodes and search nodes" and
+      "Rework the `search` node treatment", both below — not before:
+      documenting a palette that's about to lose a colour is work done twice. It's also the reason to keep resisting new
       colours — the fewer arbitrary hues, the shorter this page is.
       *(Patrick's ask, 2026-08-15.)*
 
@@ -838,6 +837,45 @@ optional, behind a key.
       badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
       v5.2.0 edge-less-node filter fix.)*
 
+- [ ] **The docked chat scrolls sideways in graph mode** — a UI bug: beside a
+      graph, the assistant panel scrolls **horizontally**, and it should
+      never — content belongs inside the panel's width, wrapping or shrinking
+      to fit, and the chat box should give width back as the window narrows.
+      *(From the `todos.md` inbox, 2026-08-16.)*
+
+      **The likely root cause is that the panel's width is viewport-blind.**
+      `useResizablePanel('atlas.teacherWidth', 340)` clamps to a fixed
+      **280–680px** and persists the reader's choice in localStorage —
+      nothing consults `window.innerWidth`, so a panel dragged wide on a big
+      monitor stays that wide in a small window, and the graph pane (not the
+      panel) is what gives. Add a viewport-relative ceiling to the clamp and
+      re-clamp on resize. That alone may not be the whole bug: check also the
+      **ask bar's row** (📚 scope + 🔍 toggle + Filters + textarea + send —
+      the same crowding behind the source-picker ticket above), which needs a
+      `min-width: 0` on the flex children to be allowed to shrink at all, and
+      the transcript's wide content (code blocks, KaTeX display math,
+      tables), which must scroll **inside its own container** rather than
+      pushing the panel. `overflow-x: hidden` on the panel would hide the
+      symptom without fixing either.
+
+- [ ] **Grow the map from a search hit, instead of only leaving it** — split
+      out of the "direct search leaves the map" ticket above *(Patrick's
+      idea, 2026-08-15; its own ticket 2026-08-16 — it's a feature, not
+      wording)*. Today a paper found by direct search can only **re-seed**:
+      you leave the graph you were reading to go look at another one. But the
+      provider knows whether an edge exists between that hit and the papers
+      already on screen, and *"does this cite, or get cited by, anything I'm
+      looking at?"* is one `traversal` call per candidate. Answered yes, the
+      hit can join the current map **with its real citation edge** — turning
+      search from a way out into a way to reach distant work.
+      **The constraint it must respect:** the graph only draws edges somebody
+      actually wrote (v7.5.0), so this adds a paper *and its real edge*, never
+      a "related to" line — a hit with no edge to anything on screen still
+      has nothing to attach to, and re-seeding stays its only offer.
+      **Sequencing:** do the wording ticket first; this one changes what
+      search *does*, and there's no point explaining behaviour that's about
+      to gain a second mode.
+
 - [ ] **Responsive layout + a collapsible icon side rail (mobile-friendly)** —
       the frontend assumes a wide desktop window; resizing squeezes the
       header until controls collide, and mobile is unusable. Patrick's
@@ -849,6 +887,14 @@ optional, behind a key.
       wants.** Substantial: touches the header, panel overlays, and the
       canvas-resize plumbing; probably lands in stages (desktop-narrow
       first, true mobile after). *(From the `todos.md` inbox, 2026-07-18.)*
+
+      **Half of this shipped as v7.8.0** — the rail exists, collapses to a
+      56px icon strip, and swallowed the header outright, which was the
+      sketch's whole left-hand side. What's left is the *responsive* half:
+      the layout still assumes a wide desktop window, and nothing reflows or
+      re-clamps as the window narrows (the sideways-scrolling chat panel
+      above is one concrete instance of it). Re-price the remainder against
+      the rail as built rather than against the original sketch.
 
 - [ ] **Highlight inline library-source references like paper links** — when an
       answer cites an uploaded library source inline (source, page number), the
