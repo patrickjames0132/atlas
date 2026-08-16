@@ -550,6 +550,40 @@ optional, behind a key.
 
 ### UI & rendering polish
 
+- [ ] **Hide the search controls once a graph is open** — in graph mode the
+      chat bar still shows 🔍 **Find papers** and **Filters**, and they invite
+      the wrong thing: a reader looking at a map usually wants to ask about
+      what is on screen, not start a fresh search that will re-seed away from
+      it. Drop the buttons from the docked bar; searching stays available from
+      the landing surface. *(From the `todos.md` inbox, 2026-08-15.)*
+
+      **Two things to settle before it's a one-liner.**
+
+      **(a) Filters aren't only direct search's.** Since v7.6.0 the year/field
+      window binds the **researcher's** paper searches too — that was the
+      point of putting it on the bar rather than inside the toggle — and that
+      is *more* relevant in graph mode, not less, since the assistant reaches
+      for `find_papers` constantly while answering. So the honest split is
+      probably: hide **Find papers**, keep **Filters**. Worth confirming
+      against the intent, since "remove the search capabilities" reads like
+      both.
+
+      **(b) Home is destructive, so "go back to the home page" costs the
+      graph.** `goHome` dispatches `workspaceCleared()` — the graph goes, and
+      with it any unsaved exploration. If direct search is only reachable from
+      home, then searching mid-exploration means discarding the map, which is
+      a worse trade than the confusion it fixes. Options: leave the toggle
+      hidden but keep the *capability* reachable (a pasted arXiv id already
+      bypasses everything and works in graph mode); make Home non-destructive;
+      or accept the trade and say so. Decide this one deliberately — it is the
+      difference between removing a distraction and removing a path.
+
+      Small mechanical notes: the bar already collapses both toggles to icons
+      when docked (`.teacher:not(.landing) .toggle-label`), so the change is a
+      render gate rather than a layout one; and the tour's two steps targeting
+      `[data-tour="direct-search"]` / `[data-tour="search-filters"]` live in
+      `HOME_TOUR`, which only runs pre-graph — so they stay valid either way.
+
 - [ ] **Teach the visual vocabulary — what every colour and glyph means** —
       the app encodes a lot in colour and shape and explains almost none of it.
       The graph legend lists node colours by name (References, Field Landmarks,
