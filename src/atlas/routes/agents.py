@@ -36,7 +36,7 @@ from ..agents.models import LectureMode, PlayedBeat, PlayedLecture
 from ..agents.orchestrators import lecturer, researcher
 from ..config import config
 from ..services import search as search_service
-from ..services.graph import Node, Provider, resolve_provider
+from ..services.graph import Edge, Node, Provider, resolve_provider
 from .sse import sse, sse_response
 
 bp = Blueprint("agents", __name__)
@@ -164,6 +164,54 @@ def _opt_lectures(payload: dict) -> list[PlayedLecture] | None:
     return lectures or None
 
 
+def _edges(payload: dict) -> list[Edge]:
+    """Parse the optional ``edges`` array from a lecture request.
+
+    Tolerant, like the node parsing beside it, and for a sharper reason: these
+    come off a live force-simulation, where the renderer **replaces an edge's
+    endpoint strings with the node objects themselves**. So an edge arriving
+    as ``{"source": {...}, "target": {...}}`` is the normal case, not a
+    malformed one, and both shapes have to resolve to an id.
+
+    Args:
+        payload: The parsed JSON body.
+
+    Returns:
+        The valid edges. Empty when the key is absent or nothing survives —
+        which the lecturer reads as "scope by tags instead", so a bad payload
+        degrades to the old over-inclusive behavior rather than to a lecture
+        with no papers in it.
+    """
+
+    def endpoint(value: object) -> str:
+        """One edge endpoint as an id, whether it arrived as one or as a node.
+
+        Args:
+            value: The raw ``source``/``target`` value.
+
+        Returns:
+            The node id, or "" when it can't be read.
+        """
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict) and isinstance(value.get("id"), str):
+            return str(value["id"])
+        return ""
+
+    raw_edges = payload.get("edges")
+    if not isinstance(raw_edges, list):
+        return []
+    edges = []
+    for raw in raw_edges:
+        if not isinstance(raw, dict):
+            continue
+        source, target = endpoint(raw.get("source")), endpoint(raw.get("target"))
+        if not source or not target or raw.get("type") not in ("reference", "citation", "latest"):
+            continue
+        edges.append(Edge(source=source, target=target, type=raw["type"]))
+    return edges
+
+
 def _node(raw: dict) -> Node:
     """Build a typed ``Node`` from a frontend node payload.
 
@@ -242,8 +290,12 @@ def api_lecture() -> ResponseReturnValue:
     """Stream a lecture over the visible graph as SSE ``beat`` events.
 
     Body:
-        ``{seed: {node fields}, nodes: [visible node objects], mode:
-        history|intuition|evolution|bridge, target?: {node fields}}``.
+        ``{seed: {node fields}, nodes: [visible node objects], edges?:
+        [{source, target, type}], mode: history|intuition|evolution|bridge,
+        target?: {node fields}}``. ``edges`` is what lets a mode tell the
+        seed's **own** neighbors from papers expanded off them; omitted or
+        malformed, scoping falls back to node tags (the pre-v7.7.0 behavior,
+        which over-includes on an expanded graph).
 
     Returns:
         An SSE stream of ``beat`` frames ``{heading, text, node_ids}``,
@@ -268,9 +320,14 @@ def api_lecture() -> ResponseReturnValue:
         target = _node(raw_target) if raw_target else None
     except ValidationError:
         return jsonify({"error": "seed/nodes are malformed"}), 400
+    edges = _edges(payload)
 
     return sse_response(
-        _relay(streams.terminated(lecturer.lecture(seed=seed, nodes=nodes, mode=mode, target=target)))
+        _relay(
+            streams.terminated(
+                lecturer.lecture(seed=seed, nodes=nodes, mode=mode, target=target, edges=edges)
+            )
+        )
     )
 
 

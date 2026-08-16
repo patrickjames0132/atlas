@@ -43,6 +43,7 @@ import {
 import {
   discoveryMerged,
   loadGraph,
+  selectGraphEdges,
   selectGroundingNodes,
   selectSeedNode,
   selectWorkspaceNodeIds,
@@ -118,6 +119,7 @@ export function useConversation() {
   const dispatch = useAppDispatch()
   const seedNode = useAppSelector(selectSeedNode)
   const groundingNodes = useAppSelector(selectGroundingNodes)
+  const lectureEdges = useAppSelector(selectGraphEdges)
   // Which cited papers are still reachable — a transcript now outlives the
   // graph it was written against, so `[n]` chips are checked before they
   // render as controls.
@@ -317,7 +319,10 @@ export function useConversation() {
       let completed = false
       try {
         await streamLecture(
-          { seed: seedNode, nodes: groundingNodes, mode },
+          // `edges` is what lets the backend scope a lecture to the seed's
+          // OWN neighbours; without it a graph the reader has expanded gets
+          // its satellites narrated as if the seed had cited them.
+          { seed: seedNode, nodes: groundingNodes, edges: lectureEdges, mode },
           {
             signal: ctrl.signal,
             // Arrives before the first beat, so a beat's [Sn, p.N] library
@@ -349,7 +354,7 @@ export function useConversation() {
         if (!completed) dispatch(lectureDropped(mode))
       }
     },
-    [seedNode, groundingNodes, dispatch, highlight],
+    [seedNode, groundingNodes, lectureEdges, dispatch, highlight],
   )
 
   /** The lecture-button toggle. One button per mode, acting as a show/hide

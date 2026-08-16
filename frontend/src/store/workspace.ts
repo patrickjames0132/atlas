@@ -620,6 +620,57 @@ export const selectWorkspaceNodeIds = createSelector(
     new Set([...(graph?.nodes ?? []).map((node) => node.id), ...discovered.map((node) => node.id)]),
 )
 
+/**
+ * Every edge on the graph — the built snapshot's plus anything the agent has
+ * discovered since.
+ *
+ * Sent with a lecture request, because edges are the only thing that can
+ * answer "is this paper a neighbour **of the seed**". A node's `rels` records
+ * what its relation *is*, never what it is *to*, so once `expand_node` could
+ * grow the graph past its seed, a paper hanging off a reference was
+ * indistinguishable from one the seed actually cites — and the history
+ * lecture narrated both. See the backend's `_story_nodes`.
+ *
+ * Deliberately NOT filtered to the visible/selected set: the backend only
+ * looks at edges touching the seed, and the node filter is applied to `nodes`
+ * anyway. Filtering here would just be a second place to get it wrong.
+ */
+export const selectGraphEdges = createSelector(
+  (state: StateWithWorkspace) => state.workspace.graph,
+  (state: StateWithWorkspace) => state.workspace.discoveredEdges,
+  (graph, discovered) => [...(graph?.edges ?? []), ...discovered],
+)
+
+/**
+ * How many papers a lecture will leave out because they hang off *another*
+ * paper rather than the seed.
+ *
+ * The same predicate the backend scopes by (`_story_nodes` → `_seed_neighbors`),
+ * computed here so the panel can say so instead of leaving a reader wondering
+ * why the papers they just expanded went unmentioned. Both sides ask one
+ * question — is this joined to the seed by an edge? — so the sentence and the
+ * lecture can't disagree.
+ *
+ * Counted over the GROUNDING nodes, not the whole graph: a satellite the
+ * reader has already filtered out isn't being left out of anything, so
+ * mentioning it would be noise.
+ */
+export const selectSatelliteCount = createSelector(
+  selectGroundingNodes,
+  selectGraphEdges,
+  selectSeedNode,
+  (nodes, edges, seed) => {
+    if (!seed) return 0
+    const adjacent = new Set<string>()
+    for (const edge of edges) {
+      if (edge.source === seed.id) adjacent.add(edge.target)
+      else if (edge.target === seed.id) adjacent.add(edge.source)
+    }
+    return nodes.filter((node) => !node.is_seed && node.id !== seed.id && !adjacent.has(node.id))
+      .length
+  },
+)
+
 export const selectHasDiscovered = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,

@@ -119,3 +119,18 @@ store/
 `tsc --noEmit` strict + oxlint; the save→restore round trip (transcript and
 discoveries surviving) is a browser-milestone item, with the Redux devtools
 action log as the debugging window.
+
+
+## Two selectors that exist to keep the frontend and backend agreeing
+
+`selectGraphEdges` (the built snapshot's edges plus anything the agent
+discovered) is sent with every lecture request, because edges are what let the
+backend scope a lecture to the seed's **own** neighbours — see
+`agents/orchestrators/lecturer/README.md`.
+
+`selectSatelliteCount` counts the papers that scoping will exclude, for the
+sentence the lecture panel shows about them. It deliberately re-derives the
+**same predicate the backend uses** (is this joined to the seed by an edge?)
+rather than reusing `_origin`, the layout hint `clusterForce` computes for
+orbiting satellites. Two independent notions of "satellite" is exactly how a
+UI note drifts out of sync with the behaviour it describes.

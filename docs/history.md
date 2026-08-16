@@ -351,6 +351,54 @@
 
 ### AI teacher & lectures
 
+- [x] **A lecture covers the seed's own neighbourhood, not the whole expanded
+      graph** *(v7.7.0)* — expand the graph a few hops, then play a lecture,
+      and it narrated the pulled-in papers as though the seed had cited them.
+      *(Patrick's report, 2026-08-15.)*
+
+      **The mechanism.** `_story_nodes` scoped each mode by **relation tag** —
+      HISTORY kept nodes carrying `reference`, EVOLUTION `citation`, FRONTIER
+      `latest` — and a paper `expand_node` pulled in carries the tag for the
+      relation it has to *the paper it was expanded from*. A tag records what
+      a relation **is**, never what it is **to**, so a reference-of-a-reference
+      was indistinguishable from a reference of the seed. Latent since
+      expansion shipped; it only bites once a reader uses both features
+      together, which is why it took this long to surface.
+
+      **The fix: scope by edges**, which can express what tags structurally
+      cannot. `/api/lecture` now takes the graph's edges and `_seed_neighbors`
+      keeps only papers joined **directly to the seed** by an edge of that
+      mode's relation. Three deliberate choices: it is **direction-agnostic**
+      (a `reference` edge runs seed → cited, `citation`/`latest` run citer →
+      seed, but the question is adjacency, not direction — so a later relation
+      can't be mis-scoped by pointing the other way); only edges **touching
+      the seed** count (two references citing each other says nothing about
+      either's place in a story); and an empty edge list **falls back to tag
+      scoping**, because over-including beats a lecture with no papers in it.
+
+      The ticket had framed this as a shape question — edges along, or nodes
+      carrying their origin. Edges won on the grounds that they were already
+      authoritative and already on the client: no model change, no persistence
+      question, no second source of truth. The frontend's `_origin` (the
+      layout hint `clusterForce` derives for orbiting satellites) was noted as
+      a hint about the natural shape and deliberately **not** reused.
+
+      **And the reader is told.** The lecture panel's intro now names how many
+      expanded papers sit outside the seed's neighbourhood and says no lecture
+      covers them, closing with the action that does ("Re-seed on one to hear
+      its story") — the ticket's second question, answered the honest way. The
+      count re-derives the **same predicate the backend scopes by**
+      (`selectSatelliteCount`) rather than reusing `_origin`, because two
+      independent notions of "satellite" is how a UI note drifts out of sync
+      with the behaviour it describes.
+
+      One trap worth knowing, pinned by a route test: react-force-graph
+      **replaces a link's `source`/`target` strings with the node objects
+      themselves**, in place — so `{"source": {...node...}}` is the normal
+      shape off a live canvas. Parsing only strings would have yielded zero
+      edges, fallen back to tag scoping, and restored the bug with every test
+      still green. See [docs/bugs.md](bugs.md).
+
 - [x] **Give the paper scout a semantic channel — "more like this one"**
       *(v7.4.0)* — the scout searched one way: lexical, over titles and
       abstracts. Its own prompt is where the weakness was already written down

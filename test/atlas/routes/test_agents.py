@@ -82,6 +82,51 @@ def test_lecture_types_the_payload_and_relays_by_event_type(client, monkeypatch)
     assert not hasattr(typed_seed, "x")
 
 
+def test_lecture_accepts_edges_as_ids_or_as_the_sim_mutated_node_objects(client, monkeypatch):
+    """The gotcha this parsing exists for: react-force-graph REPLACES a link's
+    `source`/`target` STRINGS with the node objects themselves, in place. So an
+    edge arriving as `{"source": {...node...}}` is the normal case off a live
+    canvas, not a malformed one, and both shapes have to resolve to an id — or
+    the lecture silently falls back to tag scoping and the bug comes back."""
+    seen = {}
+
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
+        yield events.Beat(heading="Roots", text="It began.", node_ids=[])
+
+    patch_agents(monkeypatch, fake_run)
+    client.post("/api/lecture", json={
+        "seed": SEED, "nodes": NODES, "mode": "history",
+        "edges": [
+            {"source": "seed01", "target": "node02", "type": "reference"},
+            {"source": {"id": "node02"}, "target": {"id": "seed01"}, "type": "citation"},
+            {"source": "seed01", "target": "node02", "type": "nonsense"},  # dropped
+            {"source": "seed01", "type": "reference"},  # no target — dropped
+            "not an edge at all",
+        ],
+    })
+    edges = seen["kwargs"]["edges"]
+    assert [(edge.source, edge.target, edge.type) for edge in edges] == [
+        ("seed01", "node02", "reference"),
+        ("node02", "seed01", "citation"),
+    ]
+
+
+def test_lecture_without_edges_still_runs(client, monkeypatch):
+    """Absent edges is not an error — it degrades to tag scoping, which
+    over-includes on an expanded graph but always has papers in it."""
+    seen = {}
+
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
+        yield events.Beat(heading="Roots", text="It began.", node_ids=[])
+
+    patch_agents(monkeypatch, fake_run)
+    response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "history"})
+    assert response.status_code == 200
+    assert seen["kwargs"]["edges"] == []
+
+
 def test_lecture_input_validation(client):
     assert client.post("/api/lecture", json={"seed": SEED, "nodes": []}).status_code == 400
     assert (

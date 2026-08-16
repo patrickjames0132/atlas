@@ -260,6 +260,16 @@ serializes the typed event stream as SSE.
 
 Design decisions worth knowing:
 
+- **`/api/lecture` sends the graph's `edges`, not just its nodes** (v7.7.0) —
+  the only thing that can answer "is this paper a neighbour *of the seed*",
+  which a node's `rels` tags structurally cannot (they say what a relation is,
+  never what it is *to*). `_edges` parses them tolerantly on purpose:
+  react-force-graph **replaces a link's `source`/`target` strings with the
+  node objects themselves**, in place, so `{"source": {...node...}}` is the
+  normal shape off a live canvas and both forms must resolve to an id. A
+  payload that yields no edges is not an error — the lecturer falls back to
+  tag scoping. See `agents/orchestrators/lecturer/README.md` and
+  `docs/bugs.md`.
 - **One serialization rule replaces six tuple matches.** Frame name = the
   event's `type` tag, payload = `model_dump(exclude={"type"})`. That
   reproduces the old wire shapes for `token`/`beat`/`cited`/`trace`/`done`
