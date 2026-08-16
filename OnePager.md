@@ -884,6 +884,63 @@ optional, behind a key.
 
 ### Enhancements & tech debt
 
+- [ ] **Rename `integrations/` to `providers/`** — `src/atlas/integrations/`
+      holds one subpackage per external data source (`semantic_scholar/`,
+      `openalex/`, `arxiv/`), and "integrations" is the vaguer word for what
+      they are: the app already says **provider** everywhere else — the
+      `Provider` type, `resolve_provider`, `config.providers`, the header's
+      "Data source" dropdown, the per-provider cache keys. One name for one
+      concept. **Blast radius is wide but shallow:** the package is imported
+      from routes, services, and every agent (`from ...integrations import
+      openalex`), so it's a mechanical sweep plus the READMEs that name it
+      (`src/README.md`'s map, `services/graph/README.md`, `agents/README.md`).
+      Two things to check while doing it: `providers` is already a *config
+      section* name, so make sure the docs distinguish the package from
+      `config.providers`; and `arxiv/` is not a graph provider at all (it's an
+      id parser and a category vocabulary), so decide whether it belongs under
+      the new name or somewhere else before the rename cements it. *(From the
+      `todos.md` inbox, 2026-08-15.)*
+
+- [ ] **The researcher is slow next to plain Claude or ChatGPT — find out
+      why, then decide what to trade** — Patrick's read is that it's the web
+      search; the evidence says it's the *shape of the run*, and the ticket
+      should start from that rather than from the hunch. *(From the `todos.md`
+      inbox, 2026-08-15.)*
+
+      **What one real turn looks like** (`data/atlas.log`, 2026-08-15
+      21:23–21:24, "what's new in quantum computing?"): ~31s wall clock for
+      `searches=1 passages=6 paper_searches=3 web_searches=1 web_pages=8`.
+      That is **three scout runs**, and a scout is not one call — the logged
+      `find_papers` line shows a single run issuing four lookups (two
+      searches, two `more_like` hops). So the turn is a Sonnet researcher
+      taking a step, waiting on a Haiku sub-agent that is itself taking
+      several steps, each waiting on a provider — **serial all the way down**,
+      by construction: the scout's tools are `sequential=True` because they
+      mutate shared deps, and the researcher's are too.
+
+      **Why the comparison isn't quite fair, and where it still stings.**
+      Claude answers from weights with one round-trip; this reads real
+      sources and tells you which. That difference is the product, not a
+      regression. But a reader doesn't experience "grounded" — they
+      experience 31 seconds, and three of those scout runs may have been one
+      question's worth of need.
+
+      **Levers, roughly in order of value-per-risk.** (a) **Run independent
+      tools concurrently** — `search_web` and `find_papers` for *different*
+      needs don't touch each other's state; the sequential flag is about deps,
+      and the parts that genuinely share deps are inside one scout, not
+      across two. (b) **Show more, sooner** — the direct-search work proved
+      the reader will happily watch a search that is visibly working
+      (v7.6.0); the researcher already streams trace chips but sits silent
+      through the long middle. (c) **Cap the fan-out** — three paper searches
+      for one question may be the prompt's "one call is the floor, not the
+      ration" landing too hard. (d) **Model tier per worker** — already Haiku;
+      little left. **Measure before touching (a)**: instrument per-step
+      timings so the split between model time, provider time and waiting is a
+      number, not a guess. A prior latency complaint on this same path turned
+      out to be six S2 429s from running keyless — worth ruling out first,
+      every time.
+
 - [ ] **Re-evaluate where the frontend lives and what its folder is called** —
       **it stays in this repo for now** (Patrick, 2026-08-09); this is about
       *placement and naming*, not extraction. `frontend/` is a generic name
