@@ -22,7 +22,24 @@ number + the pointer bookkeeping; the caller renders the panel with
   first paint (the stored width, once one exists, wins).
 - Each consumer passes its own `storageKey`, so the two panels remember
   their widths independently.
-- Bounds clamp to 280–680px by default, overridable per panel.
+- Bounds clamp to 280–680px by default, overridable per panel — **and to 40%
+  of the window** (`maxFraction`), see below.
+
+### The width is capped by the window, the choice is not (v7.10.0)
+
+A width in px alone is a promise the window cannot always keep. The panels
+are `flex-shrink: 0`, so a panel dragged to 600px on a big monitor stayed
+600px in a small window and the *canvas* gave instead — until the layout
+overflowed and the page scrolled sideways (the docked chat's
+sideways-scroll bug). So the ceiling is `min(max, maxFraction × innerWidth)`,
+re-read on every `resize`, and `min` yields to it in a window too narrow to
+honour both — a panel wider than its share of the screen is the thing being
+prevented.
+
+The reader's chosen width is stored **unclamped** and only the *rendered*
+width is capped, so narrowing the window borrows width and widening it hands
+the choice straight back. A drag is clamped as it moves, so the handle can
+never run away from the edge you are dragging.
 
 ## Who uses it
 
@@ -32,8 +49,10 @@ than nested in either feature folder.)
 
 ## How it's verified
 
-`tsc --noEmit` strict + oxlint; drag behavior and width persistence are
-browser-milestone items.
+`tsc --noEmit` strict + oxlint, plus `test/ui/useResizablePanel.test.tsx` —
+width seeding, drag direction, the px bounds, the pointer-up persist, and the
+viewport cap (including that a widened window returns the stored choice). The
+feel of a live drag stays a browser-milestone item.
 
 ## `theme.ts` — light/dark
 

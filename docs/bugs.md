@@ -22,6 +22,49 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### Two dollar signs in a sentence about money became one giant formula
+
+*Found 2026-08-16 by Patrick, as a chat panel that scrolled sideways. Fixed in v7.10.0.*
+
+- **Symptom.** Two, and nobody connected them. The docked assistant panel
+  scrolled **horizontally** beside a graph. And in the same answer, a
+  paragraph read as italic, letter-spaced nonsense with the spaces removed —
+  `3.77billioninequityinjustthefirstninemonthsof2025](https://…`.
+- **Root cause.** The answer said *"companies raised $3.77 billion … up from
+  $1.8 billion in 2024"*. `remark-math` paired those two **currency** dollars
+  and rendered everything between them — prose, a full URL, punctuation — as
+  one inline formula. KaTeX output cannot wrap, so the 521px box pushed the
+  transcript sideways; the "nonsense" was KaTeX faithfully typesetting English
+  as mathematics.
+
+  The deeper cause is that **the app had two parsers and only one knew the
+  rule**. `notation/splitMath.ts` applies the CommonMark boundary rules (an
+  opener isn't followed by whitespace, a closer isn't preceded by whitespace
+  nor followed by a digit) precisely so that "costs $5 and $10" stays prose —
+  and it has done since the notation work landed, which is why abstracts,
+  beats and the detail panel never showed this. Answers were the one surface
+  that renders through react-markdown instead, and remark-math pairs dollars
+  far more eagerly.
+- **Fix.** `notation/prepareMath.ts` makes splitMath's verdict **binding** on
+  remark-math: run the parser first, escape every dollar it left in text, and
+  re-emit genuine math in `$…$`/`$$…$$` (which also got `\(…\)` and `\[…\]`
+  rendering in answers for the first time). Code runs are skipped — `$HOME` in
+  a fenced block is a variable, and inside code a backslash is not an escape —
+  and an already-escaped `\$` is left alone, since escaping it twice would
+  produce a literal backslash *and* a live opener.
+- **Lesson / guard.** Two lessons. **One rule, one implementation**: the
+  currency heuristic existed and was correct; the bug was a second renderer
+  that never asked it. And **a layout symptom can have a parsing cause** — the
+  first two rounds of fixes went at the CSS (a viewport-aware width clamp,
+  `overflow-wrap`, per-element scrollers) and were all reasonable, all shipped,
+  and none of them the bug. What ended the guessing was a DOM measurement:
+  listing every element overhanging the panel's right edge showed all of them
+  inside a single `SPAN.katex`. Guarded by `test/notation/prepareMath.test.ts`
+  (the reported sentence, real math, code runs, mid-stream half-formulas,
+  double-escapes) and two end-to-end cases in
+  `test/teacher/transcript/AnswerMarkdown.test.tsx`: a paragraph of money
+  renders **no** `.katex` at all, and a real formula still does.
+
 ### A lecture narrated papers the seed had never cited
 
 *Found 2026-08-15 by Patrick, playing a lecture over an expanded graph. Fixed in v7.7.0.*

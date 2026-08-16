@@ -627,18 +627,6 @@ optional, behind a key.
       colours — the fewer arbitrary hues, the shorter this page is.
       *(Patrick's ask, 2026-08-15.)*
 
-- [ ] **Collapse the lecture buttons behind a caret** — the lecture-mode
-      buttons sit permanently expanded above the chat, taking prime vertical
-      space next to the thing the reader actually types into. Fold them into a
-      collapsible section with a little caret to expand. Two things to get
-      right: the **default state** (collapsed is the point, but a first-time
-      reader must still discover lectures exist — the tour teaches them, so
-      check `tour/steps.ts` still lands on a visible target), and the
-      **animation**, which should reuse the chat surface's existing motion
-      vocabulary (`--ease-rise`/`--ease-fade`, and honouring
-      `prefers-reduced-motion`) rather than inventing a third easing.
-      *(From the `todos.md` inbox, 2026-08-15.)*
-
 - [ ] **The references lecture keeps opening with "The story begins…"** — a
       verbal tic in HOW WE GOT HERE, and the reader sees it every time. Worth
       knowing before anyone starts: **it is not a string in the codebase** —
@@ -648,14 +636,6 @@ optional, behind a key.
       model reaches for the next stock opening). The `teaching-voice` skill is
       the other candidate home, if the tic turns out to span modes rather than
       living in this one. Check the other three modes before deciding which.
-      *(From the `todos.md` inbox, 2026-08-15.)*
-
-- [ ] **Rename "AI teacher" above the graph chat to "Discover"** — a one-word
-      change, but the word is doing work: "AI teacher" names the *implementation*
-      (there's an agent, it teaches), while "Discover" names what the reader
-      came to do. Worth a grep rather than a single edit — the phrase appears
-      in the panel header, and possibly in the tour text and control tooltips,
-      all of which have to move together per the in-app-help rule.
       *(From the `todos.md` inbox, 2026-08-15.)*
 
 - [ ] **The chat bar's two icons sit small inside their circles** — both
@@ -837,27 +817,6 @@ optional, behind a key.
       badges by label). *(From the `todos.md` inbox, 2026-07-14; relates to the
       v5.2.0 edge-less-node filter fix.)*
 
-- [ ] **The docked chat scrolls sideways in graph mode** — a UI bug: beside a
-      graph, the assistant panel scrolls **horizontally**, and it should
-      never — content belongs inside the panel's width, wrapping or shrinking
-      to fit, and the chat box should give width back as the window narrows.
-      *(From the `todos.md` inbox, 2026-08-16.)*
-
-      **The likely root cause is that the panel's width is viewport-blind.**
-      `useResizablePanel('atlas.teacherWidth', 340)` clamps to a fixed
-      **280–680px** and persists the reader's choice in localStorage —
-      nothing consults `window.innerWidth`, so a panel dragged wide on a big
-      monitor stays that wide in a small window, and the graph pane (not the
-      panel) is what gives. Add a viewport-relative ceiling to the clamp and
-      re-clamp on resize. That alone may not be the whole bug: check also the
-      **ask bar's row** (📚 scope + 🔍 toggle + Filters + textarea + send —
-      the same crowding behind the source-picker ticket above), which needs a
-      `min-width: 0` on the flex children to be allowed to shrink at all, and
-      the transcript's wide content (code blocks, KaTeX display math,
-      tables), which must scroll **inside its own container** rather than
-      pushing the panel. `overflow-x: hidden` on the panel would hide the
-      symptom without fixing either.
-
 - [ ] **Grow the map from a search hit, instead of only leaving it** — split
       out of the "direct search leaves the map" ticket above *(Patrick's
       idea, 2026-08-15; its own ticket 2026-08-16 — it's a feature, not
@@ -953,31 +912,6 @@ optional, behind a key.
       citation-velocity, or a curated set) and *Latest* a cross-field recency
       query — decide the source and its caching before building the UI. *(From
       the `todos.md` inbox, 2026-07-20.)*
-
-- [ ] **The source picker moves to the panel header in graph mode** — the ask
-      bar carries three controls before you reach the text you're typing: the
-      📚 **source scope** picker, the 🔍 **Find papers** toggle and the
-      **Filters** popover (`teacher/Teacher.tsx` → `ScopePicker` +
-      `search/SearchControls`). Docked beside a graph the panel is narrow, and
-      three of them plus the textarea and send is more than the width holds.
-      **The ask:** in graph mode, put 📚 up in the panel header **next to the
-      🎓 lecture-scope picker** (`teacher-head-right`, which already hosts
-      exactly this kind of control); in graph-free mode leave it exactly where
-      it is. *(From the `todos.md` inbox, 2026-08-16.)*
-
-      **It reverses a deliberate call, so keep the reasoning straight.** The
-      picker was *moved into* the ask bar because it belongs to the question
-      you're about to ask (its comment says so, and the landing head row would
-      otherwise be an empty strip of chrome). That argument is about the
-      landing surface, where the ask bar is wide and central — which is why
-      graph mode is the only half changing. Two details: the 🎓 picker renders
-      only once a lecture has played, so the header must read well with 📚
-      alone; and `openScope` is a single `'lectures' | 'sources' | 'filters'`
-      — one popover open at a time — which keeps working across the move but
-      now spans two rows, so check the popovers still anchor correctly.
-      **The tour follows it:** the graph tour walks the two scope pickers in
-      screen order (`data-tour="source-scope"`), so moving one re-sequences
-      those stops.
 
 - [ ] **Tidy the tour's ordering and card titles** — polish, not a bug: the
       steps teach the right things, they just **arrive in the wrong order**

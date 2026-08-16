@@ -39,16 +39,21 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  ├─ legend                    graph/controls/Legend.tsx
    │  ├─ detail panel (on select)  detail/DetailPanel.tsx
    │  └─ figure lightbox           figures/Lightbox.tsx
-   └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked
-      ├─ scope picker              teacher/ScopePicker.tsx (in the ask bar)
+   └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked;
+      │                             docked it stacks two folding sections
+      ├─ Lectures section          the four buttons + the shown lecture
+      │  └─ lecture beats          teacher/transcript/BeatList.tsx
+      ├─ Chat section              the conversation
+      │  ├─ scope pickers          teacher/ScopePicker.tsx (🎓 + 📚, on the
+      │  │                          Chat row — they scope the researcher;
+      │  │                          with no graph they fall to the ask bar)
+      │  └─ chat turns             teacher/transcript/ChatMessage.tsx
+      │     └─ inline figures      teacher/figures/FigCard.tsx
       ├─ search controls           search/SearchControls.tsx (in the ask bar:
       │                             the "Find papers" toggle + the Filters
       │                             popover — year slider, field picker)
       ├─ "working" dots            teacher/HopDots.tsx (lecture button, send
       │                             control, and a bubble awaiting its first token)
-      ├─ lecture beats             teacher/transcript/BeatList.tsx
-      ├─ chat turns                teacher/transcript/ChatMessage.tsx
-      │  └─ inline figures         teacher/figures/FigCard.tsx
       └─ figure lightbox           figures/Lightbox.tsx (same instance type as above,
                                     but GraphExplorer and Teacher each own their own)
 ```

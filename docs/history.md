@@ -351,6 +351,90 @@
 
 ### AI teacher & lectures
 
+- [x] **The assistant panel becomes folding sections** *(v7.10.0)* — the
+      ticket was narrow: *"the lecture-mode buttons sit permanently expanded
+      above the chat, taking prime vertical space next to the thing the reader
+      actually types into. Fold them into a collapsible section with a little
+      caret to expand. Two things to get right: the **default state**
+      (collapsed is the point, but a first-time reader must still discover
+      lectures exist — the tour teaches them, so check `tour/steps.ts` still
+      lands on a visible target), and the **animation**, which should reuse the
+      chat surface's existing motion vocabulary (`--ease-rise`/`--ease-fade`,
+      and honouring `prefers-reduced-motion`) rather than inventing a third
+      easing."* *(From the `todos.md` inbox, 2026-08-15.)*
+
+      **It grew into the panel's structure**, on Patrick's direction mid-branch:
+      if the lectures are a section, so is the conversation. The docked panel
+      is now a stack of two — **Lectures** (the four buttons, the intro, and
+      whichever lecture is shown) and **Chat** (the conversation, its caret row
+      carrying the 🎓/📚 scopes) — under a title row holding only the title and
+      the ✕. Lectures starts folded, Chat starts open; both are initial values
+      only, so a reader's choice survives the session.
+
+      **What the split bought, beyond the space.** The two used to share one
+      scroll and take turns: playing a lecture hid the chat, and `ask`
+      dispatched `lectureHidden` so a question hid the lecture. That dispatch
+      is gone — you can keep a lecture open and ask about it, which was
+      impossible before. Clear split with it: one contextual button could no
+      longer say which of the two it would wipe, so `clearLecture` sits on the
+      Lectures row and `clearChat` is the bin in the composer.
+
+      **Details worth keeping.** The tour stages both sections open
+      (`stagedOpen`, the contract `GraphControls` already had) and its walk
+      re-sequenced to the panel's new order — lectures, then the two scopes,
+      then the ask bar. Each header reports its own work with the app's shared
+      `.spin` rather than `HopDots`: the hopping dots are a *voice* ("an agent
+      is composing"), a header is a status line — the same distinction the
+      trace chips draw. And the headers are **pinned** (`position: sticky`),
+      because a long conversation buried its own header: folding the chat away
+      or reaching its scopes meant scrolling back to the top first. That fix
+      came with a gotcha worth remembering — **a sticky child sticks below its
+      scroll container's padding**, so `.teacher-scroll`'s 12px top padding
+      left a band where turns scrolled past in the open, right under the panel
+      title. The scroller gave up its top padding and the header carries it
+      instead, which also made the panel's spacing uniform: 12px from any rule
+      to the header below it, 12px from a header to its content, all from one
+      symmetric padding.
+
+- [x] **The source picker moves onto the section it scopes** *(v7.10.0)* — the
+      ticket asked for the panel header: *"the ask bar carries three controls
+      before you reach the text you're typing: the 📚 **source scope** picker,
+      the 🔍 **Find papers** toggle and the **Filters** popover. Docked beside a
+      graph the panel is narrow, and three of them plus the textarea and send
+      is more than the width holds. **The ask:** in graph mode, put 📚 up in the
+      panel header next to the 🎓 lecture-scope picker; in graph-free mode leave
+      it exactly where it is."* *(From the `todos.md` inbox, 2026-08-16.)*
+
+      **It shipped one row lower than asked, and that's the interesting part.**
+      The header version was built first, and Patrick killed it on sight:
+      *"having the scope live in a section along with lectures doesn't tell the
+      user what the scope is grounding: the q&a agent or the lecturer (it's the
+      q&a agent obviously)."* A picker in the panel header — or in a peer
+      "Grounding" section, the other candidate — claims to scope **everything**.
+      Both scopes bind the *researcher*, so both now ride the **Chat** section's
+      caret row, icon-only, where the row itself makes the claim. With no graph
+      there are no sections, so the same one `sourcePicker` element falls back
+      into the ask bar (rendered in one of two places, never both) — where the
+      original reasoning still holds: the landing composer is wide and central,
+      and the scope qualifies the question you are about to ask.
+
+- [x] **The panel's title says both halves of the job** *(v7.10.0)* — the
+      ticket: *"Rename 'AI teacher' above the graph chat to 'Discover' — a
+      one-word change, but the word is doing work: 'AI teacher' names the
+      implementation (there's an agent, it teaches), while 'Discover' names
+      what the reader came to do. Worth a grep rather than a single edit — the
+      phrase appears in the panel header, and possibly in the tour text and
+      control tooltips, all of which have to move together per the in-app-help
+      rule."* *(From the `todos.md` inbox, 2026-08-15.)*
+
+      **"Discover" shipped, then didn't.** It was in the branch for a day
+      before Patrick landed on **"AI Teacher & Discovery"** — the panel does
+      both, and naming only the discovery half lost the teaching one. The grep
+      the ticket called for still happened: "AI teacher" is gone from every
+      user-facing surface, and in *prose* (three tour cards, the controls
+      panel's alt-drag hint and its tooltip) the thing is called **"the
+      assistant"**, which is what the rest of the copy already called it.
+
 - [x] **A lecture covers the seed's own neighbourhood, not the whole expanded
       graph** *(v7.7.0)* — expand the graph a few hops, then play a lecture,
       and it narrated the pulled-in papers as though the seed had cited them.
@@ -2223,6 +2307,37 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       it still answers against the fully restored graph. Deliberately left as-is.)*
 
 ### UI & rendering polish
+
+- [x] **The docked chat scrolled sideways** *(v7.10.0)* — *"beside a graph, the
+      assistant panel scrolls **horizontally**, and it should never — content
+      belongs inside the panel's width, wrapping or shrinking to fit, and the
+      chat box should give width back as the window narrows."* *(From the
+      `todos.md` inbox, 2026-08-16.)*
+
+      **The ticket's own hypothesis was wrong, and so were the first two
+      fixes.** It guessed a viewport-blind width, and the panel's ask-bar
+      crowding. The real cause was in the *prose*: an answer wrote "raised
+      **$**3.77 billion … up from **$**1.8 billion", and remark-math paired
+      those two currency dollars and rendered everything between them —
+      sentence, URL, punctuation — as one inline formula. KaTeX output cannot
+      wrap, so the 521px result pushed the transcript sideways. It also
+      explained the *other* symptom nobody had connected to it: the same
+      paragraph reading as italic, letter-spaced nonsense. Patrick's DevTools
+      dump settled it — every overhanging element was inside one `SPAN.katex`.
+      Full story in [bugs.md](bugs.md).
+
+      **Three fixes shipped, and only the first was the bug.**
+      `notation/prepareMath.ts` makes `splitMath`'s verdict binding on
+      remark-math; the width clamp did become viewport-aware anyway
+      (`min(680px, 40% of the window)`, re-read on resize, with the reader's
+      chosen width stored *unclamped* so a widened window hands it back); and
+      the transcript got the containment it should always have had —
+      `overflow-wrap: anywhere`, a scroller for `.katex-display`, a
+      `max-width` backstop on its children, `.md img` capped, and
+      `.source-ref` un-`nowrap`ped (it holds a full book or paper title, and
+      `nowrap` defeats `overflow-wrap` outright). Deliberately **not**
+      `overflow-x: hidden`, which would have hidden the symptom and clipped
+      the wide content the other rules give a scroller of its own.
 
 - [x] **A graph opens onto the graph, not onto its panels** *(v7.9.0)* —
       building a graph used to land with two boxes already covering the

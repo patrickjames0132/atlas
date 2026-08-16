@@ -184,7 +184,9 @@ export default function Atlas() {
    *  The assistant only ever opens — collapsing it mid-walk would hide the
    *  graph tour's own lecture and ask stops. 'details' and 'controls' pass
    *  through to GraphExplorer (via tourStage), which selects the seed when
-   *  nothing is / expands a collapsed controls panel. */
+   *  nothing is / expands a collapsed controls panel; 'assistant' also
+   *  reaches Teacher (`stagedOpen`), which unfolds its lecture section so the
+   *  "Four lectures" step has something to point at. */
   const onTourStage = useCallback((stage?: string) => {
     setTourStage(stage)
     setView(stage === 'library' ? 'library' : 'workspace')
@@ -408,6 +410,7 @@ export default function Atlas() {
             key={epoch}
             landing={!graph}
             collapsed={!!graph && !assistantOpen}
+            stagedOpen={tourOpen && tourStage === 'assistant'}
             onClose={graph ? () => setAssistantOpen(false) : undefined}
           />
         </div>

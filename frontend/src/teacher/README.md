@@ -10,7 +10,8 @@ lecture buttons + agentic Q&A (the lecturer and researcher).
 
 ```
 teacher/
-  Teacher.tsx        — the slim shell: header, modes, scroll, ask form
+  Teacher.tsx        — the slim shell: title row, the two folding sections
+                       (Lectures / Q&A), ask form
   useConversation.ts — the stream engine: runs the 3 streams, dispatches
                        events into the store, owns panel run-state
   HopDots.tsx        — the one "working on it" indicator, shared by a
@@ -125,6 +126,37 @@ structure rule's nesting case (the `graph/hooks` precedent).
   itself is ruled off under the panel title with a divider and a one-line intro
   (`.lecture-intro`). (The `--lecture` periwinkle triple now only tints the
   beat/chat/trace surfaces, not the buttons.)
+- **The panel is two folding sections** (v7.10.0 — `lecturesOpen` / `qaOpen`,
+  `.panel-section` + `.section-toggle` / `.section-body`). **Lectures** holds
+  the four buttons, the intro, and the shown lecture's beats; **Chat** holds the
+  conversation. Each has a caret row that names it and folds it. Details that
+  make the fold safe: the states are **initial values only** (open one and it
+  stays open for the session — a menu you come back to); Lectures starts
+  **folded** because four buttons in the panel's prime vertical space are not
+  what most turns need, while Chat starts **open** because it is what the
+  composer writes into; the tour **stages both open** (`stagedOpen`, the same
+  contract `GraphControls` has), which is also how a first-time reader learns
+  the lectures exist; asking a question **unfolds Chat** (a turn landing in a
+  folded section reads as nothing happening); and while Lectures is folded, a
+  **generating lecture still reports itself** on its caret row with the shared
+  spinner, since its button's own dots are out of sight. Opening replays the
+  panel's one entrance (`rise` + `fade`, quicker); folding is instant, and
+  `prefers-reduced-motion` drops both.
+- **The section headers are pinned** (`position: sticky` on `.section-head`).
+  A long conversation used to bury its own header: folding the chat away, or
+  reaching its scope pickers, meant scrolling all the way back to the top
+  first (Patrick, 2026-08-16). A sticky box is confined to its own containing
+  block, so the two headers don't stack up — the Lectures one leaves with its
+  section and the Chat one takes the top from it — and the row is opaque
+  because turns now pass behind it.
+- **Each section reports its own work on its header**, with the app's shared
+  `.spin` rather than `HopDots`: the hopping dots are a *voice* ("an agent is
+  composing" — a lecture button, the send control, a bubble awaiting its first
+  token) and a header is a status line, the same distinction the trace chips
+  draw. Lectures shows it only while **folded**, since its four buttons are a
+  better readout when open (they say *which* mode). Chat shows it whenever the
+  agent is working, folded or not — with the header pinned, it is the only
+  thing still on screen while a reader scrolls back through history.
 - **Lecture buttons are cached toggles** (`toggleLecture` in `useConversation`):
   each of the four modes is a show/hide switch over its cached beats. First
   click on a mode streams and caches it (`lectureStarted`/`beatAdded` write the
@@ -151,19 +183,22 @@ structure rule's nesting case (the `graph/hooks` precedent).
   none excluded = all fed), so a lecture played after the user last touched the
   picker is included automatically; `onAsk` passes the checked modes to `ask`. A
   quiet line above the ask bar notes how many are in play.
-- **One panel, two views** (`Teacher.tsx`, gated on `activeMode`): a shown
-  lecture takes over the scroll — the "Now playing" header + its beats — while no
-  shown lecture means the Q&A chat. Selecting a lecture enters the lecture view;
-  **asking a question hides the lecture** (`ask` dispatches `lectureHidden`) to
-  drop into the Q&A view, so beats and chat never stack together. Neither is
-  lost across the switch: the lecture stays cached (its button lit-as-cached, its
-  background stream uninterrupted — re-select to return), the chat stays in the
-  store. This is why `selectVisibleBeats` keys off `activeMode` and the chat is
-  always the full list — the view is a pure render choice over persistent state.
-- **Clear is contextual** — a shown lecture → clear just that lecture (stop it
-  if loading, `lectureDropped`, unlight the graph); no lecture shown → clear the
-  Q&A chat (`chatCleared`) and mint a fresh session id. The button relabels
-  ("Clear lecture" / "Clear chat") to say which it'll do.
+- **The lecture and the conversation no longer take turns** (v7.10.0). They
+  used to share one scroll, gated on `activeMode`: a shown lecture took the
+  panel over, and **asking a question hid the lecture** (`ask` dispatched
+  `lectureHidden`) so the two could never stack. Sections made that unnecessary
+  and then wrong — a reader deep in a lecture would ask a follow-up and watch
+  the beats they were reading vanish — so that dispatch is gone and a shown
+  lecture stays shown. `selectVisibleBeats` still keys off `activeMode`, which
+  now means only *which* lecture the section shows; the chat is always the full
+  list. Both remain a pure render choice over persistent state: the lecture
+  cache and the chat both live in the store.
+- **Two Clears, one per section** — `clearLecture` (stop it if loading,
+  `lectureDropped`, unlight the graph) sits on the Lectures caret row, and
+  `clearChat` (`chatCleared` + a fresh session id) is the bin in the composer,
+  which belongs to Chat. It was one contextual button until v7.10.0; with both
+  sections on screen at once, a single button could no longer say which of the
+  two it would wipe.
 
 ## Who uses it, and how/why
 
@@ -178,12 +213,17 @@ hidden-not-unmounted when collapsed, so the conversation survives toggling.
 Everything else flows through the store: highlights → the canvas, discoveries
 → the explorer's sim merge, transcript → Save.
 
-**Where the controls live, and why.** The source scope and Clear both sit in
-the **ask bar** rather than the panel head. On the landing surface the head
-has no title and no ✕, so anything left there floats in empty space with
-nothing to belong to — and the scope was never really header furniture
-anyway: it qualifies the question you are about to ask, so it travels with the
-ask. In the bar the scope trigger is its icon alone (the popover shows the
+**Where the controls live, and why.** Each control sits on the thing it acts
+on. The panel's title row holds only the title and the ✕. The **🎓 and 📚
+scopes ride the Chat caret row** (v7.10.0): they bind the *researcher* — what
+it may read and search when it answers — not the lecturer above, and both a
+peer "Grounding" section and a slot in the panel header would imply they
+scope everything (Patrick's call, and the reason they landed here). With **no
+graph** there are no sections, so the same one `sourcePicker` element falls
+back into the ask bar — rendered in one of two places, never both. There it
+also earns its keep: the composer is wide and central on the landing surface,
+and the scope qualifies the question you are about to ask.
+On both rows the trigger is its icon alone (the popover shows the
 truth once open, an accent fill marks a narrowed scope, and the tooltip spells
 it out), and its popover opens **upward**, since the bar sits at the bottom of
 the page. It appears at **one** source, not two (v7.2.0): the old `> 1` gate
@@ -265,12 +305,38 @@ One gesture, one rhythm, both defined in `teacher.css`.
   out in the block beside the keyframes; the FLIP checks `prefersStill()`
   itself, since a scripted animation can't be reached by a media query.
 
+**The docked panel is titled "AI Teacher & Discovery"** (v7.10.0). It named
+only the agent before ("AI teacher"), which is the implementation rather than
+the offer; "Discover" alone was tried on the way and dropped for losing the
+teaching half. The panel does both, so the title says both. In *prose* — tour
+steps, the controls panel's alt-drag hint — the thing is called **"the
+assistant"**, which is what the rest of the copy already called it, rather
+than repeating the title.
+
+## Nothing may push the panel wider than it is (v7.10.0)
+
+`.teacher-scroll` is `overflow-y: auto`, and a box with one visible axis and
+one scrolling axis computes the visible one to `auto` too — so the transcript
+**is** a horizontal scroller, and anything unwrappable in it (a bare URL, a
+DOI, a long identifier) turned the docked chat into a sideways-scrolling one.
+The fix is `overflow-wrap: anywhere` on that box, inherited by every bubble,
+beat, trace chip and hint below it; `anywhere` rather than `break-word`
+because it also shrinks the box's min-content width, which is what lets the
+flex column hold the panel to its own width instead of being widened from
+inside. Genuinely unwrappable content gets a scroller of its own instead:
+`.md pre`, `.md table` and (new) `.katex-display`, which KaTeX ships with no
+overflow at all. Deliberately **not** `overflow-x: hidden` on the panel — that
+hides the symptom and silently clips those three.
+
 ## How it's verified
 
-`tsc --noEmit` strict + oxlint. Browser-milestone items: a lecture lighting
-beats as they stream, a researcher answer with trace chips + an inline figure,
-the library chat with a scope subset, Clear detaching follow-up context,
-and a save→restore round trip rehydrating the whole conversation.
+`tsc --noEmit` strict + oxlint, plus `test/teacher/Teacher.test.tsx` — the
+lecture fold's default and its `stagedOpen` unfold, and which of the two homes
+the source picker renders in for each shape. Browser-milestone items: a
+lecture lighting beats as they stream, a researcher answer with trace chips +
+an inline figure, the library chat with a scope subset, Clear detaching
+follow-up context, and a save→restore round trip rehydrating the whole
+conversation.
 
 
 ## The chat bar is the app's only text input (v7.6.0)
@@ -281,9 +347,10 @@ picking the box before you knew which one you wanted.
 
 `Teacher` owns the two pieces of state that decides: `direct` (the 🔍 **Find
 papers** toggle) and `searchOptions` (the **Filters** popover). Both controls
-render inside the ask form, beside `ScopePicker`, for the reason that one
-does — they belong to the thing you are about to send. `search/SearchControls`
-draws them; `search/useDirectSearch` runs the scout.
+render inside the ask form — beside `ScopePicker` on the landing surface, and
+alone in it once docked (the scope moves to the header there) — for the reason
+that one does: they belong to the thing you are about to send.
+`search/SearchControls` draws them; `search/useDirectSearch` runs the scout.
 
 **Three destinations, decided in `submitQuestion` before any model runs:**
 

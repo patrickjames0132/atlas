@@ -30,6 +30,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import type { PaperRef, Provider, SourceRef } from '../../api'
 import { PROVIDER_LABEL } from '../../api'
+import { prepareMath } from '../../notation/prepareMath'
 import { remarkCite } from './remarkCite'
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
@@ -241,6 +242,11 @@ export default function AnswerMarkdown({
     [graphRefs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed, provider],
   )
 
+  // Dollars sorted out before remark-math ever sees them — money in prose is
+  // not a formula (see `notation/prepareMath`). Memoised because an answer
+  // re-renders on every streamed token, and this walks the whole text.
+  const markdown = useMemo(() => prepareMath(text), [text])
+
   return (
     <div className="md">
       <ReactMarkdown
@@ -248,7 +254,7 @@ export default function AnswerMarkdown({
         rehypePlugins={REHYPE_PLUGINS}
         components={components}
       >
-        {text}
+        {markdown}
       </ReactMarkdown>
     </div>
   )
