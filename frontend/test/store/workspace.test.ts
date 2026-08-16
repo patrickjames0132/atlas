@@ -21,6 +21,7 @@ import reducer, {
   nodeSelectionToggled,
   providerSet,
   selectGroundingNodes,
+  selectSatelliteCount,
   restoreSession,
   visibleNodesSet,
   workspaceCleared,
@@ -229,5 +230,47 @@ describe('restoring a save from before the graphRefs rename', () => {
 
     expect(transcript.chat[0].graphRefs).toEqual({ '1': 'node-new' })
     getSession.mockRestore()
+  })
+})
+
+describe('selectSatelliteCount', () => {
+  const seed = { id: 'seed01', title: 'Seed', is_seed: true }
+  const edge = (source: string, target: string) => ({ source, target, type: 'reference' as const })
+
+  /** A workspace state with a graph, its edges, and everything visible. */
+  const stateWith = (
+    nodes: { id: string; is_seed?: boolean }[],
+    edges: ReturnType<typeof edge>[],
+  ) =>
+    ({
+      workspace: {
+        ...reducer(undefined, { type: '@@init' }),
+        graph: { seed, nodes, edges, counts: {} },
+        visibleNodeIds: nodes.map((node) => node.id),
+      },
+    }) as never
+
+  it('counts papers joined to no edge of the seed — the ones no lecture narrates', () => {
+    // ref01 is the seed's reference; ref01-ref hangs off ref01, so it is on the
+    // graph but outside the seed's own neighbourhood.
+    const state = stateWith(
+      [seed, { id: 'ref01' }, { id: 'ref01-ref' }],
+      [edge('seed01', 'ref01'), edge('ref01', 'ref01-ref')],
+    )
+    expect(selectSatelliteCount(state)).toBe(1)
+  })
+
+  it('is zero on an unexpanded graph, so the note stays hidden', () => {
+    const state = stateWith([seed, { id: 'ref01' }], [edge('seed01', 'ref01')])
+    expect(selectSatelliteCount(state)).toBe(0)
+  })
+
+  it('checks both endpoints — a citer points AT the seed', () => {
+    const state = stateWith([seed, { id: 'cite01' }], [edge('cite01', 'seed01')])
+    expect(selectSatelliteCount(state)).toBe(0)
+  })
+
+  it('never counts the seed itself', () => {
+    expect(selectSatelliteCount(stateWith([seed], []))).toBe(0)
   })
 })

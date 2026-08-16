@@ -51,7 +51,7 @@ from pydantic_core import from_json
 
 from ....integrations.arxiv import figures as figures_mod
 from ....integrations.arxiv import fulltext as fulltext_mod
-from ....services.graph import Node
+from ....services.graph import Edge, Node
 from ....services.sources import retrieval
 from ... import events, factory, prompts, streams
 from ...models import LectureMode
@@ -388,22 +388,75 @@ def _chronological(nodes: list[Node]) -> list[Node]:
     return sorted(nodes, key=lambda node: (node.year is None, node.year or 0))
 
 
-def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]:
+def _seed_neighbors(seed: Node, edges: list[Edge], relation: str) -> set[str]:
+    """Ids joined **directly to the seed** by an edge of one relation.
+
+    The question a lecture actually needs answered, and the one ``rels``
+    cannot: a node's tags record what its relation *is*, never what it is
+    *to*. A paper pulled in by ``expand_node`` carries the tag for the
+    relation it has to *the paper it was expanded from* — so a
+    reference-of-a-reference is tagged ``reference`` and is indistinguishable,
+    by tag alone, from something the seed actually cites.
+
+    Deliberately **direction-agnostic**. A ``reference`` edge runs seed →
+    cited and a ``citation``/``latest`` edge runs citer → seed (see
+    ``Edge``), but the question here isn't which way the arrow points — it is
+    whether this paper and the seed are joined by *this kind* of edge at all.
+    Asking about adjacency rather than direction means a future relation can't
+    be silently mis-scoped by getting its arrow backwards.
+
+    Args:
+        seed: The seed paper.
+        edges: The visible graph's edges.
+        relation: The edge type this mode narrates (``reference`` /
+            ``citation`` / ``latest``).
+
+    Returns:
+        The ids of the seed's own neighbors under that relation.
+    """
+    neighbors = set()
+    for edge in edges:
+        if edge.type != relation:
+            continue
+        if edge.source == seed.id:
+            neighbors.add(edge.target)
+        elif edge.target == seed.id:
+            neighbors.add(edge.source)
+    return neighbors
+
+
+def _story_nodes(
+    seed: Node, nodes: list[Node], edges: list[Edge], mode: LectureMode
+) -> list[Node]:
     """The node set a lecture mode may narrate.
 
     A lecture never expands the graph — and each mode is pinned to exactly one
     kind of neighbor so the four lectures don't overlap. Scoping is by
-    *relation*, not by year: HISTORY narrates the seed's **references**,
-    EVOLUTION ("The landmark papers since") the **landmark citers**,
-    and FRONTIER the recent **Latest Publications** — each keeping only nodes
-    carrying that ``rels`` tag (plus the seed itself), then sorted
-    chronologically (see ``_chronological``). INTUITION stays on the **seed
-    alone**, so it structurally can't wander onto another paper. BRIDGE sees
-    the whole visible set.
+    *relation to the seed*, not by year: HISTORY narrates the seed's
+    **references**, EVOLUTION ("The landmark papers since") the **landmark
+    citers**, and FRONTIER the recent **Latest Publications** — each keeping
+    only the seed's own neighbors under that relation (plus the seed itself),
+    then sorted chronologically (see ``_chronological``). INTUITION stays on
+    the **seed alone**, so it structurally can't wander onto another paper.
+    BRIDGE sees the whole visible set.
+
+    **Scoped by edges since v7.7.0, and that is the whole point.** This used
+    to filter on ``relation in node.rels``, which reads a node's tags — and a
+    tag says what a relation *is*, not what it is *to*. Once the graph could
+    grow past its seed (``expand_node``), a paper hanging off a reference
+    carried the tag ``reference`` and swept straight into the HISTORY lecture,
+    which then narrated papers the seed never cited. Latent from the day
+    expansion shipped; invisible until someone expanded a graph and then
+    played a lecture over it.
 
     Args:
         seed: The seed paper (always included in every mode's set).
         nodes: The visible graph nodes.
+        edges: The visible graph's edges — what makes "the seed's own
+            neighbor" answerable. **Empty falls back to tag scoping**, i.e.
+            the pre-v7.7.0 behavior: wrong for an expanded graph, but a
+            lecture that narrates too much beats one that finds no papers at
+            all and narrates nothing.
         mode: The lecture mode being narrated.
 
     Returns:
@@ -414,12 +467,12 @@ def _story_nodes(seed: Node, nodes: list[Node], mode: LectureMode) -> list[Node]
     relation = _MODE_RELATION.get(mode)
     if relation is None:  # BRIDGE (and any future non-directional mode)
         return list(nodes)
+    if edges:
+        in_scope = _seed_neighbors(seed, edges, relation)
+    else:
+        in_scope = {node.id for node in nodes if relation in node.rels}
     return _chronological(
-        [
-            node
-            for node in nodes
-            if node.is_seed or node.id == seed.id or relation in node.rels
-        ]
+        [node for node in nodes if node.is_seed or node.id == seed.id or node.id in in_scope]
     )
 
 
@@ -428,6 +481,7 @@ def lecture(
     nodes: list[Node],
     mode: LectureMode = LectureMode.HISTORY,
     target: Node | None = None,
+    edges: list[Edge] | None = None,
 ) -> Iterator[events.Beat | events.SourceRefs]:
     """Stream a lecture over the visible graph as typed beats.
 
@@ -439,6 +493,9 @@ def lecture(
             everything on screen rather than pre-filtering.
         mode: ``history``, ``intuition``, ``evolution``, or ``bridge``.
         target: The bridge target paper (bridge mode only), or None.
+        edges: The visible graph's edges, which is how a mode tells the seed's
+            **own** neighbors from papers expanded off them (see
+            ``_story_nodes``). None/empty falls back to tag scoping.
 
     Yields:
         One ``events.SourceRefs`` first when the intuition lecture retrieved
@@ -453,7 +510,7 @@ def lecture(
         Exception: Model/stream failures propagate — the caller ends the
             event stream with ``Error``.
     """
-    nodes = _story_nodes(seed, nodes, mode)
+    nodes = _story_nodes(seed, nodes, list(edges or []), mode)
     # Every storytelling mode gets a figure pool (the seed's own figures for
     # intuition; the story's landmark papers' for history/evolution — see
     # _figure_pool); library passages and the seed's full text ground the

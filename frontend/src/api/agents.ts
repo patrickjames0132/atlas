@@ -115,7 +115,16 @@ export interface LectureHandlers {
  * @param handlers Event handlers; see {@link LectureHandlers}.
  */
 export async function streamLecture(
-  body: { seed: GraphNode; nodes: GraphNode[]; mode: LectureMode; target?: GraphNode },
+  body: {
+    seed: GraphNode
+    nodes: GraphNode[]
+    mode: LectureMode
+    target?: GraphNode
+    /** Every graph edge — how the backend tells the seed's own neighbours
+     *  from papers expanded off them. Omitted, it falls back to node tags,
+     *  which over-include on an expanded graph. */
+    edges?: GraphEdge[]
+  },
   handlers: LectureHandlers,
 ): Promise<void> {
   const res = await fetch('/api/lecture', {

@@ -11,9 +11,8 @@ The lecture is the app's showpiece: press the button and the teacher
 narrates the intellectual history (or the seed's own intuition, the landmark
 papers that built on it, a survey of the current frontier, or a bridge between
 two areas) over the citation graph you're looking at, highlighting papers as the
-story reaches them. Each mode is pinned to one kind of graph neighbor so the
-stories don't overlap (the orchestrator's `_story_nodes` does the scoping — see
-below). The old repo did this by begging the model for
+story reaches them. Each mode is pinned to one kind of **the seed's own** graph neighbor so the
+stories don't overlap (`_story_nodes` does the scoping — see below). The old repo did this by begging the model for
 newline-delimited JSON and armoring a parser against disobedience
 (fence-stripping, line buffering, malformed-JSON tolerance). Here the shape
 is *enforced*, not requested: the model's output type IS `list[LectureBeat]`,
@@ -133,3 +132,48 @@ modes' era-banded list + concrete span line, and that skills ride along as
 instructions; an exploding one proves model failures reach the caller (and that
 grounding failures never block a lecture). `prompts.node_lines` /
 `node_lines_by_era` / `idx_to_id` have their own tests in `test_prompts.py`.
+
+
+## Scoping: why it reads edges, not tags (v7.7.0)
+
+`_story_nodes` decides which visible papers a mode may narrate. It used to
+filter on `relation in node.rels` — keep the nodes tagged `reference` for
+HISTORY, `citation` for EVOLUTION, `latest` for FRONTIER. That was correct
+while the graph *was* the seed's neighbourhood, and quietly stopped being
+correct the moment `expand_node` could grow it past that.
+
+**A tag says what a relation is; it never says what it is *to*.** An expanded
+paper carries the relation it has to *the paper it was expanded from*, so a
+reference-of-a-reference is tagged `reference` and is, by tag alone,
+indistinguishable from something the seed actually cites. Play a history
+lecture over an expanded graph and it narrated both. No feature was broken —
+the bug lived in the space between two of them.
+
+So scoping asks the edges instead: a paper is in a mode's story iff an edge of
+that relation joins it **directly to the seed** (`_seed_neighbors`). Three
+things about that are deliberate:
+
+- **Direction-agnostic.** A `reference` edge runs seed → cited, while
+  `citation` and `latest` run citer → seed. Both endpoints are checked,
+  because the question is *adjacency to the seed*, not which way the arrow
+  points — so a relation added later can't be silently mis-scoped by having
+  its direction the other way round.
+- **Only edges touching the seed count.** Two of the seed's references citing
+  each other is a real edge on a real graph and says nothing about either
+  paper's place in a story.
+- **No edges falls back to tag scoping.** An empty edge list means the caller
+  couldn't say (an old client, a malformed payload); scoping by edges then
+  would yield the seed alone and narrate nothing, which is worse than the
+  over-inclusion it replaced.
+
+The route parses edges tolerantly for a specific reason: react-force-graph
+**replaces a link's `source`/`target` strings with the node objects
+themselves**, in place, so `{"source": {...node...}}` is the normal shape off
+a live canvas (`routes/agents.py`'s `_edges` resolves either). Parsing only
+strings would yield zero edges, fall back to tags, and restore the bug
+invisibly.
+
+**The reader is told, too.** The frontend counts papers with no edge to the
+seed (`selectSatelliteCount` — the same predicate) and names them in the
+lecture panel's intro, so their absence reads as a stated boundary rather than
+as the lecture skipping papers. See `docs/bugs.md`.

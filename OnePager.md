@@ -128,34 +128,6 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **A lecture narrates papers the seed never cited — `rels` says the
-      relation but not *whose*** — spotted 2026-08-15: expand the graph a few
-      hops, then play a lecture, and it covers the pulled-in papers as though
-      they were the seed's own neighbourhood. They aren't; they're two hops
-      out, related to something the reader expanded rather than to the paper
-      the lecture is about.
-
-      **The mechanism is exact and it's in `_story_nodes`.** Each mode is
-      scoped by **relation tag** — HISTORY keeps nodes carrying `reference`,
-      EVOLUTION keeps `citation`, FRONTIER keeps `latest` — and a paper
-      `expand_node` pulled in carries the same tag for the *expanded* paper's
-      relation. `rels` records what the relation is, never what it is *to*, so
-      a reference-of-a-reference is indistinguishable from a reference of the
-      seed. It's been latent since expansion shipped and only bites once the
-      reader expands, which is why it took this long to notice.
-
-      **The shape question is where the answer comes from.** The edges know
-      (a paper is a seed reference iff a `reference` edge runs seed → it), but
-      the lecturer is handed **nodes only** — `lecture(seed, nodes, mode)` —
-      so either the edges come along, or nodes carry their origin. Note the
-      frontend already has this distinction as `_origin` on `VNode`, set by
-      the discovery merge when the anchor isn't the seed and deliberately
-      *not* persisted; that's a hint about the natural shape, not a thing to
-      reuse directly. Then decide what a lecture *should* do with satellites —
-      silently ignore them, or say plainly that it's covering the seed's own
-      neighbourhood and the graph has grown past it. The second is more
-      honest and costs a sentence. *(Patrick's report, 2026-08-15.)*
-
 - [ ] **The collapsible side menu** — the header goes away entirely, replaced
       by a side menu in the ChatGPT mould *(from the `todos.md` inbox,
       2026-08-15)*. This was entangled with "does the header search bar earn

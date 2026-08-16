@@ -22,6 +22,54 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A lecture narrated papers the seed had never cited
+
+*Found 2026-08-15 by Patrick, playing a lecture over an expanded graph. Fixed in v7.7.0.*
+
+- **Symptom.** Expand a paper or two on the graph, then play "How it began".
+  The lecture told the story of papers the seed has no relationship to at
+  all — confidently, and with correct-looking citations, because every paper
+  it named really was on screen.
+- **Root cause — a tag says what a relation *is*, never what it is *to*.**
+  `_story_nodes` scoped each mode by `relation in node.rels`: HISTORY kept
+  nodes tagged `reference`, EVOLUTION `citation`, FRONTIER `latest`. That was
+  exactly right while the graph *was* the seed's neighbourhood. Then
+  `expand_node` shipped, and an expanded paper is tagged with the relation it
+  has to **the paper it was expanded from** — so a reference-of-a-reference
+  carries `rels=["reference"]` and is, by tag alone, indistinguishable from
+  something the seed actually cites. There was no bug in either feature; the
+  bug appeared in the space between them, and only when a reader used both.
+- **Fix.** Scope by **edges**, which can express what tags structurally
+  cannot. `/api/lecture` now takes the graph's edges, and `_seed_neighbors`
+  keeps only papers joined directly to the seed by an edge of that mode's
+  relation. Deliberately **direction-agnostic** — a `reference` edge runs
+  seed→cited while `citation`/`latest` run citer→seed, but the question is
+  adjacency to the seed, not which way the arrow points, so a future relation
+  can't be mis-scoped by getting its direction backwards. Empty edges fall
+  back to tag scoping: over-including beats a lecture with no papers in it.
+- **Lesson / guard.** **A derived label is not a relationship.** `rels` was
+  always a *rendering* concern — what colour to paint a node — and it got
+  reused as a *semantic* one, which held only while the graph had a single
+  origin. When a feature later broke that assumption, nothing failed; the
+  label just quietly stopped meaning what its readers thought. Ask whether an
+  attribute encodes a fact about the thing or a fact about a *pair* of things.
+  If it's about a pair, the edge is the only honest home for it.
+
+  Two guards, one per side. `test_a_paper_expanded_off_a_reference_is_not_part_of_the_seeds_history`
+  asserts the satellite is excluded **and** that its tag is identical to a real
+  reference's — without that second assertion the test would pass for the
+  wrong reason. And a route test pins a trap worth knowing: react-force-graph
+  **mutates a link's `source`/`target` from id strings into the node objects
+  themselves**, in place, so `{"source": {...node...}}` is the *normal* shape
+  off a live canvas. Parsing only strings would have silently yielded zero
+  edges, fallen back to tag scoping, and restored the bug with every test
+  still green.
+
+  A third thing the fix bought: the reader is now *told*. Papers with no edge
+  to the seed are counted (`selectSatelliteCount`, the same predicate the
+  backend scopes by) and named in the lecture panel's intro, so their absence
+  reads as a stated boundary rather than as the lecture skipping papers.
+
 ### A cache-key version bump left the local search silently blind
 
 *Found 2026-08-15 by Patrick, testing direct search's instant results. Fixed in v7.6.0.*

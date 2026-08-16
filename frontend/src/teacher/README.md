@@ -309,3 +309,23 @@ Two consequences worth knowing:
 The filters ride on `ask` too, not just on direct search — see
 `search/README.md` for why they belong to the bar rather than to one of its
 modes.
+
+
+## The lecture intro says what a lecture will leave out (v7.7.0)
+
+`.lecture-intro` above the mode buttons gained a conditional sentence: when
+papers on the graph hang off *another* paper rather than the seed, it names
+how many and says no lecture covers them, closing with the action that does
+("Re-seed on one to hear its story").
+
+It exists because the alternative is worse than silence: a reader who has just
+expanded a paper and then plays a lecture sees those papers go unmentioned,
+which reads as the lecture quietly skipping things rather than as a boundary.
+
+The count comes from `selectSatelliteCount`, which asks **exactly the question
+the backend scopes by** — is this joined to the seed by an edge? — rather than
+reusing the frontend's own `_origin` layout hint. Two independent notions of
+"satellite" is how a note like this goes stale and starts contradicting the
+lecture it describes. It counts over the *grounding* nodes, so filtering a
+satellite off the canvas drops it from the count: the number tracks what a
+lecture would actually skip right now.

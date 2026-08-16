@@ -43,6 +43,7 @@ import {
   type SearchOptions,
 } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
+import { selectSatelliteCount } from '../store/workspace'
 import { loadLibrary, selectLibrary } from '../store/library'
 import { selectVisibleBeats, selectVisibleSourceRefs } from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
@@ -118,6 +119,9 @@ export default function Teacher({
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
   // to scope the teacher; 0 means it grounds in every visible paper.
   const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
+  // Papers on the graph that hang off another paper rather than the seed —
+  // the ones no lecture will narrate (see the lecture intro).
+  const satelliteCount = useAppSelector(selectSatelliteCount)
   const {
     hasGraph,
     loadingModes,
@@ -416,6 +420,22 @@ export default function Teacher({
               Play a lecture to summarize different node types. Each lecture is grounded in the
               papers currently shown on the graph — filter it, or alt-drag on the canvas to
               hand-pick a cluster, to narrow what it covers.
+              {/* Said here rather than left for the reader to notice: once you
+                  expand a paper, its own neighbours are on the graph but are
+                  not this seed's references or citers, so no lecture covers
+                  them. Without this line their absence looks like the lecture
+                  quietly skipping papers. */}
+              {satelliteCount > 0 && (
+                <>
+                  {' '}
+                  <strong>
+                    {satelliteCount} paper{satelliteCount > 1 ? 's' : ''} you expanded
+                  </strong>{' '}
+                  {satelliteCount > 1 ? 'sit' : 'sits'} outside this paper’s own neighbourhood — a
+                  lecture won’t cover {satelliteCount > 1 ? 'them' : 'it'}. Re-seed on one to hear
+                  its story.
+                </>
+              )}
             </p>
             <div className="lecture-grid" data-tour="lectures">
               {MODES.map((mode) => {
