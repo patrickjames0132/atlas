@@ -872,7 +872,44 @@ optional, behind a key.
       query — decide the source and its caching before building the UI. *(From
       the `todos.md` inbox, 2026-07-20.)*
 
+- [ ] **A graph should open onto the graph, not onto its panels** — loading a
+      graph currently lands with two boxes already covering the canvas: the
+      **detail panel** (`useSelection`'s per-graph effect selects the seed,
+      so the panel is open before you've looked at anything) and the
+      **graph controls** (`GraphControls`' `collapsed` starts `false`, so the
+      272px declutter panel is expanded). Between them the explorer is
+      crowded at exactly the moment the reader wants to see the map. Both
+      should start out of the way — the reader opens the detail panel by
+      clicking a paper and the controls by their header caret, which is what
+      those affordances are for. **The assistant panel is the deliberate
+      exception and stays visible on graph load:** the conversation is the
+      product, and docking it beside the map is the v7.x shape.
+      Three things to keep honest: the **chat-citation path**
+      (`revealSeedDetail`) must still open the seed's panel — a click that
+      said "show me that paper" is a request, not a default; the **guided
+      tour** already stages both surfaces open (`'details'` selects the seed,
+      `'controls'` expands the panel), so its stops must still land; and the
+      help surfaces that describe the opening state need re-reading.
+      *(From the `todos.md` inbox, 2026-08-16.)*
+
 ### Enhancements & tech debt
+
+- [ ] **Save a conversation with no graph** — Save is graph-gated end to end:
+      the rail only offers it when `hasGraph` (`Atlas.tsx`), `saveWorkspace`
+      throws `No graph to save yet.` without one, `POST /api/sessions` 400s on
+      an empty `nodes` list, and `restoreSession` rebuilds a `GraphResponse`
+      from `data.seed` on the way back. But since the landing chat became the
+      front door, a reader can hold a long, useful conversation before any
+      graph exists — and today closing the tab throws it away. **The design
+      question is what a graphless session *is*:** does it appear in the same
+      saved list as the graphs (and if so, what names and labels it, with no
+      seed title to borrow?), and what does reopening one restore you to — the
+      landing chat with its transcript, presumably, which the store can already
+      express (`graph: null` + a restored transcript). **The plumbing is
+      mostly loosening, not building:** make `seed`/`nodes` optional through
+      the save blob, the route's validation, and the restore path, and decide
+      whether a session that later grows a graph overwrites the same row.
+      *(From the `todos.md` inbox, 2026-08-16.)*
 
 - [ ] **Rename `integrations/` to `providers/`** — `src/atlas/integrations/`
       holds one subpackage per external data source (`semantic_scholar/`,
