@@ -22,6 +22,54 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A cache-key version bump left the local search silently blind
+
+*Found 2026-08-15 by Patrick, testing direct search's instant results. Fixed in v7.6.0.*
+
+- **Symptom.** Direct search's cache-first list never appeared. The stream was
+  provably fine — a timing probe against the real server showed the frames
+  arriving 1s apart exactly as designed — and the cache provably had content:
+  four graph snapshots sat in `data/digest.db`. But `local_search("qmix")`
+  returned **0 hits**, as did every other query. No error, no warning, no
+  empty-cache message. Just a cache-first search that had quietly stopped
+  being cache-first.
+- **Root cause — two places knowing one key format, and only one of them
+  updated.** v7.5.0 removed `Counts.similar` from the `Graph` model. Because
+  the model is `extra="forbid"`, every *stored* snapshot carrying the dead
+  field would now fail `model_validate` — a validation **error**, not a cache
+  miss. The fix was to version the key: `graph:{provider}:{seed}` became
+  `graph:v2:{provider}:{seed}`, so stale entries become unreadable instead of
+  poisonous and age out on the TTL. That worked exactly as intended for
+  `build_graph`, which writes and reads the key.
+
+  What nobody noticed is that a *second* reader existed. `local_search` doesn't
+  fetch a snapshot by key — it **scans a prefix**, `cache.scan(f"graph:{provider}:")`,
+  to sweep every cached graph for papers matching a query. A prefix scan
+  can't fail loudly: it matched nothing, returned `[]`, and every caller
+  treated that as "the cache has nothing for you", which is a perfectly
+  ordinary answer. The feature degraded to its own no-op for two releases.
+- **Fix.** One writer of the key format, one reader: `snapshot_prefix(provider)`
+  in `services/graph/build.py`, next to the `SNAPSHOT_VERSION` constant and its
+  note about when to bump it. `build_graph` composes its key from it;
+  `local_search` scans with it. Neither can drift again without the other
+  moving.
+- **Lesson / guard.** **A prefix scan is a silent reader.** A keyed `get` that
+  misses is indistinguishable from a key that never existed, which is fine — a
+  miss is a legal outcome. But a *scan* returning nothing is also a legal
+  outcome, and that is the trap: when the shape of the key changes, the scan
+  doesn't break, it just stops finding things, and "no cached results" is
+  exactly what a healthy empty cache looks like. Anything that both writes and
+  prefix-scans a key needs the format in **one** place.
+
+  The guard is `test_local_search_reads_the_same_key_prefix_build_graph_writes`,
+  which seeds the cache through `snapshot_prefix` and asserts the scan finds
+  it — so the two agree by test rather than by everyone remembering. Worth
+  noting what would *not* have caught this: the existing `local_search` tests
+  all passed throughout, because they seeded the cache with their own
+  hardcoded `graph:s2:...` keys. They tested the function against a fixture
+  that had drifted with it. A test that builds its input the way production
+  builds it is worth several that don't.
+
 ### The grounding guard deadlocked the agent into losing the whole answer
 
 *Found 2026-08-15 by Patrick, testing the web→papers join. Fixed in v7.1.0.*

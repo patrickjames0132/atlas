@@ -11,7 +11,7 @@ every agent. The agents themselves sit in two tiers, flat and deliberately no
 deeper: ``orchestrators/`` own an outcome and delegate; ``workers/`` each own
 one source and answer a bounded question about it. Agents aren't imported
 here — building one constructs its model, so consumers import exactly the one
-they need (``from ..agents.orchestrators import query_analyst``). See
+they need (``from ..agents.orchestrators import researcher``). See
 README.md for the full architecture and the workflow definitions.
 
 Authors:

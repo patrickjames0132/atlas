@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
+  dropCache,
   getAgentModels,
   getSettings,
   pickSettingsFile,
@@ -158,6 +159,67 @@ function ExtrasNumber({
         })
       }
     />
+  )
+}
+
+/**
+ * The "Drop cache" control: a two-step button that empties the derived-data
+ * cache (graph snapshots, search results, paper hydration).
+ *
+ * Two-step rather than a `window.confirm`, for two reasons: a native dialog
+ * blocks the whole page (and every automated session driving it), and the
+ * warning worth showing here is specific — what goes, what emphatically does
+ * NOT go — which a one-line confirm can't say. Saved sessions live in their
+ * own store and are untouched; that is the sentence a reader needs before
+ * pressing this.
+ *
+ * @returns The button, its inline confirmation, and the result line.
+ */
+function DropCacheButton() {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  /** Empty the cache, then report what happened in place. */
+  const drop = async () => {
+    setBusy(true)
+    try {
+      const removed = await dropCache()
+      setResult(removed ? `Dropped ${removed.toLocaleString()} cached entries.` : 'Already empty.')
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+      setConfirming(false)
+    }
+  }
+
+  if (confirming) {
+    return (
+      <div className="drop-cache confirming">
+        <p className="drop-cache-warn">
+          This clears every cached graph, search and paper detail. Nothing is lost — it all
+          refetches on demand — but the next few graphs will be slow, and a rate-limited provider
+          slower still. <strong>Your saved sessions and library are not touched.</strong>
+        </p>
+        <div className="drop-cache-actions">
+          <button type="button" onClick={() => setConfirming(false)} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="danger" onClick={drop} disabled={busy}>
+            {busy ? 'Dropping…' : 'Drop it'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="drop-cache">
+      <button type="button" onClick={() => setConfirming(true)}>
+        Drop cache…
+      </button>
+      {result && <span className="drop-cache-result">{result}</span>}
+    </div>
   )
 }
 
@@ -310,6 +372,13 @@ function BandNumber({
 
 /** Every editable row, in display order — the registry search + render share. */
 const ROW_DEFS: RowDef[] = [
+  {
+    key: 'drop-cache',
+    section: 'general',
+    label: 'Cached data',
+    hint: 'Graph snapshots, search results and paper details are cached for a day so repeat work is instant. Drop them when something is stale — a snapshot built under an older shape, or a search cached before a prompt changed — rather than waiting out the TTL.',
+    control: () => <DropCacheButton />,
+  },
   {
     key: 'default-provider',
     section: 'general',
@@ -527,16 +596,6 @@ const ROW_DEFS: RowDef[] = [
           })
         }
       />
-    ),
-  },
-  {
-    key: 'query-analyst-model',
-    section: 'agents',
-    group: 'Query analyst',
-    label: 'Model',
-    hint: 'Expands a seed search into better query terms. A small, fast model is the right fit.',
-    control: (draft, edit, models) => (
-      <ModelInput draft={draft} edit={edit} agentId="query_analyst" models={models} />
     ),
   },
   {

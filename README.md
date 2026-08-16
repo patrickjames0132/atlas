@@ -109,13 +109,19 @@ The Vite dev server proxies `/api/*` to Flask.
 
 ## Using it
 
-1. **Search a paper** — type a title, a topic, or an acronym (the analyst
-   expands it and title-resolves famous papers), or paste an **arXiv id /
-   URL** to jump straight in. Cached papers appear instantly; an **instant**
-   badge marks papers whose whole neighborhood is cached. The **Options**
-   popover holds a publication-year window (1800 → now), S2 **fields of
-   study**, and a checkbox that turns the analyst off for a raw, no-LLM
-   search of your words as typed.
+1. **Find a paper** — everything starts in the **chat bar**; there is no
+   separate search box. Ask a research question and the assistant goes
+   looking, or flip **🔍 Find papers** to skip the question and get a plain
+   list to pick from. Either way you can paste an **arXiv id / URL** to jump
+   straight to that paper — a pasted id is exact, so it goes straight to the
+   graph with no model involved. Direct search streams: papers already in
+   your cache appear immediately (⚡ **opens instantly** marks the ones whose
+   whole neighborhood is cached, so a click costs no API call), then the
+   scout's finds arrive lookup by lookup with a trace chip each. The
+   **Filters** popover holds a publication-year window (1800 → now) and
+   **fields of study** — hard limits, not hints, and they bind the
+   assistant's own paper searches too. Citation links on the graph are never
+   filtered.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🌱 latest.
    (💗 found-by-search too, on a session saved before v7.3.0 — free-text hits
    used to be drawn as edgeless pink dots; now the assistant numbers what it

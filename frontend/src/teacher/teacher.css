@@ -979,6 +979,10 @@
    docked panel deliberately — the chat should not change character just
    because a graph appeared beside it. */
 .teacher-ask {
+  /* The filter popover anchors to the WHOLE bar (left: 0 / right: 0 against
+     this), not to the little toggle that opens it — a popover the width of a
+     button has no room for a year slider. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;

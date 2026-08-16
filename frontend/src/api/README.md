@@ -9,7 +9,7 @@ shapes, and SSE frames; components above it deal in types.
 api/
   sse.ts       — the shared text/event-stream reader (internal plumbing)
   agents.ts    — streaming lecture / Q&A / library chat  (routes/agents.py)
-  search.ts    — live + local seed search, field vocabulary (routes/search.py)
+  search.ts    — direct search (SSE), field vocabulary (routes/search.py)
   graph.ts     — graph, paper detail, figures, code links, category tags (routes/graph.py)
   sessions.ts  — saved workspaces                          (routes/sessions.py)
   settings.ts  — the settings modal's config read/write     (routes/settings.py)
@@ -22,12 +22,14 @@ api/
 - **Two failure philosophies, mirroring the backend routes.** Load-bearing
   calls (`fetchGraph`, `searchLive`, `getSession`, ingestion) throw with the
   server's message for the UI to surface. Niceties and fallbacks
-  (`fetchFigures`, `fetchCodeLinks`, `fetchCategories`, `searchLocal`,
+  (`fetchFigures`, `fetchCodeLinks`, `fetchCategories`,
   `listSessions`, `getFields`) **never throw** — they degrade to
-  empty/unavailable shapes so a flaky upstream can't break a panel or block
-  the live search.
+  empty/unavailable shapes so a flaky upstream can't break a panel.
+  `searchLive` throws only on a genuine break: a rate-limited provider is a
+  normal result whose summary says so, because the scout behind it degrades
+  internally rather than failing the request.
 - **One paper type everywhere.** `GraphNode` mirrors the backend's
-  `services.graph.Node` and is also the shape of a live-search hit and a
+  `services.graph.Node` and is also the shape of a direct-search hit and a
   discovered paper — graph neighbors, search results, and agent discoveries
   merge into one canvas because they are literally the same type. (The old
   app had a separate `ArxivHit` with different fields; it died with arXiv
@@ -58,13 +60,14 @@ api/
   the pre-rewrite app still type-check on restore. Lecture streams carry
   beats only — lectures never expand the graph, so no trace/discovery
   frames appear (old saves' `hist_trace` field is tolerated and ignored).
-- **`searchLive` rides the analyst invisibly — unless told not to.**
-  Free-text queries are expanded (and famous papers title-resolved)
-  server-side; a pasted arXiv id/URL resolves to exactly that paper with
-  options skipped. The client just sees better-ordered `papers`. The one
-  visible control is `SearchOptions.analyst` (the Options popover's
-  checkbox): false sends `analyst=0` and the backend searches the words as
-  typed, no LLM call.
+- **`searchLive` streams, and its filters are promises.** It reads an SSE
+  body rather than a JSON one: a `cached` frame (papers already on disk,
+  instantly), `trace` frames as the scout issues each lookup, `papers` frames
+  as each one lands, then the authoritative `result`. The `SearchOptions` it
+  sends are enforced in the scout's deps server-side, so they cannot be
+  widened by anything the model writes — which is why the same object is also
+  sent on `/api/ask` (one filter set for the whole chat bar, not one per
+  mode).
 - **The detail-panel category tags are server-labelled.** `fetchCategories`
   hits a dedicated per-paper endpoint (`/api/paper/<ref>/categories`) that
   returns each arXiv tag already labelled, so the client does no code→name
@@ -77,8 +80,9 @@ api/
 
 - **`Atlas.tsx`** — `fetchGraphStream` (seed/re-seed, via the `loadGraph`
   thunk), session save/restore via `sessions.ts`.
-- **`search/`** — `searchLive` + `searchLocal` fan out in parallel per
-  keystroke; `getFields` fills the filter picker once.
+- **`search/`** — `useDirectSearch` calls `searchLive` on submit (an SSE
+  stream: `trace` frames as the scout works, then one `result`); `getFields`
+  fills the filter picker once, lazily.
 - **`teacher/Teacher.tsx`** — the three `agents.ts` streams; `Discovery`
   payloads flow up to the graph via `useDiscovery`.
 - **`detail/DetailPanel.tsx`** — `fetchPaperDetail`, `fetchFigures`,

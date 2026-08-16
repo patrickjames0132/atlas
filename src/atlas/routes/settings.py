@@ -23,6 +23,10 @@ source of truth (hand-edits and modal edits are the same thing). Endpoints:
   ``.config-location`` sidecar). The target must exist and validate before
   the sidecar is written; an empty path clears the sidecar, returning to
   the default ``config.json``.
+* ``POST /api/settings/drop_cache`` — empty the derived-data cache (graph
+  snapshots, search results, paper hydration). Safe by construction: every
+  entry can be refetched, and saved sessions live in a different store
+  entirely.
 * ``GET  /api/settings/models`` — the Anthropic model ids the configured
   API key can see (the Models API, ``client.models.list()``), so the modal's
   agent-model fields offer a real dropdown instead of a free-typed string.
@@ -50,12 +54,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
 from .. import config as config_module
 from ..config import EXAMPLE_CONFIG_PATH, Config
+from ..storage import cache
 
 bp = Blueprint("settings", __name__)
 
@@ -284,3 +289,27 @@ def pick_settings_file() -> ResponseReturnValue:
         cancelled or no native chooser is available.
     """
     return {"path": _native_pick()}
+
+
+@bp.post("/api/settings/drop_cache")
+def drop_cache() -> ResponseReturnValue:
+    """Empty the derived-data cache — graph snapshots, searches, hydration.
+
+    Deliberately a settings action rather than a graph one, and deliberately
+    separate from anything that deletes a *session*: everything in this table
+    can be refetched, so the worst outcome is a slower next few minutes. A
+    saved session is the only copy of something the reader made, and lives in
+    its own store.
+
+    The one thing it is genuinely for: a cache entry is keyed by what produced
+    it, so a snapshot built under an older shape or a search cached before a
+    prompt changed will sit there for its full day-long TTL. Dropping the
+    cache is how you stop waiting for that.
+
+    Returns:
+        ``{"removed": <count>}`` — how many entries went, so the modal can
+        report it rather than claiming success blankly.
+    """
+    removed = cache.clear()
+    current_app.logger.info("cache dropped by request (%d entries)", removed)
+    return {"removed": removed}

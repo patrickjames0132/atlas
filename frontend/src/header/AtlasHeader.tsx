@@ -2,43 +2,36 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The top bar container: brand, the seed-search form (composed from
- * search/Search), the current seed's title, and the drawer toggles
- * (Library / Assistant / Sessions).
+ * The top bar container: brand, the current seed's title, the data-source
+ * dropdown, and the drawer toggles (Library / Assistant / Sessions).
  *
- * Purely presentational — search state and drawer visibility live in Atlas
- * and pass through as props.
+ * The seed-search form used to live here too. It moved into the chat bar in
+ * v7.6.0 — one text input for the whole app, with a toggle choosing whether
+ * what you type is looked up or asked. Searching and asking were always two
+ * ways of saying "find me papers about this", and having them in two boxes
+ * meant picking the box before you knew which one you wanted.
+ *
+ * Purely presentational — drawer visibility lives in Atlas and passes
+ * through as props.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import type { FormEvent } from 'react'
-import type { Provider, SearchOptions } from '../api'
+import type { Provider } from '../api'
 import type { Theme } from '../ui/theme'
 import { PROVIDER_LABEL } from '../api'
-import Search from '../search/Search'
 import './header.css'
 
 /** Props for {@link AtlasHeader}. */
 export interface AtlasHeaderProps {
-  /** The controlled search box value (passed through to Search). */
-  query: string
-  onQueryChange: (query: string) => void
   /** The academic-data backend graphs are built from (the dropdown value). */
   provider: Provider
   /** Switch the backend — re-seeds the current graph under the new provider. */
   onProviderChange: (provider: Provider) => void
-  /** Submit the search form (routes to graph-load or keyword search). */
-  onSubmit: (event: FormEvent) => void
-  /** A search is in flight. */
-  searching: boolean
-  /** A graph is loading. */
+  /** A graph is loading (greys out the provider dropdown mid-build). */
   loadingGraph: boolean
-  /** The optional search options (passed through to Search). */
-  options: SearchOptions
-  onOptions: (next: SearchOptions) => void
-  /** The loaded graph's seed title, shown beside the form (null = none). */
+  /** The loaded graph's seed title, shown beside the brand (null = none). */
   seedTitle: string | null
   /** Clear the workspace — back to the page-load default state. */
   onHome: () => void
@@ -64,16 +57,10 @@ export interface AtlasHeaderProps {
 /**
  * Render the app's top bar.
  *
- * @returns The header (brand, search, seed title, drawer toggles).
+ * @returns The header (brand, seed title, provider, drawer toggles).
  */
 export default function AtlasHeader({
-  query,
-  onQueryChange,
-  onSubmit,
-  searching,
   loadingGraph,
-  options,
-  onOptions,
   provider,
   onProviderChange,
   seedTitle,
@@ -98,16 +85,6 @@ export default function AtlasHeader({
       >
         <span>Atlas</span>
       </button>
-      <Search
-        query={query}
-        onQueryChange={onQueryChange}
-        onSubmit={onSubmit}
-        searching={searching}
-        loadingGraph={loadingGraph}
-        options={options}
-        onOptions={onOptions}
-        provider={provider}
-      />
       {seedTitle && (
         <div className="seed-info" title={seedTitle}>
           {seedTitle}

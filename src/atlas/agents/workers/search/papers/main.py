@@ -32,6 +32,7 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel, ConfigDict
@@ -40,6 +41,7 @@ from pydantic_ai import Agent, RunContext, Tool
 from .....integrations import openalex
 from .....integrations import semantic_scholar as s2
 from .....services.graph import Provider
+from .....services.search import cached_nodes
 from .... import factory, prompts, traversal
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 
@@ -65,6 +67,19 @@ class ScoutDeps:
     known_ids: set[str]
     searches_left: int
     limit: int
+    #: The caller's filters, applied to EVERY search this run makes. They live
+    #: here rather than in the prompt on purpose: a filter the model is merely
+    #: *told about* is a filter it can forget, while one read out of the deps
+    #: inside the tool is one no amount of non-determinism can route around.
+    #: The model never sees these values and has no argument that overrides
+    #: them — the same way ``provider`` and ``known_ids`` already bind it.
+    #: All None/empty (the default) means a genuinely unrestricted search:
+    #: the scout runs exactly as it did before filters existed.
+    year_from: int | None = None
+    year_to: int | None = None
+    #: Field-of-study values in the ACTIVE provider's vocabulary (S2 names /
+    #: OpenAlex numeric ids — see ``traversal.search``). Empty for no filter.
+    fields: list[str] = field(default_factory=list)
     #: Raw provider node dicts, in discovery order. Deliberately not typed
     #: nodes and deliberately un-numbered: turning these into numbered graph
     #: nodes is the researcher's job.
@@ -74,6 +89,18 @@ class ScoutDeps:
     #: it records what it did instead ("similar to: <title>"), named for the
     #: provider's own notion of the relation — see ``_HOP_LABEL``.
     queries: list[str] = field(default_factory=list)
+    #: Called TWICE per lookup for a caller streaming progress: once with
+    #: ``(label, None)`` the moment it is issued, and again with
+    #: ``(label, new_nodes)`` when it lands.
+    #:
+    #: Announcing at issue is half the point — a chip that appears on
+    #: completion reports what already happened, while one that appears on
+    #: issue says what is happening now, and a scout run is several seconds of
+    #: otherwise-blank screen. Handing back the **papers** rather than just a
+    #: count is the other half: a scout finds them a batch at a time, so a
+    #: caller can grow its list lookup by lookup instead of sitting empty
+    #: until the whole run ends. (The count comes free — it's the length.)
+    on_lookup: Callable[[str, list[dict] | None], None] | None = None
 
 
 class PaperFindings(BaseModel):
@@ -101,6 +128,104 @@ class PaperFindings(BaseModel):
 #: behind it is. The tool the model calls stays one ``more_like`` — the model
 #: chooses the move, the provider decides what the move means.
 _HOP_LABEL: dict[Provider, str] = {"s2": "similar to", "openalex": "related to"}
+
+
+def _announce(deps: ScoutDeps, label: str) -> None:
+    """Record a lookup and tell any listener it just started.
+
+    Args:
+        deps: The run's state — ``queries`` grows here.
+        label: The lookup in reader-facing words ("deep q-network",
+            "title: Playing Atari", "similar to: <title>").
+    """
+    deps.queries.append(label)
+    if deps.on_lookup:
+        deps.on_lookup(label, None)
+
+
+def _report(deps: ScoutDeps, label: str, since: int) -> None:
+    """Tell any listener how a lookup turned out, and hand it the papers.
+
+    Pairs with :func:`_announce` — the caller replaces the pending chip with
+    this one rather than showing both, and appends the papers to whatever it
+    is already showing.
+
+    Args:
+        deps: The run's state.
+        label: The same label the lookup was announced under.
+        since: How long ``deps.found`` was *before* this lookup ran; the
+            papers it added are everything after that point. Passing the mark
+            rather than the list keeps the one truth in ``found`` — the
+            caller can't be handed papers the scout didn't actually keep.
+    """
+    if deps.on_lookup:
+        deps.on_lookup(label, deps.found[since:])
+
+
+def _floor(bound: int | None, other: int | None) -> int | None:
+    """Combine two "earliest year" bounds into the narrower one.
+
+    Args:
+        bound: The caller's floor, or None for none.
+        other: The scout's own floor for this call, or None for none.
+
+    Returns:
+        The later of the two (whichever is set) — so the scout can tighten a
+        window but never widen out of the caller's.
+    """
+    return max((year for year in (bound, other) if year is not None), default=None)
+
+
+def _ceiling(bound: int | None, other: int | None) -> int | None:
+    """Combine two "latest year" bounds into the narrower one — :func:`_floor`'s twin.
+
+    Args:
+        bound: The caller's ceiling, or None for none.
+        other: The scout's own ceiling for this call, or None for none.
+
+    Returns:
+        The earlier of the two (whichever is set).
+    """
+    return min((year for year in (bound, other) if year is not None), default=None)
+
+
+def _cached_hits(deps: ScoutDeps, query: str, year_from: int | None, year_to: int | None) -> list[dict]:
+    """Papers matching ``query`` in graph snapshots already on disk.
+
+    Free (no provider call, no network) and, when the provider is rate-limiting
+    us, the only thing that answers at all — which is why it runs *inside*
+    ``search`` rather than as a tool of its own. A tool is the model's to skip;
+    this isn't.
+
+    **Skipped entirely when a field filter is active.** The snapshot cache
+    stores no fields of study, so it cannot honor one, and returning hits that
+    quietly ignore a filter the reader set would break the promise the filter
+    makes. Losing the cache is the cheaper half of that trade.
+
+    Args:
+        deps: The run's state — its provider and field filter are read.
+        query: The search text, matched against cached titles + authors.
+        year_from: Earliest publication year already narrowed for this call.
+        year_to: Latest publication year already narrowed for this call.
+
+    Returns:
+        Cached papers in the traversal ``[{"node": ...}]`` shape. Empty when a
+        field filter is active, when nothing matches, or when the cache read
+        fails — a cache miss must never be able to fail a search.
+    """
+    if deps.fields:
+        return []
+    try:
+        nodes = cached_nodes(query, deps.limit, year_from, year_to, deps.provider)
+    except Exception as exc:  # a cache read must not be able to break a search
+        log.warning("paper scout cache lookup failed for %r: %s", query, exc)
+        return []
+    # `has_graph` is the route's business (it badges a paper that opens with
+    # no provider call); a scouted paper is just a paper.
+    return [
+        {"node": {key: value for key, value in node.items() if key != "has_graph"}}
+        for node in nodes
+    ]
 
 
 def _keep(deps: ScoutDeps, hits: list[dict]) -> list[str]:
@@ -162,18 +287,107 @@ def search(
     if deps.searches_left <= 0:
         return "Search budget spent — summarize what you have and stop."
     deps.searches_left -= 1
-    deps.queries.append(query)
+    _announce(deps, query)
 
+    # The caller's window wins where the two disagree: the model may tighten
+    # inside it (its prompt tells it to, for recency) but cannot widen out of
+    # it. With no caller filter set, its own bounds pass through untouched —
+    # an unfiltered run searches exactly as freely as it always did.
+    year_from = _floor(deps.year_from, year_from)
+    year_to = _ceiling(deps.year_to, year_to)
+
+    kept_before = len(deps.found)
+    cached = _cached_hits(deps, query, year_from, year_to)
     try:
-        hits = traversal.search(query, deps.limit, year_from, year_to, deps.provider)
+        hits = traversal.search(query, deps.limit, year_from, year_to, deps.provider, deps.fields)
     except _SEARCH_ERRORS as exc:
+        # Cache-only mode: the provider is down or rate-limiting, but papers we
+        # have seen before still answer. Degrading to them beats reporting a
+        # dead end the reader can see isn't one.
         log.warning("paper scout search failed for %r: %s", query, exc)
-        return f'Couldn\'t search "{query}": {exc}'
+        if not cached:
+            _report(deps, query, kept_before)
+            return f'Couldn\'t search "{query}": {exc}'
+        lines = _keep(deps, cached)
+        _report(deps, query, kept_before)
+        if not lines:
+            return f'Couldn\'t search "{query}" ({exc}) and found nothing new already cached.'
+        return (
+            f'"{query}" — the paper database is unavailable ({exc}); '
+            f"{len(lines)} paper(s) from previously loaded graphs:\n" + "\n".join(lines)
+        )
 
-    lines = _keep(deps, hits)
+    # Live hits lead; anything the cache knew that the search missed follows.
+    lines = _keep(deps, hits + cached)
+    _report(deps, query, kept_before)
     if not lines:
         return f'"{query}" returned nothing new.'
     return f'"{query}" — {len(lines)} paper(s):\n' + "\n".join(lines)
+
+
+def match_title(ctx: RunContext[ScoutDeps], title: str) -> str:
+    """Look up ONE paper by its exact title. Use it when you can name the paper
+    you're after — an acronym or nickname you recognize ("DQN", "the ResNet
+    paper") almost always has a specific paper behind it whose title never
+    contains that word, which is precisely the paper a word search cannot find.
+    Give the real title as you remember it. Costs the same as a search, so
+    spend it on papers you're confident exist, not on guesses.
+
+    Args:
+        ctx: The run context carrying the scout's deps (framework-injected).
+        title: The paper's title, as exactly as you can recall it.
+
+    Returns:
+        The matched paper as a numbered title + year line, or a note saying
+        nothing matched (which means the title was wrong — move on and search).
+    """
+    deps = ctx.deps
+    title = title.strip()
+    if not title:
+        return "Invalid title lookup (empty title)."
+    # A title match resolves one named paper and can't express a field-of-study
+    # restriction, so while one is set this move is off rather than a way
+    # around it — the same rule the cache lookup follows, for the same reason.
+    if deps.fields:
+        return "Title lookup is unavailable while a field filter is set — use search instead."
+    if deps.searches_left <= 0:
+        return "Search budget spent — summarize what you have and stop."
+    deps.searches_left -= 1
+    kept_before = len(deps.found)
+    _announce(deps, f"title: {title}")
+
+    try:
+        if deps.provider == "openalex":
+            work = openalex.resolve_work(arxiv_id=None, title=title)
+            node = openalex.node(work) if work else None
+        else:
+            node = s2.match_title(title)
+    except _SEARCH_ERRORS as exc:
+        log.warning("paper scout title match failed for %r: %s", title, exc)
+        _report(deps, f"title: {title}", kept_before)
+        return f'Couldn\'t look up "{title}": {exc}'
+
+    if not node:
+        _report(deps, f"title: {title}", kept_before)
+        return f'No paper matches the title "{title}".'
+    # The caller's year window binds here too. Today's seed search let a
+    # recalled title outrank the filters on the reading that an exact
+    # resolution is "the paper the query means" — but once the window is a
+    # promise the reader made rather than a hint, a match outside it is a
+    # broken promise, not a smart override.
+    year = node.get("year")
+    outside = (deps.year_from is not None and (year is None or year < deps.year_from)) or (
+        deps.year_to is not None and (year is None or year > deps.year_to)
+    )
+    if outside:
+        _report(deps, f"title: {title}", kept_before)
+        return f'"{node["title"]}" ({year or "n.d."}) falls outside the requested years.'
+
+    lines = _keep(deps, [{"node": node}])
+    _report(deps, f"title: {title}", kept_before)
+    if not lines:
+        return f'"{node["title"]}" was already found above.'
+    return "Matched:\n" + "\n".join(lines)
 
 
 def more_like(ctx: RunContext[ScoutDeps], result: int) -> str:
@@ -206,15 +420,19 @@ def more_like(ctx: RunContext[ScoutDeps], result: int) -> str:
     # a chip reading `more like "…"` answers that honestly.
     # No inner quotes: the reader's trace chip wraps this in curly quotes of
     # its own, and `“similar to "X"”` reads like a typo.
-    deps.queries.append(f"{_HOP_LABEL[deps.provider]}: {origin['title']}")
+    hop_label = f"{_HOP_LABEL[deps.provider]}: {origin['title']}"
+    kept_before = len(deps.found)
+    _announce(deps, hop_label)
 
     try:
         hits = traversal.neighbors(origin["id"], "similar", deps.limit, deps.provider)
     except _SEARCH_ERRORS as exc:
         log.warning("paper scout similar-hop failed for %r: %s", origin["id"], exc)
+        _report(deps, hop_label, kept_before)
         return f'Couldn\'t find papers {label} "{origin["title"]}": {exc}'
 
     lines = _keep(deps, hits)
+    _report(deps, hop_label, kept_before)
     if not lines:
         return f'Nothing new {label} "{origin["title"]}".'
     return f'{label.capitalize()} "{origin["title"]}" — {len(lines)} paper(s):\n' + "\n".join(lines)
@@ -228,7 +446,11 @@ agent: Agent[ScoutDeps, PaperFindings] = Agent(
     deps_type=ScoutDeps,
     output_type=PaperFindings,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
-    tools=[Tool(search, sequential=True), Tool(more_like, sequential=True)],
+    tools=[
+        Tool(search, sequential=True),
+        Tool(match_title, sequential=True),
+        Tool(more_like, sequential=True),
+    ],
 )
 
 
@@ -245,7 +467,50 @@ class ScoutResult:
     queries: list[str]
 
 
-async def scout(need: str, provider: Provider, known_ids: set[str]) -> ScoutResult:
+def _filter_briefing(deps: ScoutDeps) -> str:
+    """State the active filters to the model, as fact rather than instruction.
+
+    This is emphatically **not** how the filters are enforced — that happens in
+    the tools, out of the model's reach. It exists so the scout's *summary*
+    isn't wrong: a run whose year floor silently cut the results would
+    otherwise report "nothing indexed after 2021" as a finding about the
+    literature, when it was a finding about the reader's own filter. Telling it
+    which instrument it's holding costs one sentence and buys an honest
+    negative result.
+
+    Args:
+        deps: The run's state — its filters are read.
+
+    Returns:
+        A line describing the active filters, or "" when none are set.
+    """
+    active = []
+    if deps.year_from is not None or deps.year_to is not None:
+        active.append(f"published {deps.year_from or 'any'}–{deps.year_to or 'any'}")
+    if deps.fields:
+        active.append(f"in these fields: {', '.join(deps.fields)}")
+    if not active:
+        return ""
+    return (
+        "\n\n(The reader has restricted this search to papers "
+        + " and ".join(active)
+        + ". Every lookup you make is already limited to that — you don't need to "
+        "ask for it, and you cannot search outside it. If results come back thin, "
+        "say the restriction is why rather than reporting the field is empty.)"
+    )
+
+
+async def scout(
+    need: str,
+    provider: Provider,
+    known_ids: set[str],
+    *,
+    year_from: int | None = None,
+    year_to: int | None = None,
+    fields: list[str] | None = None,
+    limit: int | None = None,
+    on_lookup: Callable[[str, list[dict] | None], None] | None = None,
+) -> ScoutResult:
     """Find papers answering a stated need, reformulating until they fit.
 
     Args:
@@ -255,6 +520,17 @@ async def scout(need: str, provider: Provider, known_ids: set[str]) -> ScoutResu
         provider: The academic backend to search (``s2`` / ``openalex``).
         known_ids: Paper ids the caller already has; anything matching is
             dropped rather than reported as a find.
+        year_from: Earliest publication year every lookup is restricted to, or
+            None for no floor. Binding — see ``ScoutDeps``.
+        year_to: Latest publication year every lookup is restricted to, or None.
+        fields: Field-of-study values in ``provider``'s own vocabulary that
+            every search is restricted to, or None for no restriction.
+        limit: Hits per lookup. Defaults to the configured ``search_limit``;
+            a caller showing the papers to a reader directly wants more than
+            one feeding them to another agent does.
+        on_lookup: Called ``(label, None)`` as each lookup is issued and
+            ``(label, new_papers)`` when it lands, for a caller streaming
+            progress. None (the default) simply records them.
 
     Returns:
         A ``ScoutResult``. On any failure it comes back empty with the reason
@@ -267,10 +543,14 @@ async def scout(need: str, provider: Provider, known_ids: set[str]) -> ScoutResu
         # caller's set must not gain ids for papers it has not yet accepted.
         known_ids=set(known_ids),
         searches_left=int(BUDGETS["searches"]),
-        limit=int(BUDGETS["search_limit"]),
+        limit=limit if limit is not None else int(BUDGETS["search_limit"]),
+        year_from=year_from,
+        year_to=year_to,
+        fields=list(fields or []),
+        on_lookup=on_lookup,
     )
     try:
-        result = await agent.run(need, deps=deps)
+        result = await agent.run(need + _filter_briefing(deps), deps=deps)
     except Exception as exc:
         log.warning("paper scout failed for %r: %s", need, exc, exc_info=True)
         return ScoutResult(found=deps.found, summary=f"Paper search failed: {exc}", queries=deps.queries)

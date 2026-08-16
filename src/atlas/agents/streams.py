@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from concurrent.futures import Future
 from typing import Any, AsyncIterator, Coroutine, Iterator, TypeVar
 
 from pydantic_ai import Agent
@@ -99,6 +100,22 @@ class _AsyncRunner:
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
 
+    def submit(self, coro: Coroutine[Any, Any, _Result]) -> Future[_Result]:
+        """Schedule a coroutine on the shared loop WITHOUT waiting for it.
+
+        The half of ``run`` a streaming caller needs: it wants the agent
+        working while it drains progress from the side and yields frames, so
+        it cannot block on the result first.
+
+        Args:
+            coro: The coroutine to schedule.
+
+        Returns:
+            A ``concurrent.futures.Future`` for the result — poll it, or call
+            ``result()`` once the progress side has run dry.
+        """
+        return asyncio.run_coroutine_threadsafe(coro, self._loop)
+
     def run(self, coro: Coroutine[Any, Any, _Result]) -> _Result:
         """Run a coroutine to completion on the shared loop.
 
@@ -115,6 +132,42 @@ class _AsyncRunner:
 
 # Created once at import — the process-wide loop every ``drive`` call shares.
 _runner = _AsyncRunner()
+
+
+def submit(coro: Coroutine[Any, Any, _Result]) -> Future[_Result]:
+    """Schedule one coroutine on the shared agent loop without waiting.
+
+    For a route that streams its own progress while an agent runs (direct
+    search): it drains a queue the agent's tools push into and yields SSE
+    frames, then takes the result off this future at the end.
+
+    Args:
+        coro: The coroutine to run.
+
+    Returns:
+        A ``concurrent.futures.Future`` for its result.
+    """
+    return _runner.submit(coro)
+
+
+def run(coro: Coroutine[Any, Any, _Result]) -> _Result:
+    """Run one coroutine to completion on the shared agent loop.
+
+    The plain-request counterpart to :func:`drive`: an agent that returns a
+    value rather than a stream (the direct-search scout) still has to run on
+    *this* loop, not a fresh ``asyncio.run`` — the Anthropic ``AsyncClient``'s
+    connection pool is bound to it for the process's life, and a second loop
+    gets a pool it cannot reuse.
+
+    Args:
+        coro: The coroutine to run.
+
+    Returns:
+        Its result. The calling request thread blocks until it completes, and
+        any exception it raises propagates here.
+    """
+    return _runner.run(coro)
+
 
 _STREAM_DONE = object()
 """Sentinel for an exhausted stream — cleaner than threading a raw

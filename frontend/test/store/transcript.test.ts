@@ -22,7 +22,10 @@ import reducer, {
   lectureHidden,
   lectureShown,
   lectureStarted,
+  paperRefsSet,
   selectVisibleBeats,
+  tokenAppended,
+  traceAdded,
   turnStarted,
 } from '../../src/store/transcript'
 import type { TranscriptState } from '../../src/store/transcript'
@@ -195,5 +198,30 @@ describe('workspace epoch across a graph load', () => {
     // a session restore remount now.
     const loaded = workspaceReducer(undefined, graphLoadedAction(fromChat))
     expect(loaded.epoch).toBe(0)
+  })
+})
+
+describe('direct search reuses the streamed-answer reducers', () => {
+  it('opens a turn, takes chips, then prose and refs — the same path an answer walks', () => {
+    // Direct search deliberately has no reducer of its own: it drives
+    // turnStarted → traceAdded → tokenAppended → paperRefsSet, which is what
+    // makes it snap to the bottom and fill live like the researcher does. A
+    // single land-it-complete action read as a frozen screen for the several
+    // seconds a scout run takes.
+    const state = play(
+      turnStarted('dqn'),
+      traceAdded({ action: 'search', ok: true, query: 'deep q-network' }),
+      traceAdded({ action: 'search', ok: true, query: 'title: Playing Atari' }),
+      tokenAppended('Found the landmark.\n\n[1] **Playing Atari**'),
+      paperRefsSet({
+        '1': { node_id: 's2atari', title: 'Playing Atari', url: 'u', provider: 's2' },
+      }),
+    )
+    expect(state.chat).toHaveLength(2)
+    expect(state.chat[0]).toEqual({ role: 'user', text: 'dqn' })
+    expect(state.chat[1].trace).toHaveLength(2)
+    // paperRefs is what makes each `[n]` clickable and reseed the graph —
+    // rendering comes free from AnswerMarkdown, and a saved session keeps it.
+    expect(state.chat[1].paperRefs?.['1'].node_id).toBe('s2atari')
   })
 })

@@ -24,10 +24,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
-import { getSettings, PROVIDER_LABEL } from './api'
+import { getSettings } from './api'
 import { getBuildShape, sameBuild, useBuildShape } from './graph/buildShape'
-import { ID_RE } from './graph/model'
 import { applyConfiguredDefault, setTheme, useTheme } from './ui/theme'
 import { useAppDispatch, useAppSelector } from './store'
 import {
@@ -39,10 +37,8 @@ import {
   switchProvider,
   workspaceCleared,
 } from './store/workspace'
-import { useSeedSearch } from './search/useSeedSearch'
 import AtlasHeader from './header/AtlasHeader'
 import GraphExplorer from './graph/GraphExplorer'
-import HitList from './search/HitList'
 import Teacher from './teacher/Teacher'
 import Sources from './library/Sources'
 import Sessions from './sessions/Sessions'
@@ -186,56 +182,11 @@ export default function Atlas() {
     if (stage === 'assistant') setAssistantOpen(true)
   }, [])
 
-  // Seed search: query + optional search options, cache-first local / live S2
-  // hits. Search errors share the workspace error overlay with graph-load errors.
-  const onSearchError = useCallback(
-    (message: string | null) => {
-      dispatch(errorSet(message))
-    },
-    [dispatch],
-  )
-  const {
-    query,
-    setQuery,
-    options,
-    setOptions,
-    hits,
-    localHits,
-    searching,
-    liveFailed,
-    runSearch,
-    clearHits,
-  } = useSeedSearch(onSearchError)
-
-  /** Load a graph and dismiss any open search results. */
-  const pickSeed = useCallback(
-    (seed: string) => {
-      clearHits()
-      dispatch(loadGraph({ seed }))
-    },
-    [clearHits, dispatch],
-  )
-
-  /** Route the search form: a pasted arXiv id/URL jumps straight to its
-   * graph; anything else runs the keyword search. */
-  const onSubmit = useCallback(
-    (event: FormEvent) => {
-      event.preventDefault()
-      const trimmed = query.trim()
-      if (!trimmed) return
-      if (ID_RE.test(trimmed)) pickSeed(trimmed)
-      else runSearch(trimmed)
-    },
-    [query, pickSeed, runSearch],
-  )
-
-  /** Home: back to the page-load default — no graph, no results, no panel. */
+  /** Home: back to the page-load default — no graph, no panel. */
   const goHome = useCallback(() => {
     dispatch(workspaceCleared())
-    clearHits()
-    setQuery('')
     setAssistantOpen(true)
-  }, [dispatch, clearHits, setQuery])
+  }, [dispatch])
 
   // The floating layer over whichever surface is up — search hits, the build
   // progress, the error. Built once here rather than inline so the graph and
@@ -243,20 +194,10 @@ export default function Atlas() {
   // hint is gone: the landing chat says what to do by being a chat.)
   const overlays = (
     <>
-      <HitList
-        hits={hits}
-        localHits={localHits}
-        searching={searching}
-        liveFailed={liveFailed}
-        providerLabel={PROVIDER_LABEL[provider]}
-        onPick={pickSeed}
-        onClose={clearHits}
-      />
-
       {/* Dim whatever is behind — a graph mid-re-seed, or the chat you were
           reading. The card alone was only ever legible against an empty canvas;
           over live content it has to push that content back to read at all. */}
-      {(loading || (error && !hits)) && <div className="canvas-scrim" />}
+      {(loading || error) && <div className="canvas-scrim" />}
       {loading && (
         <div className="overlay overlay-card">
           <div className="overlay-loading">
@@ -280,7 +221,7 @@ export default function Atlas() {
           )}
         </div>
       )}
-      {error && !hits && (
+      {error && (
         <div className="overlay error overlay-card">
           {error}
           {/* A build failure used to be a dead end: the card and its scrim sat
@@ -303,13 +244,7 @@ export default function Atlas() {
   return (
     <div className="atlas">
       <AtlasHeader
-        query={query}
-        onQueryChange={setQuery}
-        onSubmit={onSubmit}
-        searching={searching}
         loadingGraph={loading}
-        options={options}
-        onOptions={setOptions}
         provider={provider}
         onProviderChange={(next) => dispatch(switchProvider(next))}
         seedTitle={graph?.seed.title ?? null}

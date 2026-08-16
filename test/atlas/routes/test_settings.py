@@ -23,6 +23,7 @@ import pytest
 
 from atlas import config as config_module
 from atlas.config import PROJECT_ROOT, Config, config
+from atlas.storage import cache
 
 
 def example_payload(tmp_path: Path) -> dict:
@@ -226,3 +227,26 @@ def test_models_endpoint_degrades_on_failure(client, _config_file, monkeypatch):
     monkeypatch.setattr(config.llm.providers.anthropic, "api_key", "sk-test")
     monkeypatch.setattr(settings_routes, "_fetch_anthropic_models", boom)
     assert client.get("/api/settings/models").json == {"models": []}
+
+
+def test_drop_cache_empties_the_table_and_reports_the_count(client):
+    """Everything in this table is derived, so dropping it costs nothing but a
+    refetch — which is exactly what makes a one-click button safe to offer."""
+    cache.set("graph:v2:s2:seed", {"nodes": []})
+    cache.set("search:s2:dqn::10:", [])
+    assert client.post("/api/settings/drop_cache").json == {"removed": 2}
+    assert cache.get("graph:v2:s2:seed") is None
+    # Idempotent: dropping an empty cache is a no-op, not an error.
+    assert client.post("/api/settings/drop_cache").json == {"removed": 0}
+
+
+def test_drop_cache_leaves_saved_sessions_alone(client):
+    """The distinction the confirmation promises. A cache entry can be
+    refetched; a saved session is the only copy of something the reader made,
+    and it lives in a different store entirely."""
+    from atlas.storage import sessions
+
+    saved = sessions.save_session({"title": "A session", "data": {"nodes": []}})
+    cache.set("graph:v2:s2:seed", {"nodes": []})
+    client.post("/api/settings/drop_cache")
+    assert sessions.get_session(saved["id"]) is not None

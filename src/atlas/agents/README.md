@@ -7,14 +7,15 @@ hand-rolled Anthropic SDK loops.
 
 **Status: COMPLETE.** The shared infrastructure (`events.py`,
 `traversal.py`, `factory.py`, `prompts.py`, `skills/`), the
-model-driven agents (`query_analyst`, `summarizer`,
+model-driven agents (`summarizer`,
 `lecturer`, `researcher`),
 and the `orchestrator` dispatcher are built and tested; the old
 `teacher/` package is fully retired. What remains is wiring: routes call
 `orchestrator.run(intent, ...)` in Phase 5. (`summarizer` arrived later,
-v5.17.0: the detail panel's on-demand TL;DR — a micro-agent in the
-query_analyst mold, called from `routes/graph.py`, never the
-orchestrator.)
+v5.17.0: the detail panel's on-demand TL;DR — a one-shot micro-agent
+called from `routes/graph.py`, never the orchestrator. `query_analyst`
+was the other agent of that shape; it was retired in v7.6.0 when the
+paper scout absorbed its job.)
 
 ## `events.py` — the typed event stream
 
@@ -271,7 +272,6 @@ agents/
   orchestrators/     ← tier 1: agents that own an outcome (README.md)
     lecturer/          ← an agent: main.py, config.py, README.md
     researcher/        ← an agent: main.py, tools.py, config.py, README.md
-    query_analyst/     ← an agent: main.py, config.py, README.md
     summarizer/        ← an agent: main.py, config.py, README.md
   workers/           ← tier 2: one source each, one question each
     search/            ← workers that go and look something up (README.md)
@@ -455,32 +455,28 @@ grounded in what it actually read.
 > nothing behind, so the package went and the researcher took both chats.
 > See `docs/history.md`.
 
-### `query_analyst` — seed-search query expansion *(built)*
+### `query_analyst` — *(retired v7.6.0)*
 
-A one-shot micro-agent, new in this rewrite (the old repo left a seam for
-it). See its own README for the full story.
-
-- **Input:** the raw search query from the seed-search box.
-- **Output:** structured `Expansion.expanded_query` — acronyms and jargon
-  expanded ("DQN" → "DQN deep Q-network deep Q-learning") so S2's lexical
-  search can find seminal papers that never spell the acronym out.
-- **Tools:** none. **Skills:** none.
-- **Note:** invoked from `services/search`'s `_analyze` seam, *not*
-  through the orchestrator — it's infrastructure for search, not a teacher
-  workflow. It degrades to a passthrough on any failure: search can never
-  break because the LLM hiccuped.
+> A one-shot micro-agent that expanded a seed-search query ("DQN" → "DQN deep
+> Q-network deep Q-learning") and named papers it confidently recalled, which
+> `live_search` then verified by title match. Both halves outlived it in a
+> better form: the **paper scout** reformulates across several attempts rather
+> than expanding once (it can see what came back), and its `match_title` tool
+> resolves a recalled title directly. Keeping the analyst would have left two
+> implementations of "search papers" — the duplication the worker split exists
+> to prevent. See `docs/history.md`.
 
 ## Who uses it, and how/why
 
 Callers *into* the package (each sub-agent's own README traces its callers
 in detail):
 
-- **`services/search/discovery.py`** (ported, live now) — `live_search`
-  routes every query through its `_analyze` seam, a one-line delegation
-  to `query_analyst.analyze` (expansion + confidently recalled titles,
-  verified via S2 title match). The only agent consumed outside the
-  teacher workflows: it's infrastructure for search, wired directly, never
-  through the orchestrator.
+- **`routes/search.py`** — calls the **paper scout** directly (v7.6.0), with
+  no orchestrator and no researcher above it: direct search is the same
+  worker the researcher sends out, run alone. The only agent consumed outside
+  a teacher workflow, and it reaches `services/search` rather than the other
+  way round — the scout reads the snapshot cache from inside its own `search`
+  tool.
 - **The routes layer (Phase 5, traced from the old repo, not yet ported).**
   Old `routes/teacher.py` calls the teacher functions directly —
   `lecture_beats` behind `POST /api/teacher` (lecture), `answer_agentic`

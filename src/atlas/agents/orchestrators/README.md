@@ -8,8 +8,11 @@ orchestrators/
   researcher/     — agentic Q&A, with or without a graph
   lecturer/       — the streaming lecture over the visible graph
   summarizer/     — one-shot paper TL;DRs
-  query_analyst/  — one-shot seed-search query expansion
 ```
+
+(`query_analyst/` sat here until v7.6.0 — a one-shot seed-search query
+expander. The paper scout absorbed both halves of its job, so it went rather
+than leave two implementations of "search papers". See `docs/history.md`.)
 
 The other tier is `workers/` — one source each, one bounded question each.
 The membership rule and the return-shape contract live in
@@ -18,10 +21,9 @@ deciding where something new belongs.
 
 ## Why the tier exists
 
-Not every agent here delegates today — `summarizer` and `query_analyst` are
-one-shot micro-agents with no sub-agents at all. They live here anyway,
-because the line that matters is **who owns the result**, not who currently
-has employees. A summarizer's TL;DR is shown to the reader as the app's
+Not every agent here delegates today — `summarizer` is a one-shot micro-agent
+with no sub-agents at all. It lives here anyway, because the line that matters
+is **who owns the result**, not who currently has employees. A summarizer's TL;DR is shown to the reader as the app's
 answer; a worker's findings never are.
 
 The practical version of that ownership, and the reason it can't be split:

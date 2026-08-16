@@ -2,7 +2,10 @@
 
 Description:
 Seed-search routes: filter parsing/validation, the blank-query and clamp
-edges, error philosophies (502 vs never-error), and the taxonomy providers.
+edges, error philosophies (never-error), and the taxonomy providers.
+
+The scout is stubbed throughout — these test the route's parsing and shaping,
+not the agent behind it (that lives in the worker's own test module).
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -10,18 +13,70 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from atlas.integrations import semantic_scholar
+import json
+
+import pytest
+
+from atlas.agents.workers.search import papers
 from atlas.routes import search as search_routes
 
 
-def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
+def frames(response) -> list[tuple[str, dict]]:
+    """Decode an SSE body into (event name, payload) pairs.
+
+    Args:
+        response: The test client's streamed response.
+
+    Returns:
+        One pair per frame, in arrival order.
+    """
+    out = []
+    for block in response.data.decode().split("\n\n"):
+        if not block.strip():
+            continue
+        name = next(line[7:] for line in block.splitlines() if line.startswith("event: "))
+        payload = next(line[6:] for line in block.splitlines() if line.startswith("data: "))
+        out.append((name, json.loads(payload)))
+    return out
+
+
+def result_of(response) -> dict:
+    """The single ``result`` frame's payload.
+
+    Args:
+        response: The test client's streamed response.
+
+    Returns:
+        The result payload.
+    """
+    return next(payload for name, payload in frames(response) if name == "result")
+
+
+def stub_scout(monkeypatch, seen, found=(), summary="found some", queries=("q",)):
+    """Swap the paper scout for a recorder, so the route is tested, not the agent.
+
+    Args:
+        monkeypatch: The test's monkeypatch fixture.
+        seen: A dict the call's arguments are recorded into.
+        found: Node dicts the scout "found".
+        summary: The scout's own account of the search.
+        queries: The lookups it claims to have made.
+    """
+
+    async def fake_scout(need, provider, known_ids, **filters):
+        seen["need"], seen["provider"], seen["known_ids"] = need, provider, known_ids
+        # on_lookup is the streaming hook, asserted by its own test — drop it
+        # so the filter assertions stay about filters.
+        seen["filters"] = {key: value for key, value in filters.items() if key != "on_lookup"}
+        seen["on_lookup"] = filters.get("on_lookup")
+        return papers.ScoutResult(found=list(found), summary=summary, queries=list(queries))
+
+    monkeypatch.setattr(search_routes.papers, "scout", fake_scout)
+
+
+def test_direct_search_hands_the_query_and_parsed_filters_to_the_scout(client, monkeypatch):
     seen = {}
-
-    def fake_live_search(query, **kwargs):
-        seen["q"], seen["kwargs"] = query, kwargs
-        return [{"id": "s2id01", "title": "Playing Atari"}]
-
-    monkeypatch.setattr(search_routes.search_service, "live_search", fake_live_search)
+    stub_scout(monkeypatch, seen, found=[{"id": "s2id01", "title": "Playing Atari"}])
     # Under OpenAlex the field filter is validated against OpenAlex field IDS —
     # "17" (Computer Science) survives, "999" is dropped as unknown.
     response = client.get(
@@ -29,93 +84,126 @@ def test_search_passes_parsed_filters_to_the_service(client, monkeypatch):
         "&fields=17,999&provider=openalex"
     )
     assert response.status_code == 200
-    assert response.json == {
+    assert result_of(response) == {
         "q": "DQN",
         "count": 1,
         "papers": [{"id": "s2id01", "title": "Playing Atari"}],
+        "summary": "found some",
+        "queries": ["q"],
     }
-    assert seen["q"] == "DQN"
-    assert seen["kwargs"] == {
-        "limit": 5,
+    # The query leads; the picker brief rides behind it (a spread of
+    # candidates, not the single best answer — see _PICKER_BRIEF).
+    assert seen["need"].startswith("DQN")
+    assert "SPREAD of candidates" in seen["need"]
+    assert seen["provider"] == "openalex"
+    assert seen["filters"] == {
         "year_from": 2010,
         "year_to": None,  # garbage degrades to no-filter
-        "fields_of_study": ["17"],  # valid OpenAlex field id kept, unknown dropped
-        "provider": "openalex",  # threaded through to the service
-        "analyst": True,  # on unless explicitly switched off
+        "fields": ["17"],  # valid OpenAlex field id kept, unknown dropped
+        "limit": 5,
     }
 
 
-def test_search_analyst_arg_switches_the_analyst_off(client, monkeypatch):
-    """analyst=0/false/no turns the query analyst off; anything else (junk
-    included) keeps it on — the LLM is opt-out, never accidentally off."""
+def test_direct_search_dedupes_against_nothing(client, monkeypatch):
+    """The scout dedupes against its caller's world, which is right for the
+    researcher and wrong here: you're picking a paper to explore, and hiding one
+    because it already sits on the canvas is exactly backwards."""
     seen = {}
-    monkeypatch.setattr(
-        search_routes.search_service, "live_search",
-        lambda query, **kwargs: seen.update(kwargs) or [],
-    )
-    for value, expected in [("0", False), ("false", False), ("no", False),
-                            ("1", True), ("junk", True), ("", True)]:
-        client.get(f"/api/search?q=dqn&analyst={value}")
-        assert seen["analyst"] is expected, value
-    client.get("/api/search?q=dqn")  # absent entirely
-    assert seen["analyst"] is True
+    stub_scout(monkeypatch, seen)
+    client.get("/api/search?q=DQN")
+    assert seen["known_ids"] == set()
 
 
-def test_search_field_filter_validates_against_the_provider_vocab(client, monkeypatch):
+def test_field_filter_is_validated_against_the_selected_provider_vocab(client, monkeypatch):
     """An S2 field name is invalid under OpenAlex (different vocab), so it's
     dropped; the same name is valid under S2."""
     seen = {}
-    monkeypatch.setattr(
-        search_routes.search_service, "live_search",
-        lambda query, **kwargs: seen.update(kwargs) or [],
-    )
+    stub_scout(monkeypatch, seen)
     client.get("/api/search?q=x&fields=Computer Science&provider=s2")
-    assert seen["fields_of_study"] == ["Computer Science"]  # S2 name valid under S2
+    assert seen["filters"]["fields"] == ["Computer Science"]  # S2 name valid under S2
     client.get("/api/search?q=x&fields=Computer Science&provider=openalex")
-    assert seen["fields_of_study"] is None  # not a valid OpenAlex field id
+    assert seen["filters"]["fields"] is None  # not a valid OpenAlex field id
 
 
-def test_blank_query_returns_empty_without_touching_the_service(client, monkeypatch):
-    def explode(query, **kwargs):
-        raise AssertionError("the service must not be called for a blank query")
+def test_blank_query_returns_empty_without_running_the_scout(client, monkeypatch):
+    async def explode(*args, **kwargs):
+        raise AssertionError("the scout must not run for a blank query")
 
-    monkeypatch.setattr(search_routes.search_service, "live_search", explode)
+    monkeypatch.setattr(search_routes.papers, "scout", explode)
     response = client.get("/api/search?q=")
     assert response.status_code == 200
-    assert response.json == {"q": "", "count": 0, "papers": []}
+    assert result_of(response) == {"q": "", "count": 0, "papers": [], "summary": "", "queries": []}
 
 
 def test_limit_is_clamped_and_garbage_defaults(client, monkeypatch):
     seen = {}
+    limits = []
 
-    def fake_live_search(query, **kwargs):
-        seen.setdefault("limits", []).append(kwargs["limit"])
-        return []
+    async def fake_scout(need, provider, known_ids, **filters):
+        limits.append(filters["limit"])
+        return papers.ScoutResult(found=[], summary="", queries=[])
 
-    monkeypatch.setattr(search_routes.search_service, "live_search", fake_live_search)
+    monkeypatch.setattr(search_routes.papers, "scout", fake_scout)
     client.get("/api/search?q=x&limit=999")
     client.get("/api/search?q=x&limit=abc")
-    assert seen["limits"] == [100, 25]
+    assert limits == [50, 12]
+    assert seen == {}
 
 
-def test_s2_down_returns_a_canned_502(client, monkeypatch):
-    def s2_down(query, **kwargs):
-        raise semantic_scholar.S2Error("rate limited")
-
-    monkeypatch.setattr(search_routes.search_service, "live_search", s2_down)
+def test_a_failing_scout_is_a_normal_result_with_the_reason_not_an_error_frame(client, monkeypatch):
+    """The scout degrades internally — a provider outage comes back as an empty
+    result whose summary says why, so the reader is told rather than shown a
+    dead route. That's the opposite of the old live-search 502, and it's why
+    `error` frames stay reserved for a genuine break."""
+    seen = {}
+    stub_scout(monkeypatch, seen, found=[], summary="Paper search failed: rate limited")
     response = client.get("/api/search?q=DQN")
-    assert response.status_code == 502
-    assert "rate limited" not in response.json["error"]  # details stay in the log
-
-
-def test_local_search_never_errors(client, monkeypatch):
-    def boom(query, **kwargs):
-        raise RuntimeError("cache corrupt")
-
-    monkeypatch.setattr(search_routes.search_service, "local_search", boom)
-    response = client.get("/api/local_search?q=atari")
     assert response.status_code == 200
-    assert response.json == {"q": "atari", "count": 0, "papers": []}
+    assert result_of(response)["count"] == 0
+    assert "rate limited" in result_of(response)["summary"]
+    assert [name for name, _ in frames(response)] == ["result", "done"]
+
+
+def test_each_lookup_streams_pending_then_counted(client, monkeypatch):
+    """The reason this route streams at all: a scout run is several seconds,
+    and a blocking response left the transcript blank for all of them. Chips
+    have to arrive while the work happens — so a lookup is announced when it's
+    ISSUED (pending) and again when it lands (with its count).
+
+    The count is not cosmetic: the chip renders "nothing new" whenever `found`
+    is missing, so a pending-only stream made every lookup look like a miss,
+    including the one that found everything."""
+
+    async def talkative_scout(need, provider, known_ids, **filters):
+        on_lookup = filters["on_lookup"]
+        on_lookup("deep q-network", None)
+        on_lookup("deep q-network", [{"id": "s2a", "title": "One"}])
+        return papers.ScoutResult(found=[], summary="done", queries=["deep q-network"])
+
+    monkeypatch.setattr(search_routes.papers, "scout", talkative_scout)
+    response = client.get("/api/search?q=dqn")
+    # The papers a lookup found ride out WITH its finished chip, so the list
+    # grows as the scout works rather than landing whole at the end.
+    assert [name for name, _ in frames(response)] == [
+        "trace", "trace", "papers", "result", "done"
+    ]
+    traces = [payload for name, payload in frames(response) if name == "trace"]
+    assert traces[0] == {"action": "search", "ok": True, "query": "deep q-network", "pending": True}
+    assert traces[1] == {"action": "search", "ok": True, "query": "deep q-network", "found": 1}
+    found = next(payload for name, payload in frames(response) if name == "papers")
+    assert found == {"papers": [{"id": "s2a", "title": "One"}]}
+
+
+def test_a_broken_run_ends_the_stream_with_an_error_frame(client, monkeypatch):
+    """A stream that simply stops is indistinguishable from one still working,
+    so the panel would wait forever — every path has to terminate."""
+
+    async def explode(need, provider, known_ids, **filters):
+        raise RuntimeError("the loop fell over")
+
+    monkeypatch.setattr(search_routes.papers, "scout", explode)
+    response = client.get("/api/search?q=dqn")
+    assert [name for name, _ in frames(response)] == ["error", "done"]
 
 
 def test_taxonomy_returns_unified_id_name_shape_per_provider(client):
@@ -133,3 +221,47 @@ def test_taxonomy_returns_unified_id_name_shape_per_provider(client):
     # arxiv is retired as a taxonomy provider; an unknown provider is a 404.
     assert client.get("/api/taxonomy/arxiv").status_code == 404
     assert client.get("/api/taxonomy/gopher").status_code == 404
+
+
+def test_the_cache_answers_first_while_the_scout_is_still_working(client, monkeypatch):
+    """The instant tier, rebuilt on the stream rather than on a second endpoint.
+    The cache reads in milliseconds, so its hits paint while the scout is still
+    on its first provider call — and they arrive BEFORE the result that
+    supersedes them, which is the whole point."""
+    seen = {}
+    stub_scout(monkeypatch, seen, found=[{"id": "s2live", "title": "A Live Paper"}])
+    monkeypatch.setattr(
+        search_routes.search_service, "cached_nodes",
+        lambda *args, **kwargs: [{"id": "cachedA", "title": "A Cached Paper"}],
+    )
+    response = client.get("/api/search?q=dqn")
+    names = [name for name, _ in frames(response)]
+    assert names.index("cached") < names.index("result")
+    cached = next(payload for name, payload in frames(response) if name == "cached")
+    assert cached == {"papers": [{"id": "cachedA", "title": "A Cached Paper"}]}
+
+
+def test_a_field_filter_suppresses_the_instant_list_too(client, monkeypatch):
+    """Same rule the scout follows: snapshots carry no fields of study, so a
+    path that cannot honor the filter is switched OFF rather than allowed to
+    quietly ignore it. An instant list that leaked unfiltered papers would
+    break the promise the filter makes, and it would do it first."""
+    seen = {}
+    stub_scout(monkeypatch, seen)
+    monkeypatch.setattr(
+        search_routes.search_service, "cached_nodes",
+        lambda *args, **kwargs: pytest.fail("the cache cannot honour a field filter"),
+    )
+    response = client.get("/api/search?q=dqn&fields=Computer Science&provider=s2")
+    assert "cached" not in [name for name, _ in frames(response)]
+
+
+def test_a_broken_cache_read_does_not_break_the_search(client, monkeypatch):
+    seen = {}
+    stub_scout(monkeypatch, seen, found=[{"id": "s2live", "title": "A Live Paper"}])
+    monkeypatch.setattr(
+        search_routes.search_service, "cached_nodes",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("cache corrupt")),
+    )
+    response = client.get("/api/search?q=dqn")
+    assert result_of(response)["count"] == 1

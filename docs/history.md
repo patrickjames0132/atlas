@@ -120,6 +120,103 @@
 
 ### Search & seeding
 
+- [x] **One bar: the search box folds into the chat bar, and direct search
+      becomes the paper scout** *(v7.6.0)* — the app had **two text inputs**
+      asking the same question. Header search went straight from a title to a
+      graph; the chat bar asked the assistant and got papers back. Both mean
+      "find me papers about this", and having them in two boxes made you pick
+      the box before you knew which one you wanted. *(Patrick's question,
+      2026-08-14, sharpened over a long design argument that changed the
+      answer — see below.)*
+
+      **The shape.** The chat bar is now the app's only text input, with three
+      destinations decided **before any model runs**: a pasted arXiv id/URL
+      goes straight to the graph (`ID_RE`, no LLM at all, checked first
+      because you pasted the paper); the 🔍 **Find papers** toggle sends the
+      **paper scout, alone** — no researcher above it, one Haiku call; and
+      anything else goes to the researcher as always. Results land in the
+      transcript as an ordinary assistant turn, so `AnswerMarkdown` renders
+      the `[n]` markers against `paperRefs`, a click reseeds the graph, and a
+      saved session keeps it — with no bespoke rendering anywhere.
+
+      **What it retired.** `services/search.live_search` (query-analyst
+      expansion → verified titles → one lexical search), `/api/local_search`,
+      the whole **`query_analyst` agent**, `Search.tsx`, `HitList.tsx`, and
+      `useSeedSearch`. That was a second implementation of "search papers"
+      sitting beside the scout — the same duplication the v7.0.0 worker split
+      exists to prevent (*"two paths to one source is the bug, not the
+      feature"*), one level up. Both halves of the analyst outlived it in
+      better form: the scout **reformulates** across attempts rather than
+      expanding once (it can see what came back), and its new **`match_title`**
+      tool resolves a recalled title directly — chosen when the scout
+      recognizes a name, instead of every query paying for a recall attempt.
+
+      **The argument that changed the design.** The first proposal was to keep
+      direct search deterministic in code and merge only the UI, on four
+      objections: the analyst's title recall, an unenforceable field filter,
+      the cache-first path, and the pasted-id fast path. Patrick answered each
+      with the same move — *put it in `RunContext[Deps]`, not the prompt* —
+      and was right. The crux ("filters and non-determinism don't mix") was
+      **wrong**: determinism comes from *where the value lives*, not from
+      whether a model is in the loop. A filter read out of deps inside the
+      tool is exactly as binding as a query param, the same way `provider` and
+      `known_ids` already bind the scout. The sharpening that came out of it:
+      **don't make them tools, make them code inside the tool** — a tool is
+      the model's to skip, a line inside `search()` is not. Only the pasted-id
+      regex stayed client-side, and not because the agent couldn't: it is one
+      `if` that cannot be wrong, versus a model retyping `2304.01234v2`.
+
+      **Binding filters, everywhere the bar means them.** `year_from` /
+      `year_to` / `fields` ride in `ScoutDeps`; the model never sees them and
+      has no argument that overrides them, though it may narrow *inside* the
+      window (the code takes the narrower of the two bounds). They bind the
+      **researcher's** paper searches too — Patrick's addition, and three
+      lines once the plumbing existed — because they belong to the bar rather
+      than to one of its modes. Deliberately scoped to *discovery*: they never
+      touch `expand_node`, since filtering a reference list by year wouldn't
+      narrow a search, it would hide real citations and leave the graph lying
+      about what cites what. Paths that **cannot** honor a field filter (the
+      snapshot cache, `match_title`) switch **off** while one is set rather
+      than quietly ignoring it — a filter with a hole in it is worse than no
+      filter, because the UI promises it.
+
+      **Streaming, in three passes.** Browser testing drove the whole
+      progressive-rendering design, and each pass fixed something real. (1)
+      The result landed in one dispatch and the panel sat frozen for the
+      several seconds a scout run takes — so `/api/search` became SSE and the
+      path was rebuilt to drive the **same reducers a streamed answer walks**
+      (`turnStarted` → `traceAdded` → `answerSet` → `paperRefsSet`), adding
+      only `answerSet`, because this path's later text *supersedes* its
+      earlier text rather than continuing it. (2) Every trace chip read
+      *"nothing new"* — including the one that found everything — because
+      `ChatMessage` renders that whenever `found` is absent, and the frames
+      carried no count; each lookup is now announced twice, pending on issue
+      and counted when it lands (the transcript's existing pending-twin
+      replacement fills the chip in rather than doubling it). (3) The papers
+      still arrived all at once, because the scout finds them a **batch per
+      lookup** and the route sat on them until the end — they now ride out
+      with each finished chip, so the list grows as the search works. Timing
+      probe against the real server: `cached` at 0.01s, chips and papers
+      1s apart, `result` at 3.12s.
+
+      **Cache-first, rebuilt on the stream.** The old instant tier needed a
+      second endpoint racing the first; on a stream it is just an earlier
+      frame. The route emits `cached` before draining the scout, so papers
+      already on disk are clickable in milliseconds, marked **⚡ opens
+      instantly** where the paper's *own* graph is cached (a precise claim: no
+      provider call at all). The scout reads the same cache from inside its
+      `search` tool, which is what keeps a rate-limited provider answering.
+
+      **Also shipped alongside:** a **Drop cache** action in the settings
+      modal (two-step confirm — a native dialog blocks the page, and the
+      warning worth showing is specific: everything here refetches, and *saved
+      sessions and the library are untouched*), and the fix for a bug it
+      surfaced — `local_search` had been **silently blind since v7.5.0**,
+      scanning a key prefix the snapshot cache had versioned out from under
+      it. See [docs/bugs.md](bugs.md); the guard is
+      `services.graph.snapshot_prefix`, one format with one writer and one
+      reader.
+
 - [x] **Phase 2.4 — Cache-first seed search** *(v1.6.0)* — seed-search results
       served from the **local snapshot cache instantly**, before (and independent
       of) the live arXiv search: `/api/local_search` scans cached graph snapshots
@@ -2078,6 +2175,25 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       it still answers against the fully restored graph. Deliberately left as-is.)*
 
 ### UI & rendering polish
+
+- [x] **The landing tour leads with the chat bar** *(v7.6.0)* — `HOME_TOUR`
+      opened with "Start with a paper" on the header search, then search
+      options, then the data source, then the library, and only reached the
+      chat bar at step 6 ("Start here"). That order was right when home *was*
+      the search box; since v6.13.0 the chat bar has been the front door, so
+      the tour spent five steps on secondary controls before naming the thing
+      the page is built around — and the step that finally did was titled as
+      if it were the beginning. *(From the `todos.md` inbox, 2026-08-14.)*
+
+      Resolved by the ticket it was waiting on. Folding search into the chat
+      bar didn't reorder the first steps, it **deleted** them: the search box
+      and its Options popover no longer exist, so their two steps went, and
+      the ask box leads with two new ones behind it (the direct-search toggle,
+      the binding filters). The connective tissue was rewritten rather than
+      permuted, as the ticket warned it would have to be — the copy is read in
+      sequence, and "This is the front door" only works where it now sits.
+      Also swept: the graph tour's find-bar step still said "to pull new
+      papers in, use the search box up top."
 
 - [x] **The chat surface got real motion** *(v6.15.0)* — the landing chat was
       visually finished but *arrived* all at once: greeting, composer and every

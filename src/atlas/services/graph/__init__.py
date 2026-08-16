@@ -17,9 +17,10 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from .build import Provider, build_graph, resolve_provider
+from .build import Provider, build_graph, resolve_provider, snapshot_prefix
 from .model import Counts, Edge, Graph, Node, Seed
 
 __all__ = [
     "Counts", "Edge", "Graph", "Node", "Provider", "Seed", "build_graph", "resolve_provider",
+    "snapshot_prefix",
 ]

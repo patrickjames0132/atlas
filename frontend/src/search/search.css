@@ -1,152 +1,73 @@
-/* Seed search: the form (rendered in the header) and the results panel
-   (HitList, floating over the canvas). */
+/* The chat bar's search controls: the direct-search toggle, the filter
+   button, and the popover behind it.
 
-/* The wrapper carries the header-row sizing so the filter popover can anchor
-   to it (position: relative); the form itself just lays out its children. */
-.search-box {
-  position: relative;
-  flex: 1;
-  max-width: 640px;
-}
-.seed-search {
+   Everything that styled the old header search form and its floating results
+   panel is gone as of v7.6.0 — the form moved into the chat bar (as two small
+   toggles) and the results moved into the transcript, where they are rendered
+   by AnswerMarkdown like any other answer and need no styling of their own. */
+
+/* Deliberately NOT the popover's containing block — `.teacher-ask` is, so the
+   popover spans the whole chat bar rather than these two buttons. */
+.search-controls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
-.seed-search input {
-  flex: 1;
-  padding: 9px 12px;
-  border-radius: 8px;
+
+/* --- the two inline toggles --- */
+.bar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--bg);
-  color: var(--text-strong);
-  font-size: 14px;
-}
-.seed-search input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.seed-search button {
-  padding: 9px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--accent-strong);
-  background: var(--accent-strong);
-  color: white;
-  font-size: 14px;
-  cursor: pointer;
-}
-.seed-search button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* --- results panel --- */
-.hit-list {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 5;
-  width: 380px;
-  max-height: calc(100% - 32px);
-  overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px;
-  box-shadow: 0 10px 30px var(--shadow);
-}
-.hit-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--muted);
-  padding: 4px 6px 8px;
-}
-.hit {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  border-radius: 8px;
-  cursor: pointer;
-}
-.hit:hover {
-  background: var(--chip);
-}
-.hit-title {
-  font-size: 14px;
-  color: var(--text-strong);
-  margin-bottom: 3px;
-}
-.hit-meta {
   font-size: 12px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.5;
+  cursor: pointer;
   white-space: nowrap;
 }
-.hit-sub {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  padding: 8px 6px 4px;
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
+.bar-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text-strong);
 }
-.hit-sub:first-of-type {
-  border-top: none;
-  margin-top: 0;
-}
-.hit-note {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 6px;
-  font-style: italic;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.hit-badge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 6px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.bar-toggle.on {
+  border-color: var(--accent);
   color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  vertical-align: 2px;
+  background: var(--accent-soft, transparent);
+}
+.bar-toggle svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+/* The active-filter count, kept when the label goes. */
+.toggle-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Docked in the side panel there is no room for words: both toggles collapse
+   to their icons, exactly as the source-scope picker already does in this bar
+   (`.teacher-ask .scope-btn-label`). The landing composer has the width to
+   spell them out, and that is where a first-time reader meets them. */
+.teacher:not(.landing) .bar-toggle {
+  padding: 4px 7px;
+}
+.teacher:not(.landing) .toggle-label {
+  display: none;
 }
 
 /* --- optional pre-submit filters (year window + category picker) --- */
-.filter-toggle {
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--muted);
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.filter-toggle:hover {
-  border-color: var(--accent);
-  color: var(--text-strong);
-}
-.filter-toggle.on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .filter-pop {
   position: absolute;
-  top: calc(100% + 6px);
+  /* Spans the bar (anchored to `.teacher-ask`, not to the button that opens
+     it — a popover the width of a button has no room for a year slider).
+     Opens UPWARD by default because that is where the room is: docked, and on
+     the landing surface once a conversation starts, the composer sits at the
+     bottom of its column. */
+  bottom: calc(100% + 8px);
   left: 0;
   right: 0;
   z-index: 30;
@@ -159,6 +80,14 @@
   flex-direction: column;
   gap: 10px;
 }
+/* The one place the composer is NOT at the bottom: an empty landing chat sits
+   it optically centred with the greeting, with the whole page below. There the
+   popover drops down, which is the plain reading of a control you press. */
+.teacher.landing.empty .filter-pop {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
 .filter-row {
   display: flex;
   align-items: center;
@@ -281,30 +210,6 @@
 .cat-chip:hover {
   background: rgba(255, 209, 102, 0.12);
 }
-/* The query-analyst on/off switch — a labelled checkbox with a one-line
-   "why" hint underneath. The row label stays aligned with the checkbox. */
-.analyst-row {
-  align-items: flex-start;
-}
-.analyst-col {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.analyst-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-}
-.analyst-toggle input {
-  margin: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
 .filter-foot {
   display: flex;
   align-items: center;
@@ -315,11 +220,6 @@
   font-size: 11.5px;
   color: var(--muted);
   opacity: 0.8;
-}
-
-/* Publication date on an arXiv hit's meta line. */
-.hit-date {
-  color: var(--text);
 }
 
 /* The popover's ✕ — closes without re-clicking the Filters toggle. Floated

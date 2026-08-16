@@ -79,3 +79,30 @@ overlays).
 
 `frontend/test/settings/` (drafting, dirty detection, save/error paths, the
 location switch) plus the backend contract in `test/atlas/routes/test_settings.py`.
+
+
+## The one row that isn't a setting: Drop cache (v7.6.0)
+
+Every other row edits `draft` and is saved by the modal's Save. `DropCacheButton`
+edits nothing — it's an **action**, and it takes effect the moment you confirm.
+It lives here anyway because "empty the derived data" is app maintenance, which
+is what this modal is for, and because there is nowhere better: the graph
+toolbar is about the graph you can see, not the ones on disk.
+
+Three decisions inside it:
+
+- **Two-step, not `window.confirm`.** A native dialog blocks the whole page
+  (and any automated session driving it), and the warning worth showing is too
+  specific for a one-liner: what goes, and — the part a reader actually needs —
+  what emphatically does not. **Saved sessions and the library are untouched.**
+  A cache entry can be refetched; a session is the only copy of something the
+  reader made, and lives in a different store.
+- **It reports a count** (`Dropped 1,204 cached entries.` / `Already empty.`)
+  rather than claiming success blankly, so you can tell a real drop from a
+  no-op.
+- **It borrows the row controls' shape rather than inventing one.** The modal
+  styles its controls by element selector (`.settings-row-control input,
+  select`), and `<button>` was never in that list — so this first shipped as a
+  raw platform button, white-on-dark and obviously foreign. Same padding,
+  radius, border and background now; only the destructive confirm differs, in
+  red, and it sits behind Cancel in the reading order.

@@ -436,6 +436,9 @@ def answer(
     source_ids: list[str] | None = None,
     lectures: list[PlayedLecture] | None = None,
     provider: Provider = "s2",
+    year_from: int | None = None,
+    year_to: int | None = None,
+    fields: list[str] | None = None,
 ) -> Iterator[events.Event]:
     """Answer a question agentically: read / expand / search via tool use.
 
@@ -459,6 +462,13 @@ def answer(
         provider: The graph's academic-data provider (``s2`` / ``openalex``) —
             expand_node, find_papers, and lazy detail hydration follow it, so
             the agent stays in the same backend (and id space) as the graph.
+        year_from: Earliest publication year the reader has restricted paper
+            *discovery* to, or None. Forwarded to every scout ``find_papers``
+            sends out and binding there — the model cannot widen it. Citation
+            hops are deliberately unaffected; see ``ResearcherDeps``.
+        year_to: Latest publication year for discovery, or None.
+        fields: Field-of-study values (in ``provider``'s own vocabulary) that
+            paper discovery is restricted to, or None for no restriction.
 
     Yields:
         One ``SourceRefs`` up front when a library is in play, then ``Trace``
@@ -491,6 +501,9 @@ def answer(
         has_sources=bool(library),
         sources=library,
         provider=provider,
+        filter_year_from=year_from,
+        filter_year_to=year_to,
+        filter_fields=list(fields or []),
         steps_left=BUDGETS["max_steps"],
         web_searches_left=BUDGETS["web_searches"],
         web_enabled=BUDGETS["web_searches"] > 0,

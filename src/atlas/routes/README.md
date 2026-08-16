@@ -93,39 +93,54 @@ Design decisions worth knowing:
 
 | Endpoint | Job |
 | --- | --- |
-| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | live seed search (s2 / openalex) |
-| `GET /api/local_search?q=&provider=&limit=&year_from=&year_to=` | instant search over the local snapshot cache |
+| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | direct search (SSE): the paper scout, run alone |
 | `GET /api/taxonomy/<provider>` | a provider's field vocabulary (`s2` / `openalex`) |
 
 Design decisions worth knowing:
 
-- **`/api/search` replaced `/api/arxiv_search`** when seed search moved to
-  S2 (wider coverage: 200M+ papers across venues, not just arXiv
-  preprints). Papers come back as S2 node dicts — the same shape as graph
-  nodes, and the same shape `local_search` returns.
-- **A pasted arXiv id/URL short-circuits inside the service** (`live_search`):
-  detected id → exact `ARXIV:<id>` lookup, skipping query expansion (an id
-  isn't vocabulary — an "improved" id could only be a wrong one) *and* the
-  filters (they never apply to an explicit lookup). The query analyst fires
-  only on real free-text queries — and only while it's switched on:
-  `analyst=0/false/no` (the search bar's Options checkbox) skips the LLM
-  and searches the words as typed. An id S2 doesn't know returns nothing
-  rather than falling through to a junk lexical search of the id text.
-- **Repeated queries answer instantly** — `live_search` caches its results
-  whole for a day (query + filters + analyst flag keyed), so re-typing a
-  recent query skips the analyst and S2 entirely (see
-  `services/search/README.md`).
+- **`/api/search` is the paper scout now** (v7.6.0) — the same worker the
+  researcher sends out, with the orchestration layer skipped. It replaced
+  `services.search.live_search` (query-analyst expansion → verified titles →
+  one lexical search), which was a second implementation of a thing the scout
+  already did better: it reformulates rather than expanding once, and it
+  resolves recalled titles through its own `match_title` tool. Two paths to
+  one source is the bug, not the feature. `query_analyst` was retired with it.
+  Skipping the *researcher* is equally deliberate: a reader who knows what
+  paper they want shouldn't pay for an agent that writes prose about it.
+- **It streams.** A scout run is several seconds, and a blocking response left
+  the transcript blank for all of them — the reader couldn't tell a slow
+  search from a dead one. The route yields a `trace` frame per lookup **as the
+  scout issues it** (`on_lookup` → a thread-safe queue the generator drains
+  while the agent runs on the shared loop via `streams.submit`), then one
+  `result` frame, then `done`. A chip on issue says what is happening now; a
+  chip on completion only reports what already happened.
+- **The filters bind, and they are not prompt text.** `year_from` / `year_to`
+  / `fields` go into `ScoutDeps`, so every lookup is already restricted and no
+  wording the model chooses can widen them (it may narrow further inside the
+  window). The same filters ride on `/api/ask` and `/api/ask_sources`
+  (`routes/agents.py`'s `_opt_filters`), because they belong to the chat bar
+  rather than to one of its modes — one set of filters, both destinations.
+- **A pasted arXiv id/URL never reaches this route.** The frontend routes it
+  straight to the graph: an id is exact, so resolving it needs a regex, not a
+  model. (It used to short-circuit *inside* `live_search`; with a model on
+  this path, keeping the fast path client-side is what stops a paper you
+  already identified costing an agent run.)
+- **Repeated lookups answer instantly** — caching moved down a layer with the
+  search itself: `traversal.search` caches each query whole for a day (query +
+  year window + limit + fields keyed). The scout still costs its one Haiku
+  call; the provider calls behind it are free on a repeat.
 - **Filters degrade, never error.** A non-numeric year becomes "no filter";
-  unknown `fields` values are silently dropped against the **selected
-  provider's** vocabulary (`semantic_scholar.vocab.valid_fields()` for s2,
-  `openalex.vocab.valid_field_ids()` for openalex) — so an S2 field name left
-  over after switching to OpenAlex is simply ignored. Blank queries return an
-  empty 200 — the box starts empty; that's not an error.
-- **Two error philosophies again:** `/api/search` maps S2 failure to a
-  canned 502 (details in the log, matching `graph.py` — the old route
-  leaked `str(exc)` to the client); `/api/local_search` **never errors** —
-  it degrades to zero hits, because the instant local results must not
-  block the live search running alongside them.
+  unknown `fields` values are dropped against the **selected provider's**
+  vocabulary (`services.search.valid_fields`, shared with the ask routes) — so
+  an S2 field name left over after switching to OpenAlex is simply ignored.
+  Blank queries return an empty `result` frame — the box starts empty; that's
+  not an error.
+- **A provider outage is NOT an `error` frame.** The scout degrades
+  internally, so a rate-limited S2 arrives as a normal result whose `summary`
+  says why (and, when the local cache has matches, with papers in it anyway).
+  `error` is reserved for a genuine break, and the stream always terminates
+  with `done` either way — a stream that simply stops is indistinguishable
+  from one still working.
 - **`/api/taxonomy/<provider>` returns one unified shape** —
   `{fields: [{id, name}]}` for both `s2` (~20 fields of study; id == name) and
   `openalex` (26 top-level fields; id == the numeric `topics.field.id`) — so the
@@ -134,28 +149,28 @@ Design decisions worth knowing:
   the long-dead arXiv-category search filter; the detail panel's per-paper tag
   labels come from `arxiv.vocab.name_for`, not this endpoint.)
 
-### LLM title resolution
+### LLM title resolution — the idea, and where it lives now
 
-Query expansion fixes the *vocabulary* gap ("DQN" → "…deep Q-network…"),
-but there's a stronger play for famous papers. Google resolves "DQN"
-straight to the Mnih et al. paper because the web is full of pages that say
-"DQN" and link to it — Google resolves the *association*, not the string.
-Claude internalized those same associations in training: asked what paper
-"DQN" refers to, it names the exact titles from parametric knowledge — no
-retrieval, no built-in RAG needed (a bare API call retrieves nothing;
-Anthropic's opt-in web-search tool would be real grounding but is
-latency/cost overkill per keystroke). And S2 has the perfect receiving end:
-a **title-match endpoint** (`/paper/search/match`) that resolves a
-near-exact title to a paper. So the mechanics: the analyst's structured
-output is `Expansion{expanded_query, known_titles}` ("name the papers this
-query most likely refers to *only if confident*") — still one Haiku call —
-and `live_search` runs: pasted id? → exact lookup → **known titles? →
-S2 title-match, verified hits lead** → expanded lexical search (deduped
-against the verified hits, capped at `limit` together). The
-hallucination risk defuses itself: an invented title simply doesn't match
-on S2 and we fall back to the lexical search we'd have run anyway — the
-failure mode is "no better than today," never worse. Post-cutoff papers
-degrade to plain expansion the same way.
+Worth keeping, because it explains a tool that otherwise looks redundant.
+
+A lexical search fixes nothing for famous papers: "DQN" appears in no title or
+abstract of the paper it names. Google resolves it anyway, because the web is
+full of pages that say "DQN" and *link* to the Mnih et al. paper — Google
+resolves the **association**, not the string. Claude internalized those same
+associations in training: asked what paper "DQN" refers to, it names the exact
+title from parametric knowledge, no retrieval needed. And both providers have
+the receiving end — S2's title-match endpoint (`/paper/search/match`) and
+OpenAlex's `resolve_work` — which turn a near-exact title into a paper.
+
+The hallucination risk defuses itself: an invented title simply doesn't match,
+costing one lookup and returning nothing, so the failure mode is "no better
+than a plain search", never worse. Post-cutoff papers degrade the same way.
+
+This shipped as the `query_analyst` agent, called from `live_search`. Both are
+gone (v7.6.0) and the idea is now the paper scout's **`match_title` tool** —
+strictly better placed, because the scout *chooses* when to spend a lookup on
+a name it recognizes, instead of every query paying for a recall attempt
+whether or not it names anything.
 
 ## `settings.py` — the settings modal's backend
 
@@ -165,6 +180,7 @@ degrade to plain expansion the same way.
 | `PUT /api/settings` | replace the file's contents (validated first) and apply live |
 | `PUT /api/settings/location` | repoint the app at another config file (`""` = default) |
 | `POST /api/settings/pick` | open the OS file chooser server-side, return the picked path |
+| `POST /api/settings/drop_cache` | empty the derived-data cache; returns `{removed}` |
 
 The modal is a **config-file editor**, so the file stays the single source of
 truth: PUT validates the whole body as a `Config` *before* writing anything
@@ -281,15 +297,21 @@ Design decisions worth knowing:
   context is gone, where touching `current_app` would kill the stream
   before the `error` frame the frontend waits for.
 
+`drop_cache` is the one endpoint here that isn't about the config file. It
+lives in this module because it is app maintenance rather than graph work, and
+it is safe by construction: everything in the cache table is derived and
+refetches on demand. Saved sessions are in a different store and are not
+touched — a fact the UI's confirmation states outright, and a test pins.
+
 ## Who uses it, and how/why
 
 The React frontend (Phase 6) is the only caller: the search/seed flow hits
 `/api/graph`, clicking a node hydrates via `/api/paper/<ref>`, and the
 detail panel lazily loads `/figures`, `/code`, and `/categories`. `<img>` tags
 point at `/api/figure_proxy` URLs (both panel figures and the researcher's
-inline answer figures use it). The search box fans out to `/api/local_search`
-(instant) and `/api/search` (live) in parallel; the filter picker loads
-`/api/taxonomy/s2` once.
+inline answer figures use it). The chat bar's **Find papers** toggle streams
+`/api/search`; the Filters popover loads `/api/taxonomy/<provider>` once,
+lazily. (`/api/local_search` is gone — the scout reads that cache itself.)
 
 ## Testing
 

@@ -161,3 +161,24 @@ export async function getAgentModels(): Promise<string[]> {
     return []
   }
 }
+
+/**
+ * Empty the derived-data cache: graph snapshots, search results, paper
+ * hydration.
+ *
+ * Safe by construction — everything in it can be refetched, and saved
+ * sessions live in a different store — so this never asks the backend for
+ * confirmation. The confirming happens in the UI, because the *cost* is real
+ * (a slow next few minutes against a rate-limited provider) even though the
+ * risk isn't.
+ *
+ * @returns How many entries were removed.
+ * @throws When the request fails — the modal shows it rather than claiming a
+ *         success it can't vouch for.
+ */
+export async function dropCache(): Promise<number> {
+  const res = await fetch('/api/settings/drop_cache', { method: 'POST' })
+  if (!res.ok) throw new Error(`Couldn't drop the cache (${res.status})`)
+  const body = (await res.json()) as { removed: number }
+  return body.removed ?? 0
+}
