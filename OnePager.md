@@ -933,18 +933,30 @@ optional, behind a key.
       screen order (`data-tour="source-scope"`), so moving one re-sequences
       those stops.
 
-- [ ] **Clean up the guided tour** — Patrick's ask, *(`todos.md` inbox,
-      2026-08-16)*, filed unresolved: **the specifics are still to come.**
-      What's known: the tour is two phases (`HOME_TOUR` / `GRAPH_TOUR` in
-      `tour/steps.ts`), the graph walk is the long one and has grown as the
-      UI has — it now runs through the whole controls panel stop by stop
-      before reaching find, the detail panel and the teacher — and the v7.8.0
-      rail plus v7.9.0's folded-by-default panels changed what the reader is
-      actually looking at when it starts. Likely candidates once the ask is
-      pinned down: trim or merge the controls-panel stops, re-check every
-      step's copy against the current UI, and re-sequence for the rail's
-      left-hand eye-path. Don't start on it before Patrick says which part
-      grates.
+- [ ] **Tidy the tour's ordering and card titles** — polish, not a bug: the
+      steps teach the right things, they just **arrive in the wrong order**
+      and some **card titles want renaming**. Explicitly *not* about length
+      (Patrick, 2026-08-16 — "it's not the length of the tour") — no stop
+      gets cut to save time. Both lists live in `tour/steps.ts`.
+
+      **The ordering problem is the rail.** `HOME_TOUR` walks ask →
+      direct-search → filters → **provider** → **library button** → library
+      panel → assistant panel → **rail (saved graphs)** → **settings**, so it
+      crosses from the rail to the centre and back: the four rail controls
+      are visited in two groups split by a stop in the middle of the screen,
+      and within the rail they don't follow the rail's own top-to-bottom
+      order (saved graphs sit *above* the data source, but are taught last).
+      `GRAPH_TOUR` already follows the eye (controls panel → find → detail
+      panel → teacher) and is the smaller job.
+
+      **The titles to re-read** are the ones that name a mechanism rather
+      than what the reader gets: *"Release · Fit · Refresh · Clear"* (a list
+      of buttons as a heading), *"How many of each"*, *"Open a paper"* (which
+      targets the hint line, not a paper), *"Four lectures"* (a count that
+      goes stale the moment a mode is added). One rule to hold: the bubble's
+      title doubles as the **jump select** (see `tour/README.md`), so titles
+      are navigation labels — they have to read well out of context, in a
+      list, not just above their own card.
 
 ### Enhancements & tech debt
 
