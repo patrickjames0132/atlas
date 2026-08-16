@@ -222,8 +222,8 @@ The Vite dev server proxies `/api/*` to Flask.
      — and the conversation comes with you rather than being cleared, so a
      survey answer is a doorway into the graph instead of a list of links out
      to someone else's site. When a graph appears the chat collapses into the
-     side panel beside it (and an **Assistant** tab appears in the header to
-     bring it back) without dropping the thread or your place in it.
+     side panel beside it (and a 🎓 button at the top-right of the canvas
+     brings it back) without dropping the thread or your place in it.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
 6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.

@@ -532,6 +532,42 @@ optional, behind a key.
   distinguishes genuine landmark **recovery** from just a prettier Similar
   relation. Hits live S2 + OA, so keep it to a handful of seeds (shared IP).
 
+- [ ] **Refresh the corpus incrementally instead of re-downloading it** — a
+      monthly S2 release is re-pulled and re-ingested whole: ~400 GB of
+      shards, then the full ingest (citations bucketed into 1024 partitions,
+      papers compacted with a global `ORDER BY corpusid` sort) — hours of
+      disk on NVMe and, per the corpus README's own measurements, ~10.6h of
+      ingest alone on a spinning disk. Almost none of that is new: month over
+      month the citation graph *appends*. **The investigation first:** the
+      Datasets API is believed to expose a diff between two releases
+      (update/delete file lists per dataset) — confirm that against the live
+      API before anything else, since `datasets.py` today only calls
+      `/release/latest` and `/release/{id}/dataset/{name}`, and the whole
+      ticket rests on it. *(From the `todos.md` inbox, 2026-08-16 — Patrick's
+      "is that possible? worth investigating".)*
+
+      **If diffs exist, the ingest layout decides how hard this is, and the
+      two halves differ sharply.** *Citations* are hash-partitioned on
+      `citedcorpusid`, so an update file's edges scatter across all 1024
+      buckets — appending is cheap in principle (write new files into each
+      `bucket=<N>/`) but must preserve the within-bucket sort that makes row
+      groups prune, so it's an append-then-merge per touched bucket, not a
+      plain copy. *Papers* are the harder half: they are **globally sorted**
+      by `corpusid` for exactly the pruning reason the README measures, and
+      updated rows land anywhere in the 0–290M id range, so a naive append
+      destroys the clustering that made hydration ~30x faster. That points at
+      a re-compaction of the affected clustered files (which the existing
+      `_compacting/` + `MANIFEST.json` staging already knows how to commit
+      safely), plus a rebuild of the arXiv index.
+      **Two constraints not to lose:** deletes are real (S2 merges and
+      retracts records), so "append-only" is the wrong mental model; and
+      releases are currently *isolated* subtrees with `CURRENT` naming an
+      ingested one — an in-place incremental update mutates the release the
+      app is serving, which is precisely the half-built-state hole the README
+      warns about. Decide whether an incremental release copies-then-updates
+      (cheap on a filesystem with reflinks, expensive otherwise) or whether
+      `CURRENT` has to move aside for the duration.
+
 ### UI & rendering polish
 
 - [ ] **Make it clear that direct search leaves the map** — the chat bar keeps
@@ -871,6 +907,44 @@ optional, behind a key.
       citation-velocity, or a curated set) and *Latest* a cross-field recency
       query — decide the source and its caching before building the UI. *(From
       the `todos.md` inbox, 2026-07-20.)*
+
+- [ ] **The source picker moves to the panel header in graph mode** — the ask
+      bar carries three controls before you reach the text you're typing: the
+      📚 **source scope** picker, the 🔍 **Find papers** toggle and the
+      **Filters** popover (`teacher/Teacher.tsx` → `ScopePicker` +
+      `search/SearchControls`). Docked beside a graph the panel is narrow, and
+      three of them plus the textarea and send is more than the width holds.
+      **The ask:** in graph mode, put 📚 up in the panel header **next to the
+      🎓 lecture-scope picker** (`teacher-head-right`, which already hosts
+      exactly this kind of control); in graph-free mode leave it exactly where
+      it is. *(From the `todos.md` inbox, 2026-08-16.)*
+
+      **It reverses a deliberate call, so keep the reasoning straight.** The
+      picker was *moved into* the ask bar because it belongs to the question
+      you're about to ask (its comment says so, and the landing head row would
+      otherwise be an empty strip of chrome). That argument is about the
+      landing surface, where the ask bar is wide and central — which is why
+      graph mode is the only half changing. Two details: the 🎓 picker renders
+      only once a lecture has played, so the header must read well with 📚
+      alone; and `openScope` is a single `'lectures' | 'sources' | 'filters'`
+      — one popover open at a time — which keeps working across the move but
+      now spans two rows, so check the popovers still anchor correctly.
+      **The tour follows it:** the graph tour walks the two scope pickers in
+      screen order (`data-tour="source-scope"`), so moving one re-sequences
+      those stops.
+
+- [ ] **Clean up the guided tour** — Patrick's ask, *(`todos.md` inbox,
+      2026-08-16)*, filed unresolved: **the specifics are still to come.**
+      What's known: the tour is two phases (`HOME_TOUR` / `GRAPH_TOUR` in
+      `tour/steps.ts`), the graph walk is the long one and has grown as the
+      UI has — it now runs through the whole controls panel stop by stop
+      before reaching find, the detail panel and the teacher — and the v7.8.0
+      rail plus v7.9.0's folded-by-default panels changed what the reader is
+      actually looking at when it starts. Likely candidates once the ask is
+      pinned down: trim or merge the controls-panel stops, re-check every
+      step's copy against the current UI, and re-sequence for the rail's
+      left-hand eye-path. Don't start on it before Patrick says which part
+      grates.
 
 ### Enhancements & tech debt
 
