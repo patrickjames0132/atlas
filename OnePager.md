@@ -550,39 +550,39 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **Hide the search controls once a graph is open** — in graph mode the
-      chat bar still shows 🔍 **Find papers** and **Filters**, and they invite
-      the wrong thing: a reader looking at a map usually wants to ask about
-      what is on screen, not start a fresh search that will re-seed away from
-      it. Drop the buttons from the docked bar; searching stays available from
-      the landing surface. *(From the `todos.md` inbox, 2026-08-15.)*
+- [ ] **Make it clear that direct search leaves the map** — the chat bar keeps
+      🔍 **Find papers** while a graph is open (**decided 2026-08-15**, against
+      the first instinct to hide it), but nothing on screen says what it does
+      differently there. In graph mode every other control is about the papers
+      you can see; this one goes looking for papers that have nothing to do
+      with them, and a reader can reasonably read it as "find papers *in this
+      map*". *(From the `todos.md` inbox, 2026-08-15.)*
 
-      **Two things to settle before it's a one-liner.**
+      **Why it stays.** Hiding it would have removed a path, not just a
+      distraction: searching would only be reachable from home, and `goHome`
+      dispatches `workspaceCleared()` — so "go home to search" costs you the
+      graph and any unsaved exploration. Running a search *beside* an open map
+      is also a legitimate thing to want, and it is the reader's call whether
+      the two are related.
 
-      **(a) Filters aren't only direct search's.** Since v7.6.0 the year/field
-      window binds the **researcher's** paper searches too — that was the
-      point of putting it on the bar rather than inside the toggle — and that
-      is *more* relevant in graph mode, not less, since the assistant reaches
-      for `find_papers` constantly while answering. So the honest split is
-      probably: hide **Find papers**, keep **Filters**. Worth confirming
-      against the intent, since "remove the search capabilities" reads like
-      both.
+      **So the work is wording, not gating.** Enough that the difference is
+      obvious before the click: the toggle's tooltip and the transcript's lead
+      line should both say these are new papers from the whole corpus, not the
+      neighbourhood on screen. (The **Filters** button stays regardless — since
+      v7.6.0 that window binds the *researcher's* paper searches too, which
+      matters more in graph mode, not less.)
 
-      **(b) Home is destructive, so "go back to the home page" costs the
-      graph.** `goHome` dispatches `workspaceCleared()` — the graph goes, and
-      with it any unsaved exploration. If direct search is only reachable from
-      home, then searching mid-exploration means discarding the map, which is
-      a worse trade than the confusion it fixes. Options: leave the toggle
-      hidden but keep the *capability* reachable (a pasted arXiv id already
-      bypasses everything and works in graph mode); make Home non-destructive;
-      or accept the trade and say so. Decide this one deliberately — it is the
-      difference between removing a distraction and removing a path.
-
-      Small mechanical notes: the bar already collapses both toggles to icons
-      when docked (`.teacher:not(.landing) .toggle-label`), so the change is a
-      render gate rather than a layout one; and the tour's two steps targeting
-      `[data-tour="direct-search"]` / `[data-tour="search-filters"]` live in
-      `HOME_TOUR`, which only runs pre-graph — so they stay valid either way.
+      **The idea worth exploring after that** *(Patrick, 2026-08-15)*: if a
+      search runs while a map is open, could a result be **linked into the
+      map** rather than only re-seeding away from it? A paper found by search
+      has no edge to anything on screen — but the provider knows whether one
+      exists, and a "does this cite, or get cited by, anything I'm looking
+      at?" check is one `traversal` call per candidate. That would turn direct
+      search from a way to *leave* the graph into a way to **grow** it toward
+      distant work, which is a genuinely different feature and probably its
+      own ticket. Note the constraint it must respect: the graph only draws
+      edges somebody actually wrote (v7.5.0), so this can add a paper *and its
+      real citation edge*, never a "related to" line.
 
 - [ ] **Teach the visual vocabulary — what every colour and glyph means** —
       the app encodes a lot in colour and shape and explains almost none of it.
