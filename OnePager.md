@@ -128,22 +128,6 @@ optional, behind a key.
 
 ### Teacher & agent reach
 
-- [ ] **The collapsible side menu** — the header goes away entirely, replaced
-      by a side menu in the ChatGPT mould *(from the `todos.md` inbox,
-      2026-08-15)*. This was entangled with "does the header search bar earn
-      its place"; **that half is now answered** — the search box folded into
-      the chat bar in **v7.6.0** (see [docs/history.md](docs/history.md)), so
-      the shell only has to rehome what is left: the Data Provider dropdown
-      (whose off-centre label is its own small ticket, likely moot here), the
-      seed title, Library, Sessions, Settings, the theme toggle and the tour
-      launcher. Two things to settle early because they are easy to lose in a
-      redesign: what the landing surface looks like with no chrome at all
-      (it is currently the app's whole first impression — and now that the
-      chat bar *is* the search, it carries even more of it), and where the
-      tour's anchors go, since several steps target header elements by
-      `data-tour` and a step whose target no longer exists is silently skipped
-      by `presentIf` rather than failing loudly.
-
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
       [docs/history.md](docs/history.md)). Citations now *resolve*: the model

@@ -33,3 +33,16 @@ list, remove.
 
 Rendered by the shell behind the header's 📚 toggle. `tsc` strict +
 oxlint; upload progress and failure-lingering are browser-milestone items.
+
+
+## Drawer or pane (v7.8.0)
+
+`variant` picks the wrapper: `drawer` floats over the app (the original
+shape, still what the guided tour stages), `pane` fills the main area, which
+is what the left rail switches to. The content between them is identical —
+only the wrapper and the dismiss affordance differ (✕ Close vs ← Back).
+
+The workspace behind a pane stays **mounted**, just hidden. Visiting the
+library is a detour, not a teardown: unmounting would cost the graph and the
+conversation, which is the same reasoning that keeps `Teacher` at one position
+in the tree.

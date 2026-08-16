@@ -2224,6 +2224,69 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The header becomes a collapsible left rail** *(v7.8.0)* — the top bar
+      is gone. A left rail in the ChatGPT/Claude mould replaces it: collapse
+      toggle, brand and the open graph's seed title, ✎ New graph, the **saved
+      graphs** listed like a chat history, then data source, ＋ Save, 📚
+      Library, ⚙ Settings, theme and the tour. *(From the `todos.md` inbox,
+      2026-08-15; shape settled from Patrick's reference screenshots.)*
+
+      **Why the shape.** A top bar spends the scarcest axis — vertical — on
+      chrome that is mostly idle, and can't be put away; a rail spends the
+      plentiful one and folds to 56px when the map wants the room. It also let
+      saved graphs stop hiding behind a drawer button, which is the change
+      that made the rail worth building: a thing you accumulate should be
+      visible. The **Sessions drawer retired** into that band, and `header/`
+      and `sessions/` were deleted outright.
+
+      **Rename needed a backend.** `PATCH /api/sessions/<id>` is new, because
+      `save_session` overwrites the whole blob — so changing a name used to
+      mean holding the entire workspace, which is possible for the session you
+      have open and impossible for the other twelve in a list. It moves the
+      name in both places (the column and the copy inside the stored blob), or
+      the next save would put the old one back, and deliberately leaves
+      `updated_at` alone: the list sorts by it, and a rename that reshuffled
+      would lose you the row you just labelled. Saving stopped prompting for a
+      name at the same time — it names the graph after its seed and you rename
+      in place, since the moment you want to save is the moment you least want
+      a dialog.
+
+      **Collapsed is actions only.** The saved list and the labelled
+      data-source select are expanded-only: a column of identical 🗂 glyphs
+      distinguishes nothing, and a bare cylinder can't show *which* source is
+      selected. Collapsed, the data source becomes an icon with a one-click
+      popup — deliberately unlike the chat bar's source picker, which is a
+      multi-select and has to stay open while you tick things.
+
+      **Three placement lessons, each found by testing.** The seed title took
+      three homes: top-left of the pane (sat on the graph controls), centred
+      over the canvas (still collided at some panel widths), and finally
+      beside the brand in the rail, where it truncates instead of colliding.
+      The data-source picker moved off the canvas for the same reason — and
+      gained something in the move, since in the rail it is reachable with
+      **no graph open**, which matters because it decides which backend the
+      assistant's paper searches hit (v6.14.0) and the canvas version was
+      gated on a graph existing. And the 🎓 that reopens a collapsed assistant
+      had to move from the pane to the **canvas overlays**: the detail panel is
+      a sibling of `.canvas-wrap`, so a pane-anchored button sat on top of that
+      panel's own ✕ and trapped the reader inside it.
+
+      **The rail resizes** like the two right-docked panels;
+      `useResizablePanel` gained a `side` option rather than a twin, since a
+      left-docked panel is the exact mirror and only the sign of the drag
+      differs. **The library became a main-pane view** (`Sources` grew
+      `variant="pane"`), with the workspace **mounted but hidden** behind it —
+      a detour, not a teardown, the same reasoning that keeps `Teacher` at one
+      position in the tree.
+
+      **Saving now says so.** The ＋ cross-fades to a green ✓ and a toast names
+      the graph it saved to. Both use *transitions* rather than keyframes so
+      the exit is the entrance reversed for free, and both stay mounted through
+      an explicit `leaving` phase — unmounting on the way out is what made the
+      first version vanish in a single frame. The faces stack with
+      `grid-area: 1 / 1`, not absolute positioning, which takes no part in
+      layout and collapsed both boxes to nothing.
+
 - [x] **The landing tour leads with the chat bar** *(v7.6.0)* — `HOME_TOUR`
       opened with "Start with a paper" on the header search, then search
       options, then the data source, then the library, and only reached the

@@ -79,6 +79,30 @@ def api_sessions_get(session_id: str) -> ResponseReturnValue:
     return jsonify(record)
 
 
+@bp.patch("/api/sessions/<session_id>")
+def api_sessions_rename(session_id: str) -> ResponseReturnValue:
+    """Rename a saved session, leaving its snapshot untouched.
+
+    A name is metadata, so editing it shouldn't require holding the whole
+    workspace — which re-saving through ``POST`` does, and which is only
+    possible for the session currently open.
+
+    Args:
+        session_id: The saved session's id.
+
+    Returns:
+        JSON ``{renamed: bool}`` — False when no such session existed (like
+        delete, absence is not a 404). HTTP 400 when ``name`` is missing or
+        not a string; a *blank* name is fine and falls back to
+        "Untitled session".
+    """
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name")
+    if not isinstance(name, str):
+        return jsonify({"error": "name is required"}), 400
+    return jsonify({"renamed": sessions_service.rename_session(session_id, name)})
+
+
 @bp.delete("/api/sessions/<session_id>")
 def api_sessions_delete(session_id: str) -> Response:
     """Delete a saved session.

@@ -1,0 +1,474 @@
+/* The app shell: the left rail (SideBar) and the main pane's floating
+   context chip. What header.css used to hold, re-laid on the other axis. */
+
+.rail {
+  position: relative;
+  flex-shrink: 0;
+  /* Expanded, an inline width from the drag handle overrides this; collapsed
+     rules below win regardless. */
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  /* Width is the only thing that animates. Collapsing swaps labels out
+     entirely rather than fading them, because a half-faded word at 56px is
+     unreadable and still takes the space. */
+  transition: width 0.16s ease;
+}
+.rail.collapsed {
+  width: 56px !important;
+}
+/* No width transition mid-drag, or the rail lags a frame behind the pointer
+   and the whole thing feels loose. */
+.rail.dragging {
+  transition: none;
+  user-select: none;
+}
+
+/* The drag handle: the rail's own right edge, widened into a grab target that
+   sits half outside the border so it doesn't eat clicks on the rows. */
+.rail-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+}
+.rail-handle:hover {
+  background: linear-gradient(
+    to right,
+    transparent 2px,
+    var(--accent) 2px,
+    var(--accent) 5px,
+    transparent 5px
+  );
+}
+
+.rail-top,
+.rail-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rail-bottom {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 4px;
+}
+/* The sessions band is the only one that scrolls: the two fixed bands stay
+   reachable however many graphs have piled up. */
+.rail-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+}
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+.rail-item:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.12));
+}
+.rail-item.active {
+  background: var(--hover, rgba(127, 127, 127, 0.16));
+  color: var(--text-strong);
+}
+/* The glyph column is fixed-width so icons stay on one vertical line whether
+   the rail is open or closed — collapsing then reads as the labels leaving,
+   not as the whole rail shifting. */
+.rail-glyph {
+  width: 20px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+}
+.rail-glyph svg {
+  width: 16px;
+  height: 16px;
+}
+.rail-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Toggle · brand · seed, on one line, centred on the icon rather than on a
+   text baseline — the three have different font sizes, and baseline-aligning
+   them tipped the whole row off the icon.
+   The toggle keeps `.rail-item`'s symmetric 7px/8px padding (only its width
+   is overridden), so its glyph centre lands 18px from the rail's edge —
+   exactly where every glyph below it sits, and dead centre of its own hover
+   square. Zeroing the right padding to tighten the gap is what knocked the
+   icon off-centre inside that square. */
+.rail-brandrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.rail-brandrow .rail-toggle {
+  width: auto;
+  flex-shrink: 0;
+}
+.rail-brand {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+}
+/* Subordinate to the brand in every way that reads: smaller, grey, and the
+   only thing in the row that truncates. */
+.rail-seed {
+  flex: 1;
+  min-width: 0;
+  padding-right: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-heading {
+  margin: 6px 0 2px;
+  padding: 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.rail-empty {
+  margin: 4px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+/* --- a saved session row --- */
+.rail-session {
+  padding: 0;
+}
+.rail-session-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* A small ring rather than a filled dot: the list is long and quiet, and a
+   row of solid bullets reads as more emphatic than a saved graph deserves. */
+.rail-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  margin-left: 7px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+}
+.rail-session.active .rail-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* The ⋮ appears on hover (or while its menu is open), so the resting list is
+   titles and nothing else. */
+.rail-more {
+  opacity: 0;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.rail-session:hover .rail-more,
+.rail-more[aria-expanded='true'] {
+  opacity: 1;
+}
+.rail-more:hover {
+  color: var(--text-strong);
+  background: var(--hover, rgba(127, 127, 127, 0.16));
+}
+.rail-rename {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-strong);
+  font: inherit;
+}
+.rail-rename:focus {
+  outline: none;
+}
+
+/* --- the row's ⋮ menu --- */
+.rail-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+}
+.rail-menu {
+  position: absolute;
+  top: 100%;
+  right: 4px;
+  z-index: 45;
+  min-width: 150px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px var(--shadow);
+}
+.rail-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.rail-menu button:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.14));
+}
+.rail-menu button.danger {
+  color: #d9705c;
+}
+
+/* --- the data-source picker, in the rail's bottom band --- */
+
+/* Collapsed: the cylinder alone, with its choice in a popup. */
+.rail-provider-mini {
+  position: relative;
+}
+/* The rail is 56px wide, so this menu can't hang inside it — it opens to the
+   RIGHT of the rail instead of below the button. */
+.rail-menu-right {
+  top: auto;
+  bottom: 0;
+  right: auto;
+  left: calc(100% + 6px);
+  min-width: 180px;
+}
+.rail-tick {
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.rail-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 8px;
+}
+.rail-provider-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.rail-provider select {
+  width: 100%;
+  padding: 6px 26px 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%237c8392' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 10px 6px;
+}
+.rail-provider select:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.rail-provider select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- the library, as a main-pane view rather than a drawer --- */
+.pane-view {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: 28px 20px;
+}
+.pane-view-inner {
+  width: min(720px, 100%);
+}
+
+/* Reopen the assistant once it's collapsed — the header tab that used to do
+   this is gone, so it sits at the edge the panel flies in from. */
+.pane-assistant {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 6;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: 0 4px 14px var(--shadow);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pane-assistant:hover {
+  border-color: var(--accent);
+}
+
+/* --- save confirmation --- */
+/* The ＋ and the ✓ occupy the same cell and cross-fade. Transitions, not
+   keyframes: a transition plays in reverse on its own, so the ✓ leaves the
+   way it arrived instead of being unmounted mid-frame. */
+/* Stacked with GRID, not absolute positioning: both faces sit in the same
+   cell (`grid-area: 1 / 1`) and the box still sizes to the largest of them.
+   Absolute children have no layout, so the containers collapsed to nothing
+   and took the glyph and the label with them. It also means the label's width
+   is the longer of the two strings for free, so the row can't twitch as they
+   swap. */
+.rail-save-glyph {
+  display: grid;
+}
+.rail-save-label {
+  display: grid;
+  justify-items: start;
+}
+.glyph-face {
+  grid-area: 1 / 1;
+  opacity: 0;
+  /* Slightly *past* the final size on the way in, which reads as landing
+     rather than fading. The same curve running backwards is a gentle
+     shrink-away. */
+  transform: scale(0.55);
+  transition:
+    opacity 0.22s ease,
+    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.rail-save-label .glyph-face {
+  transform: none;
+  white-space: nowrap;
+  transition: opacity 0.22s ease;
+}
+.glyph-face.shown {
+  opacity: 1;
+  transform: scale(1);
+}
+.rail-item.just-saved {
+  color: #3fb950;
+}
+/* The ✓ carries the colour even as the row's own colour transitions back. */
+.glyph-check {
+  color: #3fb950;
+}
+.rail-item {
+  transition: color 0.3s ease;
+}
+
+/* Beside the rail, not over the map — the confirmation belongs next to the
+   control that caused it. */
+.save-toast {
+  position: absolute;
+  left: 14px;
+  bottom: 16px;
+  z-index: 30;
+  max-width: min(420px, calc(100% - 28px));
+  padding: 9px 13px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px var(--shadow);
+  font-size: 13px;
+  color: var(--text);
+  pointer-events: none;
+  /* Mounted for one frame at the entrance's start state, then transitioned
+     in; `leaving` runs the same properties back the other way. */
+  animation: save-toast-in 0.24s ease-out;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+}
+.save-toast.leaving {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.save-toast strong {
+  color: var(--text-strong);
+  /* A paper title is long; let it wrap rather than stretch the notice. */
+  overflow-wrap: anywhere;
+}
+@keyframes save-toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* The house rule: motion is decoration here, and the state change carries the
+   meaning on its own. */
+@media (prefers-reduced-motion: reduce) {
+  .save-toast,
+  .glyph-face,
+  .rail-item {
+    animation: none;
+    transition: none;
+  }
+}

@@ -87,8 +87,10 @@ api/
   payloads flow up to the graph via `useDiscovery`.
 - **`detail/DetailPanel.tsx`** — `fetchPaperDetail`, `fetchFigures`,
   `fetchCodeLinks`, `fetchCategories` on node click (lazy, degradable).
-- **`library/Sources.tsx`** — `sources.ts` CRUD; `sessions/Sessions.tsx` —
-  `sessions.ts` CRUD.
+- **`library/Sources.tsx`** — `sources.ts` CRUD; **`shell/useSessions.ts`** —
+  `sessions.ts` CRUD, including `renameSession` (`PATCH`), which exists
+  because re-saving to change a name means holding the whole workspace blob
+  and so only works for the session you have open.
 
 ## How it's verified
 

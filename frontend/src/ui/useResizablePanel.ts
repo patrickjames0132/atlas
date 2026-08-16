@@ -2,14 +2,16 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * Drag-to-resize for a right-docked side panel, with the chosen width
+ * Drag-to-resize for a docked side panel, with the chosen width
  * remembered across sessions (localStorage).
  *
- * Both the detail panel and the assistant panel dock on the right (border on
- * their left edge), so the drag handle lives on that inner-left edge: dragging
- * it *left* widens the panel, *right* narrows it. The hook owns only the width
- * number + the pointer bookkeeping; the caller renders the panel with
- * `style={{ width }}` and drops a handle element wired to `onHandlePointerDown`.
+ * The detail panel and the assistant panel dock on the right (border on their
+ * left edge), so their handle lives on that inner-left edge: dragging it
+ * *left* widens the panel. The left rail is the mirror image — hence `side`,
+ * which flips the sign of the drag and nothing else. The hook owns only the
+ * width number + the pointer bookkeeping; the caller renders the panel with
+ * `style={{ width }}` and drops a handle element wired to
+ * `onHandlePointerDown`.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -23,6 +25,9 @@ interface ResizeBounds {
   min?: number
   /** Widest the panel may get, px. */
   max?: number
+  /** Which edge the panel is docked against. A right-docked panel widens as
+   *  the pointer moves left; a left-docked one as it moves right. */
+  side?: 'left' | 'right'
 }
 
 export interface ResizablePanel {
@@ -44,7 +49,7 @@ export interface ResizablePanel {
 export function useResizablePanel(
   storageKey: string,
   defaultWidth: number,
-  { min = 280, max = 680 }: ResizeBounds = {},
+  { min = 280, max = 680, side = 'right' }: ResizeBounds = {},
 ): ResizablePanel {
   const clamp = useCallback((value: number) => Math.min(max, Math.max(min, value)), [min, max])
 
@@ -71,8 +76,12 @@ export function useResizablePanel(
     const onMove = (event: PointerEvent) => {
       const start = origin.current
       if (!start) return
-      // Right-docked: leftward drag (smaller clientX) means a wider panel.
-      setWidth(clamp(start.startWidth + (start.startX - event.clientX)))
+      // Right-docked: leftward drag (smaller clientX) widens. Left-docked is
+      // the mirror — the pointer moves away from the panel's own edge either
+      // way, which is the only thing that has to feel the same.
+      const travelled =
+        side === 'left' ? event.clientX - start.startX : start.startX - event.clientX
+      setWidth(clamp(start.startWidth + travelled))
     }
     const onUp = () => {
       origin.current = null
@@ -85,7 +94,7 @@ export function useResizablePanel(
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
-  }, [dragging, clamp, storageKey])
+  }, [dragging, clamp, storageKey, side])
 
   return { width, onHandlePointerDown, dragging }
 }

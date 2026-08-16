@@ -56,3 +56,13 @@ inherit a CSS variable from a stylesheet.
   (click for light), ☾ while light. A single toggle button labelled with its
   current state is the one people click twice; the `title`/`aria-label`
   spells it out either way.
+
+
+## `useResizablePanel` docks either way (v7.8.0)
+
+It was written for right-docked panels (the detail panel, the assistant), where
+dragging the inner-left handle *leftward* widens. The left rail is the exact
+mirror, so the hook gained a `side` option rather than a twin: it flips the
+sign of the drag and nothing else. Both directions keep the same feel — the
+pointer moves *away* from the panel's own edge to widen it, which is the only
+property that has to hold.

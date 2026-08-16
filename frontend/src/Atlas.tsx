@@ -37,11 +37,16 @@ import {
   switchProvider,
   workspaceCleared,
 } from './store/workspace'
-import AtlasHeader from './header/AtlasHeader'
+import SideBar from './shell/SideBar'
+import type { ShellView } from './shell/SideBar'
+import { useSessions } from './shell/useSessions'
+import './shell/shell.css'
+
+/** localStorage key remembering whether the left rail is expanded. */
+const RAIL_KEY = 'atlas.railOpen'
 import GraphExplorer from './graph/GraphExplorer'
 import Teacher from './teacher/Teacher'
 import Sources from './library/Sources'
-import Sessions from './sessions/Sessions'
 import SettingsModal from './settings/SettingsModal'
 import Tour from './tour/Tour'
 import { GRAPH_TOUR, HOME_TOUR, TOUR_KEYS } from './tour/steps'
@@ -59,8 +64,14 @@ export default function Atlas() {
   )
 
   // Drawer visibility + the assistant toggle — shell-local UI.
-  const [showSources, setShowSources] = useState(false)
-  const [showSessions, setShowSessions] = useState(false)
+  // Which main-pane view is up. The workspace stays MOUNTED behind the
+  // library rather than unmounting — the graph and the conversation are
+  // expensive, live state, and visiting the library is a detour, not a
+  // teardown (the same reasoning that keeps Teacher at one tree position).
+  const [view, setView] = useState<ShellView>('workspace')
+  // The rail's expanded/collapsed state, remembered — it's a workspace
+  // preference, not a per-visit one.
+  const [railOpen, setRailOpen] = useState(() => localStorage.getItem(RAIL_KEY) !== '0')
   const [showSettings, setShowSettings] = useState(false)
   const theme = useTheme()
   // Open by default, because the assistant is now where you start: the
@@ -164,8 +175,7 @@ export default function Atlas() {
     // twice; a re-run is a deliberate "?" click. Drawers a step staged open
     // are put away (the assistant panel stays — it invites use).
     localStorage.setItem(hasGraph ? TOUR_KEYS.graph : TOUR_KEYS.home, '1')
-    setShowSources(false)
-    setShowSessions(false)
+    setView('workspace')
     setTourStage(undefined)
     setTourOpen(false)
   }, [hasGraph])
@@ -177,16 +187,68 @@ export default function Atlas() {
    *  nothing is / expands a collapsed controls panel. */
   const onTourStage = useCallback((stage?: string) => {
     setTourStage(stage)
-    setShowSources(stage === 'library')
-    setShowSessions(stage === 'sessions')
+    setView(stage === 'library' ? 'library' : 'workspace')
     if (stage === 'assistant') setAssistantOpen(true)
   }, [])
 
-  /** Home: back to the page-load default — no graph, no panel. */
+  /** New graph: back to the page-load default — no graph, the landing chat. */
   const goHome = useCallback(() => {
     dispatch(workspaceCleared())
     setAssistantOpen(true)
+    setView('workspace')
+    setOpenSessionId(null)
   }, [dispatch])
+
+  useEffect(() => {
+    localStorage.setItem(RAIL_KEY, railOpen ? '1' : '0')
+  }, [railOpen])
+
+  // The saved-graph list in the rail, and which of them is on screen. The id
+  // is tracked here rather than in the store because it is a fact about this
+  // *session of use* — which row to mark, and which one a re-save overwrites
+  // — not about the graph itself.
+  const {
+    sessions,
+    refresh: refreshSessions,
+    rename: renameSessionRow,
+    remove: removeSessionRow,
+  } = useSessions()
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null)
+  // The name a save just landed under, for the confirmation — and its own
+  // clearing timer. Saving is otherwise silent, and in the collapsed rail
+  // (where the button is a bare ＋ and the saved list isn't even rendered)
+  // there is nothing at all to tell you it worked.
+  // `leaving` is the exit phase: the notice stays MOUNTED through it so its
+  // transitions can play out. Unmounting on the way out is what made both the
+  // toast and the ✓ vanish in one frame.
+  const [savedNotice, setSavedNotice] = useState<{ name: string; leaving: boolean } | null>(null)
+  const savedTimers = useRef<number[]>([])
+  useEffect(() => () => savedTimers.current.forEach((timer) => window.clearTimeout(timer)), [])
+
+  /** Save the current workspace, named after its seed.
+   *
+   * No name prompt: the rail names it after the paper and lets you rename it
+   * in place afterwards, which is how a saved thing should work — the moment
+   * you want to save is the moment you least want a dialog. Re-saving an
+   * already-saved graph overwrites that row rather than piling up copies.
+   */
+  const onSaveSession = useCallback(async () => {
+    const name = graph?.seed.title || 'Untitled graph'
+    const saved = await dispatch(saveWorkspace({ name, id: openSessionId ?? undefined })).unwrap()
+    setOpenSessionId(saved.id)
+    setSavedNotice({ name: saved.name, leaving: false })
+    // Restarted rather than stacked, so saving twice quickly shows one notice
+    // for its full life instead of the second cutting the first short.
+    savedTimers.current.forEach((timer) => window.clearTimeout(timer))
+    savedTimers.current = [
+      window.setTimeout(
+        () => setSavedNotice((prev) => (prev ? { ...prev, leaving: true } : prev)),
+        2800,
+      ),
+      window.setTimeout(() => setSavedNotice(null), 3350),
+    ]
+    await refreshSessions()
+  }, [dispatch, graph, openSessionId, refreshSessions])
 
   // The floating layer over whichever surface is up — search hits, the build
   // progress, the error. Built once here rather than inline so the graph and
@@ -194,6 +256,23 @@ export default function Atlas() {
   // hint is gone: the landing chat says what to do by being a chat.)
   const overlays = (
     <>
+      {/* Reopening the assistant once it's collapsed. It used to be a header
+          tab; with the header gone it belongs beside the thing it opens, at
+          the top-right of the CANVAS. Not the pane: the detail panel is a
+          sibling of the canvas, so a pane-anchored button sat on top of that
+          panel's own ✕ and trapped the reader inside it. */}
+      {hasGraph && !assistantOpen && (
+        <button
+          type="button"
+          className="pane-assistant"
+          data-tour="assistant-btn"
+          onClick={() => setAssistantOpen(true)}
+          title="The AI assistant — a lecture and Q&A over the graph"
+          aria-label="Open the assistant"
+        >
+          🎓
+        </button>
+      )}
       {/* Dim whatever is behind — a graph mid-re-seed, or the chat you were
           reading. The card alone was only ever legible against an empty canvas;
           over live content it has to push that content back to read at all. */}
@@ -243,69 +322,95 @@ export default function Atlas() {
 
   return (
     <div className="atlas">
-      <AtlasHeader
-        loadingGraph={loading}
-        provider={provider}
-        onProviderChange={(next) => dispatch(switchProvider(next))}
-        seedTitle={graph?.seed.title ?? null}
-        onHome={goHome}
-        onOpenSources={() => setShowSources(true)}
-        assistantAvailable={hasGraph}
-        assistantOpen={assistantOpen}
-        onToggleAssistant={() => setAssistantOpen((prev) => !prev)}
-        onOpenSessions={() => setShowSessions(true)}
+      <SideBar
+        open={railOpen}
+        onToggle={() => setRailOpen((prev) => !prev)}
+        view={view}
+        onView={setView}
+        onNewGraph={goHome}
+        sessions={sessions}
+        openSessionId={openSessionId}
+        onOpenSession={(id) => {
+          dispatch(restoreSession(id))
+          setOpenSessionId(id)
+          setView('workspace')
+        }}
+        onRenameSession={(id, name) => void renameSessionRow(id, name)}
+        onDeleteSession={(id) => {
+          void removeSessionRow(id)
+          // Deleting the row you have open doesn't close the graph — the
+          // workspace is still yours to look at; it just isn't saved any more.
+          if (id === openSessionId) setOpenSessionId(null)
+        }}
+        onSaveSession={hasGraph ? onSaveSession : undefined}
+        justSaved={!!savedNotice && !savedNotice.leaving}
         onOpenSettings={() => setShowSettings(true)}
+        onStartTour={() => setTourOpen(true)}
         theme={theme}
         onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        onStartTour={() => setTourOpen(true)}
+        provider={provider}
+        onProviderChange={(next) => dispatch(switchProvider(next))}
+        loadingGraph={loading}
+        seedTitle={graph?.seed.title ?? null}
       />
 
-      {tourOpen && (
-        <Tour steps={hasGraph ? GRAPH_TOUR : HOME_TOUR} onClose={closeTour} onStage={onTourStage} />
-      )}
-
-      <SettingsModal
-        open={showSettings}
-        onClose={() => {
-          setShowSettings(false)
-          rebuildIfShapeChanged()
-        }}
-      />
-
-      <Sources open={showSources} onClose={() => setShowSources(false)} />
-
-      <Sessions
-        open={showSessions}
-        onClose={() => setShowSessions(false)}
-        onSave={(name, id) => dispatch(saveWorkspace({ name, id })).unwrap()}
-        onOpen={(id) => {
-          dispatch(restoreSession(id))
-          setShowSessions(false)
-        }}
-        canSave={hasGraph}
-        defaultName={graph?.seed.title ?? ''}
-      />
-
-      <div className="atlas-body">
-        {/* The overlays belong to whichever surface is up: over the canvas in
-            graph mode, over the landing chat before one exists. */}
-        {graph ? (
-          <GraphExplorer tourStage={tourOpen ? tourStage : undefined}>{overlays}</GraphExplorer>
-        ) : (
-          <div className="landing-overlays">{overlays}</div>
+      <div className="atlas-main">
+        {/* Bottom-left, next to the rail: the confirmation belongs beside the
+            control that caused it, not centred over the map. `key` on the
+            name so saving a second graph replays the entrance rather than
+            silently swapping the text of a notice already on screen. */}
+        {savedNotice && (
+          <div
+            className={`save-toast${savedNotice.leaving ? ' leaving' : ''}`}
+            key={savedNotice.name}
+            role="status"
+          >
+            Graph saved to <strong>{savedNotice.name}</strong>
+          </div>
         )}
 
-        {/* One instance, two shapes. Kept at a single position in the tree so
+        {tourOpen && (
+          <Tour
+            steps={hasGraph ? GRAPH_TOUR : HOME_TOUR}
+            onClose={closeTour}
+            onStage={onTourStage}
+          />
+        )}
+
+        <SettingsModal
+          open={showSettings}
+          onClose={() => {
+            setShowSettings(false)
+            rebuildIfShapeChanged()
+          }}
+        />
+
+        {/* The library is a VIEW, not a drawer, and the workspace behind it
+            stays mounted — going to the library and back must not cost the
+            graph or the conversation. */}
+        <Sources open={view === 'library'} variant="pane" onClose={() => setView('workspace')} />
+
+        <div className="atlas-body" hidden={view !== 'workspace'}>
+          {/* The overlays belong to whichever surface is up: over the canvas in
+              graph mode, over the landing chat before one exists. */}
+          {graph ? (
+            <GraphExplorer tourStage={tourOpen ? tourStage : undefined}>{overlays}</GraphExplorer>
+          ) : (
+            <div className="landing-overlays">{overlays}</div>
+          )}
+
+          {/* One instance, two shapes. Kept at a single position in the tree so
             entering graph mode collapses the landing chat into the side panel
             without remounting it — the conversation, its scroll position and
             its run state all survive the transition (see store/README.md on
             why a remount would undo exactly that). */}
-        <Teacher
-          key={epoch}
-          landing={!graph}
-          collapsed={!!graph && !assistantOpen}
-          onClose={graph ? () => setAssistantOpen(false) : undefined}
-        />
+          <Teacher
+            key={epoch}
+            landing={!graph}
+            collapsed={!!graph && !assistantOpen}
+            onClose={graph ? () => setAssistantOpen(false) : undefined}
+          />
+        </div>
       </div>
     </div>
   )

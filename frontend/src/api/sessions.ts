@@ -220,3 +220,28 @@ export async function deleteSession(id: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Rename a saved session, leaving its snapshot alone.
+ *
+ * Never throws — returns false on any failure, like `deleteSession`. The
+ * sidebar renames optimistically and reverts on false, so a dead backend
+ * costs a flicker rather than an error dialog over a list.
+ *
+ * @param id   The saved session's id.
+ * @param name The new name; blank falls back to "Untitled session".
+ * @returns True when the session existed and is now renamed.
+ */
+export async function renameSession(id: string, name: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (!res.ok) return false
+    return ((await res.json()) as { renamed: boolean }).renamed
+  } catch {
+    return false
+  }
+}

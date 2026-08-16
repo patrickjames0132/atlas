@@ -57,6 +57,13 @@ files.
   keeps its old value" upsert behavior — a simplification was considered
   and deliberately declined in favor of the more obviously-correct
   two-step version.
+- **`rename_session` edits metadata without rehydrating the thing it
+  describes** (v7.8.0). `save_session` overwrites the whole blob, so renaming
+  used to require holding the entire workspace — fine for the session you have
+  open, impossible for the other twelve in a list. It moves the name in *both*
+  places (the column and the copy inside the stored blob), or the next save
+  would put the old one back; and it deliberately leaves `updated_at` alone,
+  since the list sorts by it and renaming a session is not working on it.
 - **`cache.clear()` empties the table, and is safe by construction** (v7.6.0,
   behind the settings modal's "Drop cache"). Everything in here is *derived* —
   snapshots, searches, hydration — so the worst outcome is a slower next few
@@ -121,7 +128,7 @@ mechanism carries over unchanged.)
 
 - **`routes/sessions.py`** — the only caller. One Flask blueprint mapping
   1:1 onto the four storage functions (list/save/get/delete), backing the
-  Sessions drawer's save/restore/delete UI directly.
+  rail's save/restore/rename/delete UI directly.
 
 ## Testing
 
