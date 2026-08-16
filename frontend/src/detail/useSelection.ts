@@ -27,7 +27,7 @@ import type { Base, VNode } from '../graph/model'
 export interface UseSelectionArgs {
   /** The stable per-graph dataset (selection resolves against its nodes). */
   base: Base | null
-  /** The loaded graph — selection resets to its seed whenever it changes. */
+  /** The loaded graph — selection clears whenever it changes. */
   graph: GraphResponse | null
   /** The active provider — detail hydration comes from the backend the graph
    *  was built with. */
@@ -90,7 +90,16 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
   const [categories, setCategories] = useState<Record<string, CategoriesResponse>>({})
   const categoriesRequested = useRef<Set<string>>(new Set())
 
-  // A new graph invalidates the per-paper caches and selects its seed.
+  // A new graph invalidates the per-paper caches and closes the panel.
+  //
+  // It used to select the seed, which meant every graph opened with the detail
+  // panel already covering the canvas — chrome in front of the thing the
+  // reader asked to see. Nothing is selected now; clicking a paper opens it,
+  // which is what the click is for. The deliberate exception is the
+  // chat-citation path (`revealSeedDetail`, wired in GraphExplorer): that
+  // click *asked* for a specific paper, so it still lands on the panel. Its
+  // effect is registered after this one, so it sets the seed back after this
+  // clears it on the same graph change.
   useEffect(() => {
     setDetails({})
     setFigures({})
@@ -98,7 +107,7 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
     codeRequested.current = new Set()
     setCategories({})
     categoriesRequested.current = new Set()
-    setSelectedId(graph ? graph.seed.id : null)
+    setSelectedId(null)
   }, [graph])
 
   /** The selected node, overlaid with any hydrated detail fields. */

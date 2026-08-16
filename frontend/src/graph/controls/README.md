@@ -23,12 +23,20 @@ canvas about what "a reference" looks like, and both style via
 
 ## `GraphControls` — points worth knowing
 
-- **The whole panel collapses to its header bar.** The "Graph controls"
+- **The whole panel collapses to its header bar — and starts there.** The
+  "Graph controls"
   header is a button: clicking it hides the body and shrinks the panel to a
   slim strip (the find control's collapse-until-wanted idea, panel-sized),
   giving the canvas the 272px box back; the count readout rides the
   collapsed bar so the panel still reports its state while tucked away. The collapsed flag
-  is the panel's one piece of local state (like FindBar's own open/closed).
+  is the panel's one piece of local state (like FindBar's own open/closed),
+  and since **v7.9.0 it starts `true`**: a freshly built graph opens onto the
+  *graph*, not onto its own chrome, and the reader who wants to declutter
+  opens the panel by its header (the same change stopped the detail panel
+  auto-opening — see `detail/README.md`). That's the initial value only —
+  re-seeding while the explorer is up leaves the panel however the reader
+  left it, because expanding it was a choice and a re-seed is no reason to
+  undo it.
   The body hides via `hidden`, **not** unmounting — the guided tour judges
   its year/citation stops by element *existence* (`presentIf`), and those
   targets must survive a collapse. The panel steps stage `'controls'`

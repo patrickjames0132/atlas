@@ -2224,6 +2224,45 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **A graph opens onto the graph, not onto its panels** *(v7.9.0)* —
+      building a graph used to land with two boxes already covering the
+      canvas: the **detail panel** (`useSelection`'s per-graph effect selected
+      the seed, so the panel was open before the reader had looked at
+      anything) and the **graph controls** (272px of declutter chrome,
+      expanded by default). Both now start out of the way — the detail panel
+      opens on a click, the controls on their header caret — at the moment
+      the reader most wants to see the map. *(From the `todos.md` inbox,
+      2026-08-16.)*
+
+      **The assistant is the deliberate exception** and stays docked on graph
+      load: the conversation is the product, and Patrick's ask named it
+      explicitly. So this is not "hide the chrome", it's "hide the chrome
+      that has nothing to say yet" — the two panels that opened themselves
+      were both showing defaults (the seed you already know about; filters
+      you haven't asked for).
+
+      **Three paths had to keep working, and each is why the change is small
+      rather than a redesign.** The **chat-citation** re-seed still opens the
+      seed's panel — `workspace.revealSeedDetail` (set by a `fromChat` load,
+      consumed in `GraphExplorer`) is an effect registered *after*
+      `useSelection`'s per-graph clear, so on the same graph change the clear
+      runs first and the reveal puts the seed back; that click *asked* for a
+      paper, so it gets its panel. The **guided tour**'s `'details'` stops
+      already selected the seed when nothing was open, and its `'controls'`
+      stops already expanded a collapsed panel (`stagedOpen`) — staging built
+      for a reader who had folded things away, which is now the default
+      state. And the controls' collapse is an **initial value only**:
+      re-seeding while the explorer is up leaves the panel however the reader
+      left it, because expanding it was a choice.
+
+      **The help surfaces moved with it** (the rule from v6.9.0): the tour's
+      first controls stop taught "click to collapse" and now says the panel
+      starts folded, and the header tooltip reads "Open the graph controls"
+      rather than "Reopen". A testing note worth keeping: the panel's body
+      hides via `hidden`, which takes it out of the accessibility tree, so
+      every GraphControls case about a control *inside* the body now renders
+      through a `renderPanel` helper that opens it first.
+
 - [x] **The header becomes a collapsible left rail** *(v7.8.0)* — the top bar
       is gone. A left rail in the ChatGPT/Claude mould replaces it: collapse
       toggle, brand and the open graph's seed title, ✎ New graph, the **saved
