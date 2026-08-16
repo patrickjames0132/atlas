@@ -39,7 +39,7 @@ store/
   It also holds **`provider`** (the header "Data source" dropdown — the
   academic-data backend every graph is built from): written by `providerSet` /
   the `switchProvider` thunk (which re-seeds the current graph), read by
-  `loadGraph` (sent on every build) and `useSeedSearch` (scopes the local cache
+  `loadGraph` (sent on every build) and `useDirectSearch` (scopes the search
   search), and persisted in a Save. Unlike the graph, it **survives Home** — an
   app-wide setting, not per-graph. `loadGraph` takes an optional `provider`
   that both builds under that backend *and* moves the dropdown to it; only a

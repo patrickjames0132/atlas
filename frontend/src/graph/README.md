@@ -26,7 +26,7 @@ presentational: every set, id, and count arrives as a prop, and every
 interaction fires a callback upward. The canvas paints, the shell decides.
 
 (`model.ts`/`theme.ts` stay at the root: the sub-packages AND outside
-consumers — `search/HitList` uses `formatPubDate`, Atlas uses `ID_RE`,
+consumers — `teacher/transcript` uses `formatPubDate`, `Teacher` uses `ID_RE`,
 `detail/` uses both — all import them. `graph.css` also stays at the root:
 it styles the whole area, and both `controls/` components import it.)
 
@@ -162,7 +162,8 @@ and `GraphExplorer` trims the view by it. Worth knowing:
   overlays as children; uses `ID_RE` for the pasted-id fast path.
 - **`detail/`** — `useSelection` types against `Base`/`VNode`;
   `DetailPanel` uses `formatPubDate` + `BADGE_COLOR`.
-- **`search/HitList`** — `formatPubDate`.
+- **`teacher/Teacher`** — `ID_RE`, for the chat bar's pasted-id fast path
+  (v7.6.0: it moved with the search box).
 - **`store/workspace`** — `cleanNode`/`countRels` for session save/restore.
 
 ## How it's verified

@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LECTURE_TITLES, streamAsk, streamAskSources, streamLecture } from '../api'
-import type { Beat, GraphNode, LectureMode, PlayedLecture, Provider } from '../api'
+import type { Beat, GraphNode, LectureMode, PlayedLecture, Provider, SearchOptions } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { highlightSet, selectHighlightSet } from '../store/highlight'
 import {
@@ -85,6 +85,27 @@ function resolveGraphRefs(text: string, numberedIds: string[]): Record<string, s
     }
   }
   return graphRefs
+}
+
+/**
+ * Turn the chat bar's filters into the wire fields the ask routes take.
+ *
+ * Omitted entirely when nothing is filtered, so an unfiltered question sends
+ * exactly the body it always did — the backend's own default is "no filter",
+ * and spelling that out as explicit nulls would only be noise.
+ *
+ * @param filters The bar's active filters, or undefined when it has none.
+ * @returns The `year_from` / `year_to` / `fields` fields to spread into the
+ *          request body (an empty object when nothing is set).
+ */
+function askFilters(filters?: SearchOptions) {
+  if (!filters) return {}
+  const { yearFrom, yearTo, fields } = filters
+  return {
+    ...(yearFrom != null ? { year_from: yearFrom } : {}),
+    ...(yearTo != null ? { year_to: yearTo } : {}),
+    ...(fields.length ? { fields } : {}),
+  }
 }
 
 /**
@@ -372,6 +393,7 @@ export function useConversation() {
       question: string,
       sourceIds: string[] | undefined,
       lectureModes: LectureMode[] | undefined,
+      filters?: SearchOptions,
     ) => {
       // Only supersede a previous question — lectures stream on their own
       // controllers, so asking never interrupts one that's loading.
@@ -423,6 +445,7 @@ export function useConversation() {
               provider,
               source_ids: sourceIds,
               lectures: playedLectures.length > 0 ? playedLectures : undefined,
+              ...askFilters(filters),
             },
             {
               signal: ctrl.signal,
@@ -462,7 +485,13 @@ export function useConversation() {
           // there's no graph to match: it decides which backend the paper
           // search hits, and therefore whose ids come back on the citations.
           await streamAskSources(
-            { question, session_id: sessionId.current, provider, source_ids: sourceIds },
+            {
+              question,
+              session_id: sessionId.current,
+              provider,
+              source_ids: sourceIds,
+              ...askFilters(filters),
+            },
             {
               signal: ctrl.signal,
               onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),

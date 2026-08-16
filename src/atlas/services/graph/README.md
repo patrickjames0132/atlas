@@ -98,12 +98,27 @@ cache hit, a deliberate trade.
 
 1. **Blank-guard, resolve provider, cache.** Empty seed → `None`. `provider`
    defaults to `config.providers.default_provider`. The cache is keyed by
-   **`graph:<provider>:<seed_ref>`** — an S2 graph and an OpenAlex graph for the
+   **`snapshot_prefix(provider) + <seed_ref>`**, i.e.
+   `graph:v2:<provider>:<seed_ref>` — an S2 graph and an OpenAlex graph for the
    same paper are separate snapshots and must never collide. The *whole assembled
    snapshot* is cached (TTL `config.graph.cache_ttl`), so re-opening a paper is
    free. The key uses the *raw* seed reference — an arXiv id and the provider node
    id it resolves to are separate entry points on purpose, to avoid a resolution
    round-trip just to normalize the key.
+
+   **`SNAPSHOT_VERSION` and why the prefix is a function.** The `v2:` segment
+   is a schema version, bumped whenever `Graph` **loses** a field: the model is
+   `extra="forbid"`, so a stored snapshot carrying a since-deleted field is a
+   validation *error*, not a miss. Bumping makes stale entries unreadable
+   instead of poisonous, and they age out on the TTL. (v2 = v7.5.0, which
+   dropped `Counts.similar`.)
+
+   It is a **function** rather than an f-string here because the bump proved
+   what happens otherwise: `services/search.local_search` prefix-scans these
+   same keys to find papers you have already explored, kept its own hardcoded
+   `graph:<provider>:`, and silently matched nothing for two releases — a scan
+   that finds nothing looks exactly like an empty cache. One writer of the key
+   format, one reader. See `docs/bugs.md`.
 
 2. **Resolve the seed + traverse, per provider.** `build_graph` dispatches to
    `_traverse_s2` or `_traverse_openalex`, each returning the same payload:

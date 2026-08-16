@@ -172,6 +172,21 @@ const transcriptSlice = createSlice({
       if (msg) msg.text += action.payload
     },
     /**
+     * Replace the in-flight turn's text outright.
+     *
+     * `tokenAppended`'s counterpart, for a path whose later text *supersedes*
+     * its earlier text rather than continuing it: direct search paints the
+     * local cache's hits the moment they resolve, then swaps in the scout's
+     * full list when it lands. Appending would show the same papers twice.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the replacement text.
+     */
+    answerSet(state, action: PayloadAction<string>) {
+      const msg = lastMsg(state)
+      if (msg) msg.text = action.payload
+    },
+    /**
      * A researcher trace chip (read/expand/search) lands on the turn.
      *
      * @param state  The slice state (mutated via immer).
@@ -319,6 +334,7 @@ export const {
   lectureDropped,
   turnStarted,
   tokenAppended,
+  answerSet,
   traceAdded,
   figureAdded,
   retrieveSet,

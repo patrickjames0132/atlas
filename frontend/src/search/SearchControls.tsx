@@ -2,44 +2,40 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The seed-search form: the query box + Explore button, plus the optional
- * (never required) pre-submit search options — a publication-year window, a
- * field-of-study picker fed by the backend's S2 vocabulary endpoint, and the
- * query-analyst on/off switch.
+ * The chat bar's search controls: the direct-search toggle, and the filter
+ * popover (publication-year window + field of study) behind it.
  *
- * Rendered inside AtlasHeader, but it belongs to the search concern — its
- * results (HitList) and state (useSeedSearch) live alongside it here. Option
- * state lives in useSeedSearch (via Atlas) so runSearch reads it directly;
- * this component only renders and edits it.
+ * Both live *inside* the ask form, next to the source-scope picker, for the
+ * same reason that one does: they belong to the thing you are about to send.
+ * The filters deliberately sit outside the toggle rather than inside it —
+ * they bind the researcher's paper searches too, so they are the bar's
+ * filters, not direct search's (see `api/search.ts`).
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
 import { DEFAULT_SEARCH_OPTIONS, getFields } from '../api'
 import type { Field, Provider, SearchOptions } from '../api'
 import './search.css'
 
-/** Props for {@link Search}. */
-export interface SearchProps {
-  /** The controlled search box value. */
-  query: string
-  onQueryChange: (query: string) => void
-  /** Submit handler (routes to graph-load or keyword search). */
-  onSubmit: (event: FormEvent) => void
-  /** A search is in flight (disables the button, swaps its label). */
-  searching: boolean
-  /** A graph is loading (also disables the button). */
-  loadingGraph: boolean
-  /** The active search options (all optional; the defaults search everything
-   *  with the analyst on). */
+/** Props for {@link SearchControls}. */
+export interface SearchControlsProps {
+  /** Direct search is armed — the next send goes to the scout, not the
+   *  researcher. */
+  direct: boolean
+  onDirectChange: (direct: boolean) => void
+  /** The active filters (all optional; the defaults filter nothing). */
   options: SearchOptions
   onOptions: (next: SearchOptions) => void
-  /** The selected provider — the field picker fetches its vocabulary and the
+  /** The selected provider — the field picker fetches its vocabulary, and the
    *  filter values (field ids) are provider-specific. */
   provider: Provider
+  /** The filter popover is open (one shared open-slot with the other pickers
+   *  in the bar, so opening one closes the others). */
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 /**
@@ -133,23 +129,21 @@ function YearRange({ options, onOptions }: YearRangeProps) {
 }
 
 /**
- * Render the seed-search form with its collapsible options popover.
+ * Render the direct-search toggle and the filter popover beside it.
  *
- * @returns The search box (form + popover + active-option badge).
+ * @returns The two inline controls (and the popover, when open).
  */
-export default function Search({
-  query,
-  onQueryChange,
-  onSubmit,
-  searching,
-  loadingGraph,
+export default function SearchControls({
+  direct,
+  onDirectChange,
   options,
   onOptions,
   provider,
-}: SearchProps) {
-  const [open, setOpen] = useState(false)
-  // The field vocabulary loads lazily the first time the options popover opens,
-  // so the common no-option path never pays the fetch. null = not yet loaded.
+  open,
+  onOpenChange,
+}: SearchControlsProps) {
+  // The field vocabulary loads lazily the first time the popover opens, so the
+  // common no-filter path never pays the fetch. null = not yet loaded.
   const [fieldOptions, setFieldOptions] = useState<Field[] | null>(null)
   // Each provider has its own field vocabulary — drop the cached options when
   // the provider changes so the next open refetches the right one.
@@ -160,14 +154,8 @@ export default function Search({
     if (open && fieldOptions === null) getFields(provider).then(setFieldOptions)
   }, [open, fieldOptions, provider])
 
-  // Everything that strays from the defaults counts toward the badge — the
-  // analyst switch included, so a closed popover still shows that the next
-  // search behaves differently.
   const activeCount =
-    (options.yearFrom != null ? 1 : 0) +
-    (options.yearTo != null ? 1 : 0) +
-    options.fields.length +
-    (options.analyst ? 0 : 1)
+    (options.yearFrom != null ? 1 : 0) + (options.yearTo != null ? 1 : 0) + options.fields.length
 
   /**
    * Add a field to the filter (deduped).
@@ -190,42 +178,52 @@ export default function Search({
   }
 
   return (
-    <div className="search-box">
-      <form
-        className="seed-search"
-        data-tour="search"
-        onSubmit={(event) => {
-          setOpen(false) // collapse the options popover once a search is fired
-          onSubmit(event)
-        }}
+    <div className="search-controls">
+      <button
+        type="button"
+        className={`bar-toggle ${direct ? 'on' : ''}`}
+        data-tour="direct-search"
+        aria-pressed={direct}
+        onClick={() => onDirectChange(!direct)}
+        title={
+          direct
+            ? 'Direct search is on — your next message looks up papers and lists them, with no answer written'
+            : 'Direct search: look up papers and list them to pick from, instead of asking the assistant a question'
+        }
       >
-        <input
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search a paper by title, or paste an arXiv id / URL…"
-          aria-label="Search for a paper to explore"
-        />
-        <button
-          type="button"
-          className={`filter-toggle ${activeCount ? 'on' : ''}`}
-          data-tour="search-options"
-          onClick={() => setOpen((prev) => !prev)}
-          title="Optional search settings. Filter by year or field, or turn off the AI query expansion."
-        >
-          Options{activeCount ? ` · ${activeCount}` : ''}
-        </button>
-        <button type="submit" disabled={searching || loadingGraph}>
-          {searching ? 'Searching…' : 'Explore'}
-        </button>
-      </form>
+        <span aria-hidden="true">🔍</span>
+        <span className="toggle-label">Find papers</span>
+      </button>
+      <button
+        type="button"
+        className={`bar-toggle ${activeCount ? 'on' : ''}`}
+        data-tour="search-filters"
+        onClick={() => onOpenChange(!open)}
+        title="Restrict which papers can be found — by publication year or field of study. Applies to direct search AND to the assistant's own paper searches."
+      >
+        {/* A funnel, drawn rather than borrowed from the emoji table: docked in
+            the side panel the labels collapse away and this is all that's
+            left, so it has to render identically everywhere. */}
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path
+            d="M2.5 3.2h11l-4.2 5v4.3l-2.6 1.3V8.2z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="toggle-label">Filters</span>
+        {activeCount ? <span className="toggle-count">{activeCount}</span> : null}
+      </button>
 
       {open && (
         <div className="filter-pop">
           <button
             type="button"
             className="link-btn filter-close"
-            onClick={() => setOpen(false)}
-            aria-label="Close the search options"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close the filters"
           >
             ✕
           </button>
@@ -260,29 +258,10 @@ export default function Search({
               ))}
             </div>
           )}
-          <div className="filter-row analyst-row">
-            <span className="filter-label">AI</span>
-            <div className="analyst-col">
-              <label
-                className="analyst-toggle"
-                title="An AI model expands acronyms and recalls exact paper titles before the search runs. Untick to search your words as typed, with no AI call."
-              >
-                <input
-                  type="checkbox"
-                  checked={options.analyst}
-                  onChange={(event) => onOptions({ ...options, analyst: event.target.checked })}
-                />
-                Expand my query before searching
-              </label>
-              <span className="filter-hint">
-                The search only matches words, so “DQN” misses papers that never spell it out. AI
-                adds the full terms first.
-              </span>
-            </div>
-          </div>
           <div className="filter-foot">
             <span className="filter-hint">
-              Optional — applies to the next search (ignored for a pasted id/URL).
+              Applies to every paper search — direct, and the assistant’s own. Citation links on the
+              graph are never filtered.
             </span>
             {activeCount > 0 && (
               <button className="link-btn" onClick={() => onOptions(DEFAULT_SEARCH_OPTIONS)}>

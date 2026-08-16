@@ -35,7 +35,8 @@ from ..agents import events, streams
 from ..agents.models import LectureMode, PlayedBeat, PlayedLecture
 from ..agents.orchestrators import lecturer, researcher
 from ..config import config
-from ..services.graph import Node, resolve_provider
+from ..services import search as search_service
+from ..services.graph import Node, Provider, resolve_provider
 from .sse import sse, sse_response
 
 bp = Blueprint("agents", __name__)
@@ -60,6 +61,51 @@ _SOURCES_SESSIONS: dict[str, list[dict]] = {}
 # marker for this turn's figure, and the image falls back to the end of the
 # bubble.
 _FIG_MARKER_RE = re.compile(r"[ \t]*<<FIG \d+>>\n?")
+
+
+def _opt_filters(payload: dict, provider: Provider) -> dict:
+    """Parse the optional paper-discovery filters from a request body.
+
+    The chat bar carries one set of filters for both of its modes, so the same
+    year window and field restriction a direct search would apply also reach
+    the researcher — which forwards them to every scout it sends out. They
+    scope *discovery* only; citation hops ignore them (see ``ResearcherDeps``).
+
+    Args:
+        payload: The parsed JSON body.
+        provider: The resolved graph provider, for validating field values
+            against the right vocabulary.
+
+    Returns:
+        ``{year_from, year_to, fields}`` ready to splat into
+        ``researcher.answer``. Absent, blank, or non-numeric years become
+        None; unknown field values are dropped.
+    """
+
+    def year(name: str) -> int | None:
+        """Read one optional year from the payload.
+
+        Args:
+            name: The key to read (``year_from`` / ``year_to``).
+
+        Returns:
+            The year as an int, or None when absent or unparseable.
+        """
+        raw = payload.get(name)
+        if isinstance(raw, int):
+            return raw
+        try:
+            return int(str(raw).strip())
+        except (TypeError, ValueError):
+            return None
+
+    raw_fields = payload.get("fields")
+    fields = [str(value) for value in raw_fields] if isinstance(raw_fields, list) else []
+    return {
+        "year_from": year("year_from"),
+        "year_to": year("year_to"),
+        "fields": search_service.valid_fields(provider, fields),
+    }
 
 
 def _opt_source_ids(payload: dict) -> list[str] | None:
@@ -279,6 +325,7 @@ def api_ask() -> ResponseReturnValue:
                     source_ids=source_ids,
                     lectures=lectures,
                     provider=provider,
+                    **_opt_filters(payload, provider),
                 )
             ),
             store=_QA_SESSIONS,
@@ -334,6 +381,7 @@ def api_ask_sources() -> ResponseReturnValue:
                     history=history,
                     source_ids=source_ids,
                     provider=provider,
+                    **_opt_filters(payload, provider),
                 )
             ),
             store=_SOURCES_SESSIONS,

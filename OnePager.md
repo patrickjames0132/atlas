@@ -104,7 +104,7 @@ optional, behind a key.
 - **Graph renderer:** [`react-force-graph-2d`](https://github.com/vasturiano/react-force-graph)
   (canvas force-directed with custom node painting; Force ↔ Timeline layouts).
   Sigma.js + graphology remains the fallback if we ever need very large graphs.
-- **AI teacher:** a **PydanticAI agent crew** (query_analyst / librarian /
+- **AI teacher:** a **PydanticAI agent crew** (librarian /
   lecturer / researcher behind a deterministic orchestrator) on the Anthropic
   API, streaming end-to-end over SSE.
 - **Local library (bring-your-own sources):** PDFs/URLs chunked and embedded
@@ -156,38 +156,21 @@ optional, behind a key.
       neighbourhood and the graph has grown past it. The second is more
       honest and costs a sentence. *(Patrick's report, 2026-08-15.)*
 
-- [ ] **Does the header search bar still earn its place?** — an open design
-      question, not yet a decision. The chat bar now does much of what the seed
-      search does: ask about a topic, get papers back, click a citation chip to
-      map one. Header search is the only path that goes *straight* from a title
-      or a pasted arXiv id to a graph, with no answer in between — real value
-      when you know exactly which paper you want, and it's cache-first and
-      LLM-free (`query_analyst` expansion is optional and skippable), which the
-      chat path is not. **The question to answer before touching it:** can one
-      bar serve both without making the fast path slow — e.g. routing a pasted
-      id or an exact-title match straight to a graph (`ID_RE` already does this
-      in `Atlas.tsx`'s submit) while anything conversational goes to the agent?
-      If yes, the header search folds in and the landing page gets simpler
-      still. If no, they're two different intents that happen to look alike, and
-      the honest answer is to keep both and make the split legible. Worth
-      deciding *before* more UI is hung off either one. *(Patrick's question,
-      2026-08-14.)*
-
-      **Now entangled with a bigger one:** the header is going away entirely,
-      replaced by a **collapsible side menu** in the ChatGPT mould *(from the
-      `todos.md` inbox, 2026-08-15)*. That doesn't answer the question above so
-      much as force it — "does the search bar earn its place" becomes "does it
-      earn a place in the new shell, and where", and the answer shapes the
-      shell rather than the other way round. So decide the search bar first,
-      then design the menu around the answer. Everything the header carries has
-      to land somewhere in that shell: the seed search, the Data Provider
-      dropdown (whose off-centre label is its own small ticket, likely moot
-      here), Sources, Sessions, Settings, and the theme toggle. Two things to
-      settle early because they're easy to lose in a redesign: what the landing
-      surface looks like with no chrome at all (it's currently the app's whole
-      first impression), and where the tour's anchors go — several steps target
-      header elements by `data-tour`, and a step whose target no longer exists
-      is silently skipped by `presentIf` rather than failing loudly.
+- [ ] **The collapsible side menu** — the header goes away entirely, replaced
+      by a side menu in the ChatGPT mould *(from the `todos.md` inbox,
+      2026-08-15)*. This was entangled with "does the header search bar earn
+      its place"; **that half is now answered** — the search box folded into
+      the chat bar in **v7.6.0** (see [docs/history.md](docs/history.md)), so
+      the shell only has to rehome what is left: the Data Provider dropdown
+      (whose off-centre label is its own small ticket, likely moot here), the
+      seed title, Library, Sessions, Settings, the theme toggle and the tour
+      launcher. Two things to settle early because they are easy to lose in a
+      redesign: what the landing surface looks like with no chrome at all
+      (it is currently the app's whole first impression — and now that the
+      chat bar *is* the search, it carries even more of it), and where the
+      tour's anchors go, since several steps target header elements by
+      `data-tour` and a step whose target no longer exists is silently skipped
+      by `presentIf` rather than failing loudly.
 
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
@@ -223,7 +206,7 @@ optional, behind a key.
       `conversational` line on a turn that clearly asked something is the
       signal. If it ever does slip, the lever is a cheap pre-classifier
       deciding the kind before the researcher runs, so the answering model
-      can't grant itself the exemption (`query_analyst` is the pattern).
+      can't grant itself the exemption (`summarizer` is the pattern).
       Related gap, unbuilt: a user can say *"answer from your own knowledge,
       don't search"* and nothing expresses that — with a library in scope the
       guard would override an explicit instruction.
@@ -663,26 +646,6 @@ optional, behind a key.
       button and has to grow with it or the hover swap will jump.
       *(From the `todos.md` inbox, 2026-08-14.)*
 
-- [ ] **Reorder the landing tour — it still teaches the old front door** —
-      `HOME_TOUR` (`frontend/src/tour/steps.ts`) opens with "Start with a
-      paper" on the header search, then search options, then the data source,
-      then the library, and only reaches the chat bar at step 6 ("Start
-      here"). That order was right when home *was* the search box; since
-      v6.13.0 the chat bar is the front door, so the tour now spends five
-      steps on secondary controls before naming the thing the page is built
-      around — and the step that finally does is titled as if it were the
-      beginning. Lead with the chat bar and let the rest follow it.
-
-      **Two things to decide while reordering.** The step copy is written to
-      be read *in sequence* ("This is the front door…", "Once a map is up this
-      chat collapses…"), so moving steps means rewriting the connective
-      tissue, not just permuting an array. And this overlaps the open question
-      of whether the header search bar still earns its place (see "Teacher &
-      agent reach") — if that resolves toward folding search into the chat
-      bar, the first three steps stop existing rather than moving. Worth
-      settling that first if it's close; otherwise reorder now and accept the
-      rework. *(From the `todos.md` inbox, 2026-08-14.)*
-
 - [ ] **Animate the arrival of the graph** — the sibling of the chat-motion
       work that shipped in v6.15.0 (see [docs/history.md](docs/history.md)),
       and the bigger of the two. Today the landing→graph
@@ -909,7 +872,7 @@ optional, behind a key.
       rule. *(From the `todos.md` inbox, 2026-07-20.)*
 
 - [ ] **A startup discovery feed — hottest & latest papers** — the app opens to
-      a bare search box; give it a landing **feed of papers to click into**, with
+      a bare chat bar; give it a landing **feed of papers to click into**, with
       a **tab switch** between *Hottest* (trending / recently most-cited) and
       *Latest* (newest) across all fields. Clicking a paper seeds its graph, the
       same as a search hit. **The hard part is the data, not the tabs:** neither
@@ -1033,9 +996,9 @@ optional, behind a key.
       `SKILLS` tuples. *(From a session side-question, 2026-07-08.)*
 - [ ] **Cached papers don't match the query agent's expanded query** — papers
       served from the local sources cache don't seem to line up with the query
-      the query-analyst expanded to, so the researcher may ground on the wrong
+      the scout searched for, so the researcher may ground on the wrong
       cached hits. Investigate the retrieval/cache-key path vs. the expanded
-      query (query_analyst → researcher/retrieval). *(From the `todos.md` inbox,
+      query (paper scout → researcher/retrieval). *(From the `todos.md` inbox,
       2026-07-08.)*
 - [ ] **Graph build should survive S2 being down without trapping the user** —
       if Semantic Scholar is unavailable mid-build, the error message should be

@@ -66,6 +66,34 @@ log = logging.getLogger(__name__)
 #: by the caller (the header dropdown), defaulting to ``config.providers.default_provider``.
 Provider = Literal["s2", "openalex"]
 
+SNAPSHOT_VERSION = "v2"
+"""Schema version baked into every graph-snapshot cache key.
+
+Bump it whenever the ``Graph`` model **loses** a field: ``extra="forbid"``
+turns a stored snapshot carrying the dead field into a validation *error*
+rather than a miss, so old entries have to become unreadable instead of
+poisonous. They age out on the TTL. (v2 = v7.5.0, which dropped
+``Counts.similar``.)"""
+
+
+def snapshot_prefix(provider: Provider) -> str:
+    """The cache-key prefix every one of a provider's graph snapshots shares.
+
+    Lives here, and is used by everything that touches these keys, because the
+    v2 bump proved what happens otherwise: ``local_search`` scanned a
+    hardcoded ``graph:{provider}:`` and silently matched **nothing** from
+    v7.5.0 onward — no error, no empty-cache warning, just a cache-first
+    search that had quietly stopped being cache-first. One writer of a key
+    format, one reader.
+
+    Args:
+        provider: ``s2`` or ``openalex``.
+
+    Returns:
+        The prefix, ending in a colon, ready to concatenate or scan with.
+    """
+    return f"graph:{SNAPSHOT_VERSION}:{provider}:"
+
 
 def resolve_provider(raw: str | None) -> Provider:
     """Validate a requested provider name, falling back to the configured default.
@@ -343,7 +371,7 @@ def build_graph(
     # a validation error rather than a miss. Bumping this makes old entries
     # unreadable instead of poisonous; they age out on the TTL. Bump it again
     # whenever the Graph schema loses a field.
-    cache_key = f"graph:v2:{provider}:{seed_ref}{shape.cache_suffix()}"
+    cache_key = f"{snapshot_prefix(provider)}{seed_ref}{shape.cache_suffix()}"
     if not refresh:
         cached = cache.get(cache_key, config.graph.cache_ttl)
         if cached:

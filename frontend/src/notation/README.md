@@ -66,7 +66,7 @@ there are two entry points sharing one parser:
 `<MathText>` (HTML): `detail/DetailPanel.tsx` (title, abstract, TL;DR, and its
 own paper figures' captions), `teacher/transcript/BeatList.tsx` (beat heading +
 text), `teacher/transcript/ChatMessage.tsx` (answer prose),
-`search/HitList.tsx` (hit titles — both the cache and live-Semantic-Scholar
+`teacher/transcript/AnswerMarkdown.tsx` (paper titles in a direct-search list —
 lists), `teacher/figures/FigCard.tsx` + `figures/Lightbox.tsx` (figure title +
 caption). Every figure-caption render path is covered — the detail panel's
 inline captions, the teacher's inline `FigCard`, and the shared enlarged

@@ -51,6 +51,13 @@ export interface GraphNode {
   authors?: string | null
   url: string | null
   /**
+   * Only on papers from a direct search's `cached` frame: this paper's OWN
+   * graph is already cached and unexpired, so opening it costs no provider
+   * call at all. Absent everywhere else — a graph neighbour has no reason to
+   * know, and the flag is about the cache, not the paper.
+   */
+  has_graph?: boolean
+  /**
    * Semantic Scholar's own field-of-study categories (e.g. "Computer
    * Science", "Mathematics"), shown as a tag layer beside the paper's arXiv
    * categories. Empty for graph neighbors until the detail panel hydrates

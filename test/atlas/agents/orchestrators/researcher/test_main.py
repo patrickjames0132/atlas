@@ -95,7 +95,7 @@ def stub_scout(monkeypatch, found=None, summary="nothing new"):
         summary: The scout's own note about the search.
     """
 
-    async def fake_scout(need, provider, known_ids):
+    async def fake_scout(need, provider, known_ids, **filters):
         return papers_worker.ScoutResult(found=list(found or []), summary=summary, queries=[need])
 
     monkeypatch.setattr(researcher.tools.papers, "scout", fake_scout)
@@ -846,7 +846,7 @@ def test_a_repeated_need_does_not_re_run_the_scout(monkeypatch):
     query strings, so the visited-set has to key on the need."""
     calls: list[str] = []
 
-    async def counting_scout(need, provider, known_ids):
+    async def counting_scout(need, provider, known_ids, **filters):
         calls.append(need)
         return papers_worker.ScoutResult(found=[], summary="none", queries=[need])
 
@@ -1071,3 +1071,43 @@ def test_a_scout_announces_itself_before_it_runs(monkeypatch):
         (True, "recent work"),   # announced, before the scout ran
         (False, "recent work"),  # and reported, after
     ]
+
+
+def test_the_chat_bars_filters_reach_the_scout_the_researcher_sends_out(monkeypatch):
+    """One set of filters for the whole bar, not one per mode: a reader who
+    narrows to 2020+ compsci means it whether they direct-search or ask."""
+    seen = {}
+
+    async def recording_scout(need, provider, known_ids, **filters):
+        seen.update(filters)
+        return papers_worker.ScoutResult(found=[], summary="none", queries=[need])
+
+    monkeypatch.setattr(researcher.tools.papers, "scout", recording_scout)
+    model = scripted(
+        [("find_papers", ['{"need": "error correction"}'])],
+        [final("Answering.", [])],
+    )
+    run(model, monkeypatch, year_from=2020, year_to=2024, fields=["Computer Science"])
+    assert seen == {"year_from": 2020, "year_to": 2024, "fields": ["Computer Science"]}
+
+
+def test_filters_scope_discovery_and_leave_citation_hops_alone(monkeypatch):
+    """Deliberate asymmetry: find_papers goes looking for papers that could be
+    anything, expand_node walks edges somebody actually wrote. Filtering a
+    reference list by year wouldn't narrow a search — it would hide real
+    citations and leave the graph quietly lying about what cites what."""
+    seen = {}
+    monkeypatch.setattr(
+        researcher.tools.traversal, "neighbors",
+        lambda node_id, relation, limit, provider: seen.update(
+            relation=relation, args=(node_id, limit, provider)
+        ) or [],
+    )
+    model = scripted(
+        [("expand_node", ['{"index": 1, "relation": "references"}'])],
+        [final("Answering.", [])],
+    )
+    run(model, monkeypatch, year_from=2020, fields=["Computer Science"])
+    # neighbors takes no filter arguments at all — the hop is unfiltered by
+    # construction, which is the guarantee this test pins.
+    assert seen["relation"] == "references"

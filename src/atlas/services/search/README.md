@@ -1,116 +1,88 @@
-# `services.search`
+# `services/search`
 
-Seed discovery — finding the paper you'll drop into the graph.
+Seed discovery over the local snapshot cache.
 
 ```
 search/
-  discovery.py   — live_search (S2) + local_search (cache)
+  discovery.py   — local_search (cache) + valid_fields (filter validation)
 ```
 
-`__init__.py` re-exports `live_search` / `local_search`, so callers use
-`search.live_search(...)` directly.
+`__init__.py` re-exports both, so callers use `search.local_search(...)`
+directly.
 
-## Why it exists
+## What used to be here, and where it went (v7.6.0)
 
-Before you can build a graph you need a seed paper. `search/` (in `discovery.py`)
-is how you find one, two complementary ways:
+`live_search` lived here: query-analyst expansion, verified title matches,
+then one lexical provider search, merged and cached whole. It is **gone**, and
+so is the `query_analyst` agent it called.
 
-- **`live_search`** — a relevance search across all of Semantic Scholar
-  (`s2.search_papers` → `/paper/search`). This replaced the app's earlier
-  arXiv-only search: S2 covers 200M+ papers across venues, not just arXiv
-  preprints. Optional **year** and **fields-of-study** filters (S2's own ~20
-  fields, from `semantic_scholar.vocab` — not arXiv categories, which S2 doesn't
-  use).
-- **`local_search`** — an instant search over the graph snapshots already in the
-  SQLite cache. Purely local: it's the result you see while `live_search` is
-  still in flight, and the *only* result available when S2 is rate-limiting us.
-  "If you've seen a paper on a graph before, you can find it again offline."
+The paper scout does all three jobs better. It reformulates instead of
+expanding once (it can look at what came back and search again); it resolves
+recalled titles through its own `match_title` tool; and it has a semantic
+channel this never had. Keeping both would have left **two implementations of
+"search papers"** — the same duplication the v7.0.0 worker split was made to
+end, one level up. `/api/search` now runs the scout directly.
 
-## `live_search`, and the query-analysis seam
-
-`live_search` strips the query, then runs three gates in order:
-
-1. **A pasted arXiv id/URL** (`arxiv.extract_id`) resolves directly via an
-   `ARXIV:<id>` lookup — no expansion (an id isn't vocabulary; an "improved"
-   id could only be a wrong one), no filters (they never apply to an
-   explicit lookup). An id S2 doesn't know returns nothing rather than
-   falling through to a junk lexical search of the id text.
-2. Otherwise the query goes through `_analyze`, and the analyst's
-   **confidently recalled titles** are verified against `s2.match_title`
-   (S2's `/paper/search/match`; a match failure — including an S2 error —
-   skips that title, never the search). Verified papers lead the results.
-   **Unless `analyst=False`** (the search bar's Options checkbox, v5.18.0):
-   then this whole step is skipped — no LLM call, no recalled titles — and
-   step 3 runs on the words as typed. The LLM round-trip (and its spend) is
-   the user's to decline per search.
-3. The **expanded query** (or the raw one, analyst off) runs through
-   `s2.search_papers`, unwrapped into bare node dicts (so live and local
-   search return the same shape), deduped against the verified hits, capped
-   at `limit` together.
-
-`_analyze` delegates to the **query analyst agent**
-(`agents.query_analyst.analyze`). The problem it solves: S2 search is
-*lexical*, so a query like "DQN" misses the seminal papers that never spell
-out the acronym in their title/abstract. Expansion ("DQN" → "DQN deep
-Q-network deep Q-learning") lets the search meet them halfway — and for
-famous papers the analyst goes further, naming their exact titles from
-parametric knowledge, which the title match verifies (an invented title
-matches nothing and costs nothing beyond one lookup). The analyst
-**degrades to a passthrough on any failure** (no key, network down, rate
-limit), so search never breaks because the LLM hiccuped — see
-`agents/query_analyst/README.md`. (Historical note: this seam spent Phase 3
-as a documented passthrough precisely so the call site wouldn't move when
-the agent landed — and it didn't.)
-
-Live-search results are **cached whole for a day** (the graph-snapshot
-TTL), keyed by query + filters + the analyst flag (a raw search and an
-expanded search return different results, so neither may serve the other's
-entry): re-typing a recent query answers instantly — no analyst call, no S2
-requests. (The local snapshot search can't serve
-acronym queries — "DQN" appears in no cached *title* — so repeat-query
-caching is what makes the second search instant.)
+What stayed is the half the scout doesn't duplicate: reading the cache. And it
+stayed as a *function*, not a route — `/api/local_search` went too, because
+the scout calls `local_search` **inside** its own `search` tool. That placement
+is the point: a tool is the model's to skip, a line inside the tool isn't, so
+a rate-limited provider still answers from graphs already on disk without
+depending on the model choosing to ask.
 
 ## `local_search`, step by step
 
-1. **Tokenize** the query (lowercased whitespace split); blank → no hits.
-2. **Scan every `graph:` snapshot** in the cache. For a snapshot that's still
-   *fresh* (`config.graph.cache_ttl`), record its seed's ids in `fresh_seeds`
-   (these are the papers whose own graph is cached — exploring them is free).
-3. **Match** each node: every query token must appear (case-insensitive
-   substring) in `title + authors`; apply the optional year window (a bounded
-   filter excludes undatable papers).
-4. **Dedupe** across snapshots by paper id, keeping the richer record — the same
-   paper can be a bare neighbor in one graph and a hydrated seed (with authors)
-   in another.
-5. **Rank**: whole-phrase title match first, then papers explored directly as
-   seeds, then citation count. Trim to `limit`.
-6. **Shape** each hit as `{id, arxiv_id, title, authors, year, citation_count,
-   url, has_graph}`, where `has_graph` marks the papers in `fresh_seeds`.
+Every whitespace token of the query is matched (case-insensitive substring)
+against a cached paper's title + authors, across every graph snapshot in the
+SQLite cache for the selected provider.
 
-## Design decisions worth knowing
+- **Scoped to one provider.** Snapshots are cached per provider
+  (`graph:v2:<provider>:<seed>`), and only the selected backend's are scanned —
+  so a paper surfaces here (and its `has_graph` "instant" flag is truthful)
+  only when it can actually be explored under the provider currently selected,
+  not merely because some other provider once cached it.
+- **Deduped across snapshots**, keeping whichever record carries more detail
+  (the same paper may appear as a bare neighbor in one snapshot and a hydrated
+  seed in another).
+- **Ranked**: whole-phrase title matches first, then papers explored directly
+  as seeds, then by citation count.
+- **Stale snapshots still match.** A paper's title doesn't expire; only the
+  `has_graph` freshness flag consults the TTL.
+- **Year filter yes, field filter no.** Cached nodes carry a year but no fields
+  of study. That asymmetry is load-bearing upstream: the scout **skips the
+  cache entirely** whenever a field filter is active, rather than returning
+  hits that quietly ignore it. A filter with a hole in it is worse than no
+  filter, because the UI promises it.
+- **Never raises for the caller's benefit.** The scout wraps the call and
+  degrades to zero cached hits on any failure — a broken cache read must not be
+  able to break a working search.
 
-- **Two searches, one shape.** Both now return S2-node-shaped dicts (`live`
-  unwraps S2 hits; `local` reads cached S2 nodes) — previously the arXiv-backed
-  live search returned a different shape from local search.
-- **Stale snapshots still match.** `local_search` matches on any cached snapshot,
-  fresh or not — a paper's title doesn't expire. Freshness only decides
-  `has_graph` (whether re-exploring is free).
-- **No field filter on `local_search`.** Cached nodes are matched purely on text;
-  the S2 fields filter is a `live_search`-only, server-side thing.
+## `valid_fields`
 
-## Who uses it, and how/why
+Field-filter values are provider-specific and the two vocabularies are
+**disjoint** — S2 filters on its own field *names*, OpenAlex on numeric
+`topics.field.id` values. So a value that survives a provider switch isn't
+merely stale, it's meaningless.
 
-- **`routes/search.py`** (ported) — `GET /api/search` (was `/api/arxiv_search`) calls
-  `live_search`, catching `s2.S2Error` → HTTP 502; `GET /api/local_search` calls
-  `local_search` and degrades to `[]` on any error (it must never block the live
-  search running alongside it). The route validates a submitted fields filter
-  against `semantic_scholar.vocab.valid_fields()`.
+`valid_fields(provider, values)` drops anything not in that provider's
+vocabulary. Both routes that accept a filter use it (`/api/search` and the two
+ask routes), so the same value is judged the same way whichever bar sent it.
+Dropping beats forwarding now that the filter *binds* every search: one bogus
+value would narrow a search to nothing while the UI still showed an active
+chip.
 
-## Testing
+## Who uses it
 
-`test_search.py` — `live_search` with the S2 calls mocked (unwrapping,
-filter forwarding, blank short-circuit, the pasted-id front door, verified
-titles leading + dedupe + match-failure tolerance, and that the query routes
-through the `_analyze` seam), and `local_search` against the real SQLite cache on the
-per-test temp DB (token matching + `has_graph`, dedupe-keeps-richer, the year
-filter, and the phrase/seed/citation ranking).
+- **`agents/workers/search/papers`** — the scout's `search` tool calls
+  `local_search` before every provider search.
+- **`routes/search.py`** — `_opt_fields` validates the query arg through
+  `valid_fields`; **`routes/agents.py`** — `_opt_filters` does the same for the
+  ask routes' JSON body.
+
+## How it's verified
+
+`test/atlas/services/test_search.py` — `local_search` against the real SQLite
+cache on the per-test temp DB (token matching, provider scoping, dedupe,
+ranking, the year filter), plus `valid_fields`'s per-provider vocabulary and
+its drop-the-unknown rule. The search itself is tested where it now lives:
+`test/atlas/agents/workers/search/papers/test_main.py`.

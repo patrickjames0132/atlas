@@ -43,8 +43,9 @@ files.
 - **Lazy expiration, deliberately — not a gap.** Expired cache rows are
   never actively deleted; `get()` just refuses to return them past
   `max_age`. This was a specific, discussed decision: `cache.scan(prefix)`
-  (which powers "instant search" — papers you've already explored) takes no
-  age filter at all and deliberately returns stale entries too. Actively
+  (which powers direct search's instant list — papers you've already
+  explored) takes no age filter at all and deliberately returns stale entries
+  too. Actively
   evicting expired rows would silently break that feature — most
   exploration history would vanish from instant search after a single day
   (the graph snapshot TTL). For a local single-user SQLite file, unbounded
@@ -56,6 +57,21 @@ files.
   keeps its old value" upsert behavior — a simplification was considered
   and deliberately declined in favor of the more obviously-correct
   two-step version.
+- **`cache.clear()` empties the table, and is safe by construction** (v7.6.0,
+  behind the settings modal's "Drop cache"). Everything in here is *derived* —
+  snapshots, searches, hydration — so the worst outcome is a slower next few
+  minutes. That is the whole reason a one-click button can exist, and the
+  reason it lives nowhere near session deletion: a session is the only copy of
+  something the reader made, and it is in a different table. `clear()` returns
+  the row count it removed so the UI can report a real number rather than
+  claiming success blankly.
+- **A prefix scan is a *silent* reader — see `docs/bugs.md`.** `scan()` can't
+  fail loudly: when the shape of a key changes under it, it doesn't raise, it
+  just stops matching, and "nothing cached" is exactly what a healthy empty
+  cache looks like. That is how `local_search` went blind for two releases
+  after graph snapshots gained a `v2:` segment. Anything that both writes and
+  prefix-scans a key must get the format from one place (graph snapshots now
+  use `services.graph.snapshot_prefix`).
 - **`cache.delete()` has no callers anywhere yet** — kept anyway (not
   deleted) as a natural, cheap-to-maintain piece of CRUD completeness for a
   key-value cache, and plausible for near-future use (e.g. invalidating a

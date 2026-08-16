@@ -13,9 +13,10 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 <Atlas>                            Atlas.tsx        — the shell
 ├─ header bar                      header/AtlasHeader.tsx
 │  ├─ brand ("Atlas" — click = Home: clears the workspace)
-│  ├─ search box + Options popover search/Search.tsx (year slider, field
-│  │                                picker, query-analyst on/off)
-│  └─ seed title · drawer toggles  (📚 Library · 🎓 Assistant · 🗂 Sessions · ⚙ Settings · ? tour)
+│  └─ seed title · data source · drawer toggles
+│                                   (📚 Library · 🎓 Assistant · 🗂 Sessions · ⚙ Settings · ? tour)
+│                                   — the search box left here in v7.6.0; the
+│                                   chat bar is the app's only text input now
 ├─ Library drawer (📚)             library/Sources.tsx
 ├─ Sessions drawer (🗂)            sessions/Sessions.tsx
 ├─ Settings modal (⚙)             settings/SettingsModal.tsx (config-file editor)
@@ -30,8 +31,7 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │                                 tree across both, so the switch never
    │                                 remounts it — see teacher/README.md.
    ├─ graph area                   graph/GraphExplorer.tsx
-   │  ├─ overlays (from the shell): hit list  search/HitList.tsx
-   │  │                             loading / error  (Atlas.tsx)
+   │  ├─ overlays (from the shell): loading / error  (Atlas.tsx)
    │  ├─ controls panel            graph/controls/GraphControls.tsx
    │  ├─ find control (🔍 → pill)  graph/controls/FindBar.tsx
    │  ├─ the canvas                graph/canvas/GraphCanvas.tsx
@@ -40,6 +40,9 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  └─ figure lightbox           figures/Lightbox.tsx
    └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked
       ├─ scope picker              teacher/ScopePicker.tsx (in the ask bar)
+      ├─ search controls           search/SearchControls.tsx (in the ask bar:
+      │                             the "Find papers" toggle + the Filters
+      │                             popover — year slider, field picker)
       ├─ "working" dots            teacher/HopDots.tsx (lecture button, send
       │                             control, and a bubble awaiting its first token)
       ├─ lecture beats             teacher/transcript/BeatList.tsx
@@ -59,7 +62,7 @@ knows URLs and SSE frames), `store/` (the four slices + typed hooks),
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
-`search/useSeedSearch.ts`, `detail/useSelection.ts`,
+`search/useDirectSearch.ts`, `detail/useSelection.ts`,
 `teacher/useConversation.ts` (each feature's state/logic hooks).
 
 Every folder has its own README with the full story — this file is just the

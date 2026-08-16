@@ -110,6 +110,27 @@ def delete(key: str) -> None:
         conn.execute("DELETE FROM cache WHERE key = ?", (key,))
 
 
+def clear() -> int:
+    """Empty the cache table entirely.
+
+    Everything here is **derived** — graph snapshots, search results, paper
+    hydration — so dropping it costs nothing but the time to refetch. That is
+    what makes a one-click "Drop cache" safe to offer, and why it is a
+    different act from deleting a saved session (which is the only copy of
+    something you made). Nothing else lives in this table.
+
+    Returns:
+        How many entries were removed, so the caller can say.
+
+    Raises:
+        sqlite3.Error: On database failures.
+    """
+    with _connect() as conn:
+        removed = conn.execute("SELECT COUNT(*) FROM cache").fetchone()[0]
+        conn.execute("DELETE FROM cache")
+    return int(removed)
+
+
 def scan(prefix: str) -> list[tuple[str, Any, float]]:
     """Fetch every entry whose key starts with a prefix — expired ones included.
 

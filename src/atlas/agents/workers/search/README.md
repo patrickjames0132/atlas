@@ -8,7 +8,8 @@ turn is about.
 ```
 workers/search/
   papers/     — the academic-paper source (Semantic Scholar / OpenAlex),
-                searched with reformulation and recency bounding
+                searched with reformulation, recency bounding, exact-title
+                recall and a semantic hop
   web/        — the open web, via Anthropic's provider-side WebSearchTool
 ```
 
@@ -32,7 +33,7 @@ re-litigated every time something new is added. Applied:
 | Capability | Verdict | Why |
 | --- | --- | --- |
 | **Web search** | worker | Both criteria, unambiguously. It must phrase the query, judge when it has enough, and compress long low-signal pages into findings — and those pages would crowd out the researcher's own context if they landed there. |
-| **Paper search** | worker | Judgment: *query reformulation, recency bounding, and which channel to use*. A lexical, citation-weighted search answers "what's new in X" with landmarks from a decade ago; the fix is to look at what came back and ask again with a year floor — or, when the vocabulary itself is the problem, to stop re-phrasing and hop semantically off a paper already found (`more_like`, v7.4.0). That is a loop with a decision in it, which is exactly what a function isn't. |
+| **Paper search** | worker | Judgment: *query reformulation, recency bounding, and which of three channels to use*. A lexical, citation-weighted search answers "what's new in X" with landmarks from a decade ago; the fix is to look at what came back and ask again with a year floor — or, when the vocabulary itself is the problem, to stop re-phrasing entirely and either name the paper outright (`match_title`, v7.6.0) or hop semantically off one already found (`more_like`, v7.4.0). That is a loop with a decision in it, which is exactly what a function isn't. |
 | `traversal.expand` | function | *Which* node to expand is the orchestrator's reasoning about a graph it can see. Delegating it would blind the agent that has the map. |
 | `sources.search` (the library) | function | Passages already come back compact and `[Sn, p.N]`-tagged — there is nothing to compress and no query to reformulate. Promote it later **if measured**, not on principle. |
 | `read_paper`, figure mining | function | Fetch and format. No decision inside. |
@@ -130,3 +131,34 @@ cache hit; a zero web budget unregisters the tool. The suite forces the web
 scout **off** by default in `test/atlas/conftest.py`, for the same reason the
 corpus and the real embedder are forced off there: a capability configured on
 the developer's machine must not silently join every test.
+
+
+## Two callers, and what the difference is allowed to change (v7.6.0)
+
+The paper scout has two consumers now: the **researcher**, which folds its
+findings into an answer, and **`/api/search`** — direct search — which shows
+them to the reader as a list to pick from. Same worker, run two ways, and the
+boundary between what may differ and what may not is worth stating.
+
+**What the caller supplies** (legitimately different):
+
+- **The brief.** The scout's own prompt says to stop as soon as it has what
+  was asked for — right when a researcher is waiting on the papers, wrong when
+  a *reader* is. Direct search appends `_PICKER_BRIEF` asking for a spread
+  instead. It rides on the call, not in the shared prompt, precisely because
+  it is a fact about the consumer.
+- **`known_ids`.** The researcher passes what is already on the graph, so the
+  scout's summary can't claim to have found a paper the reader is looking at.
+  Direct search passes **nothing**: you are choosing a seed, and hiding a
+  paper because it happens to be on the canvas is exactly backwards.
+- **`limit`, and the filters.** A caller showing papers to a reader wants more
+  per lookup than one feeding another agent. The filters are the reader's
+  either way — the chat bar carries one set for both of its modes.
+- **`on_lookup`.** Direct search streams; the researcher already has its own
+  event bridge. A caller that doesn't pass it simply gets no progress.
+
+**What may not differ:** the return shape, the numbering rule (the scout's
+numbers are its own and never leave it), the dedupe, and the fact that a
+failure comes back as a summary rather than an exception. Those are the
+worker's contract, and a second caller is exactly the pressure that would
+erode them if they lived in the caller instead.

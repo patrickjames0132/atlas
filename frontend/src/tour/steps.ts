@@ -31,25 +31,33 @@ export const TOUR_KEYS = {
   graph: 'atlas.tour.graph',
 } as const
 
-/** The startup tour: the search surface, before any graph is loaded. */
+/** The startup tour: the chat bar, before any graph is loaded. */
 export const HOME_TOUR: TourStep[] = [
   {
-    target: '[data-tour="search"]',
-    title: 'Start with a paper',
+    target: '[data-tour="ask"]',
+    title: 'Start here',
     body:
-      'Search any paper by title — or paste an arXiv id or URL to jump straight to it. ' +
-      'Atlas maps the paper’s neighborhood: what it built on, who built on it, and ' +
-      'what’s happening there right now.',
+      'One box for everything. Ask a research question and the assistant goes looking — ' +
+      'through the literature, and through your own uploaded sources if you have any. ' +
+      'Or paste an arXiv id or URL to jump straight to that paper’s map. No graph or ' +
+      'library needed to begin; just saying hello stays a conversation.',
   },
   {
-    target: '[data-tour="search-options"]',
-    title: 'Tune the search',
+    target: '[data-tour="direct-search"]',
+    title: 'Or skip the question',
     body:
-      'Optional settings for the title search. Narrow it with a publication-year window ' +
-      'or a field-of-study picker. The search only matches words, so “DQN” would miss ' +
-      'papers that never spell it out — by default an AI model adds the full terms ' +
-      'first, and you can turn that off. A pasted id or URL ignores all of this and ' +
-      'loads its paper directly.',
+      'Switch the same box to a plain paper lookup: it searches, lists what it found, ' +
+      'and writes no answer. Click any paper in the list to map it. Reach for it when ' +
+      'you know roughly what you want and would rather choose for yourself.',
+  },
+  {
+    target: '[data-tour="search-filters"]',
+    title: 'Narrow what can be found',
+    body:
+      'Restrict every paper search to a publication-year window, a field of study, or ' +
+      'both. These are hard limits, not hints — and they apply to the assistant’s own ' +
+      'searches too, not just the direct lookup. Citation links on the graph are never ' +
+      'filtered: those are edges somebody actually wrote.',
   },
   {
     target: '[data-tour="provider"]',
@@ -75,15 +83,6 @@ export const HOME_TOUR: TourStep[] = [
       'Drop in many PDFs at once (or paste a URL) — each ingests with its own progress ' +
       'row. Everything is chunked and embedded locally: your books never leave this ' +
       'machine. Remove a source any time; the assistant only ever cites what’s here.',
-  },
-  {
-    target: '[data-tour="ask"]',
-    title: 'Start here',
-    body:
-      'This is the front door: ask a research question and the assistant goes looking — ' +
-      'through the literature, and through your own uploaded sources if you have any. ' +
-      'No graph or library needed to begin. Just saying hello stays a conversation; it ' +
-      'only goes digging when there is something to dig for.',
   },
   {
     target: '[data-tour="assistant-panel"]',
@@ -231,9 +230,9 @@ export const GRAPH_TOUR: TourStep[] = [
     body:
       'Click the 🔍 and type part of a title or author. The matching papers light up ' +
       'and everything else dims — all on your screen, nothing is fetched. Pressing ' +
-      'Enter (or “select” in the search bar) adds every match to the AI teacher’s ' +
-      'scope. Esc or ✕ clears the find and tucks it away. To pull new papers in, use ' +
-      'the search box up top.',
+      'Enter (or “select” in the find bar) adds every match to the AI teacher’s ' +
+      'scope. Esc or ✕ clears the find and tucks it away. This only searches what is ' +
+      'already drawn — to pull NEW papers in, use the chat bar in the assistant panel.',
   },
   {
     target: '[data-tour="details"]',

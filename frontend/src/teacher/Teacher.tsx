@@ -35,13 +35,22 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, KeyboardEvent } from 'react'
-import { LECTURE_TITLES, type AnswerFigure, type LectureMode } from '../api'
+import {
+  DEFAULT_SEARCH_OPTIONS,
+  LECTURE_TITLES,
+  type AnswerFigure,
+  type LectureMode,
+  type SearchOptions,
+} from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { loadLibrary, selectLibrary } from '../store/library'
 import { selectVisibleBeats, selectVisibleSourceRefs } from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
 import HopDots from './HopDots'
 import ScopePicker from './ScopePicker'
+import SearchControls from '../search/SearchControls'
+import { useDirectSearch } from '../search/useDirectSearch'
+import { ID_RE } from '../graph/model'
 import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
 import ChatMessage from './transcript/ChatMessage'
@@ -156,10 +165,24 @@ export default function Teacher({
   const [excludedLectures, setExcludedLectures] = useState<LectureMode[]>([])
   // Which scope picker's popover is open — one shared slot, so opening either
   // picker closes the other (their popovers overlap when both are open).
-  const [openScope, setOpenScope] = useState<'lectures' | 'sources' | null>(null)
+  const [openScope, setOpenScope] = useState<'lectures' | 'sources' | 'filters' | null>(null)
+  // Direct search armed: the next send goes to the paper scout and comes
+  // back as a list to pick from, instead of to the researcher for an answer.
+  const [direct, setDirect] = useState(false)
+  // The bar's filters. They bind BOTH modes (see api/search.ts), which is
+  // why they live out here beside the input rather than inside `direct`.
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS)
   // The answer figure opened full-screen (null = closed).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
+  // Direct search's own failure slot. Separate from the conversation's
+  // `error` because only a transport failure lands here — the scout
+  // degrades internally, so a rate-limited provider arrives as a normal
+  // result whose summary says so.
+  const [searchError, setSearchError] = useState<string | null>(null)
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
+  // Direct search shares the bar's busy state with the researcher: one bar,
+  // one spinner, and neither mode can be fired while the other is running.
+  const { searching, runSearch } = useDirectSearch(provider, searchOptions, setSearchError)
 
   // First reader fetches; the loaded flag keeps the drawer (and the remounts
   // that Home and a session restore still cause) from re-fetching a library
@@ -185,11 +208,28 @@ export default function Teacher({
   const lectureScope = playedModes.filter((mode) => !excludedLectures.includes(mode))
   const lectureItems = playedModes.map((mode) => ({ id: mode, title: LECTURE_TITLES[mode] }))
 
+  // One bar, three destinations — and which one runs is decided HERE, before
+  // any model is involved, rather than by asking an agent to classify the
+  // input. A pasted id is exact, so it needs nothing but a regex; direct
+  // search is deterministic apart from the queries the scout writes; only the
+  // third is open-ended.
   const submitQuestion = () => {
     const question = input.trim()
-    if (!question || asking) return
+    if (!question || asking || searching) return
     setInput('')
-    ask(question, scopeArg, lectureScope)
+    // A pasted arXiv id/URL is a statement of intent, not a question: land on
+    // that exact paper. Deliberately ahead of the direct-search toggle — you
+    // pasted the paper, so there is nothing left to search for, whichever
+    // mode happens to be armed.
+    if (ID_RE.test(question)) {
+      onPaperSeed(question)
+      return
+    }
+    if (direct) {
+      void runSearch(question)
+      return
+    }
+    ask(question, scopeArg, lectureScope, searchOptions)
   }
 
   const onAsk = (event: FormEvent) => {
@@ -467,7 +507,7 @@ export default function Teacher({
                   key={`c${index}`}
                   message={message}
                   active={activeChat === index}
-                  streaming={asking}
+                  streaming={asking || searching}
                   onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
                   onRefClick={onRefClick}
                   onGraphIds={onGraphIds}
@@ -489,7 +529,7 @@ export default function Teacher({
               ))}
           </>
         )}
-        {error && <div className="teacher-error">{error}</div>}
+        {(error || searchError) && <div className="teacher-error">{error ?? searchError}</div>}
       </div>
 
       {hasGraph && pickedCount > 0 && (
@@ -537,6 +577,15 @@ export default function Teacher({
             }}
           />
         )}
+        <SearchControls
+          direct={direct}
+          onDirectChange={setDirect}
+          options={searchOptions}
+          onOptions={setSearchOptions}
+          provider={provider}
+          open={openScope === 'filters'}
+          onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'filters' : null)}
+        />
         <textarea
           ref={inputRef}
           value={input}
@@ -580,9 +629,9 @@ export default function Teacher({
             it. Deliberately not disabled mid-flight: that was the old ellipsis,
             which looked inert and offered no way out of a long run. */}
         <button
-          type={asking ? 'button' : 'submit'}
+          type={asking || searching ? 'button' : 'submit'}
           className={asking ? 'is-stop' : undefined}
-          disabled={!asking && !input.trim()}
+          disabled={(!asking && !input.trim()) || searching}
           onClick={asking ? stopAsk : undefined}
           title={asking ? 'Stop generating' : undefined}
           aria-label={asking ? 'Stop generating' : 'Ask'}
@@ -592,6 +641,10 @@ export default function Teacher({
               <HopDots />
               <span className="stop-glyph" aria-hidden="true" />
             </>
+          ) : searching ? (
+            // A direct search is short and has no partial result worth
+            // keeping, so it shows progress without offering a stop.
+            <HopDots />
           ) : (
             '↑'
           )}

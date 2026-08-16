@@ -76,6 +76,20 @@ class ResearcherDeps:
     #: ``_canvas_growth``.
     on_canvas: set[str] = field(default_factory=set)
     provider: Provider = "s2"  # the graph provider — expand/search/hydrate follow it
+    #: The reader's search filters, forwarded verbatim to every scout
+    #: ``find_papers`` sends out. They live in the chat bar next to the
+    #: direct-search toggle, so they belong to *the bar* rather than to one of
+    #: its two modes: a reader who narrows to 2020+ compsci means it whether
+    #: they then search directly or ask a question.
+    #:
+    #: **Scoped to discovery, deliberately.** They bind ``find_papers``, which
+    #: goes looking for papers that could be anything, and NOT ``expand_node``,
+    #: which walks citations somebody actually wrote. Filtering a reference
+    #: list by year wouldn't narrow a search, it would hide real edges and
+    #: leave the graph quietly lying about what cites what.
+    filter_year_from: int | None = None
+    filter_year_to: int | None = None
+    filter_fields: list[str] = field(default_factory=list)
     #: Whether the web scout is on this run at all. False turns the tool off
     #: AND takes the web out of the coverage guard's reckoning — availability
     #: is one fact, and both consumers must read the same one or the guard
@@ -562,7 +576,14 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
     deps.searches_left -= 1
     deps.paper_searches_run += 1
 
-    result = await papers.scout(need, deps.provider, deps.known_ids)
+    result = await papers.scout(
+        need,
+        deps.provider,
+        deps.known_ids,
+        year_from=deps.filter_year_from,
+        year_to=deps.filter_year_to,
+        fields=deps.filter_fields,
+    )
 
     # Index assignment happens HERE and nowhere else. The scout returns raw
     # provider nodes precisely so it cannot number them: `[n]` must mean the

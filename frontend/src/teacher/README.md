@@ -271,3 +271,41 @@ One gesture, one rhythm, both defined in `teacher.css`.
 beats as they stream, a researcher answer with trace chips + an inline figure,
 the library chat with a scope subset, Clear detaching follow-up context,
 and a save→restore round trip rehydrating the whole conversation.
+
+
+## The chat bar is the app's only text input (v7.6.0)
+
+The header search box moved in here. Searching and asking were always two ways
+of saying "find me papers about this", and having them in two boxes meant
+picking the box before you knew which one you wanted.
+
+`Teacher` owns the two pieces of state that decides: `direct` (the 🔍 **Find
+papers** toggle) and `searchOptions` (the **Filters** popover). Both controls
+render inside the ask form, beside `ScopePicker`, for the reason that one
+does — they belong to the thing you are about to send. `search/SearchControls`
+draws them; `search/useDirectSearch` runs the scout.
+
+**Three destinations, decided in `submitQuestion` before any model runs:**
+
+1. a pasted arXiv id/URL → straight to the graph (`ID_RE`, no LLM at all),
+   checked **first**, because you pasted the paper and there is nothing left
+   to search for whichever toggle happens to be armed;
+2. `direct` armed → the paper scout, alone;
+3. otherwise → the researcher, as always.
+
+Two consequences worth knowing:
+
+- **Direct search has no reducer of its own.** It drives `turnStarted` →
+  `traceAdded` → `answerSet` → `paperRefsSet` — the same path a streamed
+  answer walks — so its result is an ordinary assistant turn that
+  `ChatMessage` renders, a click reseeds, and a saved session keeps it. The
+  one addition was `answerSet`, because this path's later text *supersedes*
+  its earlier text (the cached list, then the scout's) rather than continuing
+  it, which `tokenAppended` can't express.
+- **`streaming` is `asking || searching`.** One bar, one busy state: neither
+  mode can be fired while the other runs, and the send button shows the same
+  hopping dots either way.
+
+The filters ride on `ask` too, not just on direct search — see
+`search/README.md` for why they belong to the bar rather than to one of its
+modes.

@@ -141,16 +141,15 @@ from `config.json`.
 
 ### `llm.agents` — the agents this app runs
 
-A **list** with one entry per sub-agent package under
-`src/atlas/agents/` — they land one at a time (today:
-`query_analyst`, which expands seed-search queries; `summarizer`, the
-detail panel's on-demand paper TL;DR (generation only ever fires on the
-panel's explicit TL;DR toggle, cached per paper forever); the researcher,
-lecturer, researcher, and orchestrator follow), potentially on different
-vendors. Each entry:
+A **list** with one entry per sub-agent package under `src/atlas/agents/`,
+potentially on different vendors. Today: `summarizer` (the detail panel's
+on-demand paper TL;DR — generation only ever fires on the panel's explicit
+TL;DR toggle, cached per paper forever), `lecturer`, `researcher`, and the two
+workers it sends out, `paper_scout` and `web_scout`. Each entry:
 
 ```json
-{ "id": "query_analyst", "model": "anthropic:claude-haiku-4-5", "extras": {} }
+{ "id": "paper_scout", "model": "anthropic:claude-haiku-4-5",
+  "extras": { "searches": 4, "search_limit": 8 } }
 ```
 
 - **`id`** must be unique across the list — each agent package names the

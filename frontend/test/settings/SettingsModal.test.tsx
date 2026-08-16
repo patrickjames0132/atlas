@@ -43,7 +43,6 @@ function makeConfig(): AtlasConfig {
     llm: {
       providers: { anthropic: { api_key: 'sk-test' } },
       agents: [
-        { id: 'query_analyst', model: 'anthropic:claude-haiku-4-5', extras: {} },
         { id: 'summarizer', model: 'anthropic:claude-haiku-4-5', extras: {} },
         // Unique among the agents, so a display-value query lands on it.
         { id: 'lecturer', model: 'anthropic:claude-sonnet-4-6', extras: {} },
@@ -246,7 +245,7 @@ describe('SettingsModal', () => {
   it('lists every configured agent, not just the ones with knobs', async () => {
     await renderOpen()
     fireEvent.click(screen.getByText('Agents'))
-    for (const agent of ['Query analyst', 'Summarizer', 'Lecturer', 'Researcher']) {
+    for (const agent of ['Summarizer', 'Lecturer', 'Researcher']) {
       expect(await screen.findByText(agent)).toBeTruthy()
     }
   })

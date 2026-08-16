@@ -35,7 +35,7 @@ class FakeS2:
         self.calls.append(("recommendations", paper_id, limit))
         return [HIT]
 
-    def search_papers(self, query, limit, year_from, year_to):
+    def search_papers(self, query, limit, year_from, year_to, fields=None):
         self.calls.append(("search_papers", query, limit, year_from, year_to))
         return [HIT]
 
@@ -136,7 +136,7 @@ class FakeOpenAlex:
         self.calls.append(("related_works", work_id, limit))
         return [HIT]
 
-    def search_papers(self, query, limit, year_from, year_to):
+    def search_papers(self, query, limit, year_from, year_to, fields=None):
         # openalex.search_papers returns BARE node dicts (NOT the {"node": ...}
         # traversal shape) — mirror that so the wrap-at-the-boundary is tested.
         self.calls.append(("search_papers", query, limit, year_from, year_to))

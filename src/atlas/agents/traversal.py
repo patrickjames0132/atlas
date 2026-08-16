@@ -134,6 +134,7 @@ def search(
     year_from: int | None = None,
     year_to: int | None = None,
     provider: Provider = "s2",
+    fields: list[str] | None = None,
 ) -> list[dict]:
     """Run a free-text search on the selected provider, cached for a day.
 
@@ -147,6 +148,10 @@ def search(
         year_from: Earliest publication year (inclusive), or None.
         year_to: Latest publication year (inclusive), or None.
         provider: Which backend to search (matches the graph provider).
+        fields: Field-of-study values to restrict to (any-of), or None for no
+            restriction. **Provider-specific** — S2 field names under ``s2``,
+            OpenAlex numeric field ids under ``openalex`` (the two vocabularies
+            are disjoint), so the caller must pass the active provider's own.
 
     Returns:
         ``[{"node": ...}]`` hits, in the traversal shape.
@@ -156,7 +161,10 @@ def search(
         openalex.OpenAlexError: When an OpenAlex request fails (``openalex``).
     """
     normalized = query.strip().lower()
-    cache_key = f"search:{provider}:{normalized}:{year_from or ''}-{year_to or ''}:{limit}"
+    fields_key = ",".join(fields) if fields else ""
+    cache_key = (
+        f"search:{provider}:{normalized}:{year_from or ''}-{year_to or ''}:{limit}:{fields_key}"
+    )
     cached = cache.get(cache_key, config.graph.cache_ttl)
     if cached is not None:
         return cached
@@ -164,8 +172,11 @@ def search(
         # openalex.search_papers returns BARE node dicts (the seed-search shape);
         # wrap them into the traversal ``[{"node": ...}]`` shape this function
         # promises (and the researcher's search tool expects). S2's already is.
-        hits = [{"node": node} for node in openalex.search_papers(query, limit, year_from, year_to)]
+        hits = [
+            {"node": node}
+            for node in openalex.search_papers(query, limit, year_from, year_to, fields)
+        ]
     else:
-        hits = s2.search_papers(query, limit, year_from, year_to)
+        hits = s2.search_papers(query, limit, year_from, year_to, fields)
     cache.set(cache_key, hits)
     return hits
