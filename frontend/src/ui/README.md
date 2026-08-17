@@ -41,6 +41,29 @@ width is capped, so narrowing the window borrows width and widening it hands
 the choice straight back. A drag is clamped as it moves, so the handle can
 never run away from the edge you are dragging.
 
+### A drag can also fold the panel shut — and pull it back open (v7.11.0)
+
+The `fold` option is opt-in: keep dragging past the floor and the hook ends the
+drag and calls the caller's `onToggle` instead of sitting at `min`. That is the
+Azure DevOps gesture, and it matches what the drag already means — someone
+hauling a panel as narrow as it goes wants the space, not the last 180px of it.
+
+The **folded panel keeps its handle**, and dragging it back past `openAt`
+unfolds it, because a collapsed edge you can't grab would make the collapse a
+one-way door. Three details make the pair behave:
+
+- Both thresholds are measured on the *unclamped* drag, so each needs
+  deliberate overshoot — merely bottoming out at `min` must not fold anything.
+- A folded panel measures from `collapsedWidth` (what is on screen), not from
+  the width it remembers; otherwise the first unfolding drag starts a couple of
+  hundred px ahead of the pointer and opens on the first pixel of movement.
+- The pre-drag width is restored (and left in storage) when it folds, so
+  re-opening returns the panel the reader had, not a floor-width sliver — and a
+  folded panel is never *sized* by the drag, only opened.
+
+Only the rail uses it today — the two right-docked panels close with their
+own ✕.
+
 ## Who uses it
 
 `detail/DetailPanel.tsx` and `teacher/Teacher.tsx` — the two right-docked
@@ -50,9 +73,11 @@ than nested in either feature folder.)
 ## How it's verified
 
 `tsc --noEmit` strict + oxlint, plus `test/ui/useResizablePanel.test.tsx` —
-width seeding, drag direction, the px bounds, the pointer-up persist, and the
-viewport cap (including that a widened window returns the stored choice). The
-feel of a live drag stays a browser-milestone item.
+width seeding, drag direction, the px bounds, the pointer-up persist, the
+viewport cap (including that a widened window returns the stored choice), and
+both halves of the fold — bottoming out at `min` must not fold, a real
+overshoot must, and the folded panel's handle must pull it back open. The feel
+of a live drag stays a browser-milestone item.
 
 ## `theme.ts` — light/dark
 

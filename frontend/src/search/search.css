@@ -6,8 +6,9 @@
    toggles) and the results moved into the transcript, where they are rendered
    by AnswerMarkdown like any other answer and need no styling of their own. */
 
-/* Deliberately NOT the popover's containing block — `.teacher-ask` is, so the
-   popover spans the whole chat bar rather than these two buttons. */
+/* Deliberately NOT the popover's containing block — whichever row the pair
+   lands in is (`.ask-tools` with no graph, the sticky `.section-head` with
+   one), so the popover spans the panel rather than these two buttons. */
 .search-controls {
   display: flex;
   gap: 6px;
@@ -49,9 +50,9 @@
 }
 
 /* Docked in the side panel there is no room for words: both toggles collapse
-   to their icons, exactly as the source-scope picker already does in this bar
-   (`.teacher-ask .scope-btn-label`). The landing composer has the width to
-   spell them out, and that is where a first-time reader meets them. */
+   to their icons, exactly as the source-scope picker beside them does
+   (`.ask-tools .scope-btn-label`, teacher.css). The landing tool row has the
+   width to spell them out, and that is where a first-time reader meets them. */
 .teacher:not(.landing) .bar-toggle {
   padding: 4px 7px;
 }
@@ -62,11 +63,11 @@
 /* --- optional pre-submit filters (year window + category picker) --- */
 .filter-pop {
   position: absolute;
-  /* Spans the bar (anchored to `.teacher-ask`, not to the button that opens
-     it — a popover the width of a button has no room for a year slider).
-     Opens UPWARD by default because that is where the room is: docked, and on
-     the landing surface once a conversation starts, the composer sits at the
-     bottom of its column. */
+  /* Spans its row (anchored to `.ask-tools` / `.section-head`, not to the
+     button that opens it — a popover the width of a button has no room for a
+     year slider). Opens UPWARD by default because that is where the room is:
+     the tool row sits at the bottom of the column, under the bar. (Docked it
+     rides the Chat row instead and drops down — see teacher.css.) */
   bottom: calc(100% + 8px);
   left: 0;
   right: 0;
@@ -80,7 +81,7 @@
   flex-direction: column;
   gap: 10px;
 }
-/* The one place the composer is NOT at the bottom: an empty landing chat sits
+/* The one place the tool row is NOT at the bottom: an empty landing chat sits
    it optically centred with the greeting, with the whole page below. There the
    popover drops down, which is the plain reading of a control you press. */
 .teacher.landing.empty .filter-pop {

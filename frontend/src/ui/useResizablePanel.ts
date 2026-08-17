@@ -23,6 +23,13 @@
  * unclamped and only the rendered width is capped, so widening the window
  * hands the width straight back.
  *
+ * **A drag can also fold the panel shut and back open** (`fold`): keep pulling
+ * past the floor and the panel collapses, which is what Azure DevOps does and
+ * what the gesture already means — someone dragging a panel as narrow as it
+ * goes is asking for the space, not for 180px of it. The folded panel keeps
+ * its handle, so the same drag the other way brings it back; it is one
+ * gesture, and a collapsed edge you can't grab would be a one-way door.
+ *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
@@ -42,6 +49,27 @@ interface ResizeBounds {
   /** Which edge the panel is docked against. A right-docked panel widens as
    *  the pointer moves left; a left-docked one as it moves right. */
   side?: 'left' | 'right'
+  /** Opt in to folding the panel open/shut by dragging the same handle. */
+  fold?: FoldByDrag
+}
+
+/**
+ * Fold-by-drag: the handle doesn't only size the panel, it can shut it and
+ * open it again. Both directions are one gesture with one threshold each,
+ * measured on the *unclamped* drag so they need real overshoot.
+ */
+export interface FoldByDrag {
+  /** True while the panel is folded away. */
+  collapsed: boolean
+  /** The folded panel's width, px — where an unfolding drag measures from,
+   *  since the panel's remembered width isn't what's on screen. */
+  collapsedWidth: number
+  /** Drag the open panel narrower than this and it folds shut. */
+  closeAt: number
+  /** Drag the folded panel wider than this and it opens. */
+  openAt: number
+  /** Flip the fold — the same toggle the panel's own button uses. */
+  onToggle: () => void
 }
 
 /**
@@ -72,14 +100,19 @@ export interface ResizablePanel {
  * @param defaultWidth  Width before the user has ever dragged (must match the
  *                      panel's CSS width so nothing shifts on first paint).
  * @param bounds        Optional min/max/fraction clamp (defaults 280–680px,
- *                      and never more than 40% of the window).
+ *                      and never more than 40% of the window), the dock side,
+ *                      and the optional fold-by-drag ({@link FoldByDrag}).
  * @returns The width + drag-handle wiring (see {@link ResizablePanel}).
  */
 export function useResizablePanel(
   storageKey: string,
   defaultWidth: number,
-  { min = 280, max = 680, maxFraction = 0.4, side = 'right' }: ResizeBounds = {},
+  { min = 280, max = 680, maxFraction = 0.4, side = 'right', fold }: ResizeBounds = {},
 ): ResizablePanel {
+  // Held in a ref so a caller's inline arrow (`onToggle`) doesn't re-subscribe
+  // the drag listeners on every render.
+  const foldRef = useRef(fold)
+  foldRef.current = fold
   // The window's contribution to the ceiling, kept in state so a resize
   // re-renders the panel at its new cap.
   const [ceiling, setCeiling] = useState(() => viewportCeiling(max, maxFraction))
@@ -117,8 +150,22 @@ export function useResizablePanel(
 
   const onHandlePointerDown = useCallback((event: ReactPointerEvent) => {
     event.preventDefault()
-    origin.current = { startX: event.clientX, startWidth: widthRef.current }
+    // A folded panel measures from the width it actually shows, not from the
+    // width it remembers — otherwise the first unfolding drag would start
+    // 200px ahead of the pointer.
+    const showing = foldRef.current?.collapsed ? foldRef.current.collapsedWidth : widthRef.current
+    origin.current = { startX: event.clientX, startWidth: showing }
     setDragging(true)
+  }, [])
+
+  /** End the drag where the pointer is still down: the fold has taken over.
+   *
+   * @param then What the crossed threshold asked for (the caller's toggle).
+   */
+  const endDrag = useCallback((then: () => void) => {
+    origin.current = null
+    setDragging(false)
+    then()
   }, [])
 
   useEffect(() => {
@@ -131,9 +178,29 @@ export function useResizablePanel(
       // way, which is the only thing that has to feel the same.
       const travelled =
         side === 'left' ? event.clientX - start.startX : start.startX - event.clientX
+      const dragged = start.startWidth + travelled
+      const folding = foldRef.current
+      if (folding?.collapsed) {
+        // Folded, the handle has one job: pull it back open. Nothing is being
+        // sized, so the drag changes no width — it either crosses `openAt` or
+        // it doesn't, and the panel returns at the width it was folded on.
+        if (dragged > folding.openAt) endDrag(folding.onToggle)
+        return
+      }
+      // Keep shoving past the floor and the panel folds away rather than
+      // sitting there refusing to narrow (the Azure DevOps gesture). The
+      // overshoot has to be deliberate — `closeAt` sits well below `min`, so a
+      // drag that merely bottoms out doesn't trip it. The width they *had* is
+      // restored and left in storage, so reopening is not a fresh start; and
+      // the drag ends here, since there is nothing left to size.
+      if (folding && dragged < folding.closeAt) {
+        setChosen(start.startWidth)
+        endDrag(folding.onToggle)
+        return
+      }
       // Clamped as it moves, so the handle never runs away from the edge it is
       // dragging — the reader's "choice" is what the drag could actually reach.
-      setChosen(clamp(start.startWidth + travelled))
+      setChosen(clamp(dragged))
     }
     const onUp = () => {
       origin.current = null
@@ -146,7 +213,7 @@ export function useResizablePanel(
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
     }
-  }, [dragging, clamp, storageKey, side])
+  }, [dragging, clamp, storageKey, side, endDrag])
 
   return { width, onHandlePointerDown, dragging }
 }

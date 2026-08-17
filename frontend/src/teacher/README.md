@@ -21,8 +21,8 @@ teacher/
                        assistant searches AND which lectures it uses as context
                        (open state controlled by Teacher — the two popovers
                        are mutually exclusive; ✕ or the trigger closes). Its
-                       trigger renders icon + label as separate elements so
-                       the ask bar can show the icon alone.
+                       trigger renders icon + label as separate elements so a
+                       narrow row can show the icon alone.
   figures/           ← sub-package: the inline-figure pipeline
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
@@ -218,15 +218,31 @@ on. The panel's title row holds only the title and the ✕. The **🎓 and 📚
 scopes ride the Chat caret row** (v7.10.0): they bind the *researcher* — what
 it may read and search when it answers — not the lecturer above, and both a
 peer "Grounding" section and a slot in the panel header would imply they
-scope everything (Patrick's call, and the reason they landed here). With **no
-graph** there are no sections, so the same one `sourcePicker` element falls
-back into the ask bar — rendered in one of two places, never both. There it
-also earns its keep: the composer is wide and central on the landing surface,
-and the scope qualifies the question you are about to ask.
-On both rows the trigger is its icon alone (the popover shows the
-truth once open, an accent fill marks a narrowed scope, and the tooltip spells
-it out), and its popover opens **upward**, since the bar sits at the bottom of
-the page. It appears at **one** source, not two (v7.2.0): the old `> 1` gate
+scope everything (Patrick's call, and the reason they landed here). The
+**🔍 direct-search toggle and the ▽ filters joined them there in v7.11.0**,
+for the same reason and out of the same place.
+
+**The ask bar holds the question and nothing else** (v7.11.0). Those four
+controls all used to sit *inside* the pill, which is what made it read as
+clutter: the one thing you came here to use — a box to type in — looked like a
+toolbar with a text field wedged in it. So the pill was emptied. With **no
+graph** there are no sections to receive them, so the same single
+`sourcePicker` / `searchControls` elements render instead in a **chip row
+directly beneath the bar** (`.ask-tools`) — one of two places, never both.
+Beneath rather than above: you read the question first, then what bounds it,
+and the row is far enough from the text field to stop being chrome around it.
+The bar and that row are wrapped together in `.ask-dock`, which is what the
+landing surface's FLIP measures — the two drop from the optical centre to the
+bottom as one thing on the first question, and a row that snapped while the
+bar slid would read as two unrelated controls.
+
+On the Chat row every trigger is its icon alone (the popover shows the truth
+once open, an accent fill marks an armed toggle or a narrowed scope, and the
+tooltip spells it out); in the landing tool row there is width for the labels,
+which is where a first-time reader meets them. Popovers follow the room:
+**upward** from the tool row, which sits at the bottom of the page under the
+bar, and **downward** from the pinned Chat row.
+The 📚 picker appears at **one** source, not two (v7.2.0): the old `> 1` gate
 read a lone source as leaving no choice to make, but "use it / don't" is a
 choice, and hiding the control meant a reader with one uploaded book had no
 way to ask a question *without* it. `ScopePicker` adapts to that size rather
@@ -332,7 +348,8 @@ hides the symptom and silently clips those three.
 
 `tsc --noEmit` strict + oxlint, plus `test/teacher/Teacher.test.tsx` — the
 lecture fold's default and its `stagedOpen` unfold, and which of the two homes
-the source picker renders in for each shape. Browser-milestone items: a
+each ask-binding control (📚 scope, 🔍 direct search, ▽ filters) renders in
+for each shape — including that none of them is inside the bar. Browser-milestone items: a
 lecture lighting beats as they stream, a researcher answer with trace chips +
 an inline figure, the library chat with a scope subset, Clear detaching
 follow-up context, and a save→restore round trip rehydrating the whole
@@ -347,10 +364,11 @@ picking the box before you knew which one you wanted.
 
 `Teacher` owns the two pieces of state that decides: `direct` (the 🔍 **Find
 papers** toggle) and `searchOptions` (the **Filters** popover). Both controls
-render inside the ask form — beside `ScopePicker` on the landing surface, and
-alone in it once docked (the scope moves to the header there) — for the reason
-that one does: they belong to the thing you are about to send.
-`search/SearchControls` draws them; `search/useDirectSearch` runs the scout.
+travel with `ScopePicker`, always the same row as it, for the reason that one
+does: they belong to the thing you are about to send. They rendered inside the
+ask form until v7.11.0 — see "Where the controls live" above for where they
+went and why. `search/SearchControls` draws them; `search/useDirectSearch`
+runs the scout.
 
 **Three destinations, decided in `submitQuestion` before any model runs:**
 

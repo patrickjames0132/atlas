@@ -570,9 +570,10 @@ optional, behind a key.
 
 ### UI & rendering polish
 
-- [ ] **Make it clear that direct search leaves the map** — the chat bar keeps
+- [ ] **Make it clear that direct search leaves the map** — the ask keeps
       🔍 **Find papers** while a graph is open (**decided 2026-08-15**, against
-      the first instinct to hide it), but nothing on screen says what it does
+      the first instinct to hide it; it rides the Chat row rather than the bar
+      since v7.11.0), but nothing on screen says what it does
       differently there. In graph mode every other control is about the papers
       you can see; this one goes looking for papers that have nothing to do
       with them, and a reader can reasonably read it as "find papers *in this
@@ -609,9 +610,12 @@ optional, behind a key.
       all. **Two more surfaces joined the list since** *(Patrick,
       2026-08-16)*: the v7.8.0 **left rail** — its glyphs (✎ new graph, ＋
       save, 📚 library, ⚙, ☀/☾, ?) and the fact that the list under them is
-      your saved graphs — and the ask bar's **two chat-bar toggles** (🔍 Find
-      papers, and the 📚 source scope), which today only the tour explains,
-      and the tour is a one-time read.
+      your saved graphs — and the **ask's own controls** (🔍 Find papers, ▽
+      Filters, and the 📚 source scope — a labelled chip row under the bar
+      with no graph, bare icons on the Chat row with one, since v7.11.0),
+      which today only the tour explains, and the tour is a one-time read.
+      The docked half is the sharper case: there they are icons and nothing
+      else.
 
       **The ask:** one place that lays out the vocabulary. Candidates worth
       pricing against each other — a tour step (fits the existing help
@@ -849,7 +853,10 @@ optional, behind a key.
 
       **Half of this shipped as v7.8.0** — the rail exists, collapses to a
       56px icon strip, and swallowed the header outright, which was the
-      sketch's whole left-hand side. What's left is the *responsive* half:
+      sketch's whole left-hand side. (v7.11.0 added the Azure DevOps gesture
+      the sketch was drawn from: drag the handle past the floor to fold it,
+      drag the folded edge to bring it back.) What's left is the *responsive*
+      half:
       the layout still assumes a wide desktop window, and nothing reflows or
       re-clamps as the window narrows (the sideways-scrolling chat panel
       above is one concrete instance of it). Re-price the remainder against

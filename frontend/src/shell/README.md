@@ -39,14 +39,28 @@ building, and the Sessions drawer retired into it.
   — first top-left over the graph controls, then centred over the map — and
   every placement collided with something at some panel width. In the rail it
   truncates instead of colliding, next to the other thing that answers "where
-  am I". Only the labels are controls-adjacent; the brand row's *only* button
-  is the collapse toggle, which keeps `.rail-item`'s symmetric padding so its
-  glyph lands on the same 18px centre line as every row below it.
+  am I". Only the labels are controls-adjacent; the brand row is a plain
+  `.rail-item` like every entry below it, so its glyph lands on the same 18px
+  centre line and its hover highlight spans the rail (v7.11.0 — a highlight
+  that stopped at the glyph made the row read as an icon button with two
+  words parked beside it). The whole row toggles the rail; the seed keeps its
+  own tooltip inside the button's, because it is the one thing here that
+  truncates.
 - **The rail resizes like the other panels** (`useResizablePanel`, 180–380px,
   persisted). The hook gained a `side` option rather than a twin: a
   left-docked panel is the exact mirror of a right-docked one, so only the
   sign of the drag differs. Width applies while expanded only — a 300px-wide
   strip of icons would be absurd.
+- **The handle folds the rail both ways** (v7.11.0, the Azure DevOps
+  gesture). Drag past the 180px floor to `closeAt: 130` and it folds; the
+  folded rail *keeps its handle*, and a drag back past `openAt: 96` (40px out
+  from the 56px icon rail) opens it again — a collapsed edge you couldn't grab
+  would make the collapse a one-way door. Someone hauling a panel as narrow as
+  it goes is asking for the space, not for 180px of it, and the overshoot on
+  each side is what keeps merely bottoming out from tripping either. The width
+  they had is kept, so re-expanding is not a reset. `RAIL_COLLAPSED_WIDTH`
+  restates `.rail.collapsed`'s 56px in TS because the unfolding drag has to
+  measure from what is on screen.
 - **Saving doesn't prompt for a name.** It names the graph after its seed and
   you rename in place from the row's ⋮ menu. The moment you want to save is
   the moment you least want a dialog, and a name is trivially fixable

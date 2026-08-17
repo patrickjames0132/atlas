@@ -78,15 +78,6 @@ export interface WorkspaceState {
    * scroll container at the top (see the `loadGraph` reducer).
    */
   epoch: number
-  /**
-   * This graph was opened by clicking a paper the agent cited in a graph-free
-   * answer, so the seed's detail panel should open by itself — the click asked
-   * to *see that paper*, and landing on a bare canvas would make the reader
-   * hunt for the node they just named. GraphExplorer consumes and clears it
-   * (`seedDetailRevealed`); it is deliberately not the same thing as
-   * `selectedNodeIds`, which is the hand-picked scoping set.
-   */
-  revealSeedDetail: boolean
   loading: boolean
   /**
    * The current graph-build stage while `loading`, streamed from the SSE build
@@ -109,7 +100,6 @@ const initialState: WorkspaceState = {
   layout: 'timeline',
   provider: 's2',
   epoch: 0,
-  revealSeedDetail: false,
   loading: false,
   buildProgress: null,
   error: null,
@@ -125,11 +115,6 @@ const initialState: WorkspaceState = {
  * @param refresh  Bypass the server's day-cached snapshot for this seed and
  *                 rebuild from the provider (the "Refresh" action) — useful when
  *                 the provider's data for a paper has visibly changed.
- * @param fromChat This load came from clicking a paper the agent cited, rather
- *                 than from a cold search — so the seed's detail panel opens on
- *                 arrival, because the click asked to *see that paper*. (It no
- *                 longer gates the transcript: every graph load keeps the
- *                 conversation now — see `store/transcript`.)
  * @param provider Build under this backend instead of the selected one, and
  *                 leave the workspace on it. Only a chat citation passes this:
  *                 its `node_id` came from whichever provider answered, and an
@@ -141,7 +126,7 @@ const initialState: WorkspaceState = {
  */
 export const loadGraph = createAsyncThunk<
   GraphResponse,
-  { seed: string; refresh?: boolean; fromChat?: boolean; provider?: Provider },
+  { seed: string; refresh?: boolean; provider?: Provider },
   { state: { workspace: WorkspaceState } }
 >('workspace/loadGraph', ({ seed, refresh = false, provider }, { dispatch, getState }) =>
   fetchGraphStream(seed, provider ?? getState().workspace.provider, refresh, (progress) =>
@@ -397,16 +382,6 @@ const workspaceSlice = createSlice({
       state.selectedNodeIds = []
     },
     /**
-     * GraphExplorer has opened the chat-seeded paper's detail panel, so the
-     * request is spent. Cleared rather than left standing: without this, ✕-ing
-     * the panel and then re-rendering would spring it back open.
-     *
-     * @param state The slice state (mutated via immer).
-     */
-    seedDetailRevealed(state) {
-      state.revealSeedDetail = false
-    },
-    /**
      * Home: back to the default no-graph state (the page-load look). The
      * epoch bump remounts the teacher panel for fresh run state; the
      * transcript and highlights clear themselves via extraReducers.
@@ -423,7 +398,6 @@ const workspaceSlice = createSlice({
       state.layout = 'timeline'
       state.error = null
       state.epoch += 1
-      state.revealSeedDetail = false
     },
     /**
      * The shared search/graph error overlay (null clears it).
@@ -463,7 +437,7 @@ const workspaceSlice = createSlice({
         // Only Home and a session restore remount now; `useConversation`
         // aborts in-flight streams on the seed change instead of relying on
         // an unmount that no longer happens.
-        state.revealSeedDetail = action.meta.arg.fromChat === true
+        //
         // An override built under a different backend; the dropdown has to
         // follow, or the header would claim one provider while the graph and
         // every expand off it run on another.
@@ -491,7 +465,6 @@ const workspaceSlice = createSlice({
         state.layout = action.payload.layout
         state.provider = action.payload.provider
         state.epoch += 1
-        state.revealSeedDetail = false
         state.loading = false
       })
       .addCase(restoreSession.rejected, (state, action) => {
@@ -511,7 +484,6 @@ export const {
   nodeSelectionAdded,
   nodeSelectionToggled,
   nodeSelectionCleared,
-  seedDetailRevealed,
   errorSet,
   workspaceCleared,
 } = workspaceSlice.actions

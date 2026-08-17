@@ -95,11 +95,11 @@ export function useSelection({ base, graph, provider, loadGraph }: UseSelectionA
   // It used to select the seed, which meant every graph opened with the detail
   // panel already covering the canvas — chrome in front of the thing the
   // reader asked to see. Nothing is selected now; clicking a paper opens it,
-  // which is what the click is for. The deliberate exception is the
-  // chat-citation path (`revealSeedDetail`, wired in GraphExplorer): that
-  // click *asked* for a specific paper, so it still lands on the panel. Its
-  // effect is registered after this one, so it sets the seed back after this
-  // clears it on the same graph change.
+  // which is what the click is for. There is no exception left: the
+  // chat-citation path kept its own reveal for a while (`revealSeedDetail`,
+  // wired in GraphExplorer) on the theory that such a click asked for the
+  // paper rather than the map — it asked for both, and the panel was in the
+  // way of the half that had to be seen first. Dropped in v7.11.0.
   useEffect(() => {
     setDetails({})
     setFigures({})

@@ -43,14 +43,17 @@ figures.
   the seed, so every build landed with the panel already covering the
   canvas — chrome in front of the thing the reader had just asked to see.
   Nothing is selected now; a click opens a paper, which is what the click
-  is for. Two paths still open it without one: the **chat-citation**
-  re-seed (`workspace.revealSeedDetail`, set by a `fromChat` load and
-  consumed in `GraphExplorer`) — that click *asked* for a paper, so it gets
-  its panel — and the guided tour's `'details'` stops, which select the
-  seed if nothing is open so the walk has a panel to spotlight. Both are
-  effects registered *after* `useSelection`'s, so they set the seed back
-  after the per-graph clear runs on the same change. (The sibling half of
-  the same call: `graph/controls`' panel now starts collapsed.)
+  is for. One path still opens it without one: the guided tour's
+  `'details'` stops, which select the seed if nothing is open so the walk
+  has a panel to spotlight — an effect registered *after* `useSelection`'s,
+  so it sets the seed back after the per-graph clear runs on the same
+  change. (The sibling half of the same call: `graph/controls`' panel now
+  starts collapsed.)
+  The **chat-citation** re-seed was the other exception (`revealSeedDetail`,
+  a `fromChat` load consumed in `GraphExplorer`), on the theory that such a
+  click *asked* for a paper rather than a map. It asked for both, and the
+  panel covered the map at the exact moment it appeared, so it went the same
+  way as the seed-select in **v7.11.0** — flag, action and all.
 - **The loadable sections reveal together, behind one joint gate.** While
   ANY of the node's fetches is in flight — summary hydration (reported by
   `useSelection`'s `detailLoading` id), arXiv tags, code links, figures —

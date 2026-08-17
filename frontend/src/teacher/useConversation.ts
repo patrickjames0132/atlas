@@ -248,15 +248,17 @@ export function useConversation() {
     [activeRef, highlight],
   )
 
-  /** Click a cited paper in a graph-free answer: build that paper's graph and
-   * open its detail panel. `fromChat` is what keeps the conversation alive
-   * across the jump — see the `loadGraph` thunk. `refProvider` is the backend
-   * that minted the id (absent on pre-v6.14.0 saves, where the selected one is
-   * the best guess available); building under anything else looks the id up in
-   * a namespace it was never in, and the build simply fails. */
+  /** Click a cited paper in a graph-free answer: build that paper's graph.
+   * The conversation survives the jump on its own (every graph load keeps it
+   * now — see `store/transcript`), and the graph arrives with nothing selected,
+   * like any other build: the click asked for the map around that paper, and
+   * the detail panel it used to open landed on top of it. `refProvider` is the
+   * backend that minted the id (absent on pre-v6.14.0 saves, where the selected
+   * one is the best guess available); building under anything else looks the id
+   * up in a namespace it was never in, and the build simply fails. */
   const onPaperSeed = useCallback(
     (nodeId: string, refProvider?: Provider) => {
-      dispatch(loadGraph({ seed: nodeId, fromChat: true, provider: refProvider }))
+      dispatch(loadGraph({ seed: nodeId, provider: refProvider }))
     },
     [dispatch],
   )

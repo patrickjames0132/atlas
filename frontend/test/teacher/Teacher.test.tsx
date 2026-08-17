@@ -123,29 +123,43 @@ describe('the docked assistant panel', () => {
     expect(body().hidden).toBe(true)
   })
 
-  it('hangs the scope pickers off the Chat row, not the panel header', () => {
-    // They bind the researcher answering below, not the lecturer above — so
-    // the row they sit on is the claim being made about them.
+  it('hangs every ask-binding control off the Chat row, not the panel header', () => {
+    // The scopes bind the researcher answering below, not the lecturer above,
+    // and the search controls bind the same ask — so the row they sit on is
+    // the claim being made about them. None of the four is in the bar itself.
     sources = [SOURCE]
     const { container } = render(<Teacher onClose={() => {}} />)
 
+    const row = container.querySelector('.section-head-right')
+    const bar = container.querySelector('form.teacher-ask')
+    for (const anchor of ['source-scope', 'direct-search', 'search-filters']) {
+      const control = container.querySelector(`[data-tour="${anchor}"]`)
+      expect(control).toBeTruthy()
+      expect(row?.contains(control!)).toBe(true)
+      expect(bar?.contains(control!)).toBe(false)
+    }
     const picker = container.querySelector('[data-tour="source-scope"]')
-    expect(picker).toBeTruthy()
-    expect(container.querySelector('.section-head-right')?.contains(picker!)).toBe(true)
     expect(container.querySelector('.teacher-head-right')?.contains(picker!)).toBe(false)
-    expect(container.querySelector('form.teacher-ask')?.contains(picker!)).toBe(false)
   })
 })
 
 describe('the landing assistant', () => {
-  it('keeps the source picker inset in the ask bar, where the question is', () => {
+  it('puts the ask-binding controls in a row under the bar, never inside it', () => {
+    // v7.11.0: the pill holds the question and nothing else. With no graph
+    // there is no section row to hang these off, so they sit directly beneath.
     hasGraph = false
     sources = [SOURCE]
     const { container } = render(<Teacher landing />)
 
-    const picker = container.querySelector('[data-tour="source-scope"]')
-    expect(picker).toBeTruthy()
-    expect(container.querySelector('form.teacher-ask')?.contains(picker!)).toBe(true)
+    const tools = container.querySelector('.ask-tools')
+    const bar = container.querySelector('form.teacher-ask')
+    expect(tools).toBeTruthy()
+    for (const anchor of ['source-scope', 'direct-search', 'search-filters']) {
+      const control = container.querySelector(`[data-tour="${anchor}"]`)
+      expect(control).toBeTruthy()
+      expect(tools?.contains(control!)).toBe(true)
+      expect(bar?.contains(control!)).toBe(false)
+    }
   })
 
   it('has no sections at all — nothing to narrate, so nothing to divide', () => {
