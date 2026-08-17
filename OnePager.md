@@ -1,6 +1,6 @@
 # Atlas — One-Pager
 
-> **Status:** v6.5.0 · living document · MIT-licensed. The core loop has
+> **Status:** v7.12.0 · living document · MIT-licensed. The core loop has
 > shipped: the provider-selectable citation graph (Semantic Scholar or
 > OpenAlex, with an optional offline S2 citations corpus for honest
 > all-history landmarks), the AI teacher (four relation-scoped lectures + an
@@ -28,8 +28,36 @@ why it mattered, how each idea made the next possible — **while the graph ligh
 up node-by-node in sync with the story.** And like any good teacher, it takes
 questions: **interrupt and ask a follow-up**, and it answers grounded in the
 papers on screen, highlighting the nodes it draws from. It's the storytelling
-magic of NotebookLM (narrative, a teacher's voice, and audio), self-hosted and
-Claude-driven, married to an interactive citation graph NotebookLM never had.
+magic of NotebookLM (narrative and a teacher's voice), self-hosted and
+model-driven, married to an interactive citation graph NotebookLM never had.
+
+### Why it exists — and what that means for this list
+
+**Atlas is not a business, and is not trying to become one** (Patrick,
+2026-08-16). It is three things: a tool its author actually uses, a real
+research vehicle (the citation-coverage and landmark-selection work in
+[docs/citation-coverage.md](docs/citation-coverage.md) and
+[docs/landmark-vocabulary.md](docs/landmark-vocabulary.md)), and an
+open-source attempt to put research and self-teaching in reach of **anyone**
+who wants to learn something.
+
+That inverts the usual risk model, and the inversion is the reason this
+section exists. A competitor with more reach shipping something similar is
+the mission *succeeding*, not the project dying — so **"is this feature
+unique?" is not a question worth asking here.** The threats that are real are
+**cost, installability, and discoverability**: a person who cannot afford an
+API key, cannot get past the setup script, or never finds the project is a
+person Atlas failed. Weight the Backlog accordingly — see **Reach & access**,
+deliberately placed first.
+
+*(A competitive sweep on 2026-08-16 confirmed the landscape this assumes:
+Connected Papers still ships no LLM layer at all; Litmaps acquired
+ResearchRabbit in 2025 and both remain visualizers; Ai2's Asta shipped
+agentic search with neither a citation-graph UI nor user-document grounding;
+NotebookLM maps your uploaded sources, never the literature's citation
+structure. The graph-as-retrieval-scope binding and the your-library +
+live-graph mix were not found elsewhere. Nothing here depends on that staying
+true.)*
 
 We **leave the storage to the ecosystem** (Semantic Scholar / OpenAlex / arXiv)
 and connect dynamically — no mandatory local corpus, just a thin cache of the AI
@@ -63,24 +91,32 @@ optional, behind a key.
    to the map. Conversational, so you can go back and forth; questions that reach
    past the neighborhood expand the graph or pull that paper from S2 on demand.
 
-4. **Concept mindmap** `[core]` — Claude emits a concept map (ideas as nodes,
-   relationships as edges) rendered in the same graph library. A **"Bridge these
-   topics"** action cross-links unrelated fields (e.g. astrophysics ↔
-   reinforcement learning) — pure reasoning, built by us, not outsourced.
+4. **Concept mindmap** `[core]` — the model emits a concept map (ideas as
+   nodes, relationships as edges) rendered in the same graph library. **The
+   differentiated half is the "Bridge these topics" action**, not the map
+   itself: a mindmap over your own sources is NotebookLM's shipped feature,
+   while cross-linking two fields with no citation edge between them (e.g.
+   astrophysics ↔ reinforcement learning) is pure reasoning nobody else
+   offers. Build the bridge first; the plain map is the easy part that follows.
 
-5. **Audio lecture** `[core]` — **Podcastfy** (open-source, self-hosted) turns
-   the same lecture script into a two-host podcast. Free **Microsoft Edge TTS** by
-   default; **ElevenLabs** voices optional. The "listen on a walk" experience,
-   with no NotebookLM dependency.
+5. **Slides from the lecture** `[core]` — a deck generated **by the agent crew
+   we already run**, from the lecture beats it already writes, embedding the
+   **papers' own figures** we already mine out of the open-access PDFs. No
+   third-party media API and no subscription: three things that exist,
+   composed. *(Replaced the AutoContent API plan, 2026-08-16 — see below.)*
 
-6. **Polished media** `[flag]` — optional **AutoContent API** integration
-   (~€24/mo) for glossy artifacts we don't cheaply DIY: **slide decks,
-   infographics, explainer video, timelines**. Additive, behind a feature flag +
-   API key. Trial before committing; never load-bearing.
-   *Later idea:* leverage the papers' **own figures** — pulled via
-   [ar5iv](https://ar5iv.org) HTML, the arXiv source tarball, or a
-   figure-extractor (`pdffigures2` / DeepFigures) — so slides embed the real
-   diagrams from the papers, not just generated graphics.
+**Retired 2026-08-16 — ~~audio lecture~~ (Podcastfy + Edge TTS / ElevenLabs)
+and ~~polished media~~ (AutoContent API decks, infographics, video).**
+NotebookLM now ships audio overviews you can interrupt with questions,
+one-click decks and auto-infographics, all free. Building a worse version of a
+free Google feature serves nobody, and it was never the interesting part of
+Atlas. One factual blocker to know if anyone revives the audio half:
+**Anthropic has no TTS** — the model writes the script (the lecturer already
+does), but speech needs a separate vendor regardless, which is exactly what
+the Podcastfy/Edge TTS line always was, so "just use our LLM provider" does
+not work. What survives is the slides item above, which reuses the
+figure-mining work instead of paying for generated graphics. Kept here rather
+than deleted so the plan doesn't get re-proposed.
 ---
 
 ## Data & tech
@@ -106,14 +142,16 @@ optional, behind a key.
   Sigma.js + graphology remains the fallback if we ever need very large graphs.
 - **AI teacher:** a **PydanticAI agent crew** (librarian /
   lecturer / researcher behind a deterministic orchestrator) on the Anthropic
-  API, streaming end-to-end over SSE.
+  API, streaming end-to-end over SSE. **Anthropic-only is a reach problem, not
+  just a gap** — it puts a paid API key between a learner and the teacher; see
+  the first Backlog item.
 - **Local library (bring-your-own sources):** PDFs/URLs chunked and embedded
   **locally** (sentence-transformers + sqlite-vec, hybrid FTS5+vector
   retrieval via RRF) — copyrighted books never leave the machine.
-- **Audio (roadmap):** [Podcastfy](https://github.com/souzatharsis/podcastfy)
-  (Python lib) + Edge TTS (free) / ElevenLabs (optional).
-- **Polished media (roadmap):** [AutoContent API](https://autocontentapi.com/)
-  (optional, behind a flag).
+- **Slides (roadmap):** generated by the existing agent crew from lecture beats
+  + the figures already mined from open-access PDFs — no new vendor.
+  *(Audio via Podcastfy/Edge TTS and the AutoContent API media tier were both
+  retired 2026-08-16; see the feature stack.)*
 - **Storage:** SQLite in `data/` for the day-TTL cache, saved sessions, and
   the library index — plus the optional Parquet corpus above. All gitignored.
 
@@ -125,6 +163,108 @@ optional, behind a key.
 > story, version tag and all — into [docs/history.md](docs/history.md)'s
 > matching theme section, so this list stays the honest to-do surface. New
 > ideas arrive through the `todos.md` inbox and get filed here.
+>
+> **Theme order is priority order as of 2026-08-16.** *Reach & access* sits
+> first on purpose: per "Why it exists" above, an item that lets more people
+> in outranks an item that makes the tool cleverer for the one person who
+> already has it running. The rest of the themes are unordered among
+> themselves.
+
+### Reach & access
+
+> The mission-critical theme (see [Why it exists](#why-it-exists--and-what-that-means-for-this-list)).
+> Everything here is about somebody who cannot currently use Atlas at all —
+> because of cost, because of setup, or because they never found it. None of
+> these are hard problems. They are just the ones that were never prioritized,
+> because the backlog was implicitly sorted by what was interesting to build.
+
+- [ ] **Support additional LLM providers (OpenAI, Google, Meta, local models) —
+      the single largest barrier between a learner and the teacher** — the whole
+      agent crew runs on Claude only today, so **unlocking the AI teacher
+      requires a paid Anthropic API key**: a credit card, plus per-token cost
+      for every lecture and every question. The graph explorer runs keyless and
+      free; the teaching — the actual point of the project — does not. For a
+      tool whose stated purpose is access to education, that is the ballgame,
+      and it is why this item now leads the backlog rather than sitting in
+      *Enhancements & tech debt* where it was filed.
+
+      **What matters most is the free path, not the vendor count.** Adding
+      OpenAI beside Anthropic swaps one credit card for another and changes
+      nothing for the person this is for. The two that do change something:
+      **a local model via Ollama** (zero marginal cost, no key, and it composes
+      with the local-library half — the whole conversation stays on the
+      machine), and **a provider with a usable free tier**. Prioritize
+      accordingly; a generic provider abstraction that ships with only paid
+      vendors wired has missed the point.
+
+      **The mechanical work, which is not the hard part.** PydanticAI already
+      abstracts providers and `config.llm` is shaped for more than one
+      (`LLMProvidersConfig` names `AnthropicProvider`, `OpenAIProvider`, …), so
+      it is: wire provider construction per vendor, let each agent's `model`
+      string name a vendor (`openai:…`, `google:…`, `ollama:…`; today's are
+      `anthropic:…`), and generalize the settings modal — the agent **model
+      dropdowns** populate from the Anthropic Models API only, and the "LLM
+      vendor" row is a fixed label. Watch for per-provider streaming and
+      tool-call differences in the agentic paths (see `teacher/agentic.py`'s
+      SDK-boundary handling).
+
+      **The real risk is quality, and it needs measuring rather than
+      assuming.** The agentic researcher leans hard on reliable tool-calling —
+      the existing *agent-reliability* and *proactive-figures* tickets both
+      note the model already skips `show_figure` when asked — and a small local
+      model may simply not hold the loop together. That is a finding, not a
+      blocker: the honest outcome may be "lectures work locally, the agentic
+      researcher needs a frontier model," which is still a vastly better floor
+      than today's "nothing works without a key." Measure per agent, and say so
+      in the UI rather than letting a weak model fail quietly.
+      *(Filed 2026-07-20 as a tech-debt item; promoted to the top of the
+      backlog 2026-08-16 when the project's purpose was made explicit.)*
+
+- [ ] **Make first-run possible for someone who is not a developer** — today
+      the path to a running Atlas is: install mise, run a setup script that
+      wants Python 3.14 / uv / Node / trivy, `uv sync --all-groups`, `npm
+      install && npm run build`, hand-copy `config.example.json` to
+      `config.json`, then find and paste API keys. Every one of those steps is
+      reasonable for the person who wrote them and a wall for a student who
+      just wants to learn something. **This is a reach problem wearing the
+      costume of a polish problem.**
+
+      **Not yet a design, deliberately** — the options price very differently
+      and want thinking about before anyone builds. A **Docker image** is the
+      obvious one (a single `docker run`, no toolchain at all) and its cost is
+      the torch/CUDA question the README already documents plus image size. A
+      **prebuilt release artifact** (the packaging half of the PyPI ticket
+      already specifies bundling `frontend/dist`, so `pip install` + `atlas
+      serve` is most of the way there) is cheaper but still assumes Python. A
+      **guided first-run** that writes `config.json` for you, rather than
+      requiring a hand-edit, is small and helps regardless of which of the
+      other two wins. Note the config step is the one that *must* be solved
+      either way: `config.py` is `extra="forbid"`, so a hand-copied file that
+      drifts fails startup with a stack trace — the worst possible first
+      impression. **Sequence this after the provider work**: a one-command
+      install that still demands a paid API key has moved the wall, not
+      removed it. *(Filed 2026-08-16.)*
+
+- [ ] **Nowhere to try it, and nowhere that explains it** — Atlas is public on
+      GitHub with a thorough README, and that reaches developers who already
+      read READMEs. It reaches nobody else. There is **no demo, no screenshot,
+      no recording, and no hosted instance** — so the only way to find out
+      whether the graph-plus-teacher idea is any good is to install it, which
+      is the thing the ticket above says is hard. An open-source project that
+      nobody can evaluate serves the same number of learners as a private one.
+
+      **The cheap end is disproportionately effective and should come first:**
+      screenshots and a short screen recording in the README, showing a lecture
+      playing while the graph lights up node-by-node. That is the single most
+      convincing thing Atlas does and it is currently described only in prose.
+      **A hosted instance is the expensive end** and carries a real problem
+      worth stating before anyone tries: the teacher needs an API key, so a
+      public demo means *paying for strangers' tokens*, with no rate-limit
+      story and an obvious abuse surface. Options if it's ever wanted:
+      bring-your-own-key in the browser, a graph-only demo with the teacher
+      disabled (the explorer is already keyless and it demos well), or a
+      recorded walkthrough that costs nothing to serve. The recording is
+      probably the honest answer. *(Filed 2026-08-16.)*
 
 ### Teacher & agent reach
 
@@ -1292,17 +1432,6 @@ optional, behind a key.
       retyped across modules. A whole-codebase sweep, not a targeted one; keep the
       wire format identical so snapshots, saved sessions, and the SSE protocol are
       unaffected. *(From the `todos.md` inbox, 2026-07-13.)*
-- [ ] **Support additional LLM providers (OpenAI, Google, Meta, …)** — the whole
-      agent crew runs on Claude only today; the README now says other providers
-      are on the roadmap. PydanticAI already abstracts providers and `config.llm`
-      is shaped for more than one (`LLMProvidersConfig` names `AnthropicProvider`,
-      `OpenAIProvider`, …), so the work is: wire provider construction per vendor,
-      let each agent's `model` string name a vendor (`openai:…`, `google:…`,
-      today's are `anthropic:…`), and generalize the settings modal — the agent
-      **model dropdowns** populate from the Anthropic Models API only, and the
-      "LLM vendor" row is a fixed label. Watch for per-provider streaming and
-      tool-call differences in the agentic paths (see `teacher/agentic.py`'s
-      SDK-boundary handling). *(From the `todos.md` inbox, 2026-07-20.)*
 - [ ] **Publish to PyPI — pick an available distribution name** — the package
       `name` in `pyproject.toml` must change even though the GitHub repo and the
       `atlas` CLI stay as-is. **Availability checked 2026-08-09:** `atlas` is
@@ -1420,12 +1549,15 @@ optional, behind a key.
 
 ### Larger phases
 
-- [ ] **Phase 5 — Concept mindmap** — Claude concept-map JSON, "bridge two
-      topics," `/api/mindmap`.
-- [ ] **Phase 6 — Audio lecture** — Podcastfy integration, Edge TTS default,
-      ElevenLabs optional, `/api/lecture/audio`.
-- [ ] **Phase 7 — Polished media (optional)** — `autocontent.py` behind
-      `AUTOCONTENT_API_KEY`; "Generate visuals" button.
+- [ ] **Phase 5 — Concept mindmap** — concept-map JSON, "bridge two topics,"
+      `/api/mindmap`. Lead with the bridge; see the feature stack for why that
+      half is the one worth building.
+- [ ] **Phase 6 — Slides from the lecture** — a deck built by the existing
+      agent crew from lecture beats + already-mined paper figures.
+      *(Renumbered from the retired audio phase, 2026-08-16.)*
+- ~~Phase 6 — Audio lecture (Podcastfy / Edge TTS / ElevenLabs)~~ and
+  ~~Phase 7 — Polished media (AutoContent API)~~ — **retired 2026-08-16**,
+  reasoning in the feature stack above. Don't re-file these from `todos.md`.
 
 Each phase is independently shippable and gets its own version bump
 (test-in-browser → bump `pyproject.toml` + `uv.lock` → annotated tag → push).
@@ -1442,10 +1574,16 @@ Each phase is independently shippable and gets its own version bump
   [docs/citation-coverage.md](docs/citation-coverage.md) (OpenAlex
   under-extracts preprint→preprint edges; live S2 is recency-truncated; the
   corpus is S2's fix). Read it before touching citation-source logic.
-- **AutoContent API** — ~€24/mo (1,000 credits: infographic 10, slide deck 30,
-  video 50). Trial the cheap tier and judge quality by eye before committing
-  (Phase 7).
-- **ElevenLabs** — optional premium TTS; free tier ~10k credits/mo (Phase 6).
-- **Paper figures for slides** (later phase) — evaluate ar5iv HTML vs. arXiv
-  source tarball vs. `pdffigures2`/DeepFigures for pulling real diagrams; decide
-  how to caption/attribute them. Deferred until the visuals/slides phase.
+- **The teacher's API cost is the project's access barrier** — every lecture
+  and every question bills against the user's own Anthropic key, and there is
+  no free path to the teaching at all (the graph explorer is keyless and free;
+  the AI is not). Unmeasured: what a typical session actually costs, which
+  would at least let the README tell someone what they're signing up for.
+  The structural answer is the local/free-tier provider work at the top of the
+  Backlog. *(Replaced the AutoContent ~€24/mo and ElevenLabs cost lines,
+  retired 2026-08-16 with those phases.)*
+- **Paper figures for slides** (later phase) — largely **answered by the
+  v5.28.0 figure miner**, which already pulls real figures out of open-access
+  PDFs with captions; the open part is only which of ar5iv HTML vs. the arXiv
+  source tarball is a better source for arXiv-native papers, and how to
+  attribute them on a slide.
