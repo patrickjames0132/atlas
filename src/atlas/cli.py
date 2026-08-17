@@ -253,6 +253,86 @@ def corpus_download(release_id: str | None, datasets_opt: tuple[str, ...], shard
     click.echo("\nDownload complete.")
 
 
+@corpus.command("verify", help="Audit downloaded shards for truncation or corruption.")
+@click.option("--release", "release_id", default=None, help="Release id (default: latest).")
+@click.option(
+    "--dataset",
+    "datasets_opt",
+    type=click.Choice(["papers", "citations"]),
+    multiple=True,
+    help="Restrict to one dataset (repeatable). Default: both.",
+)
+@click.option(
+    "--deep/--no-deep",
+    default=False,
+    help="Also decompress every shard — catches damage a size match hides. Slow (reads ~400 GB).",
+)
+@click.option(
+    "--repair/--no-repair",
+    default=False,
+    help="Re-download every bad shard, resuming a usable prefix. Default: report only.",
+)
+def corpus_verify(
+    release_id: str | None, datasets_opt: tuple[str, ...], deep: bool, repair: bool
+) -> None:
+    """Check a downloaded release's shards against what the server actually holds.
+
+    The audit for corpora pulled before the downloader enforced completeness,
+    when a dropped connection could leave a truncated shard checkpointed as
+    done. Its loud failure is an ingest dying on malformed JSON hours in; its
+    quiet one is a cut landing on a line boundary, which ingests cleanly and
+    silently drops rows — only this pass finds that.
+
+    Args:
+        release_id: The release to verify; defaults to the latest release.
+        datasets_opt: Datasets to check; both by default.
+        deep: Also decompress each shard end to end (slow, thorough).
+        repair: Re-download the shards found bad instead of only listing them.
+
+    Raises:
+        click.ClickException: When the corpus root is unset or verification
+            fails.
+    """
+    _require_corpus_root()
+    from atlas.integrations.semantic_scholar.corpus import datasets, download
+    from atlas.integrations.semantic_scholar.corpus.datasets import CorpusError
+    from atlas.integrations.semantic_scholar.corpus.paths import DATASETS
+
+    release_id = release_id or datasets.latest_release_id()
+    wanted = datasets_opt or DATASETS
+    click.echo(
+        f"Verifying release {release_id} ({', '.join(wanted)})"
+        + (", deep" if deep else "")
+        + (", repairing" if repair else "")
+        + "…"
+    )
+
+    def on_progress(dataset: str, filename: str, index: int, total: int) -> None:
+        click.echo(f"\r  {dataset:9} shard {index}/{total}: {filename[:40]:40}", nl=False)
+
+    try:
+        problems = download.verify_release(
+            release_id,
+            datasets_wanted=tuple(wanted),
+            deep=deep,
+            repair=repair,
+            on_progress=on_progress,
+        )
+    except CorpusError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo()
+    if not problems:
+        click.echo("All shards intact.")
+        return
+    verb = "Repaired" if repair else "Found"
+    click.echo(f"{verb} {len(problems)} bad shard(s):")
+    for problem in problems:
+        click.echo(f"  {problem.dataset:9} {problem.kind:8} {problem.filename} — {problem.detail}")
+    if not repair:
+        click.echo("\nRe-run with --repair to re-download them.")
+
+
 @corpus.command("ingest", help="Ingest downloaded shards into queryable Parquet.")
 @click.option("--release", "release_id", default=None, help="Release id (default: latest).")
 @click.option(

@@ -22,6 +22,66 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A dropped connection looks exactly like a finished download
+
+*Found 2026-08-16 by Patrick, as an ingest that died 36 minutes in. Fixed in v7.12.0.*
+
+- **Symptom.** `atlas corpus ingest --release 2026-08-05` ran for 36 minutes,
+  reached citations shard **355/395**, and died inside a DuckDB worker:
+
+  ```
+  _duckdb.InvalidInputException: Invalid Input Error: Malformed JSON in file
+  "…/raw/citations/20260807_073810_00079_q5mh4_bdf393a8….gz",
+  at byte 164 in line 11507038: unexpected end of data.
+  ```
+
+  It reproduced identically on every rerun, and — because ingest is
+  incremental — each rerun burned straight back to the same shard. The error
+  pointed at DuckDB's JSON reader, which was the wrong place to look entirely.
+- **Root cause.** The shard on disk was **truncated**: 577,014,079 bytes of a
+  1,073,827,198-byte object, its gzip stream ending mid-record at line
+  11,507,037. `gzip -t` failed on it; the other 454 shards passed.
+
+  It got there because `download.py` **never checked that a body was
+  complete**. `_download_shard` streamed until `response.read()` returned
+  empty, then unconditionally renamed the `.part` to the final `.gz`. That
+  looks safe until you know what CPython does: `http.client.HTTPResponse.read(amt)`
+  does *not* raise `IncompleteRead` when the socket dies mid-body — it returns
+  `b""` and closes the connection, with a comment in the stdlib saying it
+  would like to raise but won't, for backwards compatibility. So **a dropped
+  connection is byte-for-byte indistinguishable from a clean EOF.** The
+  half-shard was promoted to final and written into `download.json` as
+  `{"bytes": 577014079, "done": true}` — self-consistent, authoritative, and
+  wrong, which is why re-running `download` cheerfully skipped it. The
+  module's own docstring claimed shards are "only renamed to the final `.gz`
+  once complete"; nothing enforced it.
+
+  The shard's mtime (Aug 15) sat days after its neighbours' (Aug 10), so this
+  was a single re-fetch in a later session that lost its connection ~54% in.
+- **Fix.** `_download_shard` now compares the bytes received against
+  `Content-Length` **before** the rename and raises `_ShortRead` if it falls
+  short, leaving the `.part` intact so the next of five retries resumes the
+  tail via `Range`. The checkpoint records the advertised size alongside the
+  byte count, so a shard whose size disagrees is re-fetched rather than
+  trusted, and a 416 is now resolved by probing the object's real size instead
+  of being guessed at. `atlas corpus verify [--deep] [--repair]` audits an
+  existing corpus. Repairing the real shard cost only the missing 497 MB,
+  because a truncation cuts the tail and the bytes on disk are a valid prefix.
+- **Lesson / guard.** **The quiet variant is the dangerous one.** This
+  truncation happened to land mid-record, so DuckDB threw. Had the cut landed
+  on a line boundary the shard would have parsed cleanly, earned its `_done`
+  marker, and silently dropped every edge after the cut — a citation graph
+  wrong in a way no error would ever surface. A full `gzip -t` sweep of all
+  455 shards (408 GB) confirmed this was the only casualty, but nothing in the
+  pipeline would have told us.
+
+  Also: **`.part`-then-rename is only as good as the completeness test behind
+  it.** The atomic-rename pattern was in place and correctly implemented; it
+  guarantees a reader never sees a *partially written* file, which is a
+  different property from the file being *whole*. And the downloader had no
+  test file at all — `test_download.py` now covers the guard, the resume, and
+  the verify pass; removing the four-line check fails three of them.
+
 ### Two dollar signs in a sentence about money became one giant formula
 
 *Found 2026-08-16 by Patrick, as a chat panel that scrolled sideways. Fixed in v7.10.0.*

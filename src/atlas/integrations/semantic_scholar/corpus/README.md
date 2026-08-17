@@ -285,10 +285,20 @@ resumable) — not something on any request path:
 atlas corpus status                       # where the corpus is, what's downloaded/active
 atlas corpus download --shards 1          # a ~1 GB/dataset sample to prove the pipeline
 atlas corpus download                     # the full ~300 GB (resumes if interrupted)
+atlas corpus verify                       # audit shards against the sizes S2 advertises
+atlas corpus verify --deep --repair       # …also decompress each, and re-pull anything bad
 atlas corpus ingest                       # JSONL.gz → Parquet (incl. clustering), flip CURRENT
 atlas corpus compact                      # cluster a release ingested before v5.12.0
 atlas corpus activate                     # (re)point CURRENT at a finished release
 ```
+
+`verify` is the audit for a corpus pulled **before v7.12.0**, when a dropped
+connection could leave a truncated shard checkpointed as done (see "shard
+completeness" below). It compares every local shard against the size the
+Datasets API advertises; `--deep` additionally decompresses each one (reads the
+whole ~400 GB, no network, catches damage a size match hides) and `--repair`
+re-pulls whatever it flags — resuming a short shard's tail rather than
+re-fetching the whole gigabyte. Read-only unless you pass `--repair`.
 
 `compact` is the **migration** for a corpus ingested before clustering existed
 (new ingests compact automatically): a one-time in-place sort of the active
@@ -307,6 +317,20 @@ Every corpus command reads and writes under this one root.
 - **Signed URLs expire.** The Datasets API hands out pre-signed S3 links that
   lapse after hours, so `download.py` never persists them: on a mid-pull 403/416
   it re-lists from `datasets.py` and retries the same (stably named) shard.
+- **Shard completeness is measured, never assumed** (since v7.12.0). CPython's
+  `http.client.HTTPResponse.read(amt)` does *not* raise `IncompleteRead` when
+  the socket dies mid-body — it returns `b""` and closes, with a stdlib comment
+  saying it would like to raise but won't, for compatibility. So a dropped
+  connection is byte-for-byte **indistinguishable from a clean EOF**, and a
+  downloader that trusts "read returned empty" renames a half-shard into place
+  and checkpoints it done. Every transfer is now compared against
+  `Content-Length` before the `.part` → `.gz` rename; a short body leaves the
+  `.part` alone and the next of five retries resumes the tail. The checkpoint
+  records the advertised size too, so a shard whose bytes don't match is
+  re-fetched rather than trusted. Cost of not doing this: one truncated
+  2026-08-05 citations shard surfaced only ~36 minutes into an ingest, 355
+  shards deep — and its quiet variant (a cut landing on a line boundary)
+  wouldn't have surfaced at all. See `docs/bugs.md`.
 - **DuckDB does everything** — reads gzipped JSONL and writes/queries Parquet — so
   there's no pandas/pyarrow step. It's a runtime dependency because the query side
   runs at serve time.
@@ -338,3 +362,11 @@ generation files — no re-sort), the legacy-layout migration through
 `compact_release`, and an interrupted swap landing *before* the shard loop can
 re-ingest rows the staged generation already carries. No network, no real
 Datasets pull.
+
+`test_download.py` covers the downloader against a fake `urlopen` that can hang
+up mid-body on demand — the one behaviour that matters, since a dropped socket
+reaches the caller as an ordinary empty read. It pins the completeness guard (a
+short body never becomes the final `.gz`), the `Range` resume that finishes it,
+the five-retry give-up, the expired-URL refresh, the 416 disambiguation, and
+each verdict `verify_release` can reach. Delete the four-line `Content-Length`
+check and three of them fail.
