@@ -277,6 +277,43 @@ optional, behind a key.
 
 ### Citations & graph data
 
+- [ ] **A real switch between the corpus and the live S2 API** — today the
+      choice is **implicit, config-driven, and silently per-seed**. There is no
+      flag: `corpus/source.py`'s `active_source()` (`:477-500`) hands back a
+      `DuckDBCitationSource` only when `config.storage.s2_corpus` is set *and*
+      the directory exists *and* `CURRENT` names a release *and* that release
+      has papers Parquet — any gate failing returns `None` and
+      `citation_relations` (`:573-578`) falls through to live. It then falls
+      back **again, per build**, when the seed doesn't resolve to a corpus id,
+      so two seeds in the same session can quietly come from different sources.
+      `services/graph/build.py:178-194` picks corpus-first and stamps the
+      outcome as `citation_source: "corpus" | "live"` on the `Graph`
+      (`model.py:118`), which the UI surfaces **read-only** through
+      `landmarkNote(provider, graph?.citation_source)`
+      (`GraphExplorer.tsx:591`). So the app already *tells* you which source it
+      used — it just gives you no way to *ask* for one.
+
+      **Today's only control is a path, not a switch**: SettingsModal's
+      "Citations corpus" text field (`:509-528`, hint "Empty = corpus off").
+      Forcing a live comparison means blanking the field — and losing the path
+      you'd have to retype to get back. That's the actual pain: A/B-ing corpus
+      against live is a routine thing to want (the corpus can only ever be as
+      fresh as its release, and the live endpoint has the newest citations),
+      and it currently costs a settings round-trip in each direction.
+
+      **The design question is scope**, and both precedents already exist. A
+      **per-request** choice would mirror the S2/OpenAlex provider picker —
+      a `?provider=`-style query param read in `routes/graph.py:67-77`, with
+      `resolve_provider`'s degrade-to-default behaviour (`build.py:98-119`) as
+      the model — and is the more useful shape for comparison, but it widens
+      every graph/search/agent call site that already threads `provider`. A
+      **config default** (`providers.s2.prefer_corpus`, say) is a much smaller
+      change and enough if the goal is just "pin me to live for this session".
+      Worth deciding *before* building, since the per-request version
+      subsumes the other. Either way, keep the automatic fallback: a seed the
+      corpus can't resolve must still build from live rather than fail.
+      *(From the `todos.md` inbox, 2026-08-16.)*
+
 - [ ] **Surveys as a first-class node kind** — a review/survey paper is a
       different animal from a primary result: it's the field's own overlook of
       a period, and right now it's an anonymous dot like everything else.
@@ -569,6 +606,59 @@ optional, behind a key.
       `CURRENT` has to move aside for the duration.
 
 ### UI & rendering polish
+
+- [ ] **Cache indicators in search results: split "cached graph" from "cached
+      search", and stop the badge outliving its cache** — the suspicion was
+      right on both counts. The badge exists — it reads **"⚡ opens
+      instantly"** (`search/useDirectSearch.ts:65`), not "instantly loads" —
+      and it means exactly one thing: **a cached graph snapshot**, never a
+      cached search. It's driven by `paper.has_graph` from the SSE `cached`
+      frame (`useDirectSearch.ts:165`, `routes/search.py:233-238`), which
+      `services/search/discovery.py:217-219` computes by scanning only
+      `graph:v2:<provider>:` keys. Cached *searches* live under a separate
+      `search:<provider>:…` prefix (`agents/traversal.py:166`) and feed **no
+      indicator at all** — so the second half of the ask is new plumbing, not
+      a relabel.
+
+      **On expiry, the answer is "yes, but only at compute time."**
+      `discovery.py:171` does gate the badge on `(now - created) <=
+      config.graph.cache_ttl` (86400s), deliberately still letting expired
+      snapshots supply *titles* — so the flag is honest when it's calculated.
+      Three gaps make it dishonest afterwards:
+
+      - **It's frozen into markdown and saved.** `instant` is computed once
+        from the `cached` frame, re-applied at `useDirectSearch.ts:186`, and
+        baked as plain text into the transcript answer, which is persisted
+        with the session (`store/workspace.ts:269`). **Reopen a saved session
+        days later and long-expired entries still promise "opens instantly."**
+        Nothing re-evaluates it. This is the bug worth fixing first.
+      - **Build shape is ignored.** `fresh_seeds` keys on the snapshot's
+        `seed.id`/`arxiv_id` regardless of the key's `shape.cache_suffix()`
+        (`discovery.py:168-175` vs `services/graph/build.py:374`), while the
+        browser sends its own shape on every build (`api/graph.ts:149,188`).
+        A snapshot cached under a *different* shape sets `has_graph=True` and
+        the actual open is a cache miss — a false badge on a perfectly fresh
+        cache.
+      - **False negatives.** Scout-found papers never get the badge even when
+        their graph is cached, and the whole pre-pass is skipped when a field
+        filter is active (`routes/search.py:232`).
+
+      **The data model doesn't distinguish the two kinds**, which is why this
+      is more than a label: `storage/cache.py:32-38` is one table of
+      `key, value, created_at` with no kind or expiry column — the only
+      separator is the key prefix, a convention the storage README itself
+      (`:76-82`) flags as fragile after the `v2:` incident. Settings blurs them
+      too, describing "graph snapshots, search results and paper details" as
+      one thing (`SettingsModal.tsx:379`) with a single all-or-nothing
+      `drop_cache` (`routes/settings.py:294`). Worth noting one genuine
+      oddity to decide on while here: paper TL;DRs are cached with
+      `max_age=None` — **they never expire** (`routes/graph.py:392`).
+
+      **Test gap:** `has_graph` is asserted only for the fresh case
+      (`test/atlas/services/test_search.py:46,156`); nothing ages a snapshot
+      past `cache_ttl` and asserts the badge goes away, though the aging helper
+      already exists (`test/atlas/storage/test_cache.py:21-23`).
+      *(From the `todos.md` inbox, 2026-08-16.)*
 
 - [ ] **Make it clear that direct search leaves the map** — the ask keeps
       🔍 **Find papers** while a graph is open (**decided 2026-08-15**, against
@@ -946,6 +1036,54 @@ optional, behind a key.
       list, not just above their own card.
 
 ### Enhancements & tech debt
+
+- [ ] **`atlas corpus verify` mistakes a tidied-up release for a destroyed
+      one** — deleting a release's `raw/` shards once its ingest succeeds is
+      **supported and documented** (`corpus/paths.py`'s module docstring: "A
+      release's `raw/` shards remain deletable the moment its ingest
+      succeeds"), and Patrick did exactly that to the 2026-08-05 release on the
+      Mac — 47 GB of Parquet left, `raw/` gone, `download.json` still listing
+      all 455 shards `done`. Run `atlas corpus verify` against that release now
+      and `_inspect_shard` hits `not target.exists()` for every shard and
+      reports **455 × "missing"**. With `--repair` it would then cheerfully
+      **re-download all ~408 GB** — a spectacular answer to "please check my
+      corpus is OK", on a release that is perfectly fine. (Reproduced offline
+      against the real release, feeding `download.json`'s shard names in as the
+      listing: 395/395 citations shards came back `missing`, no network needed
+      — `_inspect_shard` short-circuits before it probes a size.)
+
+      **The fix is a precondition, not a per-shard change:** `verify_release`
+      should notice that the dataset's raw directory is absent or empty and
+      return a distinct "raw shards deleted — nothing to verify, the ingested
+      Parquet is what matters here" outcome, rather than a per-shard verdict.
+      Worth deciding at the same time whether `--repair` should refuse (or
+      demand confirmation) when the miss count is *everything*, since that
+      shape is far more likely to be a tidied release than a corrupted one.
+      Note `atlas corpus download`'s behaviour on the same state is
+      **correct and should not change** — shards gone means re-fetch, which is
+      what "a re-ingest just means a re-download" promises.
+
+      Shipped in v7.12.0 and found the same night; no data at risk, but the
+      command is a footgun until this lands. *(Found 2026-08-16.)*
+
+- [ ] **Exercise the corpus downloader's unproven recovery paths on Windows** —
+      v7.12.0's guard is covered by 16 offline tests against a fake `urlopen`,
+      but three paths have **never run against real S3**, and all three only
+      fire on the rare/awkward cases the tests had to simulate: (1) the **416
+      disambiguation** (`_settle_range_past_eof` — is a `.part` at/past EOF a
+      complete shard to promote, or over-long garbage to discard?), (2) the
+      **mid-verify URL refresh** (a 400-shard verify outliving the signatures
+      it started with), and (3) **`verify --deep`** at full scale, which
+      decompresses ~400 GB. The Mac can't test any of it — its raw shards are
+      deleted (see the ticket above) — so this rides on the **Windows machine**,
+      which still has its shards, or on the next monthly release pull.
+
+      Cheap and worth doing in the same pass: run `verify` (fast, size-only)
+      against a corpus whose shards are intact and confirm it reports a clean
+      bill, since tonight's evidence that the shards *are* intact came from a
+      hand-rolled `gzip -t` sweep rather than from the command itself. See
+      `docs/bugs.md`'s "A dropped connection looks exactly like a finished
+      download" for why each path exists. *(Found 2026-08-16.)*
 
 - [ ] **Save a conversation with no graph** — Save is graph-gated end to end:
       the rail only offers it when `hasGraph` (`Atlas.tsx`), `saveWorkspace`
