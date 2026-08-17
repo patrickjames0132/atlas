@@ -317,7 +317,7 @@ The five sessions:
   over `getattr` duck-typing, and use `flask.typing.ResponseReturnValue` for
   views that return `(body, status)` tuples.
 - **`tests`** — `pytest` over `test/`, which **mirrors `src/atlas/`**
-  (491 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
+  (669 offline tests; no live arXiv/S2/Anthropic calls, ever). Shared fixtures
   in `test/conftest.py`: autouse temp-DB isolation (tests can't touch real
   `data/`), `fake_claude` (a scripted Anthropic client built from **real SDK
   event objects** — use it for anything agentic), and `stub_embeddings`

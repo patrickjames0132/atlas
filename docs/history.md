@@ -1486,6 +1486,42 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **A truncated shard passed as a finished download — the corpus pull now
+      measures completeness, and `atlas corpus verify` audits what's already on
+      disk** *(v7.12.0)* — an ingest of the 2026-08-05 release died 36 minutes
+      in, at citations shard 355/395, on a DuckDB "malformed JSON … unexpected
+      end of data" that pointed at the wrong layer entirely. The shard was
+      truncated on disk — 577 MB of a 1.07 GB object — and had been renamed to
+      its final `.gz` and checkpointed `done` anyway.
+
+      **Why the downloader couldn't tell.** CPython's
+      `http.client.HTTPResponse.read(amt)` does *not* raise `IncompleteRead`
+      when the socket dies mid-body; it returns `b""` and closes, by a
+      deliberate stdlib compatibility choice. A dropped connection is
+      therefore indistinguishable from a clean EOF, so streaming "until read
+      returns empty" and then renaming is not a completeness test at all — and
+      the resulting `download.json` entry was self-consistent and wrong, which
+      is why re-running `download` skipped the bad shard instead of fixing it.
+
+      `_download_shard` now measures the body against `Content-Length` before
+      the `.part` → `.gz` rename, raising `_ShortRead` and leaving the partial
+      file for one of five `Range` retries to resume. The checkpoint stores the
+      advertised size, so a mismatched shard is re-fetched rather than trusted;
+      a 416 is resolved by probing the object's true size instead of guessed
+      at. `atlas corpus verify [--deep] [--repair]` is the audit for corpora
+      pulled before the guard existed — size against the Datasets API, then
+      optionally a full decompress, then optional repair.
+
+      **The result that justified the sweep**: a `gzip -t` pass over all 455
+      shards (408 GB) found exactly one casualty. The failure's quiet variant —
+      a cut landing on a line boundary — would have ingested cleanly, earned
+      its `_done` marker, and silently dropped every edge after the cut.
+      Repairing the real shard cost only the missing 497 MB, since a truncation
+      cuts the tail and the surviving bytes are a valid prefix. The downloader
+      had no test file at all before this; `test_download.py` (15 tests) now
+      covers the guard, resume, expiry refresh, and verification — pull the
+      four-line check and three of them fail. Full story in `docs/bugs.md`.
+
 - [x] **Retire `similar` from the graph too — a citation map should be made of
       citations** *(v7.5.0)* — the purple papers `expand_node` pulled in were
       related by *embedding*, not by an edge anyone wrote, so they asserted a
