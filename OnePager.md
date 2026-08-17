@@ -631,7 +631,9 @@ optional, behind a key.
         baked as plain text into the transcript answer, which is persisted
         with the session (`store/workspace.ts:269`). **Reopen a saved session
         days later and long-expired entries still promise "opens instantly."**
-        Nothing re-evaluates it. This is the bug worth fixing first.
+        Nothing re-evaluates it. This is the bug worth fixing first —
+        **confirmed in the browser by Patrick, 2026-08-16**, so it's a real
+        repro, not an inference from the code.
       - **Build shape is ignored.** `fresh_seeds` keys on the snapshot's
         `seed.id`/`arxiv_id` regardless of the key's `shape.cache_suffix()`
         (`discovery.py:168-175` vs `services/graph/build.py:374`), while the
