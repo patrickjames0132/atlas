@@ -89,9 +89,9 @@ export const HOME_TOUR: TourStep[] = [
     title: 'Every answer is a way in',
     body:
       'Papers the assistant cites are clickable: the chip marked with three linked nodes ' +
-      'builds that paper’s graph and opens its details, bringing the conversation with ' +
-      'it. Once a map is up this chat collapses into a side panel — the 🎓 button above ' +
-      'the graph brings it back.',
+      'builds that paper’s graph, bringing the conversation with it. Once a map is up ' +
+      'this chat collapses into a side panel — the 🎓 button above the graph brings it ' +
+      'back.',
   },
   {
     target: '[data-tour="rail"]',
@@ -101,7 +101,8 @@ export const HOME_TOUR: TourStep[] = [
       'discovered, and the conversation — and it appears in this list. Reopening rebuilds ' +
       'the exact graph from the save itself: zero API calls, discovered papers included, ' +
       'transcript and all. Hover a row for ⋮ to rename or delete it, and collapse the ' +
-      'whole rail when the map wants the room.',
+      'whole rail when the map wants the room — click its title row, or drag its right ' +
+      'edge; the drag folds it away and pulls it back open.',
   },
   {
     target: '[data-tour="settings-btn"]',

@@ -223,8 +223,8 @@ The Vite dev server proxies `/api/*` to Flask.
      same agent answers seedless, searching your library through its tools
      rather than being handed passages, so a greeting stays a greeting and a
      real question gets looked up first. Its citations are the way *in*:
-     clicking one **maps that paper** — builds its graph and opens its details
-     — and the conversation comes with you rather than being cleared, so a
+     clicking one **maps that paper** — builds its graph, with nothing selected
+     on it — and the conversation comes with you rather than being cleared, so a
      survey answer is a doorway into the graph instead of a list of links out
      to someone else's site. When a graph appears the chat collapses into the
      side panel beside it (and a 🎓 button at the top-right of the canvas

@@ -6,8 +6,9 @@ search and the shaping that turns a scout result into a transcript turn.
 
 ```
 search/
-  SearchControls.tsx — the chat bar's two toggles: "Find papers" + "Filters"
-                       (with the year/field popover behind the second)
+  SearchControls.tsx — the ask's two toggles: "Find papers" + "Filters" (with
+                       the year/field popover behind the second). They ride
+                       BESIDE the bar, not in it — see "Who uses it" below.
   useDirectSearch.ts — run the scout, shape its result into a chat message
   search.css         — styles for the toggles and the filter popover
 ```
@@ -84,9 +85,14 @@ its title-recall half became the scout's `match_title` tool.
   `id` as the filter value (S2 field name / OpenAlex numeric field id). The
   two vocabularies are disjoint, so the backend drops values that don't belong
   to the active provider (`services/search.valid_fields`).
-- **The popover spans the whole bar and drops down from it.** It anchors to
-  `.teacher-ask`, not to the little toggle that opens it — a popover the width
-  of a button has no room for a year slider.
+- **The popover spans its whole row, not the button.** It anchors to whichever
+  container the pair lands in — `.ask-tools` with no graph, the sticky
+  `.section-head` with one — never to the little toggle that opens it, because
+  a popover the width of a button has no room for a year slider. Direction
+  follows the room: upward from the tool row (which sits at the bottom of the
+  column, under the bar), downward from the Chat row (which is pinned near the
+  top), and downward again on the empty landing surface, where the whole
+  composer floats at the optical centre.
 - **The instant cache search is gone from the frontend — not from the
   product.** `searchLocal` and `/api/local_search` were deleted, because the
   scout reads that same cache *inside* its own `search` tool: a rate-limited
@@ -98,11 +104,15 @@ its title-recall half became the scout's `match_title` tool.
 
 ## Who uses it, and how/why
 
-`Teacher` renders `SearchControls` inside its ask form (beside `ScopePicker`,
-for the same reason: they belong to the thing you are about to send) and owns
-the `direct` / `searchOptions` state. It passes the options to
-`useDirectSearch` **and** to `ask`, which forwards them to the researcher.
-The header that used to hold the search box is gone entirely (v7.8.0).
+`Teacher` renders `SearchControls` beside `ScopePicker` — always the two
+together, for the same reason: they belong to the thing you are about to send.
+It owns the `direct` / `searchOptions` state, passes the options to
+`useDirectSearch` **and** to `ask` (which forwards them to the researcher), and
+places the pair in one of two rows depending on the panel's shape: a chip row
+directly under the ask bar with no graph, the Chat section's caret row with
+one. **Never inside the bar itself, since v7.11.0** — three controls and a text
+field made the box you type in read as a toolbar. The header that used to hold
+the search box is gone entirely (v7.8.0).
 
 ## How it's verified
 

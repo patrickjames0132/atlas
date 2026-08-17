@@ -5,11 +5,13 @@
  * The chat bar's search controls: the direct-search toggle, and the filter
  * popover (publication-year window + field of study) behind it.
  *
- * Both live *inside* the ask form, next to the source-scope picker, for the
- * same reason that one does: they belong to the thing you are about to send.
- * The filters deliberately sit outside the toggle rather than inside it —
- * they bind the researcher's paper searches too, so they are the bar's
- * filters, not direct search's (see `api/search.ts`).
+ * Both travel with the source-scope picker, for the same reason that one does:
+ * they belong to the thing you are about to send. They sat *inside* the ask
+ * pill until v7.11.0, which made a text box look like a toolbar; now they ride
+ * beside it — a chip row under the bar with no graph, the Chat section's row
+ * with one. The filters deliberately sit outside the direct-search toggle
+ * rather than inside it: they bind the researcher's paper searches too, so
+ * they are the bar's filters, not direct search's (see `api/search.ts`).
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>

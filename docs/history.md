@@ -2308,6 +2308,94 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The ask bar holds the question and nothing else** *(v7.11.0)* — the
+      composer had accumulated three controls *inside* the pill — the 📚
+      source scope, the 🔍 Find-papers toggle and the ▽ Filters button — and
+      together they turned the one thing you came to the app to use, a box to
+      type in, into a toolbar with a text field wedged in it. Patrick's
+      reference was Claude's own composer against ChatGPT's: *"get away from
+      putting the scope picker and search filters in the chat bar. It's too
+      much clutter."*
+
+      **The pill was emptied; the controls went to whichever row the panel's
+      shape already had.** With **no graph** there are no sections to receive
+      them, so they became a chip row directly *beneath* the bar
+      (`.ask-tools`) — beneath rather than above, so you read the question
+      first and then what bounds it, and far enough from the field to stop
+      reading as chrome around it. With a **graph** they went *up* onto the
+      **Chat** section's caret row, joining the 🎓 and 📚 scopes that landed
+      there in v7.10.0 for exactly the same reason: all four bind the
+      researcher answering below, not the lecturer above. Each element is
+      rendered in one of the two places, never both.
+
+      **Two details the move turned out to depend on.** The bar and its chip
+      row are wrapped in `.ask-dock`, which is what the landing surface's FLIP
+      now measures — the group drops from the optical centre to the bottom on
+      the first question, and a chip row that snapped down while the bar above
+      it slid would have read as two unrelated controls. And the filter
+      popover, which spans a whole row rather than its button (a year slider
+      needs the width), had been anchored to `.teacher-ask`; it now anchors to
+      whichever row it lands in and picks its direction from the room —
+      upward from the tool row at the bottom of the page, downward from the
+      pinned Chat row and from the floating empty-landing composer. The
+      `position: relative` that made the bar a containing block is gone, which
+      is the mechanical proof nothing is left inside it.
+
+      **The "Answers also draw on N sources (📚)" note became graph-only.** It
+      exists because the docked pickers are bare icons with no room for a
+      label; in the landing tool row the chip says "2 sources" itself, a
+      centimetre below, so the note was the same sentence twice.
+
+- [x] **Drag the rail shut, and drag it back open** *(v7.11.0)* — the left
+      rail's resize handle now does two jobs. Keep pulling it past the 180px
+      floor and the rail **folds away** instead of sitting there refusing to
+      narrow — the Azure DevOps gesture, and what the drag already means:
+      someone dragging a panel as narrow as it goes is asking for the space,
+      not for 180px of it. The folded rail **keeps its handle**, so the same
+      pull the other way brings it back; a collapsed edge you couldn't grab
+      would have made the new gesture a one-way door.
+
+      **It's an opt-in on the shared hook, not rail-specific code.**
+      `useResizablePanel` gained a `fold` option (`{collapsed,
+      collapsedWidth, closeAt, openAt, onToggle}`) that the two right-docked
+      panels simply don't pass. Three things it has to get right: both
+      thresholds are measured on the **unclamped** drag, so bottoming out
+      isn't enough — `closeAt: 130` sits 50px below the floor and `openAt: 96`
+      40px past the folded rail's own 56, and the overshoot has to be
+      deliberate. A folded panel measures from the width it **shows**, not the
+      width it remembers, or the first unfolding drag would start 200px ahead
+      of the pointer. And the width you had is saved on the way out, so
+      reopening is not a fresh start.
+
+      **The brand row became one hit target while we were in there.** "Atlas"
+      and the seed title are labels rather than controls, and a hover
+      highlight that stopped at the glyph made the row look like an icon
+      button with two words parked beside it. It is now a `.rail-item` like
+      every entry below it — same glyph line, full-width highlight — with the
+      seed keeping its own tooltip inside the row's, since it is the one thing
+      there that truncates. The tour's rail step teaches both gestures.
+
+- [x] **A chat citation opens the map, not the paper's panel** *(v7.11.0)* —
+      **supersedes the deliberate exception carved out in v7.9.0**, below.
+      That release stopped every graph from opening with its detail panel
+      already covering the canvas, but kept one path: clicking a paper the
+      agent cited in a graph-free answer still landed with the seed's panel
+      open, on the theory that such a click *asked for that paper*. It asks
+      for both — and the panel arrived on top of the half that has to be seen
+      first, so the exception reproduced the exact bug it was excepted from.
+      Clicking the seed opens it now, like any other node.
+
+      **The whole mechanism came out, not just its effect.**
+      `workspace.revealSeedDetail`, the `seedDetailRevealed` reducer that
+      spent it, `loadGraph`'s `fromChat` argument and `GraphExplorer`'s
+      consuming effect are all deleted — `fromChat` had already lost its other
+      job when v7.10.0 made every graph load keep the conversation, so nothing
+      was left for it to mean. The comment in `useSelection` that explained
+      the effect-ordering trick (the reveal registered *after* the per-graph
+      clear so it could set the seed back) now records why there is no
+      ordering left to preserve. The README and the tour's "Every answer is a
+      way in" step both stopped promising the details.
+
 - [x] **The docked chat scrolled sideways** *(v7.10.0)* — *"beside a graph, the
       assistant panel scrolls **horizontally**, and it should never — content
       belongs inside the panel's width, wrapping or shrinking to fit, and the

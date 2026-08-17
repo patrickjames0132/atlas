@@ -145,7 +145,7 @@ describe('transcript lecture caching', () => {
 })
 
 /** A `loadGraph.fulfilled` action, as the store would dispatch it. */
-function graphLoadedAction(fromChat: boolean) {
+function graphLoadedAction() {
   return {
     type: 'workspace/loadGraph/fulfilled',
     payload: {
@@ -154,21 +154,20 @@ function graphLoadedAction(fromChat: boolean) {
       edges: [],
       counts: {},
     },
-    meta: { arg: { seed: 'seed', fromChat }, requestId: 'r', requestStatus: 'fulfilled' },
+    meta: { arg: { seed: 'seed' }, requestId: 'r', requestStatus: 'fulfilled' },
   } as unknown as Parameters<typeof reducer>[1]
 }
 
 describe('transcript survival across a graph load', () => {
   const graphLoaded = graphLoadedAction
 
-  it.each([
-    ['seeded from a citation', true],
-    ['searched cold from the header', false],
-  ])('keeps the conversation when the graph was %s', (_label, fromChat) => {
+  it('keeps the conversation, however the new graph was reached', () => {
     // The chat is the user's: they asked those questions, and loading another
     // graph doesn't say they're done with the answers. Clearing it is theirs
-    // to do — the Clear button, or Home.
-    const state = play(turnStarted('What is new in quantum computing?'), graphLoaded(fromChat))
+    // to do — the Clear button, or Home. A citation-seeded load and a cold
+    // search are the same action here: the `fromChat` flag that once told them
+    // apart is gone (v7.11.0), along with the detail panel it opened.
+    const state = play(turnStarted('What is new in quantum computing?'), graphLoaded())
     // turnStarted seeds the user turn plus the assistant placeholder.
     expect(state.chat).toHaveLength(2)
     expect(state.chat[0].text).toBe('What is new in quantum computing?')
@@ -182,7 +181,7 @@ describe('transcript survival across a graph load', () => {
       lectureStarted('history'),
       beatAdded({ mode: 'history', beat: makeBeat() }),
       turnStarted('And what about DQN?'),
-      graphLoaded(false),
+      graphLoaded(),
     )
     expect(state.lectures).toEqual({})
     expect(state.activeMode).toBeNull()
@@ -191,37 +190,12 @@ describe('transcript survival across a graph load', () => {
 })
 
 describe('workspace epoch across a graph load', () => {
-  it.each([true, false])('holds the epoch steady on any graph load (fromChat=%s)', (fromChat) => {
+  it('holds the epoch steady on a graph load', () => {
     // The shell keys the teacher panel on `epoch`, so a bump remounts it and
     // rebuilds the transcript's scroll container at the top — throwing the
     // reader back to the start of the answer they were reading. Only Home and
     // a session restore remount now.
-    const loaded = workspaceReducer(undefined, graphLoadedAction(fromChat))
+    const loaded = workspaceReducer(undefined, graphLoadedAction())
     expect(loaded.epoch).toBe(0)
-  })
-})
-
-describe('direct search reuses the streamed-answer reducers', () => {
-  it('opens a turn, takes chips, then prose and refs — the same path an answer walks', () => {
-    // Direct search deliberately has no reducer of its own: it drives
-    // turnStarted → traceAdded → tokenAppended → paperRefsSet, which is what
-    // makes it snap to the bottom and fill live like the researcher does. A
-    // single land-it-complete action read as a frozen screen for the several
-    // seconds a scout run takes.
-    const state = play(
-      turnStarted('dqn'),
-      traceAdded({ action: 'search', ok: true, query: 'deep q-network' }),
-      traceAdded({ action: 'search', ok: true, query: 'title: Playing Atari' }),
-      tokenAppended('Found the landmark.\n\n[1] **Playing Atari**'),
-      paperRefsSet({
-        '1': { node_id: 's2atari', title: 'Playing Atari', url: 'u', provider: 's2' },
-      }),
-    )
-    expect(state.chat).toHaveLength(2)
-    expect(state.chat[0]).toEqual({ role: 'user', text: 'dqn' })
-    expect(state.chat[1].trace).toHaveLength(2)
-    // paperRefs is what makes each `[n]` clickable and reseed the graph —
-    // rendering comes free from AnswerMarkdown, and a saved session keeps it.
-    expect(state.chat[1].paperRefs?.['1'].node_id).toBe('s2atari')
   })
 })

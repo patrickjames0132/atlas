@@ -10,6 +10,12 @@
  * window. The reader's chosen width outlives the cap: it is stored unclamped,
  * so widening the window hands it straight back.
  *
+ * Plus fold-by-drag (v7.11.0), which has three cases worth pinning: bottoming
+ * out at `min` must *not* fold the panel away, a deliberate overshoot must —
+ * restoring the width they had, since the panel will be reopened — and the
+ * folded panel's own handle must pull it back open, measuring from the width
+ * it shows rather than the width it remembers.
+ *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
@@ -113,6 +119,91 @@ describe('useResizablePanel', () => {
     window.innerWidth = 600
     const { result } = renderHook(() => useResizablePanel(STORAGE_KEY, 340))
     expect(result.current.width).toBe(240)
+  })
+
+  it('collapses when a drag is hauled well past the floor', () => {
+    let toggles = 0
+    const { result } = renderHook(() =>
+      useResizablePanel(STORAGE_KEY, 240, {
+        min: 180,
+        max: 380,
+        side: 'left',
+        fold: {
+          collapsed: false,
+          collapsedWidth: 56,
+          closeAt: 130,
+          openAt: 96,
+          onToggle: () => {
+            toggles += 1
+          },
+        },
+      }),
+    )
+
+    act(() => result.current.onHandlePointerDown(pointerDownAt(240)))
+    // Left-docked: rightward widens, so 60px LEFT is 180 — the floor, not the
+    // collapse. Bottoming out must not fold the panel away.
+    act(() => firePointer('pointermove', 180))
+    expect(toggles).toBe(0)
+    expect(result.current.width).toBe(180)
+
+    act(() => firePointer('pointermove', 140)) // → 140: past the floor, above 130
+    expect(toggles).toBe(0)
+
+    act(() => firePointer('pointermove', 100)) // → 100, well under 130
+    expect(toggles).toBe(1)
+    // The drag is over, and the width they had is what comes back on reopen —
+    // a floor-width sliver would make re-expanding feel like a reset.
+    expect(result.current.dragging).toBe(false)
+    expect(result.current.width).toBe(240)
+
+    act(() => firePointer('pointerup'))
+    expect(toggles).toBe(1)
+  })
+
+  it('pulls the folded panel back open, measuring from the width it shows', () => {
+    localStorage.setItem(STORAGE_KEY, '300')
+    let toggles = 0
+    const { result } = renderHook(() =>
+      useResizablePanel(STORAGE_KEY, 240, {
+        min: 180,
+        max: 380,
+        side: 'left',
+        fold: {
+          collapsed: true,
+          collapsedWidth: 56,
+          closeAt: 130,
+          openAt: 96,
+          onToggle: () => {
+            toggles += 1
+          },
+        },
+      }),
+    )
+
+    act(() => result.current.onHandlePointerDown(pointerDownAt(56)))
+    // 300px is remembered, 56px is on screen: measured from the remembered
+    // width, this 20px pull would already have crossed `openAt` at rest.
+    act(() => firePointer('pointermove', 76))
+    expect(toggles).toBe(0)
+
+    act(() => firePointer('pointermove', 120)) // 64px of pull → 120, past 96
+    expect(toggles).toBe(1)
+    expect(result.current.dragging).toBe(false)
+    // Nothing was sized on the way out: the rail comes back at its own width.
+    expect(result.current.width).toBe(300)
+    act(() => firePointer('pointerup'))
+  })
+
+  it('stops at the floor when no collapse is wired up', () => {
+    const { result } = renderHook(() =>
+      useResizablePanel(STORAGE_KEY, 240, { min: 180, max: 380, side: 'left' }),
+    )
+    act(() => result.current.onHandlePointerDown(pointerDownAt(240)))
+    act(() => firePointer('pointermove', 0))
+    expect(result.current.width).toBe(180)
+    expect(result.current.dragging).toBe(true)
+    act(() => firePointer('pointerup'))
   })
 
   it('will not let a drag exceed the viewport cap', () => {

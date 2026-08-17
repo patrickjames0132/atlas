@@ -25,12 +25,20 @@
  *
  * **Docked, the panel is a stack of folding sections** (v7.10.0): *Lectures*
  * — the four mode buttons and whichever lecture is shown — and *Chat*, the
- * conversation, whose caret row also carries the 🎓/📚 scope pickers, because
- * those scope the researcher answering there rather than the lecturer above.
+ * conversation, whose caret row also carries every control that binds the ask:
+ * the 🎓/📚 scope pickers and the 🔍/▽ search controls, because those scope
+ * the researcher answering there rather than the lecturer above.
  * Before this the two shared one scroll and took turns: playing a lecture hid
  * the chat, asking a question hid the lecture. Sections let a reader keep a
  * lecture open and ask about it. With no graph there is nothing to divide, so
  * the conversation simply is the panel.
+ *
+ * **The ask bar itself holds nothing but the question** (v7.11.0). Those four
+ * controls all used to sit inside the pill, which made the one thing you came
+ * here to use — a box to type in — read as a toolbar with a text field wedged
+ * in it. Without a graph they moved out to a chip row directly beneath the
+ * bar; with one, up to the Chat row above it. Either way they stay adjacent to
+ * the ask they modify, and the bar goes back to looking like a bar.
  *
  * The conversation itself lives in the store (transcript slice) and the
  * stream orchestration in useConversation; this component owns only what it
@@ -363,7 +371,7 @@ export default function Teacher({
   // Keyed on `empty` alone, and deliberately not on every render: reading
   // getBoundingClientRect forces layout, and this component re-renders on every
   // streamed token.
-  const askRef = useRef<HTMLFormElement>(null)
+  const askRef = useRef<HTMLDivElement>(null)
   const askTop = useRef<number | null>(null)
   const wasEmpty = useRef(false)
   const empty = landing && chat.length === 0
@@ -403,25 +411,34 @@ export default function Teacher({
   // sources share it (space is tight), each part naming its picker's icon.
   // Only what's actually in play appears — no lectures played and no sources
   // scoped means no note.
+  //
+  // Graph mode only, both halves. There the two pickers are bare icons on the
+  // Chat row and this line is the only place their state is spelled out; with
+  // no graph the tool row under the bar wears its own labels ("2 sources"),
+  // so the note would be saying the same thing twice a centimetre apart.
   const askContextParts: string[] = []
-  if (hasGraph && lectureScope.length > 0) {
-    askContextParts.push(
-      `${lectureScope.length} played lecture${lectureScope.length > 1 ? 's' : ''} (🎓)`,
-    )
-  }
-  if (scopeIds.length > 0) {
-    askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
+  if (hasGraph) {
+    if (lectureScope.length > 0) {
+      askContextParts.push(
+        `${lectureScope.length} played lecture${lectureScope.length > 1 ? 's' : ''} (🎓)`,
+      )
+    }
+    if (scopeIds.length > 0) {
+      askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
+    }
   }
 
   // Which sources the researcher may search. ONE picker, rendered in one of
-  // two places depending on the shape the panel is in:
-  //   • landing — inset in the ask bar, where it belongs to the question you
-  //     are about to ask (that reasoning is why it moved there in the first
-  //     place, and the wide centred composer has room for it);
-  //   • docked — up in the panel header beside the 🎓 lecture scope, because
-  //     beside a graph the bar is ~300px and 📚 + 🔍 + Filters + the textarea
-  //     + send is more than that width holds. The header already hosts
-  //     exactly this kind of control.
+  // two places depending on the shape the panel is in — but never *inside* the
+  // ask bar any more (v7.11.0). It sat there, with the two search controls
+  // beside it, until the pill was three controls and a textarea and read as
+  // clutter: the box you type in should look like a box you type in. So:
+  //   • no graph — down in the tool row directly under the bar, still plainly
+  //     part of the question you are about to ask, and with the room to wear
+  //     its label;
+  //   • docked — up on the Chat section's row beside the 🎓 lecture scope,
+  //     because beside a graph the panel is ~340px and nothing fits in the
+  //     pill. That row already hosts exactly this kind of control.
   // At ONE source too, not two. The gate used to be `> 1` on the reading that
   // a lone source leaves no choice to make — but "use it / don't" is a choice,
   // and it's the one a reader with a single uploaded book most wants: without
@@ -450,6 +467,23 @@ export default function Teacher({
         noneHint: "No sources selected — the assistant won't search your library.",
         buttonTitle: 'Choose which of your sources the assistant may search',
       }}
+    />
+  )
+
+  // The two search controls (arm direct search · open the filters), and they
+  // travel with the source picker above for the same reason and to the same
+  // two places — the tool row under the bar without a graph, the Chat row with
+  // one. Their filter popover anchors to whichever container it lands in, so
+  // it still spans the panel rather than the button that opened it.
+  const searchControls = (
+    <SearchControls
+      direct={direct}
+      onDirectChange={setDirect}
+      options={searchOptions}
+      onOptions={setSearchOptions}
+      provider={provider}
+      open={openScope === 'filters'}
+      onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'filters' : null)}
     />
   )
 
@@ -685,9 +719,12 @@ export default function Teacher({
                     <span className="spin section-spin" role="status" aria-label="Answering" />
                   )}
                 </button>
-                {/* The two scopes live HERE, not in the panel header, because
-                    this is whose reach they are: they bind the researcher
-                    answering below, not the lecturer above. */}
+                {/* Every control that binds the ask lives HERE, not in the
+                    panel header and no longer in the bar itself: the two
+                    scopes (🎓 lectures, 📚 sources) and the two search
+                    controls (🔍 direct search, ▽ filters). All four bind the
+                    researcher answering below, not the lecturer above, and
+                    docked there is no room for any of them in the pill. */}
                 <div className="section-head-right">
                   {playedModes.length > 0 && (
                     <ScopePicker
@@ -717,6 +754,7 @@ export default function Teacher({
                     />
                   )}
                   {sourcePicker}
+                  {searchControls}
                 </div>
               </div>
               <div className="section-body" hidden={!chatOpen}>
@@ -756,72 +794,77 @@ export default function Teacher({
       {askContextParts.length > 0 && (
         <p className="ask-context-note">Answers also draw on {askContextParts.join(' · ')}.</p>
       )}
-      <form className="teacher-ask" data-tour="ask" onSubmit={onAsk} ref={askRef}>
-        {/* With no graph there are no sections, so the scope rides in the bar
-            (see `sourcePicker` above for the other half of this). */}
-        {!hasGraph && sourcePicker}
-        <SearchControls
-          direct={direct}
-          onDirectChange={setDirect}
-          options={searchOptions}
-          onOptions={setSearchOptions}
-          provider={provider}
-          open={openScope === 'filters'}
-          onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'filters' : null)}
-        />
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={onInputKeyDown}
-          rows={1}
-          placeholder={askPlaceholder}
-          aria-label="Ask the assistant a question"
-        />
-        {/* Clear, inside the bar beside the send rather than floating above the
-            transcript — same round shape and size, but muted rather than
-            accent: it's the destructive one, and it shouldn't compete with the
-            control you actually came here to press. Contextual, as it always
-            was: with a lecture on screen it clears that instead of the chat,
-            which the tooltip says since the icon can't. */}
-        {chat.length > 0 && (
-          <button
-            type="button"
-            className="ask-clear"
-            onClick={clearChat}
-            title="Clear the chat — start a fresh conversation"
-            aria-label="Clear chat"
-          >
-            <ClearGlyph />
-          </button>
-        )}
-        {/* One button, two jobs. While an answer streams it shows the same
-            hopping dots the lecture buttons wear — and hovering turns it into a
-            stop, so the control that says "working" is also the one that ends
-            it. Deliberately not disabled mid-flight: that was the old ellipsis,
-            which looked inert and offered no way out of a long run. */}
-        <button
-          type={asking || searching ? 'button' : 'submit'}
-          className={asking ? 'is-stop' : undefined}
-          disabled={(!asking && !input.trim()) || searching}
-          onClick={asking ? stopAsk : undefined}
-          title={asking ? 'Stop generating' : undefined}
-          aria-label={asking ? 'Stop generating' : 'Ask'}
-        >
-          {asking ? (
-            <>
-              <HopDots />
-              <span className="stop-glyph" aria-hidden="true" />
-            </>
-          ) : searching ? (
-            // A direct search is short and has no partial result worth
-            // keeping, so it shows progress without offering a stop.
-            <HopDots />
-          ) : (
-            '↑'
+      {/* Bar and tool row move as one thing — which is why the FLIP below
+          measures this wrapper rather than the form: on the landing surface
+          the whole group drops from the optical centre to the bottom on the
+          first question, and a row that snapped down while the bar above it
+          slid would read as two separate controls. */}
+      <div className="ask-dock" ref={askRef}>
+        <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={onInputKeyDown}
+            rows={1}
+            placeholder={askPlaceholder}
+            aria-label="Ask the assistant a question"
+          />
+          {/* Clear, inside the bar beside the send rather than floating above the
+              transcript — same round shape and size, but muted rather than
+              accent: it's the destructive one, and it shouldn't compete with the
+              control you actually came here to press. Contextual, as it always
+              was: with a lecture on screen it clears that instead of the chat,
+              which the tooltip says since the icon can't. */}
+          {chat.length > 0 && (
+            <button
+              type="button"
+              className="ask-clear"
+              onClick={clearChat}
+              title="Clear the chat — start a fresh conversation"
+              aria-label="Clear chat"
+            >
+              <ClearGlyph />
+            </button>
           )}
-        </button>
-      </form>
+          {/* One button, two jobs. While an answer streams it shows the same
+              hopping dots the lecture buttons wear — and hovering turns it into a
+              stop, so the control that says "working" is also the one that ends
+              it. Deliberately not disabled mid-flight: that was the old ellipsis,
+              which looked inert and offered no way out of a long run. */}
+          <button
+            type={asking || searching ? 'button' : 'submit'}
+            className={asking ? 'is-stop' : undefined}
+            disabled={(!asking && !input.trim()) || searching}
+            onClick={asking ? stopAsk : undefined}
+            title={asking ? 'Stop generating' : undefined}
+            aria-label={asking ? 'Stop generating' : 'Ask'}
+          >
+            {asking ? (
+              <>
+                <HopDots />
+                <span className="stop-glyph" aria-hidden="true" />
+              </>
+            ) : searching ? (
+              // A direct search is short and has no partial result worth
+              // keeping, so it shows progress without offering a stop.
+              <HopDots />
+            ) : (
+              '↑'
+            )}
+          </button>
+        </form>
+        {/* No graph means no sections, so the controls that bind the ask have
+            nowhere above to live — they sit as a chip row directly beneath the
+            bar instead, near what they modify and out of it. Rendered only
+            here: with a graph they are up on the Chat row. */}
+        {!hasGraph && (
+          <div className="ask-tools">
+            {sourcePicker}
+            {searchControls}
+          </div>
+        )}
+      </div>
 
       {lightbox && <Lightbox figure={lightbox} onClose={() => setLightbox(null)} />}
     </section>

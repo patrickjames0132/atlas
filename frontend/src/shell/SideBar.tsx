@@ -31,6 +31,10 @@ import { PROVIDER_LABEL } from '../api'
 import type { Provider, SavedSessionMeta } from '../api'
 import './shell.css'
 
+/** The folded rail's width, px — `.rail.collapsed` in `shell.css`, repeated
+ *  here because the unfold-by-drag has to measure from what is on screen. */
+const RAIL_COLLAPSED_WIDTH = 56
+
 /** The main-pane view a rail entry switches to. */
 export type ShellView = 'workspace' | 'library'
 
@@ -314,10 +318,16 @@ export default function SideBar({
   // Same drag-to-resize the two right-docked panels use, mirrored. The width
   // only applies while expanded — collapsed is a fixed icon rail, and a
   // 300px-wide strip of icons would be absurd.
+  // Dragging the handle well past the 180px floor folds the rail instead of
+  // stopping dead there — the gesture already means "I want this space back".
+  // 130px is 50px of deliberate overshoot, so bottoming out isn't enough. The
+  // folded rail keeps the handle, so the same pull the other way brings it
+  // back: 96px is 40px past the icon rail's own 56.
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.railWidth', 240, {
     min: 180,
     max: 380,
     side: 'left',
+    fold: { collapsed, collapsedWidth: RAIL_COLLAPSED_WIDTH, closeAt: 130, openAt: 96, onToggle },
   })
 
   return (
@@ -328,47 +338,43 @@ export default function SideBar({
       style={collapsed ? undefined : { width }}
     >
       <div className="rail-top">
-        {/* Brand row: the collapse toggle is the only button in it. "Atlas"
-            and the open graph's title are labels, not controls, so they sit
-            beside the toggle rather than inside its hit area — and the seed
-            reads as a subtitle to the app name, which is what it is. */}
-        <div className="rail-brandrow">
-          <button
-            type="button"
-            className="rail-item rail-toggle"
-            onClick={onToggle}
-            title={open ? 'Collapse the menu' : 'Expand the menu'}
-            aria-label={open ? 'Collapse the menu' : 'Expand the menu'}
-            aria-expanded={open}
-          >
-            {/* The panel glyph both apps use: a rectangle with its left column
-                filled, which reads as "there is a rail here" at either state. */}
-            <span className="rail-glyph" aria-hidden="true">
-              <svg viewBox="0 0 16 16" focusable="false">
-                <rect
-                  x="1.6"
-                  y="2.6"
-                  width="12.8"
-                  height="10.8"
-                  rx="2"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                />
-                <line
-                  x1="6.2"
-                  y1="2.6"
-                  x2="6.2"
-                  y2="13.4"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                />
-              </svg>
-            </span>
-          </button>
+        {/* Brand row: the whole row is the collapse toggle. "Atlas" and the
+            open graph's title are labels rather than controls, but a hover
+            highlight that stopped at the glyph made the row look like an icon
+            button with two words parked beside it — so the row is one target,
+            the way every other entry below it is, and the seed reads as a
+            subtitle to the app name, which is what it is. */}
+        <button
+          type="button"
+          className="rail-item rail-brandrow"
+          onClick={onToggle}
+          title={open ? 'Collapse the menu' : 'Expand the menu'}
+          aria-label={open ? 'Collapse the menu' : 'Expand the menu'}
+          aria-expanded={open}
+        >
+          {/* The panel glyph both apps use: a rectangle with its left column
+              filled, which reads as "there is a rail here" at either state. */}
+          <span className="rail-glyph" aria-hidden="true">
+            <svg viewBox="0 0 16 16" focusable="false">
+              <rect
+                x="1.6"
+                y="2.6"
+                width="12.8"
+                height="10.8"
+                rx="2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.3"
+              />
+              <line x1="6.2" y1="2.6" x2="6.2" y2="13.4" stroke="currentColor" strokeWidth="1.3" />
+            </svg>
+          </span>
           {open && (
             <>
               <span className="rail-brand">Atlas</span>
+              {/* Its own tooltip inside the button's: the row's says what the
+                  click does, and the seed — the one thing here that truncates
+                  — says what it is in full. */}
               {seedTitle && (
                 <span className="rail-seed" title={seedTitle}>
                   {seedTitle}
@@ -376,7 +382,7 @@ export default function SideBar({
               )}
             </>
           )}
-        </div>
+        </button>
 
         <button
           type="button"
@@ -525,16 +531,17 @@ export default function SideBar({
         </button>
       </div>
 
-      {/* Expanded only: there is nothing to drag a fixed icon rail to. */}
-      {open && (
-        <div
-          className="rail-handle"
-          onPointerDown={onHandlePointerDown}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize the menu"
-        />
-      )}
+      {/* Present in both states, and doing a different job in each: it sizes
+          the open rail, and it is the only way to *pull* the folded one back
+          open — a collapsed edge you can't grab would make the drag-to-collapse
+          a one-way door. */}
+      <div
+        className="rail-handle"
+        onPointerDown={onHandlePointerDown}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={open ? 'Resize the menu' : 'Drag right to open the menu'}
+      />
     </nav>
   )
 }

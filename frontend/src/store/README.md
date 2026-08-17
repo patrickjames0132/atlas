@@ -62,9 +62,10 @@ store/
   only safe because citations degrade — an `[n]` whose paper is no longer
   loaded renders greyed and inert instead of silently highlighting nothing
   (`teacher/transcript/README.md`), which is why the reset used to be
-  wholesale. A `fromChat` load additionally sets `workspace.revealSeedDetail`,
-  which GraphExplorer consumes (and clears) to open the new seed's detail
-  panel on arrival.
+  wholesale. A load seeded from a citation used to carry a `fromChat` flag
+  that opened the new seed's detail panel on arrival; both flag and panel
+  went in v7.11.0 (the panel covered the graph the click was waiting for), so
+  a graph load now says nothing about what is selected.
   Lectures are held as a **per-mode cache** (`lectures`: mode → beats) plus the
   `activeMode` on screen, so each of the four modes is played once and then
   toggled show/hide for free; `selectVisibleBeats` reads out the shown mode's

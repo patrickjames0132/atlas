@@ -12,7 +12,7 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 ```
 <Atlas>                            Atlas.tsx        — the shell
 ├─ left rail (collapsible)         shell/SideBar.tsx
-│  ├─ collapse toggle · "Atlas" · the open graph's seed title
+│  ├─ brand row (the whole row collapses the rail): "Atlas" · seed title
 │  ├─ ✎ New graph
 │  ├─ saved graphs (⋮ → rename / delete)   shell/useSessions.ts
 │  └─ data source · ＋ Save · 📚 Library · ⚙ Settings · theme · ? tour
@@ -45,13 +45,16 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
       │  └─ lecture beats          teacher/transcript/BeatList.tsx
       ├─ Chat section              the conversation
       │  ├─ scope pickers          teacher/ScopePicker.tsx (🎓 + 📚, on the
-      │  │                          Chat row — they scope the researcher;
-      │  │                          with no graph they fall to the ask bar)
+      │  │                          Chat row — they scope the researcher)
+      │  ├─ search controls        search/SearchControls.tsx (🔍 "Find papers"
+      │  │                          + ▽ Filters — year slider, field picker;
+      │  │                          same row, same ask they bind)
       │  └─ chat turns             teacher/transcript/ChatMessage.tsx
       │     └─ inline figures      teacher/figures/FigCard.tsx
-      ├─ search controls           search/SearchControls.tsx (in the ask bar:
-      │                             the "Find papers" toggle + the Filters
-      │                             popover — year slider, field picker)
+      ├─ ask bar                    the question and nothing else (v7.11.0)
+      │  └─ tool row               with no graph there is no Chat row, so all
+      │                             four controls above sit as chips directly
+      │                             under the bar (`.ask-tools`)
       ├─ "working" dots            teacher/HopDots.tsx (lecture button, send
       │                             control, and a bubble awaiting its first token)
       └─ figure lightbox           figures/Lightbox.tsx (same instance type as above,

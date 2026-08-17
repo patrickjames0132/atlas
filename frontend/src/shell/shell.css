@@ -119,20 +119,13 @@
 /* Toggle · brand · seed, on one line, centred on the icon rather than on a
    text baseline — the three have different font sizes, and baseline-aligning
    them tipped the whole row off the icon.
-   The toggle keeps `.rail-item`'s symmetric 7px/8px padding (only its width
-   is overridden), so its glyph centre lands 18px from the rail's edge —
-   exactly where every glyph below it sits, and dead centre of its own hover
-   square. Zeroing the right padding to tighten the gap is what knocked the
-   icon off-centre inside that square. */
+   It is a `.rail-item` like every other entry, so its glyph lands on the same
+   vertical line and its hover highlight spans the rail rather than boxing the
+   icon. Only the gap is tighter: 10px between a glyph and a label reads as a
+   menu entry, and this row is a wordmark. */
 .rail-brandrow {
-  display: flex;
-  align-items: center;
   gap: 6px;
   min-width: 0;
-}
-.rail-brandrow .rail-toggle {
-  width: auto;
-  flex-shrink: 0;
 }
 .rail-brand {
   flex-shrink: 0;
