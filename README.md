@@ -14,6 +14,20 @@ corpus of papers to store. The only things kept on disk are a small cache of
 the graphs you've looked at, your saved sessions, and the library of sources
 you upload (embedded locally; nothing leaves your machine).
 
+**Why it exists.** Atlas is free software (MIT), built to put research and
+self-teaching within reach of anyone who wants to learn something — not to
+become a product. It runs on your own machine, and the sources you upload
+never leave it. If something with more reach ever does this better, good;
+until then this exists, and you can have it.
+
+> **One honest caveat before you invest the setup time.** The graph explorer
+> runs free and keyless. **The AI teacher does not** — it needs your own paid
+> [Anthropic API key](https://console.anthropic.com/settings/keys), and every
+> lecture and every question bills against it. Support for other providers,
+> including free local models, is the project's top open item — but it is not
+> built yet, so today the teaching costs money. See *Reach & access* in
+> [OnePager.md](OnePager.md).
+
 ```
 ┌──────────┐  find seed   ┌─────────┐   whole graph      ┌──────────────────┐
 │  search  │ ───────────▶ │ backend │ ─── seed/refs/ ──▶ │  Semantic Scholar│
@@ -83,8 +97,11 @@ graph explorer runs fine without it, but the Assistant panel needs it.
 - **`llm.providers.anthropic.api_key`** — **required to power the agents.** A
   [Claude API key](https://console.anthropic.com/settings/keys) drives the whole
   crew (lectures, research Q&A, library chat, query analysis); the per-agent
-  model choices live under `llm.agents`. Anthropic is the only LLM provider
-  today — **support for other providers is on the roadmap.**
+  model choices live under `llm.agents`. **Anthropic is the only LLM provider
+  today, and this is the one barrier the project most wants gone** — it puts a
+  paid key between a learner and the teacher. Additional providers, and free
+  local models via [Ollama](https://ollama.com), lead the backlog's
+  *Reach & access* theme in [OnePager.md](OnePager.md). Not built yet.
 
 ### 2. Build the frontend & run
 
@@ -254,7 +271,7 @@ hygiene; ruff incl. Google-style docstring rules; a repo-local
 no-single-letter-identifiers AST check, notebooks included; pydoclint for
 Args/Returns completeness; the frontend's prettier + oxlint incl. JSDoc
 completeness and `id-length`, the frontend half of that same naming rule),
-strict mypy, pytest (`test/`, 605 offline tests), and Vitest
+strict mypy, pytest (`test/`, 669 offline tests), and Vitest
 (`frontend/test/`, offline too) — plus `cd frontend && npm run build`
 (strict tsc + Vite) for the type/build check.
 
