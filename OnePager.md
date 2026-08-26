@@ -1004,6 +1004,40 @@ than deleted so the plan doesn't get re-proposed.
       commit to left-aligning the label so the offset reads as intentional.
       *(From the `todos.md` inbox, 2026-08-14.)*
 
+- [ ] **Say what each agent actually does, in Agent Settings** — the Agents
+      page now lists five foldable groups (Lecturer, Researcher, Summarizer,
+      Paper scout, Web scout — `FIELDS` in
+      `frontend/src/settings/SettingsModal.tsx`, each row tagged with a
+      `group`), and every one of them shows a Vendor/Model pair plus its
+      tunables. What it never says is **what the agent is for.** A reader
+      deciding whether the summarizer can go on a free local model has no
+      basis for the call, and "Paper scout" vs. "Web scout" is only obvious
+      once you already know the architecture. The section `blurb` added in
+      v7.13.0 describes the crew as a whole; the per-agent half is missing.
+
+      **The shape is already there to copy:** sections carry a `blurb`, rows
+      carry a `hint`. This is the same idea one level in — a `GROUP_BLURBS`
+      map keyed by the group name, rendered under the group heading when the
+      group is open, styled like `.settings-blurb`. Nothing needs to move.
+
+      **Two things worth deciding before writing the words.** First, where the
+      text lives: a frontend constant is the cheap answer, but the agents
+      themselves are backend packages, and `AgentConfig` (`config.py`) is
+      deliberately thin — id, model, extras — with each agent's *words* kept
+      in its own package's `config.py`. A `description` served from
+      `/api/settings/models` alongside the vendor lists would keep the
+      description next to the agent instead of forking it into the UI, at the
+      cost of a config field the operator has no reason to tune. Second, the
+      blurbs should carry the **cost-relevant** fact, not just a job title:
+      the summarizer runs once per lecture and is the safest thing to put on
+      a local model, the researcher leans hardest on tool-calling and is the
+      first to break on a small one, and the web scout is the one that goes
+      silent without provider-side search (`WEB_SEARCH_VENDORS` in
+      `agents/factory.py`). That is exactly the knowledge a reader needs at
+      the moment they are choosing a vendor, and today it exists only in
+      `docs/configuration.md` and the Ollama field hint.
+      *(From the `todos.md` inbox, 2026-08-25.)*
+
 - [ ] **Settings modal — the corpus vs. live-citations toggle** — the
       adaptive-sizing half of the stage-2 ticket shipped in v6.3.0 (the switch,
       the revived per-chip count sliders, the band-shape inputs — see history).
@@ -1221,6 +1255,55 @@ than deleted so the plan doesn't get re-proposed.
       `docs/bugs.md`'s "A dropped connection looks exactly like a finished
       download" for why each path exists. *(Found 2026-08-16.)*
 
+- [ ] **Every exploration saves itself — drop the Save button, rename "New
+      graph" to "New Exploration"** — Save is a manual, explicit act today:
+      the rail carries a ＋/✓ **"Save this graph"** button
+      (`shell/SideBar.tsx:455`) that POSTs the whole workspace, and forgetting
+      to press it loses the session on tab close. Patrick's ask is to make it
+      automatic — every exploration lands in the sidebar list on its own, and
+      the vocabulary shifts from *graph* to *exploration*, starting with the
+      rail's ✎ **New graph** (`SideBar.tsx:397`, `Atlas.tsx:196`).
+
+      **One premise needs correcting before anyone builds on it.** The idea as
+      filed was "graphs are already cached, so there is no need to save the
+      graph anymore — only the lectures are at risk." That is backwards about
+      which store is durable. The graph cache (`storage/cache.py`, in
+      `digest.db`) is explicitly **ephemeral with a 1-day TTL**; saved sessions
+      live in a *separate* `sessions.db` precisely because they are "durable
+      user data with their own lifecycle" (`storage/sessions.py`'s own module
+      docstring). A history list backed by the cache would work all afternoon
+      and then quietly empty overnight. So auto-save means **writing the same
+      full blob we write today, just without being asked** — and the good news
+      is that blob already contains everything: graph, chat, *and* lectures
+      (`saveWorkspace` in `store/workspace.ts:252` sends `transcript.lectures`).
+      The lecture-loss worry the ticket was filed to fix is already solved by
+      the existing save path; what's missing is only the *automatic* part.
+
+      **The real design questions are about when and how often.** A session
+      row already has a stable id and `POST /api/sessions` overwrites by id,
+      so re-saving in place is free — but "every change" would write the whole
+      graph blob on every node expand and every streamed beat. Wants a debounce
+      and a set of commit points (graph built, lecture finished, chat turn
+      settled), and a decision on whether a save mid-stream is worth anything.
+      Then: **what names a session nobody named?** Today the name comes from
+      the save dialog; automatic rows need a default (seed title is the
+      obvious one, and `rename_session` / `PATCH /api/sessions/<id>` already
+      exists for fixing it). And **when does a new exploration begin?** — the
+      row identity has to be pinned to something, or a seed change either
+      forks a new row or silently overwrites the old one.
+
+      **Scope note:** this subsumes *"Save a conversation with no graph"*
+      below — a graphless session stops being a special case the moment saving
+      is not a button you can only press when `hasGraph`. That ticket's design
+      work (what a graphless row is called, what reopening one restores) is
+      the input to this one, and it closes when this ships.
+
+      **Don't forget the help surfaces** (CLAUDE.md): the tour step *"Your
+      saved graphs live here"* (`tour/steps.ts:98`) teaches the manual save in
+      so many words, and the rail's tooltips and `shell/README.md` name the
+      button. All of them move in the same change. *(From the `todos.md`
+      inbox, 2026-08-25.)*
+
 - [ ] **Save a conversation with no graph** — Save is graph-gated end to end:
       the rail only offers it when `hasGraph` (`Atlas.tsx`), `saveWorkspace`
       throws `No graph to save yet.` without one, `POST /api/sessions` 400s on
@@ -1236,7 +1319,12 @@ than deleted so the plan doesn't get re-proposed.
       mostly loosening, not building:** make `seed`/`nodes` optional through
       the save blob, the route's validation, and the restore path, and decide
       whether a session that later grows a graph overwrites the same row.
-      *(From the `todos.md` inbox, 2026-08-16.)*
+      **Superseded in scope by the auto-save ticket above** — if every
+      exploration saves itself, a graphless one is just a session with no
+      graph yet, and this closes with it. The design question above is still
+      the one that needs answering; it just gets answered there.
+      *(From the `todos.md` inbox, 2026-08-16; folded into auto-save
+      2026-08-25.)*
 
 - [ ] **Rename `integrations/` to `providers/`** — `src/atlas/integrations/`
       holds one subpackage per external data source (`semantic_scholar/`,
