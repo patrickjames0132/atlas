@@ -1292,39 +1292,31 @@ than deleted so the plan doesn't get re-proposed.
       row identity has to be pinned to something, or a seed change either
       forks a new row or silently overwrites the old one.
 
-      **Scope note:** this subsumes *"Save a conversation with no graph"*
-      below — a graphless session stops being a special case the moment saving
-      is not a button you can only press when `hasGraph`. That ticket's design
-      work (what a graphless row is called, what reopening one restores) is
-      the input to this one, and it closes when this ships.
+      **A graphless conversation comes along for free, and must.** Save is
+      graph-gated end to end today: the rail only offers it when `hasGraph`
+      (`Atlas.tsx`), `saveWorkspace` throws `No graph to save yet.` without
+      one, `POST /api/sessions` 400s on an empty `nodes` list, and
+      `restoreSession` rebuilds a `GraphResponse` from `data.seed` on the way
+      back. But since the landing chat became the front door, a reader can
+      hold a long, useful conversation before any graph exists — and today
+      closing the tab throws it away. Automatic saving cannot skip that case
+      without recreating the bug it exists to fix, so **decide what a
+      graphless session *is*** as part of this: does it sit in the same list
+      as the rest (and what names it, with no seed title to borrow?), and what
+      does reopening one restore you to — the landing chat with its
+      transcript, presumably, which the store can already express
+      (`graph: null` + a restored transcript). **The plumbing is mostly
+      loosening, not building:** make `seed`/`nodes` optional through the save
+      blob, the route's validation, and the restore path. *(This absorbed the
+      standalone "Save a conversation with no graph" ticket, filed from the
+      inbox 2026-08-16 and removed 2026-08-25 — it was the same work seen from
+      the manual-save side.)*
 
       **Don't forget the help surfaces** (CLAUDE.md): the tour step *"Your
       saved graphs live here"* (`tour/steps.ts:98`) teaches the manual save in
       so many words, and the rail's tooltips and `shell/README.md` name the
       button. All of them move in the same change. *(From the `todos.md`
       inbox, 2026-08-25.)*
-
-- [ ] **Save a conversation with no graph** — Save is graph-gated end to end:
-      the rail only offers it when `hasGraph` (`Atlas.tsx`), `saveWorkspace`
-      throws `No graph to save yet.` without one, `POST /api/sessions` 400s on
-      an empty `nodes` list, and `restoreSession` rebuilds a `GraphResponse`
-      from `data.seed` on the way back. But since the landing chat became the
-      front door, a reader can hold a long, useful conversation before any
-      graph exists — and today closing the tab throws it away. **The design
-      question is what a graphless session *is*:** does it appear in the same
-      saved list as the graphs (and if so, what names and labels it, with no
-      seed title to borrow?), and what does reopening one restore you to — the
-      landing chat with its transcript, presumably, which the store can already
-      express (`graph: null` + a restored transcript). **The plumbing is
-      mostly loosening, not building:** make `seed`/`nodes` optional through
-      the save blob, the route's validation, and the restore path, and decide
-      whether a session that later grows a graph overwrites the same row.
-      **Superseded in scope by the auto-save ticket above** — if every
-      exploration saves itself, a graphless one is just a session with no
-      graph yet, and this closes with it. The design question above is still
-      the one that needs answering; it just gets answered there.
-      *(From the `todos.md` inbox, 2026-08-16; folded into auto-save
-      2026-08-25.)*
 
 - [ ] **Rename `integrations/` to `providers/`** — `src/atlas/integrations/`
       holds one subpackage per external data source (`semantic_scholar/`,
