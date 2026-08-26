@@ -27,7 +27,7 @@ source of truth (hand-edits and modal edits are the same thing). Endpoints:
   snapshots, search results, paper hydration). Safe by construction: every
   entry can be refetched, and saved sessions live in a different store
   entirely.
-* ``GET  /api/settings/models`` — the Anthropic model ids the configured
+* ``GET  /api/settings/models`` — the model ids the configured
   API key can see (the Models API, ``client.models.list()``), so the modal's
   agent-model fields offer a real dropdown instead of a free-typed string.
   Degrades to an empty list keyless or on any failure — the input stays a
@@ -200,6 +200,39 @@ def put_settings_location() -> ResponseReturnValue:
     return _settings_payload()
 
 
+#: Model ids offered for vendors with no listing API worth calling. Google
+#: publishes a list endpoint but it needs the key and returns dozens of tuned
+#: variants; OpenAI's is key-scoped and enormous. A short curated list of the
+#: models actually worth running an agent on beats both, and the modal lets the
+#: user type anything anyway — so a stale entry here costs nothing.
+KNOWN_MODELS: dict[str, list[str]] = {
+    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    "openai": ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
+}
+
+
+def _fetch_ollama_models(base_url: str) -> list[str]:
+    """The model names a local Ollama server has actually pulled.
+
+    The one vendor whose listing is both free and exactly right: it reports
+    what is on this machine, so the modal can only offer models that will
+    really run. ``/api/tags`` lives at the server root while the chat surface
+    is under ``/v1``, hence the trim.
+
+    Args:
+        base_url: The configured Ollama endpoint, normally ending in ``/v1``.
+
+    Returns:
+        The installed model names (``"qwen3:8b"``, ...), server order.
+    """
+    import requests
+
+    root = base_url.rstrip("/").removesuffix("/v1")
+    response = requests.get(f"{root}/api/tags", timeout=3)
+    response.raise_for_status()
+    return [model["name"] for model in response.json().get("models", [])]
+
+
 def _fetch_anthropic_models(api_key: str) -> list[str]:
     """The model ids the key can see, via the Anthropic Models API.
 
@@ -221,20 +254,38 @@ def _fetch_anthropic_models(api_key: str) -> list[str]:
 
 @bp.get("/api/settings/models")
 def list_agent_models() -> ResponseReturnValue:
-    """The Anthropic model ids available to the configured key.
+    """The model ids available, per configured vendor.
+
+    Every listing path degrades to an empty list rather than an error: the
+    modal's model field is free text with suggestions, so a vendor that can't
+    be reached costs the user autocomplete, never the ability to configure.
 
     Returns:
-        ``{"models": [...]}`` — empty when no key is configured or the
-        Models API can't be reached (the modal degrades to free text).
+        ``{"models": {"<vendor>": [...]}, "vendors": [...], "known": [...]}``.
+        ``models`` holds one entry per *configured* vendor and ``vendors``
+        names them; ``known`` names **every** vendor the factory can build,
+        configured or not. That last one matters: the modal has to offer the
+        free vendors to someone who has not set them up yet, so a list of only
+        what is already working would hide exactly the options a newcomer
+        needs to find.
     """
-    api_key = config_module.config.llm.providers.anthropic.api_key
-    if not api_key:
-        return {"models": []}
-    try:
-        return {"models": _fetch_anthropic_models(api_key)}
-    except Exception:
-        log.warning("Anthropic model listing failed", exc_info=True)
-        return {"models": []}
+    vendors = config_module.config.llm.providers
+    configured = vendors.configured_vendors()
+    known = list(type(vendors).model_fields)
+    models: dict[str, list[str]] = {}
+    for vendor in configured:
+        try:
+            match vendor:
+                case "anthropic":
+                    models[vendor] = _fetch_anthropic_models(vendors.anthropic.api_key)
+                case "ollama":
+                    models[vendor] = _fetch_ollama_models(vendors.ollama.base_url)
+                case _:
+                    models[vendor] = KNOWN_MODELS.get(vendor, [])
+        except Exception:
+            log.warning("model listing failed for %s", vendor, exc_info=True)
+            models[vendor] = []
+    return {"models": models, "vendors": configured, "known": known}
 
 
 def _native_pick() -> str | None:

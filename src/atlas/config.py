@@ -234,21 +234,116 @@ class AnthropicConfig(ConfigModel):
 
     api_key: str = Field(description="Key from https://console.anthropic.com.")
 
+    @property
+    def configured(self) -> bool:
+        """Whether this vendor is usable — i.e. the key was actually filled in."""
+        return bool(self.api_key.strip())
+
+
+class OpenAIConfig(ConfigModel):
+    """Credentials for OpenAI, or for any OpenAI-compatible server.
+
+    ``base_url`` is the reason this is more than an api_key: leaving it blank
+    means OpenAI's own endpoint, while setting it points the very same
+    adapter at anything speaking the OpenAI chat API — Groq, OpenRouter,
+    Together, DeepSeek, LM Studio, llama.cpp. That is a lot of reach,
+    including several free tiers, for one wired vendor. (Ollama has its own
+    entry below purely because it needs no key and PydanticAI ships a
+    dedicated provider for it.)
+    """
+
+    api_key: str = Field(
+        description="Key from https://platform.openai.com/api-keys. For an "
+        "OpenAI-compatible server that wants no key, leave it blank and set base_url."
+    )
+    base_url: str = Field(
+        description="Blank = OpenAI's own API. Otherwise the full base URL of an "
+        "OpenAI-compatible endpoint, e.g. 'https://api.groq.com/openai/v1'."
+    )
+
+    @property
+    def configured(self) -> bool:
+        """Usable with either a key (OpenAI proper) or a base_url (a compatible server)."""
+        return bool(self.api_key.strip() or self.base_url.strip())
+
+
+class GoogleConfig(ConfigModel):
+    """Credentials for Google's Gemini API.
+
+    Worth naming explicitly among the paid vendors: Google AI Studio issues a
+    free-tier key, which makes this one of the two ways (with Ollama) to run
+    Atlas's teacher at no cost. Quota-limited and revocable, so it is a
+    complement to the local path rather than a replacement for it.
+    """
+
+    api_key: str = Field(description="Key from https://aistudio.google.com/apikey.")
+
+    @property
+    def configured(self) -> bool:
+        """Whether this vendor is usable — i.e. the key was actually filled in."""
+        return bool(self.api_key.strip())
+
+
+class OllamaConfig(ConfigModel):
+    """Where a local Ollama server is listening — no credentials, by design.
+
+    This is the vendor the project most wants working (see OnePager's
+    *Reach & access*): it costs nothing, needs no signup, and keeps the whole
+    conversation on the machine, which is the same promise the local source
+    library already makes. The trade is real and not hidden: a local model has
+    no provider-side web search, so the web scout degrades (see
+    ``factory.supports_web_search``), and a small model may not hold the
+    researcher's tool-calling loop together.
+    """
+
+    base_url: str = Field(
+        description="Blank = Ollama off. Otherwise the OpenAI-compatible endpoint of "
+        "a running server, normally 'http://localhost:11434/v1' (note the '/v1')."
+    )
+
+    @property
+    def configured(self) -> bool:
+        """Usable when a server URL is set — there is no key to check."""
+        return bool(self.base_url.strip())
+
 
 class LLMProvidersConfig(ConfigModel):
     """Backend LLM providers this app can reach, keyed by vendor name.
 
     One sub-object per vendor — mirrors PydanticAI's own per-vendor
     ``Provider`` classes (``AnthropicProvider``, ``OpenAIProvider``, ...).
-    Only Anthropic is wired up today (that's what we're testing against),
-    but adding a vendor later is purely additive: a new field here, no
-    redesign. Every ``AgentConfig.model``'s ``"<provider>:<model>"`` prefix
-    must name a vendor configured here (``LLMConfig`` validates this).
+    Every ``AgentConfig.model``'s ``"<provider>:<model>"`` prefix must name a
+    vendor that exists here (``LLMConfig`` validates this).
     (Distinct from the top-level ``providers`` group, which holds the
     external *data* APIs — S2, OpenAlex.)
+
+    **Every vendor block must be present; its values may be blank.** That is
+    the same rule the data-provider keys follow, and it is what lets the app
+    run with no LLM at all (the graph explorer is keyless; only the teacher
+    needs a vendor). A blank block means *not configured*, which is checked
+    at request time by the factory rather than at load — so a user who has
+    not chosen a vendor still gets a working app and an honest message,
+    instead of a stack trace at startup.
     """
 
     anthropic: AnthropicConfig
+    openai: OpenAIConfig
+    google: GoogleConfig
+    ollama: OllamaConfig
+
+    def configured_vendors(self) -> list[str]:
+        """Vendor names whose credentials are actually filled in.
+
+        Returns:
+            The subset of vendor field names usable right now, in declaration
+            order. Empty is a legitimate state — it means the teacher is off
+            and the graph explorer still works.
+        """
+        return [
+            name
+            for name in type(self).model_fields
+            if getattr(getattr(self, name), "configured", False)
+        ]
 
 
 class LecturerExtras(ConfigModel):

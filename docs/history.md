@@ -10,6 +10,57 @@
 
 ## Roadmap — shipped
 
+### Reach & access
+
+- [x] **Four LLM vendors, chosen per agent (v7.13.0)** — the AI teacher ran on
+      Claude only, so unlocking it required a paid Anthropic key: a credit card,
+      plus per-token cost for every lecture and question. The graph explorer was
+      free and keyless; the teaching — the point of the project — was not. Under
+      the purpose stated in [OnePager.md](../OnePager.md)'s *Why it exists*, that
+      was the single largest barrier between a learner and the product, which is
+      why this led the backlog rather than sitting in tech debt where it was
+      first filed.
+
+      **What shipped.** `agents/factory.py`'s `build_model` became the whole
+      vendor seam: a match on the entry's `"<vendor>:<model>"` prefix
+      constructing the matching PydanticAI pair — `anthropic`, `openai`,
+      `google`, `ollama`. Adding a vendor is now one case arm plus a config
+      block, with no agent package touched. `config.llm.providers` gained a
+      block per vendor (present-but-blank means *not configured*, the same rule
+      the data-provider keys follow), and `LLMProvidersConfig.configured_vendors()`
+      reports what is actually usable.
+
+      **The free path was the point, not the vendor count.** Adding OpenAI beside
+      Anthropic swaps one credit card for another; **Ollama** (local, no key, no
+      signup, nothing leaving the machine) and **Google**'s free tier are what
+      change who can use Atlas. OpenAI's `base_url` was included for the same
+      reason — the one adapter also drives Groq, OpenRouter, Together and LM
+      Studio, several with free tiers.
+
+      **Vendors are per agent, not global**, which turned out to matter more than
+      expected: the web scout's search runs *provider-side*, and a local model has
+      none. Rather than let a search-less model invent sources — the failure mode
+      that actually occurs — `factory.supports_web_search` gates the capability at
+      construction, and `scout()` returns empty **without calling the model** when
+      it is absent. So "run everything locally" honestly costs web grounding, and
+      leaving that one agent on a cloud vendor is a supported mix.
+
+      **Settings.** The Agents section became two nav sub-pages (*Model Providers*,
+      *Agent Settings*) under a landing page, with foldable group headings, a cost
+      badge per vendor, and each agent's model split into a Vendor select and a
+      Model select — the single `"vendor:model"` dropdown had hidden the vendor
+      inside a string. `GET /api/settings/models` now returns per-vendor listings
+      plus `known`, which lists **every** vendor whether configured or not: the two
+      free paths are precisely what a newcomer has not set up, so offering only
+      what already works would hide the options most worth finding. The scouts got
+      settings rows for the first time. Four UI shapes were tried and rejected in
+      browser testing (tabs, cards, an aligned table, cards again) before landing
+      here.
+
+      **Known limit at ship time:** the wiring is covered by tests, but no
+      non-Anthropic vendor had executed a lecture end to end when this merged.
+      *(Filed 2026-07-20 as tech debt; promoted 2026-08-16; shipped 2026-08-25.)*
+
 ### Foundation & the v2 rewrite
 
 - [x] **Phase 0 — One-pager** (this file)

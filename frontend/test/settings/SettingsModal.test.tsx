@@ -47,6 +47,10 @@ function makeConfig(): AtlasConfig {
         // Unique among the agents, so a display-value query lands on it.
         { id: 'lecturer', model: 'anthropic:claude-sonnet-4-6', extras: {} },
         { id: 'researcher', model: 'anthropic:claude-opus-4-8', extras: { max_steps: 20 } },
+        // The scouts complete the real crew — the Agents tab renders a card
+        // per configured agent, so a short fixture would under-test it.
+        { id: 'paper_scout', model: 'anthropic:claude-haiku-4-5', extras: { searches: 4 } },
+        { id: 'web_scout', model: 'anthropic:claude-haiku-4-5', extras: { max_uses: 2 } },
       ],
     },
     untouched_section: { keep: 'me' },
@@ -70,7 +74,14 @@ beforeEach(() => {
   fetchState.pickAnswer = null
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     if (!init?.method && String(url).endsWith('/api/settings/models')) {
-      return new Response(JSON.stringify({ models: ['claude-opus-4-8'] }), { status: 200 })
+      return new Response(
+        JSON.stringify({
+          models: { anthropic: ['claude-opus-4-8'], ollama: ['qwen3:8b'] },
+          vendors: ['anthropic', 'ollama'],
+          known: ['anthropic', 'openai', 'google', 'ollama'],
+        }),
+        { status: 200 },
+      )
     }
     if (init?.method === 'POST' && String(url).endsWith('/api/settings/pick')) {
       return new Response(JSON.stringify({ path: fetchState.pickAnswer }), { status: 200 })
@@ -158,7 +169,7 @@ describe('SettingsModal', () => {
 
   it('agent extras edit into llm.agents, and clearing removes the override', async () => {
     await renderOpen()
-    fireEvent.click(screen.getByText('Agents'))
+    openAgentTuning()
     const stepBudget = await screen.findByDisplayValue('20') // researcher max_steps override
     fireEvent.change(stepBudget, { target: { value: '8' } })
     fireEvent.click(await screen.findByText('Save'))
@@ -198,23 +209,98 @@ describe('SettingsModal', () => {
     expect(await screen.findByDisplayValue('/repo/config.json')).toBeTruthy()
   })
 
-  it('the model dropdown lists fetched models plus the current value', async () => {
-    await renderOpen()
+  /** Enter the Agents section and open its "Agent settings" sub-page.
+   *
+   *  The section opens on Model providers, so anything about an agent's model
+   *  or knobs is one nav click away.
+   */
+  function openAgentTuning() {
     fireEvent.click(screen.getByText('Agents'))
-    const [lecturerModel] = await screen.findAllByDisplayValue('anthropic:claude-sonnet-4-6')
+    openSubPage('Agent Settings')
+  }
+
+  /** Click a sub-page by name, from the nav rather than the landing page.
+   *
+   *  Both offer the same label while the landing page is showing, so the
+   *  first match — the sidebar, which renders before the content pane — is
+   *  the unambiguous one to drive.
+   */
+  function openSubPage(label: string) {
+    const [navItem] = screen.getAllByText(label)
+    fireEvent.click(navItem)
+  }
+
+  /** Enter the Agents section and open its "Model Providers" sub-page.
+   *
+   *  The section opens on its own landing page — a description and links —
+   *  so vendor credentials are one further click away.
+   */
+  function openModelProviders() {
+    fireEvent.click(screen.getByText('Agents'))
+    openSubPage('Model Providers')
+  }
+
+  it("the model dropdown lists the agent's own vendor plus its current value", async () => {
+    await renderOpen()
+    openAgentTuning()
+    // The model select is scoped to the vendor chosen beside it, so it offers
+    // Anthropic's models only — picking Ollama is the vendor select's job.
+    const [lecturerModel] = await screen.findAllByDisplayValue('claude-sonnet-4-6')
     // The config's current model is kept even though the fetched list lacks it
     // — a hand-set or since-retired id must never be silently dropped.
     expect([...lecturerModel.querySelectorAll('option')].map((option) => option.value)).toEqual([
-      'anthropic:claude-sonnet-4-6',
-      'anthropic:claude-opus-4-8',
+      'claude-sonnet-4-6',
+      'claude-opus-4-8',
     ])
+  })
+
+  it('every vendor is listed, including ones not set up yet', async () => {
+    // The whole point: the free options are exactly the ones a newcomer has
+    // not set up, so a list of working vendors would hide them.
+    await renderOpen()
+    openModelProviders()
+    // Each vendor is its own foldable group, and the heading badge carries the
+    // cost — the deciding fact for the reader this list exists for.
+    expect(await screen.findByRole('button', { name: /Ollama/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Google/ })).toBeTruthy()
+    // The cost rides the heading as a badge.
+    expect(screen.getByText('free, local')).toBeTruthy()
+    expect(screen.getByText('free tier')).toBeTruthy()
+  })
+
+  it('a group heading folds its own rows away', async () => {
+    await renderOpen()
+    openModelProviders()
+    // Open on arrival — folding is for tidying, not for dismantling a wall.
+    expect(await screen.findByText('Server URL')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Ollama/ }))
+    expect(screen.queryByText('Server URL')).toBeNull()
+    // Folding one leaves the others alone.
+    expect(screen.getAllByText('API key').length).toBeGreaterThan(0)
+  })
+
+  it('switching an agent to another vendor rewrites both halves', async () => {
+    await renderOpen()
+    openAgentTuning()
+    // First Vendor select on the page is the summarizer's — the agent rows are
+    // rendered in config order.
+    const [summarizerVendor] = await screen.findAllByLabelText('Vendor')
+    fireEvent.change(summarizerVendor, { target: { value: 'ollama' } })
+    fireEvent.click(await screen.findByText('Save'))
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull())
+    const body = fetchState.lastPutBody as { config: AtlasConfig }
+    // The model must move with the vendor — an anthropic model name under an
+    // ollama prefix would be a config that cannot run.
+    expect(body.config.llm.agents.find((agent) => agent.id === 'summarizer')?.model).toBe(
+      'ollama:qwen3:8b',
+    )
   })
 
   it('picking a model from the dropdown edits llm.agents', async () => {
     await renderOpen()
-    fireEvent.click(screen.getByText('Agents'))
-    const [lecturerModel] = await screen.findAllByDisplayValue('anthropic:claude-sonnet-4-6')
-    fireEvent.change(lecturerModel, { target: { value: 'anthropic:claude-opus-4-8' } })
+    openAgentTuning()
+    const [lecturerModel] = await screen.findAllByDisplayValue('claude-sonnet-4-6')
+    fireEvent.change(lecturerModel, { target: { value: 'claude-opus-4-8' } })
     fireEvent.click(await screen.findByText('Save'))
     await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull())
     const body = fetchState.lastPutBody as { config: AtlasConfig }
@@ -235,24 +321,49 @@ describe('SettingsModal', () => {
 
   it('a positive-only agent knob cannot be driven below 1', async () => {
     await renderOpen()
-    fireEvent.click(screen.getByText('Agents'))
+    openAgentTuning()
     const stepBudget = await screen.findByDisplayValue('20') // researcher max_steps
     expect(stepBudget.getAttribute('min')).toBe('1')
     fireEvent.change(stepBudget, { target: { value: '-3' } })
     expect(await screen.findByDisplayValue('1')).toBeTruthy()
   })
 
-  it('lists every configured agent, not just the ones with knobs', async () => {
+  it('a section with sub-pages opens on its own landing page', async () => {
     await renderOpen()
     fireEvent.click(screen.getByText('Agents'))
-    for (const agent of ['Summarizer', 'Lecturer', 'Researcher']) {
+    // Neither sub-page's rows yet — the landing page says what the section is
+    // before dropping the reader into one side of it.
+    expect(screen.queryByDisplayValue('sk-test')).toBeNull()
+    expect(screen.queryByLabelText('Vendor')).toBeNull()
+    expect(await screen.findByText(/The AI teacher/)).toBeTruthy()
+    // And both ways in are offered.
+    expect(screen.getAllByText('Model Providers').length).toBe(2)
+  })
+
+  it('lists every configured agent, not just the ones with knobs', async () => {
+    await renderOpen()
+    openAgentTuning()
+    for (const agent of ['Summarizer', 'Lecturer', 'Researcher', 'Paper scout', 'Web scout']) {
       expect(await screen.findByText(agent)).toBeTruthy()
     }
   })
 
+  it('folding an agent hides its model and knobs together', async () => {
+    await renderOpen()
+    openAgentTuning()
+    // Every configured agent shows a vendor select without any unfolding.
+    expect((await screen.findAllByLabelText('Vendor')).length).toBe(5)
+    expect(screen.getByDisplayValue('20')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Researcher/ }))
+    expect(screen.queryByDisplayValue('20')).toBeNull()
+    // The other agents are untouched — folding is per group.
+    expect(screen.getAllByLabelText('Vendor').length).toBe(4)
+  })
+
   it('the Anthropic key edits llm.providers', async () => {
     await renderOpen()
-    fireEvent.click(screen.getByText('Agents'))
+    openModelProviders()
     const keyInput = await screen.findByDisplayValue('sk-test')
     fireEvent.change(keyInput, { target: { value: 'sk-new' } })
     fireEvent.click(await screen.findByText('Save'))

@@ -74,6 +74,46 @@ overlays).
 - **Agent knobs edit `llm.agents` extras**: a blank input shows the code
   default as a placeholder; typing writes an override into the entry's
   `extras`; clearing deletes the override.
+- **Every section carries a one-paragraph `blurb`** saying what it is for.
+- **The Agents section is two nav sub-pages of foldable groups** (since
+  v7.13.0): *Model Providers* and *Agent Settings*, reached from the sidebar
+  tree rather than a tab strip inside the pane. Sub-pages show only while their
+  section is selected — the nav is somewhere to navigate, not an outline of
+  everything — and the pane's heading becomes a breadcrumb (`Agents › Model
+  Providers`). Tabs were tried first and framed the two as views of one thing,
+  which they aren't: one holds vendor credentials, the other per-agent tuning.
+- **A section with sub-pages opens on its own landing page** (`page === ''`):
+  the blurb plus a plain text link per sub-page. Dropping the reader straight
+  into an arbitrary first child never says what the section as a whole is, and
+  the landing page costs one click to skip. Clicking the parent in the nav
+  always returns there. The links are links, not cards — a boxed row per
+  sub-page reads as a control worth deliberating over, when these are only the
+  way through.
+- **Group headings fold their own rows.** Both sub-pages keep the modal's
+  ordinary label-hint-control row; what folds is the heading, so the layout
+  matches every other section and long pages can still be tidied. Groups are
+  **open on arrival** — folding is for putting away a section you are done
+  with, not a wall to dismantle first — so state is tracked as the set of
+  *folded* names. The heading is a `<button>` and therefore needs an explicit
+  `font: inherit`, or it renders in the platform UI font.
+- **One group per vendor, cost as a badge in the heading** (`Google` +
+  `free tier`, tinted). Cost is the deciding fact for the reader this screen
+  exists for, so it rides the heading rather than a hint. Every vendor the
+  backend can build gets a group whether configured or not: the two free paths
+  are precisely what a newcomer has *not* set up, so listing only what already
+  works would hide the options most worth finding. `GET /api/settings/models`
+  returns `{models: {vendor: [...]}, vendors: [...], known: [...]}`, and
+  `known` is what drives that.
+- **An agent's model is two controls, not one string.** The single
+  `"vendor:model"` dropdown this replaced made the vendor invisible — a prefix
+  inside a long string — where the real fact is that **each agent picks its own
+  vendor**. Changing vendor rewrites both halves, since an Anthropic model name
+  under an `ollama:` prefix is a config that cannot run. A value the listing no
+  longer offers is preserved as its own option at either level rather than
+  silently rewritten.
+- **Search ignores sub-pages and folding both.** A query has to reach every
+  matching row, and an unselected sub-page or a fold hiding one is the thing
+  search exists to avoid.
 
 ## Verified by
 

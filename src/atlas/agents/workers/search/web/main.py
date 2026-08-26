@@ -17,8 +17,16 @@ it needs judgment — phrasing the query, deciding when it has enough — and it
 needs context isolation, because raw pages are long and low-signal and would
 crowd out the researcher's own context.
 
-The search itself is Anthropic's native ``WebSearchTool``, so the retrieval
-runs provider-side and ``max_uses`` enforces the budget for us.
+The search itself is a provider-side capability, so the retrieval runs on the
+vendor's infrastructure and ``max_uses`` enforces the budget for us.
+
+**Not every vendor has one.** A local Ollama model cannot search the web at
+all, and since v7.13.0 an agent may be pointed at one. The scout handles that
+by refusing to pretend: the capability is only attached when the vendor offers
+it, and when it doesn't ``scout`` returns empty *without calling the model*.
+That second half is the important one — an agent instructed to search, holding
+no search tool, does not fail cleanly; it invents plausible sources. Not
+calling it is the only honest degradation available.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -65,6 +73,12 @@ class WebFindings(BaseModel):
     sources: list[WebSource]
 
 
+#: Whether this agent's configured vendor can actually search. Read once, at
+#: import, because the capability has to be decided when the ``Agent`` below is
+#: built — and re-read by ``scout`` to decide whether calling the model is
+#: honest at all.
+WEB_SEARCH_AVAILABLE = factory.supports_web_search(AGENT_ID)
+
 agent: Agent[None, WebFindings] = Agent(
     factory.build_model(AGENT_ID),
     output_type=WebFindings,
@@ -77,7 +91,9 @@ agent: Agent[None, WebFindings] = Agent(
     # constructor and then silently dropped, leaving an agent that is
     # prompted to search the web and has no way to (caught by mypy, then
     # confirmed against the resolved native-tool list).
-    capabilities=[WebSearch(max_uses=int(BUDGETS["max_uses"]))],
+    capabilities=(
+        [WebSearch(max_uses=int(BUDGETS["max_uses"]))] if WEB_SEARCH_AVAILABLE else []
+    ),
 )
 
 
@@ -91,8 +107,20 @@ async def scout(need: str) -> WebFindings:
     Returns:
         A ``WebFindings``. Sources missing a URL are dropped. On any failure
         it comes back empty with the reason as its summary: a broken web
-        search must cost the answer its web grounding, never the answer.
+        search must cost the answer its web grounding, never the answer. A
+        vendor with no provider-side search returns empty the same way, and
+        without spending a request.
     """
+    if not WEB_SEARCH_AVAILABLE:
+        vendor = factory.agent_entry(AGENT_ID).provider
+        log.info("web scout disabled: %r has no provider-side web search", vendor)
+        return WebFindings(
+            summary=(
+                f"Web search is unavailable — the {vendor} model this runs on has no "
+                "web search. The answer is grounded in the other sources only."
+            ),
+            sources=[],
+        )
     try:
         result = await agent.run(need)
     except Exception as exc:

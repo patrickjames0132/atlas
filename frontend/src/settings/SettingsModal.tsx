@@ -28,6 +28,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   dropCache,
   getAgentModels,
+  type AgentModels,
   getSettings,
   pickSettingsFile,
   putSettings,
@@ -45,12 +46,45 @@ const CURRENT_YEAR = new Date().getFullYear()
 const MAX_BANDS = 50
 const MAX_PER_BAND = 200 // OpenAlex's page cap — no query can return more.
 
-/** The sidebar's sections, in display order. */
+/** The sidebar's sections, in display order.
+ *
+ *  A section with `pages` is navigated as sub-pages in the nav tree rather
+ *  than as tabs inside the pane: Agents holds two unrelated jobs — vendor
+ *  credentials and per-agent tuning — and a tab strip framed them as two views
+ *  of one thing. */
 const SECTIONS = [
-  { id: 'general', icon: '⚙', label: 'General' },
-  { id: 'graph', icon: '🕸', label: 'Graph' },
-  { id: 'providers', icon: '🌐', label: 'Data Providers' },
-  { id: 'agents', icon: '🎓', label: 'Agents' },
+  {
+    id: 'general',
+    icon: '⚙',
+    label: 'General',
+    blurb:
+      'App-wide preferences: which citation source new graphs open on, the colour theme, how long cached graph snapshots stay fresh, and a button to drop that cache.',
+  },
+  {
+    id: 'graph',
+    icon: '🕸',
+    label: 'Graph',
+    blurb:
+      "How big a graph comes back and how its Latest Publications are banded. Left automatic, Atlas sizes each graph from the seed's own citation pool; turn that off to set the bands yourself.",
+  },
+  {
+    id: 'providers',
+    icon: '🌐',
+    label: 'Data Providers',
+    blurb:
+      'Where the papers and citations come from — Semantic Scholar and OpenAlex. Both work without a key, just on tighter public rate limits. Also where the optional offline S2 citations corpus is pointed.',
+  },
+  {
+    id: 'agents',
+    icon: '🎓',
+    label: 'Agents',
+    blurb:
+      'The AI teacher: the crew that writes lectures, answers questions, and scouts papers and the web. Two halves — which vendors Atlas can reach, and which model each agent runs on. Every agent picks its own, so running the lecturer on a free local model while the web scout stays on a cloud one is a normal setup.',
+    pages: [
+      { id: 'providers', label: 'Model Providers' },
+      { id: 'agents', label: 'Agent Settings' },
+    ],
+  },
 ] as const
 
 /** A section id from {@link SECTIONS}. */
@@ -231,21 +265,29 @@ interface RowDef {
   group?: string
   label: string
   hint?: string
-  control: (draft: AtlasConfig, edit: Edit, models: string[]) => React.ReactNode
+  /** Which sub-tab of the Agents section this row belongs to. */
+  tab?: AgentTab
+  control: (draft: AtlasConfig, edit: Edit, models: AgentModels) => React.ReactNode
 }
 
+/** Which sub-page of the Agents section a row belongs to. */
+type AgentTab = 'providers' | 'agents'
+
 /**
- * An agent-model picker: a real dropdown of the models the configured key can
- * see (fetched live from the Models API), always including the config's
- * current value so a hand-set or since-retired id is never silently dropped.
- * With no models available (keyless, offline) it degrades to a text input.
+ * An agent's model, as two controls: which vendor, then which of its models.
  *
- * NOTE: this was briefly a `<datalist>` combobox, which looked right but
- * offered almost nothing — a datalist *filters* its options against the text
- * already in the box, so a field holding "anthropic:claude-sonnet-4-6" only
- * ever showed sonnet entries.
+ * The single `"vendor:model"` dropdown this replaces made the vendor invisible
+ * — it was a prefix inside a long string, and choosing one meant knowing that
+ * options were grouped by a heading. Splitting it says the real thing out
+ * loud: **each agent picks its own vendor**, so running the lecturer on a free
+ * local model while the web scout stays on one that can actually search the
+ * web is an obvious move rather than a discovery.
  *
- * @returns The select, or a text input when no models are known.
+ * Both degrade to text when nothing is listed (no vendor configured, or a
+ * server that could not be reached), because a config file the modal cannot
+ * describe must still be editable.
+ *
+ * @returns The vendor select and the model select.
  */
 function ModelInput({
   draft,
@@ -256,15 +298,20 @@ function ModelInput({
   draft: AtlasConfig
   edit: Edit
   agentId: string
-  models: string[]
+  models: AgentModels
 }) {
   const current = draft.llm.agents.find((entry) => entry.id === agentId)?.model ?? ''
+  const separator = current.indexOf(':')
+  const currentVendor = separator === -1 ? '' : current.slice(0, separator)
+  const currentModel = separator === -1 ? current : current.slice(separator + 1)
+
   const apply = (value: string) =>
     edit((next) => {
       agentEntry(next, agentId).model = value
     })
 
-  if (models.length === 0) {
+  const usable = models.vendors.filter((vendor) => (models.models[vendor] ?? []).length > 0)
+  if (usable.length === 0) {
     return (
       <input
         type="text"
@@ -275,22 +322,106 @@ function ModelInput({
     )
   }
 
-  const options = models.map((model) => `anthropic:${model}`)
-  if (current && !options.includes(current)) options.unshift(current)
+  // A vendor the agent is already on stays offered even when unconfigured —
+  // switching vendors must not silently rewrite an entry the user set by hand.
+  const vendors = usable.includes(currentVendor) ? usable : [currentVendor, ...usable]
+  const forVendor = models.models[currentVendor] ?? []
+  // Same rule one level down: keep a model the listing no longer offers.
+  const options = forVendor.includes(currentModel) ? forVendor : [currentModel, ...forVendor]
+
   return (
-    <select
-      className="settings-wide"
-      value={current}
-      onChange={(event) => apply(event.target.value)}
-    >
-      {!current && <option value="">(not set)</option>}
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
+    <div className="agent-model">
+      <select
+        aria-label="Vendor"
+        value={currentVendor}
+        onChange={(event) => {
+          const vendor = event.target.value
+          const first = models.models[vendor]?.[0]
+          apply(first ? `${vendor}:${first}` : `${vendor}:`)
+        }}
+      >
+        {vendors.map((vendor) => (
+          <option key={vendor} value={vendor}>
+            {VENDOR_LABELS[vendor] ?? (vendor || '(none)')}
+          </option>
+        ))}
+      </select>
+      {forVendor.length === 0 ? (
+        <input
+          type="text"
+          aria-label="Model"
+          value={currentModel}
+          placeholder="model name"
+          onChange={(event) => apply(`${currentVendor}:${event.target.value}`)}
+        />
+      ) : (
+        <select
+          aria-label="Model"
+          value={currentModel}
+          onChange={(event) => apply(`${currentVendor}:${event.target.value}`)}
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
   )
+}
+
+/**
+ * One credential field for one vendor, creating the vendor's config block on
+ * first keystroke if the file predates it.
+ *
+ * @returns The text input.
+ */
+function VendorField({
+  draft,
+  edit,
+  vendor,
+  field,
+}: {
+  draft: AtlasConfig
+  edit: Edit
+  vendor: string
+  field: string
+}) {
+  const block = (draft.llm.providers[vendor] ?? {}) as Record<string, unknown>
+  return (
+    <input
+      type="text"
+      className="settings-wide"
+      value={(block[field] as string) ?? ''}
+      onChange={(event) =>
+        edit((next) => {
+          const existing = (next.llm.providers[vendor] ?? {}) as Record<string, unknown>
+          next.llm.providers[vendor] = { ...existing, [field]: event.target.value }
+        })
+      }
+    />
+  )
+}
+
+/** What a group's heading badge says, and whether it is the good news.
+ *
+ *  Cost rides the heading rather than a hint because for the reader this
+ *  screen exists for it is the deciding fact: two of these four vendors run
+ *  the teacher for nothing. */
+const GROUP_BADGES: Record<string, { text: string; free: boolean }> = {
+  Anthropic: { text: 'paid', free: false },
+  OpenAI: { text: 'paid', free: false },
+  Google: { text: 'free tier', free: true },
+  Ollama: { text: 'free, local', free: true },
+}
+
+/** Display names for the vendors the backend can construct. */
+const VENDOR_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  google: 'Google',
+  ollama: 'Ollama',
 }
 
 /**
@@ -565,42 +696,64 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
-    key: 'llm-vendor',
+    key: 'anthropic-key',
     section: 'agents',
-    group: 'Provider',
-    label: 'LLM vendor',
-    hint: 'Which LLM backend the agents run on. Anthropic only for now — more vendors land here as they are wired up.',
-    control: () => (
-      <select defaultValue="anthropic">
-        <option value="anthropic">Anthropic</option>
-      </select>
+    tab: 'providers',
+    group: 'Anthropic',
+    label: 'API key',
+    hint: 'From console.anthropic.com. Used by every agent on an anthropic:* model, and billed per lecture and per question.',
+    control: (draft, edit) => (
+      <VendorField draft={draft} edit={edit} vendor="anthropic" field="api_key" />
     ),
   },
   {
-    key: 'anthropic-key',
+    key: 'openai-key',
     section: 'agents',
-    group: 'Provider',
-    label: 'Anthropic API key',
-    hint: 'Used by every agent running an anthropic:* model (lecturer, researcher, …).',
+    tab: 'providers',
+    group: 'OpenAI',
+    label: 'API key',
+    hint: 'From platform.openai.com/api-keys.',
     control: (draft, edit) => (
-      <input
-        type="text"
-        className="settings-wide"
-        value={draft.llm.providers.anthropic?.api_key ?? ''}
-        onChange={(event) =>
-          edit((next) => {
-            next.llm.providers.anthropic = {
-              ...(next.llm.providers.anthropic ?? {}),
-              api_key: event.target.value,
-            }
-          })
-        }
-      />
+      <VendorField draft={draft} edit={edit} vendor="openai" field="api_key" />
+    ),
+  },
+  {
+    key: 'openai-base-url',
+    section: 'agents',
+    tab: 'providers',
+    group: 'OpenAI',
+    label: 'Compatible server URL',
+    hint: 'Blank = OpenAI itself. Set it to drive any OpenAI-compatible server — Groq, OpenRouter, Together, LM Studio — several of which have free tiers.',
+    control: (draft, edit) => (
+      <VendorField draft={draft} edit={edit} vendor="openai" field="base_url" />
+    ),
+  },
+  {
+    key: 'google-key',
+    section: 'agents',
+    tab: 'providers',
+    group: 'Google',
+    label: 'API key',
+    hint: 'From aistudio.google.com/apikey. The free tier is quota-limited but costs nothing, making this one of the two ways to run the teacher for free.',
+    control: (draft, edit) => (
+      <VendorField draft={draft} edit={edit} vendor="google" field="api_key" />
+    ),
+  },
+  {
+    key: 'ollama-base-url',
+    section: 'agents',
+    tab: 'providers',
+    group: 'Ollama',
+    label: 'Server URL',
+    hint: 'Normally http://localhost:11434/v1 — keep the /v1. No key, no signup, and nothing leaves this machine. Local models cannot search the web, so the web scout goes quiet rather than inventing sources.',
+    control: (draft, edit) => (
+      <VendorField draft={draft} edit={edit} vendor="ollama" field="base_url" />
     ),
   },
   {
     key: 'summarizer-model',
     section: 'agents',
+    tab: 'agents',
     group: 'Summarizer',
     label: 'Model',
     hint: "Writes the detail panel's on-demand paper TL;DR (cached per paper forever).",
@@ -611,6 +764,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'lecturer-model',
     section: 'agents',
+    tab: 'agents',
     group: 'Lecturer',
     label: 'Model',
     hint: 'PydanticAI "<vendor>:<model>" shorthand, e.g. anthropic:claude-sonnet-4-6.',
@@ -621,6 +775,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'lecturer-frontier-window',
     section: 'agents',
+    tab: 'agents',
     group: 'Lecturer',
     label: 'Frontier window (months)',
     hint: 'How far back "The current frontier" lecture reaches. Empty = the code default.',
@@ -637,6 +792,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'lecturer-min-beats',
     section: 'agents',
+    tab: 'agents',
     group: 'Lecturer',
     label: 'Minimum beats',
     hint: 'The shortest lecture, in beats. Empty = the code default.',
@@ -653,6 +809,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'lecturer-max-beats',
     section: 'agents',
+    tab: 'agents',
     group: 'Lecturer',
     label: 'Maximum beats',
     hint: 'The longest lecture, in beats — raising this materially lengthens (and slows) every lecture.',
@@ -669,6 +826,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-model',
     section: 'agents',
+    tab: 'agents',
     group: 'Researcher',
     label: 'Model',
     hint: 'PydanticAI "<vendor>:<model>" shorthand.',
@@ -679,6 +837,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-max-steps',
     section: 'agents',
+    tab: 'agents',
     group: 'Researcher',
     label: 'Step budget',
     hint: 'Total tool calls per question — the hard stop on a research run. Empty = the code default.',
@@ -695,6 +854,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-full-reads',
     section: 'agents',
+    tab: 'agents',
     group: 'Researcher',
     label: 'Full-text reads',
     hint: 'Whole-paper reads per question (the priciest tokens).',
@@ -712,6 +872,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-hops',
     section: 'agents',
+    tab: 'agents',
     group: 'Researcher',
     label: 'Graph hops',
     hint: 'expand_node calls per question — bounds how far the graph grows per answer.',
@@ -729,6 +890,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-searches',
     section: 'agents',
+    tab: 'agents',
     group: 'Researcher',
     label: 'Topic searches',
     hint: 'find_papers calls per question — bounds off-graph reach.',
@@ -746,6 +908,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-figures',
     section: 'agents',
+    tab: 'agents',
     group: 'Researcher',
     label: 'Inline figures',
     hint: 'show_source_figure calls per answer.',
@@ -757,6 +920,79 @@ const ROW_DEFS: RowDef[] = [
         extrasKey="figures"
         fallback={3}
         min={0}
+      />
+    ),
+  },
+  {
+    key: 'paper-scout-model',
+    section: 'agents',
+    tab: 'agents',
+    group: 'Paper scout',
+    label: 'Model',
+    hint: "Finds papers by free-text search, on the researcher's behalf and from the search bar. A small fast model earns its keep here.",
+    control: (draft, edit, models) => (
+      <ModelInput draft={draft} edit={edit} agentId="paper_scout" models={models} />
+    ),
+  },
+  {
+    key: 'paper-scout-searches',
+    section: 'agents',
+    tab: 'agents',
+    group: 'Paper scout',
+    label: 'Searches per run',
+    hint: 'Queries one scouting run may issue before it must report. Empty = the code default.',
+    control: (draft, edit) => (
+      <ExtrasNumber
+        draft={draft}
+        edit={edit}
+        agentId="paper_scout"
+        extrasKey="searches"
+        fallback={4}
+      />
+    ),
+  },
+  {
+    key: 'paper-scout-search-limit',
+    section: 'agents',
+    tab: 'agents',
+    group: 'Paper scout',
+    label: 'Hits per query',
+    hint: 'How many results each query fetches. Empty = the code default.',
+    control: (draft, edit) => (
+      <ExtrasNumber
+        draft={draft}
+        edit={edit}
+        agentId="paper_scout"
+        extrasKey="search_limit"
+        fallback={8}
+      />
+    ),
+  },
+  {
+    key: 'web-scout-model',
+    section: 'agents',
+    tab: 'agents',
+    group: 'Web scout',
+    label: 'Model',
+    hint: 'Searches the open web. The search runs provider-side, so this is the one agent a local Ollama model cannot do — point it at a cloud vendor to keep web grounding.',
+    control: (draft, edit, models) => (
+      <ModelInput draft={draft} edit={edit} agentId="web_scout" models={models} />
+    ),
+  },
+  {
+    key: 'web-scout-max-uses',
+    section: 'agents',
+    tab: 'agents',
+    group: 'Web scout',
+    label: 'Searches per run',
+    hint: 'Web searches one run may make, enforced provider-side. Empty = the code default.',
+    control: (draft, edit) => (
+      <ExtrasNumber
+        draft={draft}
+        edit={edit}
+        agentId="web_scout"
+        extrasKey="max_uses"
+        fallback={4}
       />
     ),
   },
@@ -780,7 +1016,14 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const [errorFields, setErrorFields] = useState<SettingsFieldError[]>([])
   const [saving, setSaving] = useState(false)
   const [locationDraft, setLocationDraft] = useState('')
-  const [models, setModels] = useState<string[]>([])
+  const [models, setModels] = useState<AgentModels>({ models: {}, vendors: [], known: [] })
+  // '' is the section's own landing page. A section with sub-pages opens
+  // there rather than dropping you into an arbitrary first child.
+  const [page, setPage] = useState<AgentTab | ''>('')
+  // Which group headings the reader has folded away. Tracked as the negative
+  // so everything is open on arrival: folding is for tidying a section you are
+  // done with, not a wall you have to dismantle before you can read anything.
+  const [foldedGroups, setFoldedGroups] = useState<ReadonlySet<string>>(new Set())
 
   const refresh = useCallback(async () => {
     try {
@@ -897,10 +1140,41 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     }
   }
 
+  // A search reaches across both sub-tabs — hiding a matching row behind an
+  // unselected tab is the thing search exists to avoid.
+  // A search reaches across sub-pages and ignores folding — hiding a matching
+  // row behind either is the thing search exists to avoid.
+  const searching = query !== ''
+
+  const activeSection = SECTIONS.find((entry) => entry.id === section)
+  const pages = activeSection && 'pages' in activeSection ? activeSection.pages : undefined
+  const pageLabel = searching ? undefined : pages?.find((sub) => sub.id === page)?.label
+  // The landing page has no rows of its own — its whole job is to say what the
+  // section is before you pick a side of it.
+  const onLanding = pages !== undefined && page === '' && !searching
+
   /** The active section's rows under the current filter, grouped for headings. */
   const rows = ROW_DEFS.filter(
-    (row) => row.section === section && matches(row.label, row.hint, row.group),
+    (row) =>
+      row.section === section &&
+      (searching || row.tab === undefined || row.tab === page) &&
+      matches(row.label, row.hint, row.group),
   )
+
+  /** The rows above, cut into consecutive same-heading runs. */
+  const groups: { name?: string; rows: RowDef[] }[] = []
+  for (const row of rows) {
+    const last = groups.at(-1)
+    if (last && last.name === row.group) last.rows.push(row)
+    else groups.push({ name: row.group, rows: [row] })
+  }
+
+  const toggleGroup = (name: string) =>
+    setFoldedGroups((previous) => {
+      const next = new Set(previous)
+      if (!next.delete(name)) next.add(name)
+      return next
+    })
 
   return (
     <div className="settings-backdrop" onClick={onClose}>
@@ -918,16 +1192,37 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
             onChange={(event) => setFilter(event.target.value)}
           />
           <div className="settings-nav-group">Settings</div>
-          {visibleSections.map((entry) => (
-            <button
-              key={entry.id}
-              className={`settings-nav-item ${section === entry.id ? 'active' : ''}`}
-              onClick={() => setSection(entry.id)}
-            >
-              <span className="settings-nav-icon">{entry.icon}</span>
-              {entry.label}
-            </button>
-          ))}
+          {visibleSections.map((entry) => {
+            const pages = 'pages' in entry ? entry.pages : undefined
+            const here = section === entry.id
+            return (
+              <div key={entry.id}>
+                <button
+                  className={`settings-nav-item ${here && (!pages || page === '') ? 'active' : ''}`}
+                  onClick={() => {
+                    setSection(entry.id)
+                    setPage('')
+                  }}
+                >
+                  <span className="settings-nav-icon">{entry.icon}</span>
+                  {entry.label}
+                </button>
+                {/* Sub-pages show only for the section you are in — the nav is
+                    a place to navigate, not an outline of everything. */}
+                {pages &&
+                  here &&
+                  pages.map((sub) => (
+                    <button
+                      key={sub.id}
+                      className={`settings-nav-item sub ${page === sub.id ? 'active' : ''}`}
+                      onClick={() => setPage(sub.id)}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+              </div>
+            )
+          })}
         </aside>
 
         <div className="settings-content">
@@ -939,19 +1234,74 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
 
             {draft && (
               <>
-                <h2>{SECTIONS.find((entry) => entry.id === section)?.label}</h2>
-                {rows.map((row, index) => (
-                  <div key={row.key}>
-                    {row.group && rows[index - 1]?.group !== row.group && <h3>{row.group}</h3>}
-                    <div className="settings-row">
-                      <div className="settings-row-label">
-                        <span>{row.label}</span>
-                        {row.hint && <span className="settings-hint">{row.hint}</span>}
-                      </div>
-                      <div className="settings-row-control">{row.control(draft, edit, models)}</div>
+                <h2>
+                  {SECTIONS.find((entry) => entry.id === section)?.label}
+                  {pageLabel && (
+                    <>
+                      <span className="settings-crumb-sep">›</span>
+                      {pageLabel}
+                    </>
+                  )}
+                </h2>
+
+                {activeSection?.blurb && !searching && !pageLabel && (
+                  <p className="settings-blurb">{activeSection.blurb}</p>
+                )}
+                {onLanding &&
+                  pages.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      className="settings-landing-link"
+                      onClick={() => setPage(sub.id)}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+
+                {groups.map((group) => {
+                  // A search opens everything it matched: the reader asked for
+                  // exactly these rows and should not have to unfold them.
+                  const open =
+                    group.name === undefined || searching || !foldedGroups.has(group.name)
+                  return (
+                    <div key={group.name ?? group.rows[0].key}>
+                      {group.name !== undefined && (
+                        <button
+                          type="button"
+                          className="settings-group-head"
+                          aria-expanded={open}
+                          onClick={() => toggleGroup(group.name as string)}
+                        >
+                          {group.name}
+                          {GROUP_BADGES[group.name] && (
+                            <span
+                              className={`settings-group-badge${
+                                GROUP_BADGES[group.name].free ? ' free' : ''
+                              }`}
+                            >
+                              {GROUP_BADGES[group.name].text}
+                            </span>
+                          )}
+                          <span className="settings-group-rule" />
+                          <span className="settings-group-caret">{open ? '▾' : '▸'}</span>
+                        </button>
+                      )}
+                      {open &&
+                        group.rows.map((row) => (
+                          <div key={row.key} className="settings-row">
+                            <div className="settings-row-label">
+                              <span>{row.label}</span>
+                              {row.hint && <span className="settings-hint">{row.hint}</span>}
+                            </div>
+                            <div className="settings-row-control">
+                              {row.control(draft, edit, models)}
+                            </div>
+                          </div>
+                        ))}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
                 {rows.length === 0 && query !== '' && (
                   <div className="settings-loading">No matching settings here.</div>
                 )}

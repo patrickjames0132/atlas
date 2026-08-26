@@ -197,36 +197,87 @@ def test_location_rejects_missing_or_invalid_targets(client, _config_file, tmp_p
     assert client.get("/api/settings").json["path"] == str(_config_file)
 
 
+def _only_vendor(monkeypatch, vendor: str) -> None:
+    """Blank every LLM vendor but one, so a listing assertion is unambiguous."""
+    providers = config.llm.providers
+    for name in ("anthropic", "openai", "google"):
+        monkeypatch.setattr(getattr(providers, name), "api_key", "")
+    monkeypatch.setattr(providers.ollama, "base_url", "")
+    if vendor == "ollama":
+        monkeypatch.setattr(providers.ollama, "base_url", "http://localhost:11434/v1")
+    else:
+        monkeypatch.setattr(getattr(providers, vendor), "api_key", "sk-test")
+
+
 def test_models_endpoint_relays_the_sdk_listing(client, _config_file, monkeypatch):
     """With a key configured, the endpoint relays the (stubbed) Models API."""
     from atlas.routes import settings as settings_routes
 
-    monkeypatch.setattr(config.llm.providers.anthropic, "api_key", "sk-test")
+    _only_vendor(monkeypatch, "anthropic")
     monkeypatch.setattr(
         settings_routes, "_fetch_anthropic_models",
         lambda api_key: ["claude-opus-4-8", "claude-sonnet-5"],
     )
-    assert client.get("/api/settings/models").json == {
-        "models": ["claude-opus-4-8", "claude-sonnet-5"]
-    }
+    payload = client.get("/api/settings/models").json
+    assert payload["models"] == {"anthropic": ["claude-opus-4-8", "claude-sonnet-5"]}
+    assert payload["vendors"] == ["anthropic"]
 
 
 def test_models_endpoint_empty_without_a_key(client, _config_file, monkeypatch):
-    """Keyless: no listing attempt, just an empty degrade."""
-    monkeypatch.setattr(config.llm.providers.anthropic, "api_key", "")
-    assert client.get("/api/settings/models").json == {"models": []}
+    """Keyless: nothing configured, so nothing to list and nothing to offer."""
+    providers = config.llm.providers
+    for name in ("anthropic", "openai", "google"):
+        monkeypatch.setattr(getattr(providers, name), "api_key", "")
+    monkeypatch.setattr(providers.ollama, "base_url", "")
+    payload = client.get("/api/settings/models").json
+    assert payload["models"] == {}
+    assert payload["vendors"] == []
+    # `known` still lists everything — the modal has to offer the free vendors
+    # to exactly this user, who has configured none of them.
+    assert "ollama" in payload["known"]
 
 
 def test_models_endpoint_degrades_on_failure(client, _config_file, monkeypatch):
-    """A Models API failure degrades to empty rather than erroring the modal."""
+    """A Models API failure degrades to empty rather than erroring the modal.
+
+    The vendor still appears in `vendors` — it IS configured, it just could not
+    be listed, and dropping it would wrongly tell the modal it is unusable.
+    """
     from atlas.routes import settings as settings_routes
 
     def boom(api_key):
         raise RuntimeError("network down")
 
-    monkeypatch.setattr(config.llm.providers.anthropic, "api_key", "sk-test")
+    _only_vendor(monkeypatch, "anthropic")
     monkeypatch.setattr(settings_routes, "_fetch_anthropic_models", boom)
-    assert client.get("/api/settings/models").json == {"models": []}
+    payload = client.get("/api/settings/models").json
+    assert payload["models"] == {"anthropic": []}
+    assert payload["vendors"] == ["anthropic"]
+
+
+def test_models_endpoint_lists_a_local_ollama_server(client, _config_file, monkeypatch):
+    """Ollama's listing is the honest one: what this machine has actually pulled."""
+    from atlas.routes import settings as settings_routes
+
+    _only_vendor(monkeypatch, "ollama")
+    monkeypatch.setattr(
+        settings_routes, "_fetch_ollama_models", lambda base_url: ["qwen3:8b"]
+    )
+    payload = client.get("/api/settings/models").json
+    assert payload["models"] == {"ollama": ["qwen3:8b"]}
+    assert payload["vendors"] == ["ollama"]
+
+
+def test_models_endpoint_uses_a_curated_list_where_there_is_no_listing_api(
+    client, _config_file, monkeypatch
+):
+    """Google and OpenAI get a short static list rather than a key-scoped dump."""
+    from atlas.routes import settings as settings_routes
+
+    _only_vendor(monkeypatch, "google")
+    payload = client.get("/api/settings/models").json
+    assert payload["vendors"] == ["google"]
+    assert payload["models"]["google"] == settings_routes.KNOWN_MODELS["google"]
 
 
 def test_drop_cache_empties_the_table_and_reports_the_count(client):
@@ -250,3 +301,17 @@ def test_drop_cache_leaves_saved_sessions_alone(client):
     cache.set("graph:v2:s2:seed", {"nodes": []})
     client.post("/api/settings/drop_cache")
     assert sessions.get_session(saved["id"]) is not None
+
+
+def test_models_endpoint_names_every_vendor_not_just_the_configured_ones(
+    client, _config_file, monkeypatch
+):
+    """`known` is what makes the free vendors discoverable.
+
+    A newcomer has configured nothing; offering only working vendors would hide
+    precisely the two (Ollama, Google) that cost nothing to adopt.
+    """
+    _only_vendor(monkeypatch, "anthropic")
+    payload = client.get("/api/settings/models").json
+    assert payload["known"] == ["anthropic", "openai", "google", "ollama"]
+    assert payload["vendors"] == ["anthropic"]

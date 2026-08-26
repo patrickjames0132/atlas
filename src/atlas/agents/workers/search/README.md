@@ -10,7 +10,7 @@ workers/search/
   papers/     — the academic-paper source (Semantic Scholar / OpenAlex),
                 searched with reformulation, recency bounding, exact-title
                 recall and a semantic hop
-  web/        — the open web, via Anthropic's provider-side WebSearchTool
+  web/        — the open web, via a provider-side web-search capability
 ```
 
 Grouped under `search/` because "go look something up somewhere" is one job
@@ -106,6 +106,15 @@ that chose prompting first (v7.1.0).
   weights. A web page is as real, as citable and as retrievable as a paper or
   a page of the reader's own book: this *extends* the grounding boundary
   rather than abandoning it.
+- **Not every vendor has a web search** (since v7.13.0). The capability is
+  attached only when the agent's configured vendor offers one —
+  `factory.supports_web_search` decides, and Ollama is the vendor that
+  doesn't. When it isn't available the scout returns empty **without calling
+  the model at all**, which is the part that matters: an agent instructed to
+  search while holding no search tool does not fail cleanly, it invents
+  plausible sources. Not asking it is the only honest degradation, and the
+  researcher simply loses web grounding for that turn the same way a failed
+  search already cost it.
 - **`capabilities.WebSearch`, not `native_tools.WebSearchTool`.** The bare
   native tool is accepted by the `Agent` constructor and then silently
   dropped, leaving an agent prompted to search the web with no way to. mypy

@@ -66,6 +66,16 @@
     "providers": {
       "anthropic": {
         "api_key": "sk-ant-..."
+      },
+      "openai": {
+        "api_key": "",
+        "base_url": ""
+      },
+      "google": {
+        "api_key": ""
+      },
+      "ollama": {
+        "base_url": ""
       }
     },
     "agents": [

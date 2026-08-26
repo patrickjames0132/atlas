@@ -137,9 +137,28 @@ explicitly to the provider. `agent_entry(id)` (the lookup half) is also how
 an agent reads its own `extras` knobs — which arrive **already validated**
 against that agent's model in `config.AGENT_EXTRAS`, complete with defaults
 filled in, so a package indexes them (`extras["min_beats"]`) instead of
-range-checking or `.get`-defaulting them. The factory also sets
-`anthropic_eager_input_streaming` on every model — see `streams.py` below
-for why nothing streams without it.
+range-checking or `.get`-defaulting them.
+
+**This module is the entire vendor seam** (since v7.13.0). `build_model`
+matches on the entry's provider prefix and constructs the matching PydanticAI
+pair — `anthropic`, `openai` (whose `base_url` also covers every
+OpenAI-compatible server), `google`, `ollama` — so teaching Atlas a new vendor
+is one case arm plus a config block, and no agent package changes. Two
+consequences worth holding onto:
+
+- **Vendors are per agent, not global.** Each `config.llm.agents` entry names
+  its own, so running the lecturer on a free local model while the web scout
+  stays on one that can actually search the web is a normal setup. The
+  companion `supports_web_search(agent_id)` exists for exactly that — the web
+  scout asks it at construction time and attaches the provider-side search
+  capability only when the vendor has one (Ollama does not).
+- **A blank vendor fails at request time, not at import.** `build_model`
+  raises a `ValueError` naming the vendors that *are* configured, rather than
+  letting config validation refuse to boot — the keyless graph explorer must
+  survive a machine with no LLM set up at all.
+
+The factory also sets `anthropic_eager_input_streaming` on Anthropic models —
+see `streams.py` below for why nothing streams without it.
 
 ## `streams.py` — consuming a run synchronously, event by event
 
