@@ -121,8 +121,12 @@ def test_agent_provider_property_parses_the_prefix():
 def test_agent_provider_must_be_configured():
     """An agent naming a vendor with no `providers` entry fails at load, not at
     its first request."""
-    cfg = set_nested(example_config(), ("llm", "agents", 0, "model"), "openai:gpt-4o")
-    with pytest.raises(ValidationError, match="openai"):
+    # 'mistral' is deliberately a vendor Atlas has no block for — 'openai' used
+    # to play this role and became real in v7.13.0.
+    cfg = set_nested(
+        example_config(), ("llm", "agents", 0, "model"), "mistral:mistral-large"
+    )
+    with pytest.raises(ValidationError, match="mistral"):
         Config.model_validate(cfg)
 
 

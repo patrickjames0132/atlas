@@ -38,7 +38,13 @@ export interface AtlasConfig {
   graph: { cache_ttl: number; [key: string]: unknown }
   ui: { default_theme: 'dark' | 'light'; [key: string]: unknown }
   llm: {
-    providers: { anthropic?: { api_key: string; [key: string]: unknown }; [key: string]: unknown }
+    providers: {
+      anthropic?: { api_key: string; [key: string]: unknown }
+      openai?: { api_key: string; base_url: string; [key: string]: unknown }
+      google?: { api_key: string; [key: string]: unknown }
+      ollama?: { base_url: string; [key: string]: unknown }
+      [key: string]: unknown
+    }
     agents: { id: string; model: string; extras?: Record<string, number>; [key: string]: unknown }[]
     [key: string]: unknown
   }
@@ -145,20 +151,34 @@ export async function pickSettingsFile(): Promise<string | null> {
   return body.path
 }
 
+/** Model ids per configured vendor, plus which vendors exist and which work. */
+export interface AgentModels {
+  /** Vendor name -> its model ids. A vendor present with an empty list is
+   *  configured but could not be listed (offline, bad key) — still selectable. */
+  models: Record<string, string[]>
+  /** Configured vendors, in config declaration order. Empty = no LLM set up. */
+  vendors: string[]
+  /** Every vendor the backend can build, configured or not — what the modal
+   *  offers, so the free ones are discoverable before they are set up. */
+  known: string[]
+}
+
 /**
- * The Anthropic model ids available to the configured key (the backend's
- * Models API relay). Empty keyless or on failure — callers degrade to a
- * free-text input then.
+ * The model ids available per configured LLM vendor.
  *
- * @returns The available model ids (e.g. "claude-opus-4-8").
+ * Every failure degrades to "nothing known" rather than throwing: the model
+ * field is a text input with suggestions, so an unreachable vendor costs the
+ * user autocomplete, never the ability to configure one by hand.
+ *
+ * @returns The per-vendor listing, empty when no vendor is configured.
  */
-export async function getAgentModels(): Promise<string[]> {
+export async function getAgentModels(): Promise<AgentModels> {
   try {
     const res = await fetch('/api/settings/models')
-    const body = (await res.json()) as { models: string[] }
-    return body.models ?? []
+    const body = (await res.json()) as Partial<AgentModels>
+    return { models: body.models ?? {}, vendors: body.vendors ?? [], known: body.known ?? [] }
   } catch {
-    return []
+    return { models: {}, vendors: [], known: [] }
   }
 }
 

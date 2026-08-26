@@ -178,47 +178,41 @@ than deleted so the plan doesn't get re-proposed.
 > these are hard problems. They are just the ones that were never prioritized,
 > because the backlog was implicitly sorted by what was interesting to build.
 
-- [ ] **Support additional LLM providers (OpenAI, Google, Meta, local models) —
-      the single largest barrier between a learner and the teacher** — the whole
-      agent crew runs on Claude only today, so **unlocking the AI teacher
-      requires a paid Anthropic API key**: a credit card, plus per-token cost
-      for every lecture and every question. The graph explorer runs keyless and
-      free; the teaching — the actual point of the project — does not. For a
-      tool whose stated purpose is access to education, that is the ballgame,
-      and it is why this item now leads the backlog rather than sitting in
-      *Enhancements & tech debt* where it was filed.
+- [ ] **The app will not start without an Anthropic key — the keyless graph
+      explorer is unreachable** — every agent builds its model at *import*
+      (`agent = Agent(factory.build_model(AGENT_ID), ...)` at module level in
+      all five agent packages), so importing the app constructs a provider for
+      whatever vendor each agent names. With that vendor's block blank,
+      construction raises and `create_app` never returns. Before v7.13.0 the
+      error was PydanticAI's own — *"Set the `ANTHROPIC_API_KEY` environment
+      variable"* — which is doubly wrong here, since this app's config rule is
+      **no env vars at all**. v7.13.0 replaced it with an actionable message
+      naming the vendors that *are* configured, but **the crash itself is
+      unchanged**.
 
-      **What matters most is the free path, not the vendor count.** Adding
-      OpenAI beside Anthropic swaps one credit card for another and changes
-      nothing for the person this is for. The two that do change something:
-      **a local model via Ollama** (zero marginal cost, no key, and it composes
-      with the local-library half — the whole conversation stays on the
-      machine), and **a provider with a usable free tier**. Prioritize
-      accordingly; a generic provider abstraction that ships with only paid
-      vendors wired has missed the point.
+      **Why this is the most mission-critical bug open.** README.md and
+      `docs/configuration.md` both promise the graph explorer runs free and
+      keyless, with only the teacher needing a vendor. That promise is false:
+      a person who cannot pay cannot open the free half either. It is the exact
+      failure this theme exists to prevent. *(Since v7.13.0 there is a
+      workaround — point all five agents at `ollama:` and configure nothing
+      else — but it requires knowing to do that, which a first-run user does
+      not.)*
 
-      **The mechanical work, which is not the hard part.** PydanticAI already
-      abstracts providers and `config.llm` is shaped for more than one
-      (`LLMProvidersConfig` names `AnthropicProvider`, `OpenAIProvider`, …), so
-      it is: wire provider construction per vendor, let each agent's `model`
-      string name a vendor (`openai:…`, `google:…`, `ollama:…`; today's are
-      `anthropic:…`), and generalize the settings modal — the agent **model
-      dropdowns** populate from the Anthropic Models API only, and the "LLM
-      vendor" row is a fixed label. Watch for per-provider streaming and
-      tool-call differences in the agentic paths (see `teacher/agentic.py`'s
-      SDK-boundary handling).
-
-      **The real risk is quality, and it needs measuring rather than
-      assuming.** The agentic researcher leans hard on reliable tool-calling —
-      the existing *agent-reliability* and *proactive-figures* tickets both
-      note the model already skips `show_figure` when asked — and a small local
-      model may simply not hold the loop together. That is a finding, not a
-      blocker: the honest outcome may be "lectures work locally, the agentic
-      researcher needs a frontier model," which is still a vastly better floor
-      than today's "nothing works without a key." Measure per agent, and say so
-      in the UI rather than letting a weak model fail quietly.
-      *(Filed 2026-07-20 as a tech-debt item; promoted to the top of the
-      backlog 2026-08-16 when the project's purpose was made explicit.)*
+      **The fix is lazy model construction**, and the shape needs deciding
+      before anyone builds. `build_model` already raises a clean `ValueError`
+      at the right moment; what's wrong is *when* it is called. Options:
+      construct each package's `Agent` on first use behind a cached accessor
+      (explicit, but `agent` is a module attribute re-exported from five
+      `__init__.py` files, so every call site moves); or pass the model per-run
+      (`agent.run(..., model=...)`), which keeps the module shape but threads a
+      model through `streams.py`'s `drive`. Either way the routes need to turn
+      the resulting `ValueError` into an honest 502 — `routes/graph.py:398`
+      already does exactly that for the TL;DR path and is the pattern to copy.
+      **Test it with the case that is currently impossible:** a config with
+      every LLM vendor blank must import `atlas.app`, serve a graph, and fail
+      only when the teacher is asked for. *(Found 2026-08-21 while wiring
+      multi-provider support; pre-existing, not introduced by it.)*
 
 - [ ] **Make first-run possible for someone who is not a developer** — today
       the path to a running Atlas is: install mise, run a setup script that

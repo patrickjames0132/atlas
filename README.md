@@ -20,13 +20,15 @@ become a product. It runs on your own machine, and the sources you upload
 never leave it. If something with more reach ever does this better, good;
 until then this exists, and you can have it.
 
-> **One honest caveat before you invest the setup time.** The graph explorer
-> runs free and keyless. **The AI teacher does not** — it needs your own paid
-> [Anthropic API key](https://console.anthropic.com/settings/keys), and every
-> lecture and every question bills against it. Support for other providers,
-> including free local models, is the project's top open item — but it is not
-> built yet, so today the teaching costs money. See *Reach & access* in
-> [OnePager.md](OnePager.md).
+> **The teacher runs on whichever model you point it at, including free ones.**
+> The graph explorer is keyless and free. For the AI teacher, pick a vendor:
+> **[Ollama](https://ollama.com)** runs a model on your own machine — no key,
+> no signup, no cost, nothing leaving the computer — or **Google AI Studio**
+> issues a free-tier key, or use paid **Anthropic** / **OpenAI** if you have
+> one. Any OpenAI-compatible server (Groq, OpenRouter, LM Studio) works
+> through the OpenAI entry too. It is a **per-agent** choice, so a sensible
+> setup runs the lecturer locally and leaves the one agent that needs web
+> search on a cloud vendor. See [docs/configuration.md](docs/configuration.md).
 
 ```
 ┌──────────┐  find seed   ┌─────────┐   whole graph      ┌──────────────────┐
@@ -94,14 +96,24 @@ graph explorer runs fine without it, but the Assistant panel needs it.
   — plenty for browsing); a free key at
   [openalex.org/settings/api](https://openalex.org/settings/api) lifts it to
   $1/day. Set `providers.openalex.mailto` to your email either way.
-- **`llm.providers.anthropic.api_key`** — **required to power the agents.** A
-  [Claude API key](https://console.anthropic.com/settings/keys) drives the whole
-  crew (lectures, research Q&A, library chat, query analysis); the per-agent
-  model choices live under `llm.agents`. **Anthropic is the only LLM provider
-  today, and this is the one barrier the project most wants gone** — it puts a
-  paid key between a learner and the teacher. Additional providers, and free
-  local models via [Ollama](https://ollama.com), lead the backlog's
-  *Reach & access* theme in [OnePager.md](OnePager.md). Not built yet.
+- **`llm.providers`** — **one block per LLM vendor; fill in at least one to
+  power the agents.** Four are wired, and two of them cost nothing:
+  - **`ollama.base_url`** — **free and local.** Point it at a running
+    [Ollama](https://ollama.com) server (normally `http://localhost:11434/v1`,
+    keep the `/v1`). No key, no signup, no quota, and the conversation never
+    leaves your machine. The one trade: a local model can't search the web, so
+    that scout goes quiet rather than inventing sources.
+  - **`google.api_key`** — **free tier.** A key from
+    [Google AI Studio](https://aistudio.google.com/apikey), quota-limited.
+  - **`anthropic.api_key`** — paid. A
+    [Claude API key](https://console.anthropic.com/settings/keys).
+  - **`openai.api_key`** / **`openai.base_url`** — paid at OpenAI, but the
+    `base_url` points the same adapter at **any OpenAI-compatible server**
+    (Groq, OpenRouter, Together, LM Studio), several with free tiers.
+
+  Which vendor each agent uses is set per agent in `llm.agents`
+  (`"model": "ollama:qwen3:8b"`), so mixing them is normal — Settings ▸ Agents
+  has a one-click "run every agent on" picker for the simple case.
 
 ### 2. Build the frontend & run
 

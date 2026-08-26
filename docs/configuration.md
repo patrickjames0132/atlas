@@ -117,21 +117,47 @@ chat/tool-use LLM.
 
 ### `llm.providers` — backend credentials
 
-This app is migrating its agents onto
-[PydanticAI](https://ai.pydantic.dev), which supports many LLM vendors, not
-just Anthropic. PydanticAI itself separates *authentication* (a `Provider`
+The agents run on [PydanticAI](https://ai.pydantic.dev), which supports many
+LLM vendors. PydanticAI itself separates *authentication* (a `Provider`
 object, e.g. `AnthropicProvider(api_key=...)`) from *behavior* (an `Agent`:
 system prompt, tools) — `llm.providers` mirrors that split so our config
 maps cleanly onto PydanticAI's own constructs:
 
 ```json
-"llm": { "providers": { "anthropic": { "api_key": "sk-ant-..." } } }
+"llm": {
+  "providers": {
+    "anthropic": { "api_key": "sk-ant-..." },
+    "openai":    { "api_key": "",  "base_url": "" },
+    "google":    { "api_key": "" },
+    "ollama":    { "base_url": "" }
+  }
+}
 ```
 
-One sub-object per vendor. Only `anthropic` is wired up today (that's what
-we're testing against), but adding a second vendor later — say
-`llm.providers.openai.api_key` — is purely additive: a new field, no
-redesign. Credentials live here, **not** on individual agents, because a
+**Four vendors are wired since v7.13.0**, and which one you use is a per-agent
+choice (see `llm.agents` below), not a global switch.
+
+**Every block must be present; the values may be blank.** A blank block means
+*not configured*, and that is checked when an agent actually runs rather than
+at startup — the graph explorer is keyless and has to keep working for someone
+who has set up no LLM at all.
+
+Two of the four cost nothing, which is the point of having them:
+
+| Vendor | Cost | Notes |
+| --- | --- | --- |
+| `anthropic` | paid | Billed per lecture and per question. |
+| `openai` | paid | `base_url` blank = OpenAI itself. Set it and the same adapter drives **any OpenAI-compatible server** — Groq, OpenRouter, Together, LM Studio — several with free tiers. |
+| `google` | **free tier** | A Google AI Studio key is free and quota-limited. |
+| `ollama` | **free, local** | No key, no signup, nothing leaves the machine. `base_url` is normally `http://localhost:11434/v1` — keep the `/v1`, that is where Ollama's OpenAI-compatible surface lives. |
+
+One trade is worth knowing before choosing `ollama` for everything: a local
+model has **no provider-side web search**, so the web scout goes quiet (it
+returns empty and says so, rather than letting a search-less model invent
+sources — see `agents/workers/search/web/`). Pointing just that one agent at a
+cloud vendor is a supported and sensible mix.
+
+Credentials live here, **not** on individual agents, because a
 key belongs to an (account × vendor) pair, not to any one agent — two
 agents sharing a vendor should share its key rather than duplicate it
 (duplicated keys are a rotation hazard: change one copy and forget the
