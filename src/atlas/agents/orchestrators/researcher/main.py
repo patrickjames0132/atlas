@@ -174,8 +174,9 @@ def _unconsulted(deps: ResearcherDeps) -> list[str]:
     return missing
 
 
+# No model at construction: it is passed per run by `factory.model_for`, so a
+# blank config can't stop the app booting and a settings edit needs no restart.
 agent: Agent[ResearcherDeps, Answer] = Agent(
-    factory.build_model(AGENT_ID),
     deps_type=ResearcherDeps,
     output_type=Answer,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
@@ -537,6 +538,7 @@ def answer(
         agent,
         _prompt(seed, deps.nodes, library, question, lectures or []),
         deps=deps,
+        model=factory.model_for(AGENT_ID),
         message_history=prompts.history(history),
         usage_limits=UsageLimits(request_limit=BUDGETS["max_steps"] + 4),
     )

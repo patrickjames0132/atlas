@@ -22,6 +22,112 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A hardcoded model list, and the wrong layer to fix it in
+
+*Found 2026-08-27 by Patrick, switching the lecturer to Google. Fixed in
+v7.14.0. The bug was small; the detour is the part worth keeping.*
+
+- **Symptom.** Choosing a Gemini model from Settings and running a lecture
+  answered `404 NOT_FOUND ... This model models/gemini-2.5-flash is no longer
+  available to new users`. The dropdown offered three Gemini models and all
+  three were dead.
+- **Root cause.** `KNOWN_MODELS` in `routes/settings.py` — a hand-written list
+  of model ids for the two vendors we weren't fetching live. It shipped in
+  v7.13.0 naming the 2.5 line, Google retired that line for new keys, and the
+  list had no way to know. Its own comment claimed a stale entry "costs
+  nothing" because the modal "lets the user type anything anyway"; that was
+  **false**, the field was a `<select>`, so the stale list was the only thing
+  on offer.
+- **The wrong fix, and why it looked right.** The false comment was taken as
+  the spec: make the field typeable. It became an `<input list=>` combobox over
+  a `<datalist>`, so a dead list could be typed past. That dragged in a chain
+  of its own defects — Chrome draws its own dropdown arrow inside such an input,
+  so the field had two carets; suppressing that needs the rule on a class on
+  the input itself (as a descendant selector Chrome ignores it silently) *and*
+  `!important` (the UA rule wins otherwise), neither discoverable from
+  `getComputedStyle`, which reports the rule as applied either way.
+
+  Then the real one: **a `<datalist>` is filtered by whatever text the input
+  already holds.** A field set to `claude-haiku-4-5` offered the two ids
+  containing that string and hid the other eight, and a field holding a
+  *retired* id offered only itself — so after every fix the dropdown still
+  looked stale, for a completely different reason than it originally was.
+- **The actual fix.** Fetch the list live from each vendor's API, and put the
+  `<select>` back untouched. The `settings.css` diff went to zero and the
+  component diff to a single comment.
+- **Lesson / guard.** *Fix data problems in the data layer.* The list was
+  wrong; the control was fine. Making the control more permissive to tolerate
+  bad data kept the bad data and added a second problem on top — and each
+  round of UI patching produced a symptom identical to the original one, which
+  is what made it expensive to diagnose.
+
+  A corollary about comments: the "user can type anything anyway" note had
+  been false since the field became a `<select>`, and it was load-bearing —
+  it was the stated reason a stale list was acceptable. A comment justifying
+  why something *doesn't matter* is worth re-checking against the code before
+  trusting it.
+
+  No test guards the control choice; the guard is the fetch itself
+  (`test_models_endpoint_fetches_google_live`,
+  `test_a_failed_listing_falls_back_to_the_curated_names`,
+  `test_a_listing_is_filtered_to_models_that_could_run_an_agent`).
+
+### The keyless app couldn't start, and the settings modal couldn't change a model
+
+*Found 2026-08-21 while wiring multi-provider support; filed then, fixed in
+v7.14.0. Two bugs, one line of code.*
+
+- **Symptom.** Two, and they looked unrelated. A machine with a blank
+  `llm.providers` block couldn't start Atlas at all: `create_app` raised
+  before returning, so the **keyless graph explorer** — the half of the app
+  that needs no API key, and the half README.md and `docs/configuration.md`
+  both promise costs nothing — was unreachable by exactly the people it was
+  written for. Separately, editing an agent's vendor or model in Settings
+  appeared to work (the modal saved, the value round-tripped, a reload showed
+  it) and then changed nothing: the next lecture ran on the old model.
+- **Root cause.** One line, repeated in five packages:
+
+  ```python
+  agent = Agent(factory.build_model(AGENT_ID), ...)   # module level
+  ```
+
+  Building the model at **import** meant importing the app constructed a
+  provider for whatever vendor each agent named. Blank block → the provider
+  raised → the import failed → no app. Before v7.13.0 the error was
+  PydanticAI's own, *"Set the `ANTHROPIC_API_KEY` environment variable"*,
+  which is doubly wrong in an app whose config rule is **no env vars at all**.
+
+  The second symptom is the same line seen from the other side. `config.py`'s
+  `reload_config` folds fresh values into the **existing** config object
+  precisely so that "every consumer holds the module-level `config` and reads
+  its fields late" — the codebase's stated convention. The agents were the one
+  place that read early, so they held a model built from boot-time config
+  forever. The modal's "no restart" promise was true for every setting except
+  the ones it was built to change. The web scout had it twice over: its
+  `capabilities=[WebSearch(...)]` was decided at import too, so a vendor
+  switch could leave it silent on a searching vendor, or vice versa.
+- **Fix.** `factory.model_for(agent_id)` — build on first use, cache against a
+  **fingerprint of the config that produced it** (the agent's `provider:model`
+  string plus the named vendor's whole block, so an edited key invalidates as
+  surely as a switched vendor), and pass the result to the *run* rather than
+  the `Agent`: `agent.run(..., model=...)`. PydanticAI accepts a model-less
+  `Agent` and takes `model=` on every run method, so this needed no proxy and
+  no wrapper — and `streams.drive` already forwarded `**kwargs`, so the
+  streaming path changed by one argument. The web scout's `capabilities` moved
+  to the same call for the same reason.
+- **Lesson / guard.** *Import time is config time, and config is not constant.*
+  Anything read at module scope silently opts out of `reload_config`, and any
+  **construction** at module scope turns a bad value into a failure to boot
+  rather than a failure to serve one request.
+
+  The guard is the test that was impossible to write before the fix —
+  `test_app_starts_with_no_llm_vendor_configured_at_all` blanks every vendor
+  block, **reloads all five agent modules** (the failure was import-time, and
+  they are long since imported by the time the suite runs), and asserts the
+  app still answers `/api/health`. It fails on the pre-fix code, which is the
+  only reason to trust it. `test_model_for_rebuilds_when_only_the_credentials_change`
+  guards the subtler half: same model name, new key, must not be reused.
+
 ### A dropped connection looks exactly like a finished download
 
 *Found 2026-08-16 by Patrick, as an ingest that died 36 minutes in. Fixed in v7.12.0.*

@@ -111,6 +111,18 @@ overlays).
   under an `ollama:` prefix is a config that cannot run. A value the listing no
   longer offers is preserved as its own option at either level rather than
   silently rewritten.
+- **Both controls are `<select>`s, and the model list is fetched live**
+  (v7.14.0). The model names used to be hardcoded server-side for Google and
+  OpenAI, and that list rotted: it shipped in v7.13.0 naming the 2.5-era Gemini
+  models and was answering `404 ... no longer available to new users` within
+  weeks, with a dropdown offering nothing but dead options. The fix belongs in
+  the backend, not the control — `routes/settings.py` now asks every vendor's
+  own API what it has (see its `KNOWN_MODELS`, demoted to an offline
+  fallback). A brief attempt to solve it in the UI instead, by making the model
+  field an `<input list=>` combobox, is worth knowing about so nobody retries
+  it: a `<datalist>` is filtered by whatever text the box already holds, so a
+  field set to `claude-haiku-4-5` offered the two ids containing that string
+  and hid the other eight. A dropdown shows everything, which is the job.
 - **Search ignores sub-pages and folding both.** A query has to reach every
   matching row, and an unselected sub-page or a fold hiding one is the thing
   search exists to avoid.

@@ -294,7 +294,9 @@ def test_tldr_generation_failure_maps_to_502(client, monkeypatch):
         "/api/paper/tldr", json={"id": "W123", "title": "T", "abstract": "A."}
     )
     assert response.status_code == 502
-    assert "Anthropic" in response.json["error"]
+    # Vendor-neutral since v7.14.0: there are four vendors now, and naming only
+    # Anthropic sent a Gemini or Ollama user looking for a key they never set.
+    assert "model provider" in response.json["error"]
 
 
 def test_paper_backfills_a_generated_tldr_but_never_overwrites_a_native_one(

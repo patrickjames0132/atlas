@@ -116,10 +116,17 @@ that chose prompting first (v7.1.0).
   researcher simply loses web grounding for that turn the same way a failed
   search already cost it.
 - **`capabilities.WebSearch`, not `native_tools.WebSearchTool`.** The bare
-  native tool is accepted by the `Agent` constructor and then silently
-  dropped, leaving an agent prompted to search the web with no way to. mypy
-  catches it; the runtime does not. (Confirmed against the agent's resolved
-  native-tool list — see the comment at the call site.)
+  native tool is accepted and then silently dropped, leaving an agent prompted
+  to search the web with no way to. mypy catches it; the runtime does not.
+  (Confirmed against the agent's resolved native-tool list — see the comment
+  at the call site.)
+- **The capability rides the run, not the `Agent`** (since v7.14.0). It used
+  to be decided once at import, alongside the model — which meant switching
+  this agent's vendor in Settings left it with the boot-time answer: a scout
+  pointed at Anthropic that still believed it was on Ollama and stayed silent,
+  or the reverse. Both the vendor check and the model are now read per call
+  (`factory.supports_web_search` / `factory.model_for`), so the two stay
+  consistent with each other and with whatever config currently says.
 - **Budgets are small on purpose.** The papers scout's value is two or three
   aimed attempts, not ten: every one is a live provider call the reader is
   waiting on. The web scout's `max_uses` is enforced **provider-side**, so

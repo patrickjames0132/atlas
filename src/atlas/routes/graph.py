@@ -395,7 +395,9 @@ def api_paper_tldr() -> ResponseReturnValue:
     tldr = summarizer.summarize(title, abstract)
     if tldr is None:
         current_app.logger.warning("TL;DR generation failed for %s", node_id)
-        return jsonify({"error": "Couldn't generate a TL;DR — is the Anthropic key set?"}), 502
+        return jsonify(
+            {"error": "Couldn't generate a TL;DR — is a model provider configured in Settings?"}
+        ), 502
     cache.set(key, tldr)
     return jsonify({"tldr": tldr})
 

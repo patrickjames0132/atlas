@@ -4,6 +4,9 @@ Description:
 The web scout's degradation path: what happens when the configured vendor has
 no provider-side web search at all (a local Ollama model, since v7.13.0).
 
+Both the vendor check and the model are read per run (``factory``), so these
+patch the factory rather than a module constant.
+
 The behaviour under test is deliberately a *refusal to call the model*. An
 agent instructed to search, holding no search tool, does not fail cleanly — it
 invents sources — so "don't ask it" is the only honest answer, and these tests
@@ -34,7 +37,7 @@ def test_no_web_search_returns_empty_without_calling_the_model(monkeypatch):
         called = True
         raise AssertionError("the scout called the model with no search tool")
 
-    monkeypatch.setattr(web, "WEB_SEARCH_AVAILABLE", False)
+    monkeypatch.setattr(web.factory, "supports_web_search", lambda agent_id: False)
     monkeypatch.setattr(web.agent, "run", must_not_run)
 
     findings = asyncio.run(web.scout("who won the 2026 Turing award"))
@@ -59,10 +62,16 @@ def test_supported_vendor_still_searches(monkeypatch):
             ],
         )
 
-    async def fake_run(need):
+    async def fake_run(need, **kwargs):
+        # The model and the search capability both ride the call now, not the
+        # Agent — that is what lets a settings change take effect without a
+        # restart, so assert they actually arrive.
+        assert kwargs["model"] == "stub-model"
+        assert kwargs["capabilities"]
         return Result()
 
-    monkeypatch.setattr(web, "WEB_SEARCH_AVAILABLE", True)
+    monkeypatch.setattr(web.factory, "supports_web_search", lambda agent_id: True)
+    monkeypatch.setattr(web.factory, "model_for", lambda agent_id: "stub-model")
     monkeypatch.setattr(web.agent, "run", fake_run)
 
     findings = asyncio.run(web.scout("anything"))

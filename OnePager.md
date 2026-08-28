@@ -178,42 +178,6 @@ than deleted so the plan doesn't get re-proposed.
 > these are hard problems. They are just the ones that were never prioritized,
 > because the backlog was implicitly sorted by what was interesting to build.
 
-- [ ] **The app will not start without an Anthropic key — the keyless graph
-      explorer is unreachable** — every agent builds its model at *import*
-      (`agent = Agent(factory.build_model(AGENT_ID), ...)` at module level in
-      all five agent packages), so importing the app constructs a provider for
-      whatever vendor each agent names. With that vendor's block blank,
-      construction raises and `create_app` never returns. Before v7.13.0 the
-      error was PydanticAI's own — *"Set the `ANTHROPIC_API_KEY` environment
-      variable"* — which is doubly wrong here, since this app's config rule is
-      **no env vars at all**. v7.13.0 replaced it with an actionable message
-      naming the vendors that *are* configured, but **the crash itself is
-      unchanged**.
-
-      **Why this is the most mission-critical bug open.** README.md and
-      `docs/configuration.md` both promise the graph explorer runs free and
-      keyless, with only the teacher needing a vendor. That promise is false:
-      a person who cannot pay cannot open the free half either. It is the exact
-      failure this theme exists to prevent. *(Since v7.13.0 there is a
-      workaround — point all five agents at `ollama:` and configure nothing
-      else — but it requires knowing to do that, which a first-run user does
-      not.)*
-
-      **The fix is lazy model construction**, and the shape needs deciding
-      before anyone builds. `build_model` already raises a clean `ValueError`
-      at the right moment; what's wrong is *when* it is called. Options:
-      construct each package's `Agent` on first use behind a cached accessor
-      (explicit, but `agent` is a module attribute re-exported from five
-      `__init__.py` files, so every call site moves); or pass the model per-run
-      (`agent.run(..., model=...)`), which keeps the module shape but threads a
-      model through `streams.py`'s `drive`. Either way the routes need to turn
-      the resulting `ValueError` into an honest 502 — `routes/graph.py:398`
-      already does exactly that for the TL;DR path and is the pattern to copy.
-      **Test it with the case that is currently impossible:** a config with
-      every LLM vendor blank must import `atlas.app`, serve a graph, and fail
-      only when the teacher is asked for. *(Found 2026-08-21 while wiring
-      multi-provider support; pre-existing, not introduced by it.)*
-
 - [ ] **Make first-run possible for someone who is not a developer** — today
       the path to a running Atlas is: install mise, run a setup script that
       wants Python 3.14 / uv / Node / trivy, `uv sync --all-groups`, `npm

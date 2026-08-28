@@ -346,6 +346,15 @@ function ModelInput({
           </option>
         ))}
       </select>
+      {/* A real <select>, listing every model the vendor's own API reported
+          (see routes/settings.py). It was briefly an <input list=> combobox,
+          because the model names were hardcoded and a stale list behind a
+          dropdown is a trap with nothing but dead options in it. Fetching the
+          list live removed that reason, and the combobox brought its own
+          problem: a <datalist> is filtered by whatever text the box already
+          holds, so a field set to "claude-haiku-4-5" offered the two ids
+          containing that string and hid the other eight. A dropdown shows
+          everything, which is the whole job. */}
       {forVendor.length === 0 ? (
         <input
           type="text"

@@ -126,9 +126,10 @@ Design points worth knowing:
 
 ## `factory.py` — config entries → live model objects
 
-Each sub-agent's `main.py` calls `factory.build_model(<its AGENT_ID>)` to
-get the model its `config.llm.agents` entry names, and hands it to its
-`pydantic_ai.Agent`. This is the one place credentials meet PydanticAI —
+Each sub-agent's `main.py` calls `factory.model_for(<its AGENT_ID>)` to get
+the model its `config.llm.agents` entry names, and passes it **to the run**
+— `agent.run(..., model=...)`, not `Agent(model)`. This is the one place
+credentials meet PydanticAI —
 and it's deliberate that the entry's `"provider:model"` string is only ever
 *parsed* here, never passed to PydanticAI whole: the bare string shorthand
 would pull the API key from environment variables, and this app's config
@@ -150,12 +151,30 @@ consequences worth holding onto:
   its own, so running the lecturer on a free local model while the web scout
   stays on one that can actually search the web is a normal setup. The
   companion `supports_web_search(agent_id)` exists for exactly that — the web
-  scout asks it at construction time and attaches the provider-side search
-  capability only when the vendor has one (Ollama does not).
+  scout asks it **per run** and attaches the provider-side search capability
+  only when the vendor has one (Ollama does not).
 - **A blank vendor fails at request time, not at import.** `build_model`
   raises a `ValueError` naming the vendors that *are* configured, rather than
   letting config validation refuse to boot — the keyless graph explorer must
   survive a machine with no LLM set up at all.
+
+**Nothing is built at import (since v7.14.0), and that is the whole point.**
+Until then each package ran `Agent(factory.build_model(AGENT_ID), ...)` at
+module level, which quietly cost two things the rest of the codebase does not
+pay. Importing the app *constructed a provider*, so a blank vendor block took
+`create_app` down with it and the "keyless graph explorer" promise was false
+on exactly the machines it was written for. And the model froze at boot while
+`config.reload_config` updated everything else in place — so the settings
+modal's "no restart" promise held for every setting except the ones the modal
+exists to change. `model_for` fixes both by reading config late, which is the
+codebase convention the agents were the sole exception to.
+
+It caches, because constructing a model builds an HTTP client and rebuilding
+one per run would churn connections. What it caches *against* is a
+fingerprint of the config that produced it — the agent's `provider:model`
+string plus the named vendor's whole block — so an edited key invalidates the
+model just as surely as a switched vendor does. Two threads racing only build
+the same model twice, so there is no lock.
 
 The factory also sets `anthropic_eager_input_streaming` on Anthropic models —
 see `streams.py` below for why nothing streams without it.
@@ -508,7 +527,7 @@ in detail):
   history, they never store it).
 
 Inside the package, the shared root modules exist for the sub-agents:
-every agent builds its model via `factory.build_model` and its instruction
+every agent builds its model via `factory.model_for` and its instruction
 parts via `prompts.skill`; the researcher converts route
 turns with `prompts.history`; the lecturer (and next the researcher) numbers
 papers with `prompts.node_lines` / `idx_to_id`; every workflow yields

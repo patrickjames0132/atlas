@@ -104,3 +104,41 @@ def test_web_search_support_is_per_vendor(monkeypatch, model_string, expected):
     """A local model has no provider-side search; the scout must be able to ask."""
     monkeypatch.setattr(config.llm, "agents", [make_entry(model=model_string)])
     assert factory.supports_web_search("probe") is expected
+
+
+def test_model_for_reuses_the_model_while_config_is_unchanged(monkeypatch):
+    """Rebuilding per run would open a fresh HTTP client for every request."""
+    monkeypatch.setattr(config.llm, "agents", [make_entry()])
+    monkeypatch.setattr(factory, "_MODELS", {})
+    assert factory.model_for("probe") is factory.model_for("probe")
+
+
+def test_model_for_rebuilds_when_the_agent_changes_model(monkeypatch):
+    """The settings modal edits config in place and promises no restart."""
+    entry = make_entry()
+    monkeypatch.setattr(config.llm, "agents", [entry])
+    monkeypatch.setattr(factory, "_MODELS", {})
+    first = factory.model_for("probe")
+    entry.model = "anthropic:claude-test-2"
+    second = factory.model_for("probe")
+    assert first is not second
+    assert second.model_name == "claude-test-2"
+
+
+def test_model_for_rebuilds_when_only_the_credentials_change(monkeypatch):
+    """The subtle half: same model name, different key, must not be reused."""
+    monkeypatch.setattr(config.llm, "agents", [make_entry()])
+    monkeypatch.setattr(config.llm.providers.anthropic, "api_key", "sk-first")
+    monkeypatch.setattr(factory, "_MODELS", {})
+    first = factory.model_for("probe")
+    monkeypatch.setattr(config.llm.providers.anthropic, "api_key", "sk-second")
+    assert factory.model_for("probe") is not first
+
+
+def test_model_for_defers_the_blank_vendor_error_to_the_call(monkeypatch):
+    """Same request-time failure as build_model — caching must not pre-empt it."""
+    monkeypatch.setattr(config.llm, "agents", [make_entry(model="google:gemini-2.5-flash")])
+    monkeypatch.setattr(config.llm.providers.google, "api_key", "")
+    monkeypatch.setattr(factory, "_MODELS", {})
+    with pytest.raises(ValueError, match="google"):
+        factory.model_for("probe")

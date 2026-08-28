@@ -12,6 +12,94 @@
 
 ### Reach & access
 
+- [x] **The agent model dropdowns list what each vendor actually offers**
+      *(v7.14.0)* — the model names for Google and OpenAI were a hand-written
+      list in `routes/settings.py` (`KNOWN_MODELS`, shipped v7.13.0), and it
+      rotted in three weeks: Google retired the 2.5 line for new users, so
+      picking the only Gemini models Atlas offered answered `404 ... no longer
+      available to new users`. A hardcoded list of a thing the vendor controls
+      rots by construction, and behind a `<select>` it is not a stale hint but
+      a wall — every option dead and no way past it.
+
+      **Every vendor is now fetched live** from its own listing API, joining
+      Anthropic (`client.models.list()`) and Ollama (`/api/tags`), which
+      already were. The OpenAI fetch honours `base_url`, so it lists an
+      OpenAI-*compatible* server too rather than assuming OpenAI proper.
+      `KNOWN_MODELS` survives only as the offline fallback for when a listing
+      can't be reached, and now prefers non-versioned aliases
+      (`gemini-flash-latest`) that cannot go stale even if nobody touches it
+      again.
+
+      **A raw listing is not a menu.** It answers with everything the key can
+      reach — Whisper, Sora, `nano-banana-pro-preview`, embeddings, robotics,
+      music, TTS — none of which can run an agent, and 77 entries where six
+      are relevant is a worse dropdown than none. Filtering is an **allowlist
+      of families** per vendor (`gpt-`/`o1`/`o3`/`o4`, `gemini-`/`gemma-`,
+      `claude-`) plus a modality strip for the `-tts`/`-image`/`-audio`
+      variants that live *inside* an allowed family. A blocklist was tried
+      first and leaked immediately; the allowlist hides an unheard-of family
+      rather than offering it, which is the safe direction — a missing
+      suggestion costs keystrokes, a suggestion that can't run an agent costs
+      a failed lecture. Results are ordered by family, because
+      reverse-alphabetical alone sorted OpenAI's `o1`/`o3` above every `gpt-`.
+
+      **A listing is fresher, never validated** — Google's `models.list` still
+      returns `gemini-2.5-flash` to a key that 404s calling it. Nothing
+      downstream may treat a listed model as one that works; that is written
+      into the code so a later cleanup doesn't assume otherwise.
+      *(Found 2026-08-27 by Patrick, browser-testing the keyless fix above.
+      Full story of the wrong turn in [bugs.md](bugs.md).)*
+
+- [x] **The app starts with no LLM configured at all — and a settings change
+      no longer needs a restart** *(v7.14.0)* — the keyless graph explorer was
+      unreachable on the machines it was written for. Every agent built its
+      model at *import* (`agent = Agent(factory.build_model(AGENT_ID), ...)`
+      at module level in all five agent packages), so importing the app
+      constructed a provider for whatever vendor each agent named; with that
+      vendor's block blank, construction raised and `create_app` never
+      returned. README.md and `docs/configuration.md` both promised the
+      explorer ran free and keyless — a promise that held for everyone except
+      the person who couldn't pay, which is the exact failure the *Reach &
+      access* theme exists to prevent.
+
+      **A second bug turned out to be the same line.** `config.reload_config`
+      folds fresh values into the *existing* config object precisely so
+      "every consumer holds the module-level `config` and reads its fields
+      late" — the codebase's own convention. The agents were the sole
+      exception, so they held a model built from boot-time config forever:
+      changing an agent's vendor or model in the settings modal saved
+      correctly, round-tripped correctly, and changed nothing until restart.
+      The modal's "no restart" promise was true for every setting except the
+      ones v7.13.0 had just built it to change. The web scout had it twice
+      over — its `capabilities=[WebSearch(...)]` was decided at import too,
+      so a vendor switch could leave it silent on a searching vendor or
+      searching on one that couldn't.
+
+      **The fix is `factory.model_for(agent_id)`:** build on first use, cache
+      against a **fingerprint of the config that produced it** (the agent's
+      `provider:model` string plus the named vendor's whole block, so an
+      edited key invalidates as surely as a switched vendor does), and pass
+      the model to the *run* rather than to the `Agent` —
+      `agent.run(..., model=...)`. Three candidate shapes were priced first
+      (a lazy `Model` proxy, a cached per-package accessor, per-run passing);
+      per-run won because PydanticAI accepts a model-less `Agent` and takes
+      `model=` on every run method, so it needed **no proxy over the `Model`
+      ABC** and therefore no surface to drift on upgrade. `streams.drive`
+      already forwarded `**kwargs`, so the streaming path changed by exactly
+      one argument, and the web scout's `capabilities` moved to the same call.
+      Caching matters because constructing a model builds an HTTP client:
+      per-run construction would churn connections, never caching would leak
+      them. A thread race only builds the same model twice, so no lock.
+
+      **The guard is the test that was impossible to write before**:
+      `test_app_starts_with_no_llm_vendor_configured_at_all` blanks every
+      vendor block, reloads all five agent modules (the failure was
+      import-time, and they are long since imported by the time the suite
+      runs), and asserts `/api/health` still answers — verified to fail on the
+      pre-fix code, which is the only reason to trust it. Full story in
+      [bugs.md](bugs.md). *(Found 2026-08-21 while wiring multi-provider
+      support; pre-existing, not introduced by it. Fixed 2026-08-26.)*
+
 - [x] **Four LLM vendors, chosen per agent (v7.13.0)** — the AI teacher ran on
       Claude only, so unlocking it required a paid Anthropic key: a credit card,
       plus per-token cost for every lecture and question. The graph explorer was
