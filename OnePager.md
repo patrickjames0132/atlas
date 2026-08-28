@@ -760,6 +760,46 @@ than deleted so the plan doesn't get re-proposed.
       already exists (`test/atlas/storage/test_cache.py:21-23`).
       *(From the `todos.md` inbox, 2026-08-16.)*
 
+- [ ] **An error in the chat can't be dismissed** — when a turn fails the
+      message stays on screen with no way to clear it, so a single failed
+      search or lecture leaves a red block sitting above every later turn.
+      `workspace.error` is the shared surface (`store/workspace.ts` — "the
+      shared search/graph overlay surface"), written by the graph and search
+      paths and never cleared except by the next successful load, so the fix
+      is an explicit `errorCleared` action behind a dismiss control rather
+      than new plumbing.
+
+      **Scope note:** the *"Graph build should survive S2 being down"* ticket
+      (Enhancements & tech debt) already asks for a dismissible error, but as
+      one half of a bigger behaviour — the other half being that the graph
+      already on screen must be restored rather than left greyed out. This
+      ticket is the affordance on its own, which every failing surface needs
+      and which that ticket can then assume. Do this one first; it makes the
+      other smaller. *(From the `todos.md` inbox, 2026-08-28.)*
+
+- [ ] **Order streaming search results best-match-first, as they arrive** —
+      results already stream: `useDirectSearch.ts` pushes each paper onto
+      `found` and re-renders the turn on every hit, so the reader watches the
+      list grow. But the order is **the scout's arrival order**, so the best
+      match can appear fourth and stay fourth until the run ends. Patrick's
+      ask is to re-sort on each arrival against the user's query, so the most
+      relevant paper is on top from the first render instead of after the last
+      one.
+
+      **The open question is what "best match" means here, and it isn't
+      obvious.** The scout issues several queries through its own tools and
+      reports what it found; there is no per-hit relevance score to sort on
+      today. Candidates: reuse the provider's own result ranking (S2 returns
+      relevance-ordered hits per query, but merging *several* queries' lists
+      loses that), a cheap lexical score against the raw query in the
+      frontend, or have the scout emit a score per hit. The frontend option is
+      the only one that costs nothing and is honest about being approximate —
+      worth prototyping first, since the goal is *perceived* responsiveness,
+      not a better final answer. **Whatever is chosen must be stable**: a list
+      that reshuffles under the reader's cursor while they are trying to click
+      row two is worse than one that appends. *(From the `todos.md` inbox,
+      2026-08-28.)*
+
 - [ ] **Make it clear that direct search leaves the map** — the ask keeps
       🔍 **Find papers** while a graph is open (**decided 2026-08-15**, against
       the first instinct to hide it; it rides the Chat row rather than the bar
@@ -1449,6 +1489,33 @@ than deleted so the plan doesn't get re-proposed.
       narrate), so we can experiment with surfacing under-cited but important
       work. Low-effort: a skill-file addition wired into the researcher/lecturer
       `SKILLS` tuples. *(From a session side-question, 2026-07-08.)*
+- [ ] **The search cache is keyed on the literal query, so near-identical
+      searches never reuse each other** — `agents/traversal.py:163` builds
+      `search:{provider}:{query.strip().lower()}:{years}:{limit}:{fields}`, so
+      the key is the raw string the user typed. "dqn" and "deep q-network"
+      are different keys, and a result cached under one is invisible to the
+      other even though the scout would expand both to the same searches.
+      Patrick's report is exactly this shape: a paper he had already found
+      didn't come back from cache on a differently-worded search for it.
+
+      **Confirm the diagnosis before building** — it is also possible the
+      entry simply expired (`config.graph.cache_ttl`, a day) or that the
+      scout's expanded queries differ run to run, which would make the raw-key
+      question moot. Log the key on hit/miss for a few real searches first.
+
+      **If it is the key, the fix is a question of what to key on**, and none
+      of the options are free: the scout's *expanded* queries (accurate, but
+      only known after a model call — so the cache can't be checked before
+      spending the thing it exists to avoid), a normalized/stemmed form of the
+      raw query (cheap, catches "dqn"/"DQN " but not "deep q-network"), or an
+      embedding-nearest lookup (catches paraphrase, but a nearest-neighbour
+      cache can serve confidently wrong results and needs a distance
+      threshold nobody has fitted). Related but distinct:
+      *"Cached papers don't match the query agent's expanded query"* below is
+      about the **library sources** cache, a different store with a similar
+      smell — worth reading together. *(From the `todos.md` inbox,
+      2026-08-28.)*
+
 - [ ] **Cached papers don't match the query agent's expanded query** — papers
       served from the local sources cache don't seem to line up with the query
       the scout searched for, so the researcher may ground on the wrong
