@@ -76,8 +76,9 @@ class LectureBeat(BaseModel):
     figure: int | None = None
 
 
+# No model at construction: it is passed per run by `factory.model_for`, so a
+# blank config can't stop the app booting and a settings edit needs no restart.
 agent: Agent[None, list[LectureBeat]] = Agent(
-    factory.build_model(AGENT_ID),
     output_type=list[LectureBeat],
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
 )
@@ -543,7 +544,7 @@ def lecture(
         )
 
     prompt = _prompt(seed, nodes, mode, target, figures, passages, fulltext)
-    for event in streams.drive(agent, prompt):
+    for event in streams.drive(agent, prompt, model=factory.model_for(AGENT_ID)):
         if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
             if event.part.tool_name == streams.OUTPUT_TOOL:
                 output_part = event.index

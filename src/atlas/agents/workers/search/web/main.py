@@ -73,27 +73,11 @@ class WebFindings(BaseModel):
     sources: list[WebSource]
 
 
-#: Whether this agent's configured vendor can actually search. Read once, at
-#: import, because the capability has to be decided when the ``Agent`` below is
-#: built — and re-read by ``scout`` to decide whether calling the model is
-#: honest at all.
-WEB_SEARCH_AVAILABLE = factory.supports_web_search(AGENT_ID)
-
+# No model at construction: it is passed per run by `factory.model_for`, so a
+# blank config can't stop the app booting and a settings edit needs no restart.
 agent: Agent[None, WebFindings] = Agent(
-    factory.build_model(AGENT_ID),
     output_type=WebFindings,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
-    # `capabilities=`, not `tools=`: the search runs provider-side and never
-    # reaches this process, so PydanticAI attaches it as a capability of the
-    # model rather than as a function it can call. It must be the
-    # `capabilities.WebSearch` wrapper and NOT a bare
-    # `native_tools.WebSearchTool` — a bare one is accepted by the
-    # constructor and then silently dropped, leaving an agent that is
-    # prompted to search the web and has no way to (caught by mypy, then
-    # confirmed against the resolved native-tool list).
-    capabilities=(
-        [WebSearch(max_uses=int(BUDGETS["max_uses"]))] if WEB_SEARCH_AVAILABLE else []
-    ),
 )
 
 
@@ -111,7 +95,7 @@ async def scout(need: str) -> WebFindings:
         vendor with no provider-side search returns empty the same way, and
         without spending a request.
     """
-    if not WEB_SEARCH_AVAILABLE:
+    if not factory.supports_web_search(AGENT_ID):
         vendor = factory.agent_entry(AGENT_ID).provider
         log.info("web scout disabled: %r has no provider-side web search", vendor)
         return WebFindings(
@@ -122,7 +106,21 @@ async def scout(need: str) -> WebFindings:
             sources=[],
         )
     try:
-        result = await agent.run(need)
+        # `capabilities=`, not `tools=`: the search runs provider-side and never
+        # reaches this process, so PydanticAI attaches it as a capability of the
+        # model rather than as a function it can call. It must be the
+        # `capabilities.WebSearch` wrapper and NOT a bare
+        # `native_tools.WebSearchTool` — a bare one is accepted and then silently
+        # dropped, leaving an agent that is prompted to search the web and has no
+        # way to (caught by mypy, then confirmed against the resolved native-tool
+        # list). Passed per run, like the model, so switching this agent's vendor
+        # in settings re-decides the capability instead of keeping the boot-time
+        # answer forever.
+        result = await agent.run(
+            need,
+            model=factory.model_for(AGENT_ID),
+            capabilities=[WebSearch(max_uses=int(BUDGETS["max_uses"]))],
+        )
     except Exception as exc:
         log.warning("web scout failed for %r: %s", need, exc, exc_info=True)
         return WebFindings(summary=f"Web search failed: {exc}", sources=[])

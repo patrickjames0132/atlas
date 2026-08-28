@@ -169,3 +169,64 @@ def build_model(agent_id: str) -> Model:
                 f"agent {agent_id!r} wants provider {provider_name!r}, which the "
                 "factory doesn't construct yet"
             )
+
+
+#: Live models, keyed by agent id, beside the config that produced them.
+#: Constructing one builds a provider and its HTTP client, so rebuilding per
+#: run would churn connections; keeping one forever would pin the app to
+#: whatever config.json said at boot. Storing the fingerprint alongside gets
+#: both: reuse while nothing changed, rebuild the moment it does. A race
+#: between two threads only builds the same model twice, so no lock.
+_MODELS: dict[str, tuple[str, Model]] = {}
+
+
+def _fingerprint(entry: AgentConfig) -> str:
+    """Everything about the config that would change an agent's model.
+
+    That is the entry's ``provider:model`` string *and* the named vendor's
+    whole block — a key or base_url edit has to invalidate the cached model
+    just as surely as switching vendor does, or the settings modal's "no
+    restart" promise would hold for the model name and quietly break for
+    credentials.
+
+    Args:
+        entry: The agent's config entry.
+
+    Returns:
+        An opaque string that differs whenever the model would.
+    """
+    provider_name = entry.model.split(":", 1)[0]
+    vendor = getattr(config.llm.providers, provider_name, None)
+    return f"{entry.model}|{vendor.model_dump_json() if vendor is not None else ''}"
+
+
+def model_for(agent_id: str) -> Model:
+    """The agent's model, built on first use and rebuilt when config changes.
+
+    **Call this per run, not at import.** Building at import is what made a
+    blank config a startup crash instead of a teacher that says it isn't
+    configured, and it also froze every agent on boot-time config while
+    ``reload_config`` updated everything else in place. Reading late is the
+    codebase convention (see ``config.reload_config``); this is how the
+    agents keep it.
+
+    Args:
+        agent_id: The agent's ``config.llm.agents`` entry id.
+
+    Returns:
+        A ready ``Model`` — the same object as last call while the relevant
+        config is unchanged, a fresh one after an edit.
+
+    Raises:
+        LookupError: When no entry has that id.
+        ValueError: When the entry's vendor is blank in config.json.
+        NotImplementedError: When no case arm constructs that vendor.
+    """
+    entry = agent_entry(agent_id)
+    fingerprint = _fingerprint(entry)
+    cached = _MODELS.get(agent_id)
+    if cached is not None and cached[0] == fingerprint:
+        return cached[1]
+    model = build_model(agent_id)
+    _MODELS[agent_id] = (fingerprint, model)
+    return model

@@ -12,6 +12,56 @@
 
 ### Reach & access
 
+- [x] **The app starts with no LLM configured at all — and a settings change
+      no longer needs a restart** *(v7.14.0)* — the keyless graph explorer was
+      unreachable on the machines it was written for. Every agent built its
+      model at *import* (`agent = Agent(factory.build_model(AGENT_ID), ...)`
+      at module level in all five agent packages), so importing the app
+      constructed a provider for whatever vendor each agent named; with that
+      vendor's block blank, construction raised and `create_app` never
+      returned. README.md and `docs/configuration.md` both promised the
+      explorer ran free and keyless — a promise that held for everyone except
+      the person who couldn't pay, which is the exact failure the *Reach &
+      access* theme exists to prevent.
+
+      **A second bug turned out to be the same line.** `config.reload_config`
+      folds fresh values into the *existing* config object precisely so
+      "every consumer holds the module-level `config` and reads its fields
+      late" — the codebase's own convention. The agents were the sole
+      exception, so they held a model built from boot-time config forever:
+      changing an agent's vendor or model in the settings modal saved
+      correctly, round-tripped correctly, and changed nothing until restart.
+      The modal's "no restart" promise was true for every setting except the
+      ones v7.13.0 had just built it to change. The web scout had it twice
+      over — its `capabilities=[WebSearch(...)]` was decided at import too,
+      so a vendor switch could leave it silent on a searching vendor or
+      searching on one that couldn't.
+
+      **The fix is `factory.model_for(agent_id)`:** build on first use, cache
+      against a **fingerprint of the config that produced it** (the agent's
+      `provider:model` string plus the named vendor's whole block, so an
+      edited key invalidates as surely as a switched vendor does), and pass
+      the model to the *run* rather than to the `Agent` —
+      `agent.run(..., model=...)`. Three candidate shapes were priced first
+      (a lazy `Model` proxy, a cached per-package accessor, per-run passing);
+      per-run won because PydanticAI accepts a model-less `Agent` and takes
+      `model=` on every run method, so it needed **no proxy over the `Model`
+      ABC** and therefore no surface to drift on upgrade. `streams.drive`
+      already forwarded `**kwargs`, so the streaming path changed by exactly
+      one argument, and the web scout's `capabilities` moved to the same call.
+      Caching matters because constructing a model builds an HTTP client:
+      per-run construction would churn connections, never caching would leak
+      them. A thread race only builds the same model twice, so no lock.
+
+      **The guard is the test that was impossible to write before**:
+      `test_app_starts_with_no_llm_vendor_configured_at_all` blanks every
+      vendor block, reloads all five agent modules (the failure was
+      import-time, and they are long since imported by the time the suite
+      runs), and asserts `/api/health` still answers — verified to fail on the
+      pre-fix code, which is the only reason to trust it. Full story in
+      [bugs.md](bugs.md). *(Found 2026-08-21 while wiring multi-provider
+      support; pre-existing, not introduced by it. Fixed 2026-08-26.)*
+
 - [x] **Four LLM vendors, chosen per agent (v7.13.0)** — the AI teacher ran on
       Claude only, so unlocking it required a paid Anthropic key: a credit card,
       plus per-token cost for every lecture and question. The graph explorer was

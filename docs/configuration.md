@@ -142,6 +142,14 @@ choice (see `llm.agents` below), not a global switch.
 at startup — the graph explorer is keyless and has to keep working for someone
 who has set up no LLM at all.
 
+*That has only actually been true since v7.14.0.* Between v7.13.0 and then the
+sentence above described the intent while the app still built every agent's
+model at import, so a genuinely blank config crashed on startup instead of
+serving the free half. Models are now built on first use, which also means
+**changing an agent's vendor or model in Settings takes effect on the next
+lecture, with no restart** — before, the modal saved the value and the running
+agents kept the one they booted with.
+
 Two of the four cost nothing, which is the point of having them:
 
 | Vendor | Cost | Notes |

@@ -22,6 +22,62 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### The keyless app couldn't start, and the settings modal couldn't change a model
+
+*Found 2026-08-21 while wiring multi-provider support; filed then, fixed in
+v7.14.0. Two bugs, one line of code.*
+
+- **Symptom.** Two, and they looked unrelated. A machine with a blank
+  `llm.providers` block couldn't start Atlas at all: `create_app` raised
+  before returning, so the **keyless graph explorer** — the half of the app
+  that needs no API key, and the half README.md and `docs/configuration.md`
+  both promise costs nothing — was unreachable by exactly the people it was
+  written for. Separately, editing an agent's vendor or model in Settings
+  appeared to work (the modal saved, the value round-tripped, a reload showed
+  it) and then changed nothing: the next lecture ran on the old model.
+- **Root cause.** One line, repeated in five packages:
+
+  ```python
+  agent = Agent(factory.build_model(AGENT_ID), ...)   # module level
+  ```
+
+  Building the model at **import** meant importing the app constructed a
+  provider for whatever vendor each agent named. Blank block → the provider
+  raised → the import failed → no app. Before v7.13.0 the error was
+  PydanticAI's own, *"Set the `ANTHROPIC_API_KEY` environment variable"*,
+  which is doubly wrong in an app whose config rule is **no env vars at all**.
+
+  The second symptom is the same line seen from the other side. `config.py`'s
+  `reload_config` folds fresh values into the **existing** config object
+  precisely so that "every consumer holds the module-level `config` and reads
+  its fields late" — the codebase's stated convention. The agents were the one
+  place that read early, so they held a model built from boot-time config
+  forever. The modal's "no restart" promise was true for every setting except
+  the ones it was built to change. The web scout had it twice over: its
+  `capabilities=[WebSearch(...)]` was decided at import too, so a vendor
+  switch could leave it silent on a searching vendor, or vice versa.
+- **Fix.** `factory.model_for(agent_id)` — build on first use, cache against a
+  **fingerprint of the config that produced it** (the agent's `provider:model`
+  string plus the named vendor's whole block, so an edited key invalidates as
+  surely as a switched vendor), and pass the result to the *run* rather than
+  the `Agent`: `agent.run(..., model=...)`. PydanticAI accepts a model-less
+  `Agent` and takes `model=` on every run method, so this needed no proxy and
+  no wrapper — and `streams.drive` already forwarded `**kwargs`, so the
+  streaming path changed by one argument. The web scout's `capabilities` moved
+  to the same call for the same reason.
+- **Lesson / guard.** *Import time is config time, and config is not constant.*
+  Anything read at module scope silently opts out of `reload_config`, and any
+  **construction** at module scope turns a bad value into a failure to boot
+  rather than a failure to serve one request.
+
+  The guard is the test that was impossible to write before the fix —
+  `test_app_starts_with_no_llm_vendor_configured_at_all` blanks every vendor
+  block, **reloads all five agent modules** (the failure was import-time, and
+  they are long since imported by the time the suite runs), and asserts the
+  app still answers `/api/health`. It fails on the pre-fix code, which is the
+  only reason to trust it. `test_model_for_rebuilds_when_only_the_credentials_change`
+  guards the subtler half: same model name, new key, must not be reused.
+
 ### A dropped connection looks exactly like a finished download
 
 *Found 2026-08-16 by Patrick, as an ingest that died 36 minutes in. Fixed in v7.12.0.*

@@ -45,8 +45,9 @@ class Summary(BaseModel):
     tldr: str
 
 
+# No model at construction: it is passed per run by `factory.model_for`, so a
+# blank config can't stop the app booting and a settings edit needs no restart.
 agent: Agent[None, Summary] = Agent(
-    factory.build_model(AGENT_ID),
     output_type=Summary,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
 )
@@ -72,7 +73,7 @@ def summarize(title: str, abstract: str) -> str | None:
         return None
     prompt = f"Title: {(title or '').strip() or '(untitled)'}\n\nAbstract: {abstract}"
     try:
-        result = agent.run_sync(prompt)
+        result = agent.run_sync(prompt, model=factory.model_for(AGENT_ID))
     except Exception:
         log.warning("TL;DR generation failed", exc_info=True)
         return None

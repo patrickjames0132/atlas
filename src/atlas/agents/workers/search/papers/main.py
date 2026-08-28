@@ -441,8 +441,10 @@ def more_like(ctx: RunContext[ScoutDeps], result: int) -> str:
 # sequential=True for the same reason the researcher's tools use it: the deps
 # these mutate (the budget, the found list, and the numbering that indexes into
 # it) are shared across the run's calls.
+#
+# No model at construction: it is passed per run by `factory.model_for`, so a
+# blank config can't stop the app booting and a settings edit needs no restart.
 agent: Agent[ScoutDeps, PaperFindings] = Agent(
-    factory.build_model(AGENT_ID),
     deps_type=ScoutDeps,
     output_type=PaperFindings,
     instructions=[SYSTEM_PROMPT, *(prompts.skill(name) for name in SKILLS)],
@@ -550,7 +552,9 @@ async def scout(
         on_lookup=on_lookup,
     )
     try:
-        result = await agent.run(need + _filter_briefing(deps), deps=deps)
+        result = await agent.run(
+            need + _filter_briefing(deps), deps=deps, model=factory.model_for(AGENT_ID)
+        )
     except Exception as exc:
         log.warning("paper scout failed for %r: %s", need, exc, exc_info=True)
         return ScoutResult(found=deps.found, summary=f"Paper search failed: {exc}", queries=deps.queries)

@@ -28,8 +28,9 @@ routes/graph.api_paper_tldr
 - **`config.py`** — `AGENT_ID` (which `config.llm.agents` entry to build
   from), the complete `SYSTEM_PROMPT`, and an empty `SKILLS` tuple (skills
   carry teaching-behavior rules; this agent doesn't teach).
-- **`main.py`** — the `Agent` (model from `factory.build_model`, output type
-  `Summary`) and `summarize`, the only function callers touch.
+- **`main.py`** — the `Agent` (output type `Summary`; the model arrives per
+  run from `factory.model_for`, never at import — see `agents/README.md`) and
+  `summarize`, the only function callers touch.
 - No `tools.py` — the agent calls nothing.
 
 ## Design decisions worth knowing
