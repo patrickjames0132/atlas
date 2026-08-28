@@ -250,6 +250,7 @@ def test_models_endpoint_degrades_on_failure(client, _config_file, monkeypatch):
 
     _only_vendor(monkeypatch, "anthropic")
     monkeypatch.setattr(settings_routes, "_fetch_anthropic_models", boom)
+    monkeypatch.setitem(settings_routes.KNOWN_MODELS, "anthropic", [])
     payload = client.get("/api/settings/models").json
     assert payload["models"] == {"anthropic": []}
     assert payload["vendors"] == ["anthropic"]
@@ -268,16 +269,64 @@ def test_models_endpoint_lists_a_local_ollama_server(client, _config_file, monke
     assert payload["vendors"] == ["ollama"]
 
 
-def test_models_endpoint_uses_a_curated_list_where_there_is_no_listing_api(
-    client, _config_file, monkeypatch
-):
-    """Google and OpenAI get a short static list rather than a key-scoped dump."""
+def test_models_endpoint_fetches_google_live(client, _config_file, monkeypatch):
+    """Every vendor is listed live now — the curated list is only a fallback.
+
+    It was the primary source for Google until v7.14.0, and that is how it
+    failed: the shipped list named the 2.5-era Gemini models and went 404 when
+    Google retired them.
+    """
     from atlas.routes import settings as settings_routes
 
     _only_vendor(monkeypatch, "google")
+    monkeypatch.setattr(
+        settings_routes, "_fetch_google_models", lambda api_key: ["gemini-flash-latest"]
+    )
     payload = client.get("/api/settings/models").json
-    assert payload["vendors"] == ["google"]
+    assert payload["models"]["google"] == ["gemini-flash-latest"]
+
+
+def test_a_failed_listing_falls_back_to_the_curated_names(client, _config_file, monkeypatch):
+    """An offline machine still gets something to pick from."""
+    from atlas.routes import settings as settings_routes
+
+    def boom(api_key):
+        raise RuntimeError("no network")
+
+    _only_vendor(monkeypatch, "google")
+    monkeypatch.setattr(settings_routes, "_fetch_google_models", boom)
+    payload = client.get("/api/settings/models").json
     assert payload["models"]["google"] == settings_routes.KNOWN_MODELS["google"]
+
+
+def test_a_listing_is_filtered_to_models_that_could_run_an_agent():
+    """The listing carries the whole key's reach, most of which cannot chat.
+
+    An allowlist, so a family nobody here has heard of is hidden rather than
+    offered — a missing suggestion costs keystrokes, a suggestion that cannot
+    run an agent costs a failed lecture.
+    """
+    from atlas.routes import settings as settings_routes
+
+    kept = settings_routes._chat_models(
+        "openai",
+        ["whisper-1", "sora-2", "gpt-5.5", "o3", "gpt-4o-audio-preview", "text-embedding-3"],
+    )
+    # gpt- leads o-, whatever order they arrived in: reverse-alphabetical alone
+    # buried every gpt- model under the reasoning line.
+    assert kept == ["gpt-5.5", "o3"]
+
+    google = settings_routes._chat_models(
+        "google", ["gemini-flash-latest", "nano-banana-pro-preview", "gemini-3.1-flash-tts-preview"]
+    )
+    assert google == ["gemini-flash-latest"]
+
+
+def test_an_unknown_vendor_listing_is_left_alone():
+    """A self-hosted OpenAI-compatible server names its models whatever it likes."""
+    from atlas.routes import settings as settings_routes
+
+    assert settings_routes._chat_models("mistral", ["anything-at-all"]) == ["anything-at-all"]
 
 
 def test_drop_cache_empties_the_table_and_reports_the_count(client):

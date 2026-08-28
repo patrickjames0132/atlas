@@ -27,11 +27,15 @@ source of truth (hand-edits and modal edits are the same thing). Endpoints:
   snapshots, search results, paper hydration). Safe by construction: every
   entry can be refetched, and saved sessions live in a different store
   entirely.
-* ``GET  /api/settings/models`` — the model ids the configured
-  API key can see (the Models API, ``client.models.list()``), so the modal's
-  agent-model fields offer a real dropdown instead of a free-typed string.
-  Degrades to an empty list keyless or on any failure — the input stays a
-  plain text field then.
+* ``GET  /api/settings/models`` — the model ids the configured credentials
+  can see, fetched live from **every** vendor (each one's own listing API),
+  filtered to the families that could actually run an agent, so the modal's
+  agent-model fields can *suggest* rather than leave the reader guessing.
+  Suggestions only: the field is a combobox, anything can be typed into it,
+  and a listing is never treated as proof a model works — see
+  ``KNOWN_MODELS`` for why neither is negotiable. Falls back to the curated
+  names when a vendor can't be reached, which costs freshness and nothing
+  else.
 * ``POST /api/settings/pick`` — open the **native** file chooser on the
   machine running the server and return the chosen path. Exists because a
   browser's own file picker never reveals an absolute path (sandboxing), and
@@ -200,14 +204,32 @@ def put_settings_location() -> ResponseReturnValue:
     return _settings_payload()
 
 
-#: Model ids offered for vendors with no listing API worth calling. Google
-#: publishes a list endpoint but it needs the key and returns dozens of tuned
-#: variants; OpenAI's is key-scoped and enormous. A short curated list of the
-#: models actually worth running an agent on beats both, and the modal lets the
-#: user type anything anyway — so a stale entry here costs nothing.
+#: The **fallback** suggestions, used only when a vendor's own listing can't be
+#: reached or comes back empty — every vendor is fetched live first.
+#:
+#: This used to be the primary source for Google and OpenAI, and that is
+#: exactly how it failed: it shipped in v7.13.0 naming the 2.5-era Gemini
+#: models, and by 2026-08-27 `gemini-2.5-flash` answered `404 ... no longer
+#: available to new users`. A hand-written list of a thing the vendor controls
+#: rots by construction, and back then the model field was a `<select>`, so a
+#: rotted list was a wall with nothing but dead options behind it. Both halves
+#: are fixed (live fetch, and a typeable combobox) — this list is now just the
+#: offline safety net, which is why it prefers **non-versioned aliases**:
+#: Google's `-latest` names cannot go stale even if nobody touches this again.
+#:
+#: Do not "improve" this by trusting a listing to be *correct*, either: Google's
+#: `models.list` still returns `gemini-2.5-flash` to a key that gets a 404 when
+#: calling it. Fresher, yes; validated, no. Nothing may treat either source as
+#: proof a model works.
 KNOWN_MODELS: dict[str, list[str]] = {
-    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
-    "openai": ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
+    "google": [
+        "gemini-flash-latest",
+        "gemini-pro-latest",
+        "gemini-flash-lite-latest",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+    ],
+    "openai": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "o4-mini"],
 }
 
 
@@ -252,6 +274,121 @@ def _fetch_anthropic_models(api_key: str) -> list[str]:
     return [model.id for model in client.models.list()]
 
 
+#: Which model families could plausibly run an agent, per vendor. An
+#: **allowlist of prefixes**, not a blocklist of the rest: a vendor's listing
+#: answers with everything the key can reach — `whisper-1`, `sora-2`,
+#: `nano-banana-pro-preview`, embeddings, robotics, music — and that tail is
+#: endless and unguessable, while the families that *can* hold a conversation
+#: are few and stable. A new family we've never heard of is therefore hidden
+#: rather than shown, which is the safe direction: the field is typeable, so
+#: a missing suggestion costs a few keystrokes, while a suggestion that cannot
+#: run an agent costs a failed lecture and a confusing error.
+_CHAT_FAMILIES: dict[str, tuple[str, ...]] = {
+    "anthropic": ("claude-",),
+    "google": ("gemini-", "gemma-"),
+    "openai": ("gpt-", "o1", "o3", "o4"),
+}
+
+#: Modality suffixes that appear *inside* an allowed family — Gemini ships
+#: `-tts`, `-image` and `-transcribe` variants under the `gemini-` prefix, and
+#: OpenAI ships `-audio`/`-realtime` under `gpt-`. The prefix allowlist can't
+#: see these, so they're stripped second.
+_NON_CHAT_MARKERS = (
+    "audio",
+    "embedding",
+    "image",
+    "moderation",
+    "realtime",
+    "robotics",
+    "transcribe",
+    "tts",
+)
+
+
+def _chat_models(vendor: str, ids: list[str]) -> list[str]:
+    """A vendor listing narrowed to ids that could plausibly run an agent.
+
+    Args:
+        vendor: The vendor key, selecting which families are allowed. An
+            unknown vendor is not filtered at all — better a noisy list than
+            an empty one for a server we know nothing about.
+        ids: Every model id the vendor reported.
+
+    Returns:
+        The surviving ids, order preserved.
+    """
+    families = _CHAT_FAMILIES.get(vendor)
+    if families is None:
+        return ids
+    kept = [
+        name
+        for name in ids
+        if name.startswith(families) and not any(mark in name for mark in _NON_CHAT_MARKERS)
+    ]
+    # Order by family, so the flagship line leads: reverse-alphabetical alone
+    # sorted OpenAI's `o1`/`o3` reasoning models above every `gpt-`, burying
+    # the models most people want. The sort is stable, so whatever order the
+    # caller established *within* a family survives (newest-first, and Google's
+    # never-stale `-latest` aliases at the very top).
+    def family_rank(name: str) -> int:
+        return next(rank for rank, family in enumerate(families) if name.startswith(family))
+
+    return sorted(kept, key=family_rank)
+
+
+def _fetch_google_models(api_key: str) -> list[str]:
+    """The model ids the key can see, via the Google GenAI Models API.
+
+    **A fetched Google listing is fresher but not clean.** It reports models
+    the same key cannot actually call — ``gemini-2.5-flash`` was listed and
+    answered ``404 ... no longer available to new users`` (2026-08-27), which
+    is why nothing downstream may treat this list as validated. It is
+    autocomplete, and the model field stays typeable.
+
+    Args:
+        api_key: The configured Google AI Studio key.
+
+    Returns:
+        Chat-capable model ids, generation-capable ones only, newest-looking
+        first (reverse-sorted, since the API's own order is arbitrary).
+    """
+    from google import genai
+
+    client = genai.Client(api_key=api_key)
+    names = []
+    for model in client.models.list():
+        actions = getattr(model, "supported_actions", None) or []
+        if actions and "generateContent" not in actions:
+            continue
+        names.append(str(model.name).removeprefix("models/"))
+    # The `-latest` aliases can't go stale, so they lead; the rest sort
+    # newest-looking first, which for Gemini's naming is plain reverse order.
+    aliases = sorted(name for name in names if name.endswith("-latest"))
+    pinned = sorted((name for name in names if not name.endswith("-latest")), reverse=True)
+    return _chat_models("google", aliases + pinned)
+
+
+def _fetch_openai_models(api_key: str, base_url: str) -> list[str]:
+    """The model ids the key can see, via the OpenAI Models API.
+
+    Honours ``base_url``, so this also lists an OpenAI-*compatible* server
+    (Groq, OpenRouter, Together, LM Studio) rather than assuming OpenAI
+    proper.
+
+    Args:
+        api_key: The configured OpenAI key.
+        base_url: The configured endpoint; blank means OpenAI itself.
+
+    Returns:
+        Chat-capable model ids, newest-looking first.
+    """
+    import openai
+
+    client = openai.OpenAI(api_key=api_key or None, base_url=base_url or None)
+    names = [model.id for model in client.models.list()]
+    return _chat_models("openai", sorted(names, reverse=True))
+
+
 @bp.get("/api/settings/models")
 def list_agent_models() -> ResponseReturnValue:
     """The model ids available, per configured vendor.
@@ -280,11 +417,22 @@ def list_agent_models() -> ResponseReturnValue:
                     models[vendor] = _fetch_anthropic_models(vendors.anthropic.api_key)
                 case "ollama":
                     models[vendor] = _fetch_ollama_models(vendors.ollama.base_url)
+                case "google":
+                    models[vendor] = _fetch_google_models(vendors.google.api_key)
+                case "openai":
+                    models[vendor] = _fetch_openai_models(
+                        vendors.openai.api_key, vendors.openai.base_url
+                    )
                 case _:
                     models[vendor] = KNOWN_MODELS.get(vendor, [])
         except Exception:
             log.warning("model listing failed for %s", vendor, exc_info=True)
             models[vendor] = []
+        # A fetch that failed or came back empty falls back to the curated
+        # list, so an offline machine or a self-hosted endpoint with no
+        # /models route still offers something to pick from.
+        if not models[vendor]:
+            models[vendor] = KNOWN_MODELS.get(vendor, [])
     return {"models": models, "vendors": configured, "known": known}
 
 

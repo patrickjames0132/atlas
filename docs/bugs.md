@@ -22,6 +22,56 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A hardcoded model list, and the wrong layer to fix it in
+
+*Found 2026-08-27 by Patrick, switching the lecturer to Google. Fixed in
+v7.14.0. The bug was small; the detour is the part worth keeping.*
+
+- **Symptom.** Choosing a Gemini model from Settings and running a lecture
+  answered `404 NOT_FOUND ... This model models/gemini-2.5-flash is no longer
+  available to new users`. The dropdown offered three Gemini models and all
+  three were dead.
+- **Root cause.** `KNOWN_MODELS` in `routes/settings.py` — a hand-written list
+  of model ids for the two vendors we weren't fetching live. It shipped in
+  v7.13.0 naming the 2.5 line, Google retired that line for new keys, and the
+  list had no way to know. Its own comment claimed a stale entry "costs
+  nothing" because the modal "lets the user type anything anyway"; that was
+  **false**, the field was a `<select>`, so the stale list was the only thing
+  on offer.
+- **The wrong fix, and why it looked right.** The false comment was taken as
+  the spec: make the field typeable. It became an `<input list=>` combobox over
+  a `<datalist>`, so a dead list could be typed past. That dragged in a chain
+  of its own defects — Chrome draws its own dropdown arrow inside such an input,
+  so the field had two carets; suppressing that needs the rule on a class on
+  the input itself (as a descendant selector Chrome ignores it silently) *and*
+  `!important` (the UA rule wins otherwise), neither discoverable from
+  `getComputedStyle`, which reports the rule as applied either way.
+
+  Then the real one: **a `<datalist>` is filtered by whatever text the input
+  already holds.** A field set to `claude-haiku-4-5` offered the two ids
+  containing that string and hid the other eight, and a field holding a
+  *retired* id offered only itself — so after every fix the dropdown still
+  looked stale, for a completely different reason than it originally was.
+- **The actual fix.** Fetch the list live from each vendor's API, and put the
+  `<select>` back untouched. The `settings.css` diff went to zero and the
+  component diff to a single comment.
+- **Lesson / guard.** *Fix data problems in the data layer.* The list was
+  wrong; the control was fine. Making the control more permissive to tolerate
+  bad data kept the bad data and added a second problem on top — and each
+  round of UI patching produced a symptom identical to the original one, which
+  is what made it expensive to diagnose.
+
+  A corollary about comments: the "user can type anything anyway" note had
+  been false since the field became a `<select>`, and it was load-bearing —
+  it was the stated reason a stale list was acceptable. A comment justifying
+  why something *doesn't matter* is worth re-checking against the code before
+  trusting it.
+
+  No test guards the control choice; the guard is the fetch itself
+  (`test_models_endpoint_fetches_google_live`,
+  `test_a_failed_listing_falls_back_to_the_curated_names`,
+  `test_a_listing_is_filtered_to_models_that_could_run_an_agent`).
+
 ### The keyless app couldn't start, and the settings modal couldn't change a model
 
 *Found 2026-08-21 while wiring multi-provider support; filed then, fixed in

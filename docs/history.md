@@ -12,6 +12,44 @@
 
 ### Reach & access
 
+- [x] **The agent model dropdowns list what each vendor actually offers**
+      *(v7.14.0)* — the model names for Google and OpenAI were a hand-written
+      list in `routes/settings.py` (`KNOWN_MODELS`, shipped v7.13.0), and it
+      rotted in three weeks: Google retired the 2.5 line for new users, so
+      picking the only Gemini models Atlas offered answered `404 ... no longer
+      available to new users`. A hardcoded list of a thing the vendor controls
+      rots by construction, and behind a `<select>` it is not a stale hint but
+      a wall — every option dead and no way past it.
+
+      **Every vendor is now fetched live** from its own listing API, joining
+      Anthropic (`client.models.list()`) and Ollama (`/api/tags`), which
+      already were. The OpenAI fetch honours `base_url`, so it lists an
+      OpenAI-*compatible* server too rather than assuming OpenAI proper.
+      `KNOWN_MODELS` survives only as the offline fallback for when a listing
+      can't be reached, and now prefers non-versioned aliases
+      (`gemini-flash-latest`) that cannot go stale even if nobody touches it
+      again.
+
+      **A raw listing is not a menu.** It answers with everything the key can
+      reach — Whisper, Sora, `nano-banana-pro-preview`, embeddings, robotics,
+      music, TTS — none of which can run an agent, and 77 entries where six
+      are relevant is a worse dropdown than none. Filtering is an **allowlist
+      of families** per vendor (`gpt-`/`o1`/`o3`/`o4`, `gemini-`/`gemma-`,
+      `claude-`) plus a modality strip for the `-tts`/`-image`/`-audio`
+      variants that live *inside* an allowed family. A blocklist was tried
+      first and leaked immediately; the allowlist hides an unheard-of family
+      rather than offering it, which is the safe direction — a missing
+      suggestion costs keystrokes, a suggestion that can't run an agent costs
+      a failed lecture. Results are ordered by family, because
+      reverse-alphabetical alone sorted OpenAI's `o1`/`o3` above every `gpt-`.
+
+      **A listing is fresher, never validated** — Google's `models.list` still
+      returns `gemini-2.5-flash` to a key that 404s calling it. Nothing
+      downstream may treat a listed model as one that works; that is written
+      into the code so a later cleanup doesn't assume otherwise.
+      *(Found 2026-08-27 by Patrick, browser-testing the keyless fix above.
+      Full story of the wrong turn in [bugs.md](bugs.md).)*
+
 - [x] **The app starts with no LLM configured at all — and a settings change
       no longer needs a restart** *(v7.14.0)* — the keyless graph explorer was
       unreachable on the machines it was written for. Every agent built its
