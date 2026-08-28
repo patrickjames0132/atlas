@@ -248,6 +248,11 @@ it does not wait on a PyPI release.)*
   `data/digest.db` (`cache` table, 1-day TTL). Encourage setting `S2_API_KEY`.
 - **Run backend:** `uv run atlas serve` (Python 3.14 in `.venv`; the
   console script comes from the editable src-layout install — `cli.py`).
+- **Optional extras (v7.15.0).** `sources` (sentence-transformers + torch),
+  `pdf` (PyMuPDF) and `corpus` (DuckDB) are `[project.optional-dependencies]`,
+  not core — 83 MB vs 1.0 GB. **Import them only through
+  `atlas.optional.require`, never at module scope**; a test walks the tree and
+  fails otherwise. `bin/setup` installs all of them locally.
 - **Logs:** `create_app()` logs to the console *and* a rotating file,
   `data/atlas.log` (5MB × 3 backups, gitignored with the rest of `data/`).
   Useful for after-the-fact debugging of agent runs (e.g. an S2 429 or search
@@ -270,14 +275,17 @@ worth knowing before you edit either the workflow or `bin/setup.sh`:
 
 - It **reuses `bin/setup.sh`** instead of restating the bootstrap, so CI can't
   drift from what you run locally. Change the bootstrap and CI follows.
-- It sets **`ATLAS_SKIP_TORCH=1`** (the guard in `bin/setup.{sh,bat}`). Nothing
-  in the gate needs torch — `sentence_transformers` is imported lazily in
-  `services/sources/embeddings.py`'s `_get_model` and every test stubs the
-  embedder — while a full Linux sync pulls the ~15 `nvidia-*` CUDA packages
-  the lockfile gates on `sys_platform == 'linux'`. **Side effect worth
-  preserving: CI now fails if anything imports torch at module scope**, which
-  is what keeps that lazy import honest. Don't "fix" a CI-only torch
-  ImportError by installing torch in CI — fix the eager import.
+- It sets **`ATLAS_SKIP_TORCH=1`** (the guard in `bin/setup.{sh,bat}`), which
+  since v7.15.0 drops the **`sources` extra** rather than deselecting a single
+  package. Nothing in the gate needs torch — `sentence_transformers` is
+  imported lazily in `services/sources/embeddings.py`'s `_get_model` and the
+  embedding tests inject a fake module — while a full Linux sync pulls the 37
+  `nvidia-*` CUDA packages the lockfile resolves there (1.0 GB → 304 MB). The
+  `pdf` and `corpus` extras **are** installed in CI: their tests build real
+  PDFs and query real Parquet. **Side effect worth preserving: CI fails if
+  anything imports an optional package at module scope**, which is what keeps
+  those lazy imports honest. Don't "fix" a CI-only ImportError by installing
+  the extra in CI — fix the eager import, via `atlas.optional.require`.
 - It runs **`npm run build` as a separate step**, because no nox session
   typechecks the frontend (`tsc -b`). Adding a nox session for it would let
   that step be dropped; today the two are deliberately both present.

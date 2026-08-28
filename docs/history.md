@@ -12,6 +12,65 @@
 
 ### Reach & access
 
+- [x] **The heavy capabilities became optional extras — a 1.0 GB install is
+      now 83 MB** *(v7.15.0)* — the first step of the first-run sequence scoped
+      in [first-run.md](first-run.md), and the only one that is pure
+      subtraction. Three capabilities moved to
+      `[project.optional-dependencies]`: **`sources`**
+      (sentence-transformers + torch, searching your own uploads),
+      **`pdf`** (PyMuPDF, mining figures), **`corpus`** (DuckDB, the offline S2
+      citations corpus). A reader who wants the graph and the teacher — which
+      is the whole product for most people — installs none of them.
+
+      | Install | Size |
+      | --- | --- |
+      | Core | **83 MB** |
+      | + `pdf` | 137 MB |
+      | + `corpus` | 181 MB |
+      | + `sources` | ~1.0 GB |
+
+      Also deleted: **`scikit-learn`, `joblib` and `numpy`**, declared in
+      `pyproject.toml` and imported nowhere in the repo — leftovers from the
+      `ml_pipelines/`+`research/` plumbing removed 2026-07-22.
+
+      **A latent startup crash surfaced on the way.** `corpus/source.py`
+      imported `duckdb` at *module* scope and
+      `integrations/semantic_scholar/__init__.py` imports `corpus`, so the
+      moment DuckDB became optional an install without it could not have served
+      a graph at all — the same shape as the v7.14.0 keyless crash, one release
+      later, in a different package. That is why the split shipped with an
+      **enforced invariant** rather than a convention:
+      `test_no_module_imports_an_optional_package_at_module_scope` parses every
+      module in `src/atlas` and fails on any module-scope import of an optional
+      package (`TYPE_CHECKING` blocks exempt, since
+      `from __future__ import annotations` makes them free). Verified to fail on
+      the pre-split code.
+
+      **`optional.py` is the seam**, and it has two halves for two situations.
+      `require(module, extra)` raises `MissingExtra` naming the capability in
+      the reader's terms and the exact install command — because
+      `No module named 'fitz'` tells someone who just installed Atlas nothing.
+      `available(extra)` is the *ask before doing* half, for code that would
+      rather degrade quietly: the embedder calls it and logs one line about
+      falling back to lexical search instead of dumping a traceback for what is
+      a supported way to install. That is the web scout's `supports_web_search`
+      pattern (v7.13.0) applied to packaging.
+
+      **CI got the same win**: `ATLAS_SKIP_TORCH=1` now drops the `sources`
+      extra rather than deselecting one package, taking the Linux environment
+      from 1.0 GB to 304 MB. `pdf` and `corpus` stay installed there — those
+      tests build real PDFs and query real Parquet.
+
+      **Verified by installing it, not by reasoning about it:** a core-only venv
+      boots, answers `/api/health`, registers the graph routes, and reports each
+      absent capability by name. The same experiment against a non-editable
+      `pip install .` failed on config discovery
+      (`FileNotFoundError: .../lib/python3.14/config.example.json`) — the
+      `PROJECT_ROOT` problem first-run.md predicted, and the next step's first
+      task. **Not verified:** what the *browser* shows when a core-only install
+      is asked to mine a PDF; the Python side says the right thing, the UI path
+      is untested. *(2026-08-28.)*
+
 - [x] **The agent model dropdowns list what each vendor actually offers**
       *(v7.14.0)* — the model names for Google and OpenAI were a hand-written
       list in `routes/settings.py` (`KNOWN_MODELS`, shipped v7.13.0), and it
