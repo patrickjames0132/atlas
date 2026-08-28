@@ -187,8 +187,18 @@ than deleted so the plan doesn't get re-proposed.
       just wants to learn something. **This is a reach problem wearing the
       costume of a polish problem.**
 
-      **Not yet a design, deliberately** — the options price very differently
-      and want thinking about before anyone builds. A **Docker image** is the
+      **Scoped 2026-08-28 in [docs/first-run.md](docs/first-run.md) — read it
+      before building.** The measurement there reframes the ticket: the install
+      is 1.0 GB and the core app needs 83 MB of it, because every optional
+      capability (library-source embeddings, PDF mining, the S2 corpus) is a
+      mandatory dependency. Splitting those into extras is the first step
+      whichever distribution shape wins, and it is pure subtraction. The doc
+      also corrects one assumption below: a missing `config.json` is **already**
+      created from the example (`config.py:865`), so a fresh checkout needs no
+      config step — the real config problem is that its path is anchored to the
+      repo root, which breaks for an installed package.
+
+      **The options, kept here in summary:** A **Docker image** is the
       obvious one (a single `docker run`, no toolchain at all) and its cost is
       the torch/CUDA question the README already documents plus image size. A
       **prebuilt release artifact** (the packaging half of the PyPI ticket
