@@ -156,7 +156,7 @@ Two of the four cost nothing, which is the point of having them:
 | --- | --- | --- |
 | `anthropic` | paid | Billed per lecture and per question. |
 | `openai` | paid | `base_url` blank = OpenAI itself. Set it and the same adapter drives **any OpenAI-compatible server** — Groq, OpenRouter, Together, LM Studio — several with free tiers. |
-| `google` | **free tier** | A Google AI Studio key is free and quota-limited. |
+| `google` | **free tier** | A Google AI Studio key is free and quota-limited. The quota covers the **flash** models — `gemini-pro-latest` answers `429 RESOURCE_EXHAUSTED` on it (measured 2026-08-27), and a busy flash model can answer `503` transiently. A key on a paid project with spent credits 429s on everything, which looks identical and isn't. |
 | `ollama` | **free, local** | No key, no signup, nothing leaves the machine. `base_url` is normally `http://localhost:11434/v1` — keep the `/v1`, that is where Ollama's OpenAI-compatible surface lives. |
 
 One trade is worth knowing before choosing `ollama` for everything: a local

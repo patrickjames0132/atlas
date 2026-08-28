@@ -105,6 +105,10 @@ graph explorer runs fine without it, but the Assistant panel needs it.
     that scout goes quiet rather than inventing sources.
   - **`google.api_key`** — **free tier.** A key from
     [Google AI Studio](https://aistudio.google.com/apikey), quota-limited.
+    The free quota covers the **flash** models; the pro ones answer
+    `429 RESOURCE_EXHAUSTED`, so pick a `gemini-*-flash*` for each agent.
+    A key on a *paid* project with its credits spent fails the same way even
+    on flash — if everything 429s, check billing rather than the model name.
   - **`anthropic.api_key`** — paid. A
     [Claude API key](https://console.anthropic.com/settings/keys).
   - **`openai.api_key`** / **`openai.base_url`** — paid at OpenAI, but the
