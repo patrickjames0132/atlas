@@ -59,15 +59,31 @@ The toolchain (python, uv, nodejs, trivy) is pinned in `.tool-versions` —
 [mise](https://mise.jdx.dev) installs it all with `mise install` (mise reads
 the asdf-format file and works on Windows and macOS alike). With mise in
 place, `bin/setup.bat` (Windows) or `bin/setup.sh` (macOS/Linux) does the full
-bootstrap: pinned tools, `uv sync --all-groups` (dev tooling and the notebook
-`research` group alike), and the frontend install + build. Without
-mise, `uv` and `Node.js` installed any other way work fine too.
+bootstrap: pinned tools, a full `uv sync` (dev tooling, the notebook
+`research` group, and every optional extra), and the frontend install + build.
+Without mise, `uv` and `Node.js` installed any other way work fine too.
+
+> **Three capabilities are optional extras**, because they are most of the
+> install and a reader who only wants the graph and the teacher needs none of
+> them — core is **83 MB** against **1.0 GB** with everything:
+>
+> | Extra | Gives you | Cost |
+> | --- | --- | --- |
+> | *(core)* | the graph explorer and the AI teacher | 83 MB |
+> | `pdf` | figures, tables and algorithm boxes mined from PDFs | +54 MB |
+> | `corpus` | the offline Semantic Scholar citations corpus | +44 MB |
+> | `sources` | search over your own uploaded books and PDFs | +~800 MB |
+>
+> `bin/setup` installs all of them. To pick: `uv sync --extra pdf`, or
+> `pip install 'atlas[pdf,corpus]'`. Nothing breaks without one — the feature
+> says it isn't installed and names the command. See
+> [docs/first-run.md](docs/first-run.md).
 
 > **Windows pulls a CUDA build of torch** (~1.8GB, from PyTorch's `cu130`
-> index) so the local embedder can use a GPU if you have one — PyPI's Windows
-> wheel is CPU-only, and that's the whole difference between ~80 and ~1500
-> chunks/s at ingest. It falls back to CPU on a machine without a GPU, and
-> macOS/Linux resolve torch from PyPI as usual. See
+> index) with the `sources` extra, so the local embedder can use a GPU if you
+> have one — PyPI's Windows wheel is CPU-only, and that's the whole difference
+> between ~80 and ~1500 chunks/s at ingest. It falls back to CPU on a machine
+> without a GPU, and macOS/Linux resolve torch from PyPI as usual. See
 > [`sources.embedding.device`](docs/configuration.md).
 
 ### 1. Configure
@@ -296,9 +312,11 @@ All of that also runs in CI (`.github/workflows/ci.yml`) on every push to
 toolchain from `.tool-versions` with mise, so it runs the *same* python / uv /
 node / trivy the developer machines do — and because Trivy is genuinely on
 PATH there, the security scan actually runs rather than skipping. It reuses
-`bin/setup.sh` rather than restating it, with `ATLAS_SKIP_TORCH=1`: nothing in
-the gate needs torch, and skipping it avoids dragging the multi-gigabyte
-Linux CUDA wheels into every run. A second workflow (`release.yml`) fires on
+`bin/setup.sh` rather than restating it, with `ATLAS_SKIP_TORCH=1`, which
+drops the `sources` extra: nothing in the gate needs torch, and skipping it
+avoids dragging the 37 Linux CUDA packages into every run (1.0 GB → 304 MB).
+The `pdf` and `corpus` extras *are* installed there — those tests build real
+PDFs and query real Parquet. A second workflow (`release.yml`) fires on
 `v*` tags and fails if the tag and `pyproject.toml`'s version disagree.
 
 For the project's direction and past, two living docs sit beside the code:

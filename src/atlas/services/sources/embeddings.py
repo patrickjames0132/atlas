@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 
+from ... import optional
 from ...config import config
 
 log = logging.getLogger(__name__)
@@ -75,6 +76,17 @@ def _load_model():
     if _model is not None or _load_failed:
         return _model
     if not config.sources.semantic_enabled:
+        _load_failed = True
+        return None
+    # Asked before doing, so a lean install reports a *configuration* rather
+    # than logging a traceback: the caller already treats None as "no semantic
+    # search", and an exception dump here would read like a crash for what is
+    # a supported way to install Atlas.
+    if not optional.available("sources"):
+        log.info(
+            "Semantic search over uploaded sources is not installed "
+            "(the 'sources' extra); falling back to lexical search only."
+        )
         _load_failed = True
         return None
     model_id = config.sources.embedding.model

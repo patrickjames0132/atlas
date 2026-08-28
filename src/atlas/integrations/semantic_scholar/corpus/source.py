@@ -46,14 +46,16 @@ import json
 import logging
 import threading
 from collections.abc import Sequence
-from typing import Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Protocol
 
-import duckdb
-
+from .... import optional
 from ...caps import LATEST_NODES_PER_BAND, LATEST_NUMBER_OF_BANDS, UNBOUNDED_LANDMARK_CAP
 from . import paths as corpus_paths
 from .ingest import NBUCKETS
 from .paths import ReleasePaths, read_current_release
+
+if TYPE_CHECKING:  # duckdb is an optional extra; annotations only here
+    pass
 
 log = logging.getLogger(__name__)
 
@@ -215,7 +217,11 @@ class DuckDBCitationSource:
         self._citations_root = paths.parquet_dataset("citations").as_posix()
         self._arxiv_index_glob = (paths.parquet / "arxiv_index" / "*.parquet").as_posix()
         self._lock = threading.Lock()
-        self._connection = duckdb.connect(":memory:")
+        # Held so the IOException class is reachable without re-importing on
+        # every query; this is also the point where a missing `corpus` extra
+        # is reported, which is the first moment anyone asked for the corpus.
+        self._duckdb = optional.require("duckdb", "corpus")
+        self._connection = self._duckdb.connect(":memory:")
 
     def resolve_corpus_id(self, arxiv_id: str | None, seed_ref: str) -> int | None:
         """Resolve a seed to its S2 ``corpusid``, or None when unresolvable.
@@ -304,7 +310,7 @@ class DuckDBCitationSource:
         with self._lock:
             try:
                 return self._connection.execute(query, params).fetchall()
-            except duckdb.IOException:
+            except self._duckdb.IOException:
                 return []
 
     def _ranked_landmark_citers(self, corpus_id: int, limit: int | None, *,

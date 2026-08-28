@@ -49,12 +49,14 @@ import shutil
 import uuid
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-import duckdb
-
+from .... import optional
 from .datasets import CorpusError
 from .paths import ReleasePaths
+
+if TYPE_CHECKING:  # duckdb is an optional extra; annotations only here
+    import duckdb
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +127,7 @@ def _connect() -> duckdb.DuckDBPyConnection:
         An in-memory connection sized for the whole box — the ingest is the one
         place we want that.
     """
-    connection = duckdb.connect(":memory:")
+    connection = optional.require("duckdb", "corpus").connect(":memory:")
     # Headroom over NBUCKETS so no bucket ever has to be evicted mid-shard.
     connection.execute(f"SET partitioned_write_max_open_files={NBUCKETS + 24}")
     return connection

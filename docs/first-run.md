@@ -106,12 +106,21 @@ installable — it makes it *usable once installed*.
 
 Sequence, not a choice — the options are not alternatives:
 
-1. **Split the dependencies into extras** (`atlas[sources]` for
-   sentence-transformers/torch, `atlas[pdf]` for PyMuPDF, `atlas[corpus]` for
-   DuckDB) and delete the three unused declarations. 1.0 GB → 83 MB. Every
-   option below gets cheaper; nothing gets harder. It also makes the AGPL
-   question in `docs/licensing.md` concrete rather than theoretical, since
-   PyMuPDF stops being mandatory.
+1. ~~**Split the dependencies into extras**~~ — **done in v7.15.0.**
+   `atlas[sources]`, `atlas[pdf]`, `atlas[corpus]`; the three unused
+   declarations deleted. Measured after: a core install is **83 MB** and boots,
+   serves a graph, and reports each missing capability by name. CI dropped from
+   1.0 GB to 304 MB. PyMuPDF is now optional, which makes the AGPL question in
+   `docs/licensing.md` concrete rather than theoretical.
+
+   Two things surfaced while doing it, both worth carrying forward.
+   `corpus/source.py` imported `duckdb` at module scope and
+   `integrations/semantic_scholar/__init__.py` imports `corpus`, so a
+   corpus-less install could not have served a graph at all — the same shape as
+   the v7.14.0 keyless crash, now guarded by a test that walks the tree. And a
+   `pip install .` into a clean venv **failed on config discovery exactly as
+   predicted below** (`FileNotFoundError: .../lib/python3.14/config.example.json`),
+   which is the next step's first task, not a new problem.
 2. **Option A's packaging half** — config discovery off `PROJECT_ROOT`,
    `frontend/dist` as package data. Ship it as a GitHub release asset. This is
    the largest reach gain per unit of work, and it is a prerequisite for B
@@ -130,10 +139,12 @@ Sequence, not a choice — the options are not alternatives:
   checkout. Settle this before the packaging work hard-codes anything — it is
   the same "settle the location first" warning the PyPI ticket already carries
   about `frontend/dist`.
-- **Does a torch-free install degrade honestly?** The library-sources feature
-  must say "not installed" rather than raising an ImportError at the moment
-  someone uploads a PDF. Same shape as the web scout's honest degradation on a
-  vendor with no web search (v7.13.0) — that is the pattern to copy.
+- ~~**Does a torch-free install degrade honestly?**~~ **Answered in v7.15.0:
+  yes.** `optional.require` raises a `MissingExtra` naming the capability and
+  the command, and `optional.available` is the ask-before-doing half the
+  embedder uses to log one line about falling back to lexical search instead of
+  dumping a traceback. What is *not* yet verified is the full UI path — nobody
+  has uploaded a PDF to a core-only install and watched what the browser shows.
 - **Who is the reader?** "A student" is doing a lot of work in the ticket. A
   student with a laptop and no terminal experience needs B. A grad student who
   has used `pip` needs A. These have very different costs and the answer

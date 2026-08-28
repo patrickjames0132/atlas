@@ -1,8 +1,42 @@
 # `atlas` (backend package root)
 
-This README covers what lives directly at this level — currently just
-`config.py`. `app.py` and `cli.py` will get sections here once they're
+This README covers what lives directly at this level — `config.py` and
+`optional.py`. `app.py` and `cli.py` will get sections here once they're
 ported (Phase 5).
+
+## `optional.py` — importing what only some installs have
+
+Three capabilities are **optional extras** (`pyproject.toml`): `sources`
+(sentence-transformers + torch, searching your own uploads), `pdf` (PyMuPDF,
+mining figures), and `corpus` (DuckDB, the offline S2 citations corpus).
+Together they are the difference between a **1.0 GB** install and an **83 MB**
+one, and a reader who only wants the graph and the teacher needs none of them.
+`docs/first-run.md` has the measurements and why this split came before any
+packaging work.
+
+Every import of one goes through `require(module, extra)`, and two rules follow:
+
+- **Never at module scope.** An eager import turns a missing extra into a
+  failure to *start* rather than a failure to use one feature — the same shape
+  as the keyless-startup crash fixed in v7.14.0. `corpus/source.py` really did
+  have it: it imported `duckdb` at module level, and
+  `integrations/semantic_scholar/__init__.py` imports `corpus`, so an install
+  without that extra could not have served a graph. Enforced by
+  `test_no_module_imports_an_optional_package_at_module_scope`, which walks the
+  tree — verified to fail on the pre-split code.
+- **The error names the fix.** `MissingExtra` says which capability was wanted
+  and gives the exact command, because `No module named 'fitz'` tells someone
+  who just installed Atlas nothing.
+
+`available(extra)` is the *ask before doing* half, for code that would rather
+degrade quietly than raise — the embedder calls it and logs one line about
+falling back to lexical search, instead of dumping a traceback for what is a
+supported way to install Atlas. Same pattern as the web scout asking
+`supports_web_search` before prompting a model to search.
+
+Type annotations are exempt: every module here uses
+`from __future__ import annotations`, so a `TYPE_CHECKING` import costs nothing
+at runtime and the real types survive.
 
 ## `config.py` — central configuration
 

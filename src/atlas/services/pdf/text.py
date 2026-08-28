@@ -18,6 +18,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from ... import optional
+
 log = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ def extract_text(path: str | Path) -> str:
         extractable text (a scanned/image-only PDF) — never raises, since
         the caller treats empty as "unavailable" like a missing ar5iv render.
     """
-    import fitz
+    fitz = optional.require("fitz", "pdf")
 
     try:
         doc = fitz.open(path)

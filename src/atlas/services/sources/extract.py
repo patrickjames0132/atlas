@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from ... import optional
 from ...config import config
 from ...integrations.arxiv import html_to_text
 from .errors import SourceError
@@ -78,7 +79,7 @@ def extract_pdf(path: str | Path) -> tuple[list[tuple[int, str]], int]:
             isn't supported yet), or when no text was found at all.
         fitz.FileDataError: When the file isn't a readable PDF.
     """
-    import fitz  # pymupdf
+    fitz = optional.require("fitz", "pdf")
 
     doc = fitz.open(path)
     try:

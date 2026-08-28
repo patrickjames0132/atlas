@@ -48,12 +48,13 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from ... import optional
 from ...config import config
 from .errors import PdfError
 
-if TYPE_CHECKING:  # pymupdf is imported lazily (heavy native module)
+if TYPE_CHECKING:  # the `pdf` extra; imported for real via optional.require
     import fitz
 
 log = logging.getLogger(__name__)
@@ -214,7 +215,7 @@ def _rule_span(caption: fitz.Rect, rules: list[fitz.Rect], below: bool) -> fitz.
         The span from first to last rule, or None when no anchored,
         multi-rule span exists on that side.
     """
-    import fitz
+    fitz = optional.require("fitz", "pdf")
 
     if below:
         candidates = sorted(
@@ -266,7 +267,7 @@ def _algorithm_region(caption: fitz.Rect, rules: list[fitz.Rect]) -> fitz.Rect |
         above it (an in-prose "Algorithm 1 shows…" mention) or the float has
         no closing rule.
     """
-    import fitz
+    fitz = optional.require("fitz", "pdf")
 
     anchored = [
         rule for rule in rules if rule.y1 <= caption.y0 + 3 and _overlap_x(rule, caption)
@@ -305,7 +306,7 @@ def _table_region(
     Returns:
         The region, or None when nothing table-shaped sits near the caption.
     """
-    import fitz
+    fitz = optional.require("fitz", "pdf")
 
     for table in page.find_tables().tables:
         table_rect = fitz.Rect(table.bbox)
@@ -357,7 +358,7 @@ def extract_floats(path: str | Path, *, max_floats: int, max_pages: int) -> list
         ``render_float``. Unparseable files yield ``[]`` (never raise) —
         figures are a nicety, not the read.
     """
-    import fitz
+    fitz = optional.require("fitz", "pdf")
 
     try:
         doc = fitz.open(path)
@@ -370,7 +371,10 @@ def extract_floats(path: str | Path, *, max_floats: int, max_pages: int) -> list
             if len(found) >= max_floats:
                 break
             page = doc.load_page(page_index)
-            captions: list[tuple[fitz.Rect, str, str]] = []
+            # `Any` rather than `fitz.Rect`: inside this function `fitz` is
+            # the local from optional.require (a ModuleType), which shadows
+            # the type-only import for annotations as well as for calls.
+            captions: list[tuple[Any, str, str]] = []
             for block in page.get_text("blocks"):
                 text = " ".join(str(block[4]).split())
                 match = CAPTION_RE.match(text)
@@ -430,7 +434,7 @@ def render_float(path: str | Path, page_number: int, region: list[float]) -> byt
     Raises:
         PdfError: When the page or region is invalid or rendering fails.
     """
-    import fitz
+    fitz = optional.require("fitz", "pdf")
 
     try:
         doc = fitz.open(path)
