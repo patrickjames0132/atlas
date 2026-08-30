@@ -188,15 +188,22 @@ than deleted so the plan doesn't get re-proposed.
       costume of a polish problem.**
 
       **Scoped 2026-08-28 in [docs/first-run.md](docs/first-run.md) — read it
-      before building.** The measurement there reframes the ticket: the install
-      is 1.0 GB and the core app needs 83 MB of it, because every optional
-      capability (library-source embeddings, PDF mining, the S2 corpus) is a
-      mandatory dependency. Splitting those into extras is the first step
-      whichever distribution shape wins, and it is pure subtraction. The doc
-      also corrects one assumption below: a missing `config.json` is **already**
-      created from the example (`config.py:865`), so a fresh checkout needs no
-      config step — the real config problem is that its path is anchored to the
-      repo root, which breaks for an installed package.
+      before building.** The measurement there reframed the ticket: the install
+      was 1.0 GB where the core app needs 83 MB of it, because every optional
+      capability (library-source embeddings, PDF mining, the S2 corpus) was a
+      mandatory dependency.
+
+      **Step one shipped in v7.15.0** — those three capabilities are now
+      `[project.optional-dependencies]`, so a core install is 83 MB (see
+      [docs/history.md](docs/history.md)). That was the pure-subtraction step
+      every distribution shape needed first. **The next task is already
+      identified**, from trying it: a non-editable `pip install .` fails on
+      config discovery (`FileNotFoundError: …/lib/python3.14/config.example.json`)
+      because `PROJECT_ROOT` is anchored to the repo root. Note this corrects
+      one assumption below — a missing `config.json` is **already** created
+      from the example (`config.py:865`), so a fresh checkout needs no config
+      step; the real config problem is only that path anchoring, which breaks
+      for an installed package.
 
       **The options, kept here in summary:** A **Docker image** is the
       obvious one (a single `docker run`, no toolchain at all) and its cost is
@@ -479,47 +486,28 @@ than deleted so the plan doesn't get re-proposed.
       branch survives with its fitted S2 corpus sample (1,502 seeds) for
       reference; fitting still runs on the **Windows** box (offline corpus),
       artifact travels back via git.
-      *(Goal filed 2026-07-20; restarted 2026-07-23.)*
-- [ ] ~~**Spike: is the SKIP rule what we actually want?**~~ — **superseded
-      2026-07-20** by the threshold-predicate ticket above, which generalizes
-      this spike's own option (3), "SKIP with a citation floor", into an
-      age-adjusted, seed-scaled floor applied to every path. Kept for its
-      success criterion, which any future design should still be measured
-      against (see the citation-threshold ticket above, now restarting from
-      scratch under the research process). Original text follows. — Patrick's ask
-      (2026-07-17), from the conversation that retired the budget model. Since
-      v5.13.0 SKIP serves exactly one situation: a **truncated** live pool — a
-      hyper-cited seed, on a machine with no corpus. Everything else prefixes by
-      the STOP rule. Questions for the spike, against real seeds: (1) SKIP
-      guarantees up to `PER_YEAR_CAP` from *every* reachable year, so a thin year
-      ships its 40-citation best beside a blockbuster year's 13,000-citation
-      13th-best — is that a landmark band or padding? (2) The truncated pool's
-      "landmarks" are already only "most-cited of the newest 9k" —
-      would an honest **UI label** (provenance: "recent most-cited", not "Field
-      Landmarks") matter more than the selection rule? (3) Is there a defensible
-      middle — e.g. SKIP with a citation floor, or a shorter band span — or
-      should the truncated path simply mirror the complete path's shape and
-      accept the hole the 29-vs-84 measurement documented?
-      **Scope grown (Patrick, 2026-07-19): the truncated path's *Latest* side
-      too** — its rolling 12-month window should move in line with the
-      adaptive Latest (tau-started per-year bands), even if that means the
-      truncated path's landmarks end up a very small set. And **sequencing:
-      do this after the settings modal ships.**
-      **The success criterion (Patrick, 2026-07-17):** whatever rule the
-      truncated pool ends up with should land **as close as possible to what the
-      STOP rule would ship if the seed's full citation history were reachable**
-      — full-history STOP is the ground truth, and SKIP-vs-alternatives is an
-      approximation contest, not a taste question. That makes the spike
+
+      **The success criterion, inherited from the SKIP spike this superseded**
+      (Patrick, 2026-07-17): on a **truncated** pool — a hyper-cited seed on a
+      machine with no corpus — whatever rule ships should land **as close as
+      possible to what full-history STOP would ship if the seed's whole
+      citation history were reachable**. Full-history STOP is the ground truth,
+      so this is an approximation contest, not a taste question — and it is
       *measurable* with machinery we already have: `live_pool_validation`
       simulates the exact truncated pool from the offline corpus, so each
-      candidate rule can be scored against the full-history STOP band (overlap
-      on the reachable intersection, plus count agreement) across the 58-seed
-      corpus. A candidate can't ship what the ceiling hides, so the honest
-      ceiling on any rule's score is how much of the true band is reachable at
-      all — the study's median 1.8× budget gap says that ceiling is often low,
-      which feeds question (2): where no rule can score well, provenance
-      labelling is doing the real work. Analysis only; no code until the spike
-      reports. *(Filed 2026-07-17.)*
+      candidate can be scored against the full-history band (overlap on the
+      reachable intersection, plus count agreement) across the 58-seed corpus.
+      **The honest ceiling on any rule's score is how much of the true band is
+      reachable at all**, and the study's median 1.8× budget gap says that
+      ceiling is often low. Where no rule can score well, **provenance
+      labelling is doing the real work** — a truncated pool's "landmarks" are
+      only ever "most-cited of the newest 9k", and saying so in the UI may
+      matter more than the selection rule. Scope note (Patrick, 2026-07-19):
+      the truncated path's *Latest* side moves with the adaptive Latest too,
+      even if that leaves its landmark set very small.
+      *(Goal filed 2026-07-20; restarted 2026-07-23; absorbed the superseded
+      "Spike: is the SKIP rule what we actually want?" ticket, filed
+      2026-07-17 and removed 2026-08-29.)*
 - [ ] **Investigate forward references — references S2/OpenAlex date *after*
       the seed's publication** — both providers sometimes list a reference (a
       paper the seed *cites*) with a publication date later than the seed's
@@ -1569,12 +1557,17 @@ than deleted so the plan doesn't get re-proposed.
       **Consequences of that framing:**
       - PyPI gives no *fork* — no git history, no PRs. It seeds a work-side
         repo once; it is not a synced remote. Accepted.
-      - **Blocked on the PyMuPDF/AGPL question** — see the optional-extra
-        ticket below. Xray license policy plausibly rejects the whole package
-        over that one transitive dependency, which would waste the packaging
-        work. **Patrick owns clarifying the Xray policy**, including the
-        specific question of whether it flags *declared optional dependencies*
-        or only what actually resolves.
+      - **The PyMuPDF/AGPL blocker is half-cleared.** `pymupdf` moved to the
+        `pdf` extra in **v7.15.0** (see [docs/history.md](docs/history.md)), so
+        the default dependency graph now carries no AGPL at all — the shape
+        that was supposed to get this past Xray. **What is still unanswered is
+        whether that is enough:** some policy engines flag *declared* optional
+        dependencies, not just what resolves. **Patrick owns clarifying the
+        Xray policy** on exactly that point. If declared extras are also
+        flagged, the fallback is swapping PyMuPDF for `pypdfium2` (BSD-3/
+        Apache-2.0) or `pdfminer.six` (MIT) — a much bigger job, since
+        `mine.py`/`floats.py` lean on PyMuPDF's layout and image extraction.
+        Confirm before building either.
       - **Open: does the work side need the frontend TypeScript source?** A
         wheel/sdist would carry the built `frontend/dist`, not `frontend/src`.
         Their Artifactory also fronts npm, so building the frontend at work is
@@ -1593,42 +1586,6 @@ than deleted so the plan doesn't get re-proposed.
       relicense first, 2026-08-09, as a deliberate preference rather than a
       prerequisite. *(Raised 2026-07-20, deferred from the licensing pass;
       re-scoped 2026-08-09 around the work-Artifactory driver.)*
-- [ ] **Make PyMuPDF an optional extra — it's AGPL, and it's the one licensing
-      landmine in the dependency graph** — a license audit of the installed tree
-      (2026-08-09) came back clean everywhere except one:
-      `pymupdf` is **"Dual Licensed - GNU AFFERO GPL 3.0 or Artifex
-      commercial"**. Everything else is BSD-3 (torch, scikit-learn, flask),
-      Apache-2.0 (sentence-transformers), or MIT (anthropic, duckdb,
-      sqlite-vec). Enterprise scanners commonly ban AGPL outright, and Atlas is
-      a Flask **network service** — precisely the scenario AGPL §13 targets — so
-      this is the most likely reason the "Publish to PyPI" work above fails at
-      the Xray gate. **The fix, and why it beats a work-specific fork:**
-      ```toml
-      dependencies = [ … ]           # pymupdf removed
-      [project.optional-dependencies]
-      pdf = ["pymupdf>=1.24"]
-      ```
-      `pip install <dist>` then has no AGPL anywhere in its graph, while
-      `pip install <dist>[pdf]` (and the dev env / `uv sync --all-extras`) keeps
-      today's behavior. One published package, no divergent branch whose
-      pymupdf-removal could drift back into `main` — which was Patrick's stated
-      worry, 2026-08-09. **Contained enough to be tractable:** pymupdf is
-      imported in exactly three modules — `services/pdf/{floats,mine,text}.py` —
-      with references in `config.py` and `services/sources/extract.py`. The work
-      is making those imports lazy and degrading the upload/sources feature
-      cleanly ("PDF support not installed") rather than crashing at import.
-      Work doesn't plan to upload files or sources at all (Patrick), so the
-      degraded mode is the *expected* mode there.
-      **Caveat that could kill the approach:** some policy engines flag
-      *declared* optional dependencies, not just resolved ones. If Xray does,
-      the extra doesn't clear the gate and the real fix is swapping to
-      `pypdfium2` (BSD-3/Apache-2.0) or `pdfminer.six` (MIT) — a much bigger
-      job, since `mine.py`/`floats.py` lean on PyMuPDF's layout and image
-      extraction. Confirm before building either. Worth doing on its own merits
-      regardless of PyPI: it lightens the default install and removes a copyleft
-      dependency from a network service. See [docs/pdf-mining.md](docs/pdf-mining.md)
-      before touching the caching layer. *(Filed 2026-08-09, out of the PyPI
-      packaging discussion.)*
 - [ ] **A deploy / release-automation strategy** — *(CI, the first of this
       ticket's three stages, **shipped in v6.10.0** — see
       [docs/history.md](docs/history.md). What follows is the remainder.)* The

@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 # Optional capabilities. Each one is heavy, each is imported lazily at a single
-# guarded site (see `services/optional.py`), and each is useless to a reader who
+# guarded site (see `src/atlas/optional.py`), and each is useless to a reader who
 # only wants the graph and the teacher. `uv sync --all-extras` for everything.
 [project.optional-dependencies]
 # Search over your own uploaded sources. The expensive one by a wide margin:

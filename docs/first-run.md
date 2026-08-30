@@ -74,7 +74,7 @@ else.
 
 **Note it does *not* need PyPI.** A GitHub release asset installs with
 `pip install <url>`, which sidesteps both the distribution-name question and
-the PyMuPDF/AGPL blocker recorded in `docs/licensing.md` and the PyPI ticket.
+the PyMuPDF/AGPL blocker recorded in the PyPI ticket.
 Worth separating: the packaging work is useful immediately, publishing is a
 separate decision.
 
@@ -110,8 +110,10 @@ Sequence, not a choice — the options are not alternatives:
    `atlas[sources]`, `atlas[pdf]`, `atlas[corpus]`; the three unused
    declarations deleted. Measured after: a core install is **83 MB** and boots,
    serves a graph, and reports each missing capability by name. CI dropped from
-   1.0 GB to 304 MB. PyMuPDF is now optional, which makes the AGPL question in
-   `docs/licensing.md` concrete rather than theoretical.
+   1.0 GB to 304 MB. PyMuPDF is now optional, so the default dependency graph
+   carries no AGPL at all — the shape the Xray question needed; what is still
+   open is only whether *declared* extras are flagged too (the PyPI ticket).
+
 
    Two things surfaced while doing it, both worth carrying forward.
    `corpus/source.py` imported `duckdb` at module scope and

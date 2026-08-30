@@ -3569,6 +3569,40 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Infrastructure, quality & tooling
 
+- [x] **PyMuPDF is an optional extra — the one AGPL dependency is out of the
+      default install** *(v7.15.0)* — a license audit of the installed tree
+      (2026-08-09) came back clean everywhere except one: `pymupdf` is **"Dual
+      Licensed - GNU AFFERO GPL 3.0 or Artifex commercial"**. Everything else
+      was BSD-3 (torch, scikit-learn, flask), Apache-2.0
+      (sentence-transformers), or MIT (anthropic, duckdb, sqlite-vec).
+      Enterprise scanners commonly ban AGPL outright, and Atlas is a Flask
+      **network service** — precisely the scenario AGPL §13 targets.
+
+      It shipped as one of the three extras in the packaging split (see
+      **"The heavy capabilities became optional extras"** under *Reach &
+      access* for the size story and the enforced no-module-scope-import
+      invariant). `pip install <dist>` now has no AGPL anywhere in its
+      dependency graph; `pip install <dist>[pdf]` keeps today's behavior, and
+      an install without it degrades by name through `optional.require`
+      rather than crashing on `No module named 'fitz'`. **One published
+      package, no divergent branch** whose pymupdf-removal could drift back
+      into `main` — which was Patrick's stated worry, 2026-08-09.
+
+      It was contained enough to be tractable: pymupdf is imported in exactly
+      three modules — `services/pdf/{floats,mine,text}.py` — with references
+      in `config.py` and `services/sources/extract.py`.
+
+      **What this does *not* settle** is whether it clears the work-side Xray
+      gate: some policy engines flag *declared* optional dependencies, not
+      just resolved ones. That question rides with the still-open "Publish to
+      PyPI" ticket, along with the fallback if the answer is bad (swapping to
+      `pypdfium2` or `pdfminer.six`, a much bigger job since `mine.py` and
+      `floats.py` lean on PyMuPDF's layout and image extraction). Shipping the
+      extra was worth doing on its own merits regardless: it lightens the
+      default install and removes a copyleft dependency from a network
+      service. *(Filed 2026-08-09 out of the PyPI packaging discussion;
+      shipped 2026-08-28.)*
+
 - [x] **`refs` → `graph_refs`: naming the citation maps apart** *(v6.12.0)* —
       three different `[n]`-marker maps had grown up beside each other, and the
       oldest and most load-bearing was the one with the least specific name:
