@@ -13,6 +13,6 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from .discovery import cached_nodes, local_search, valid_fields
+from .discovery import cached_nodes, display_hits, local_search, valid_fields
 
-__all__ = ["cached_nodes", "local_search", "valid_fields"]
+__all__ = ["cached_nodes", "display_hits", "local_search", "valid_fields"]

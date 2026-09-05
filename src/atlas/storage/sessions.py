@@ -1,19 +1,37 @@
 """Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
 
 Description:
-Saved sessions & workspaces.
+Saved explorations.
 
-Save the current **graph** (seed + every node/edge on screen, including ones
-the agent discovered/expanded/searched) together with the **teacher
-transcript** (chat + lecture beats), then reopen it later without rebuilding
-the graph from Semantic Scholar — a restore costs no rate-limited API calls
-and keeps the exact papers you had explored.
+An **exploration** is a sitting at the app: the conversation you held, the
+lectures you played, and a note of which graph was open while you held it.
+Every exploration saves itself as you work (there is no Save button); the
+frontend re-POSTs the same row on settled events, debounced.
 
-This is a small key/blob store, separate from the ephemeral 1-day graph
-cache in digest.db — saved sessions are durable user data with their own
-lifecycle, so they live in their own ``sessions.db`` (like the bring-your-
-own sources). The heavy state is JSON in the ``data`` column; a few metadata
-columns are lifted out so the list view renders without parsing every blob.
+**The conversation is the durable thing here, the graph is a reference.**
+The blob carries chat, lectures and a ``graph_ref`` (the seed reference,
+provider and layout needed to put the graph back) rather than the graph's
+nodes and edges. Reopening rebuilds it — instantly when the 1-day snapshot
+cache in digest.db is still warm, from the provider when it is not. That is
+a deliberate trade Patrick made 2026-08-29: rows stay small and the chat
+history is the spine, at the cost of rate-limited calls on a cold reopen and
+a rebuilt graph that may differ from the one you left (citation data moves).
+
+**One exception rides with the conversation:** the papers the *agent* pulled
+in mid-chat (``discovered_nodes``/``discovered_edges``). No cache holds them
+and no rebuild reproduces them — they are a product of the conversation, not
+of the seed — so they are stored, and merged back over the rebuilt graph.
+
+Explorations are durable user data with their own lifecycle, so they live in
+their own ``sessions.db`` (like the bring-your-own sources), separate from
+the ephemeral cache. The heavy state is JSON in the ``data`` column; a few
+metadata columns are lifted out so the list view renders without parsing
+every blob.
+
+**Legacy saves still restore.** Rows written before 2026-08-29 carry the
+whole graph inline (``nodes``/``edges``) and no ``graph_ref``; ``get_session``
+hands the blob back as-is and the frontend uses whichever it finds, so an
+old save keeps its exact papers instead of being rebuilt.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -106,18 +124,77 @@ def get_session(session_id: str) -> dict | None:
     }
 
 
+def _seed_of(payload: dict) -> dict:
+    """Find the seed paper an exploration was reading, in either blob shape.
+
+    The lifted ``seed_id``/``seed_title`` columns exist so the list view can
+    render without parsing every blob, and they must keep working across the
+    move to the reference shape — which put the seed one level down, inside
+    ``graph_ref``. A **legacy** blob has it at the top level.
+
+    Args:
+        payload: The exploration blob, in either shape.
+
+    Returns:
+        The seed dict, or ``{}`` for a graphless exploration (which correctly
+        stores NULL in both columns).
+    """
+    graph_ref = payload.get("graph_ref")
+    if isinstance(graph_ref, dict) and isinstance(graph_ref.get("seed"), dict):
+        return graph_ref["seed"]
+    seed = payload.get("seed")
+    return seed if isinstance(seed, dict) else {}
+
+
+def _count_nodes(payload: dict) -> int:
+    """Count the papers an exploration is worth showing in the list view.
+
+    Two blob shapes have to answer this. A **legacy** save carries the whole
+    graph inline, so its ``nodes`` list is the count. A **current** save
+    carries only a ``graph_ref`` plus whatever the agent discovered, and the
+    rebuilt graph's size is not knowable here — nothing in this process has
+    fetched it — so the honest answer is the count the reference itself
+    recorded when it was written (``graph_ref.n_nodes``) plus the discovered
+    papers layered on top.
+
+    The number is a **list-view hint, not a guarantee**: a rebuilt graph can
+    come back a different size, because the provider's citation data moves
+    between the save and the reopen. Nothing depends on it being exact.
+
+    Args:
+        payload: The exploration blob, in either shape.
+
+    Returns:
+        The paper count for the ``n_nodes`` column; 0 for a graphless
+        exploration (a conversation with no graph is a valid row).
+    """
+    legacy_nodes = payload.get("nodes")
+    if isinstance(legacy_nodes, list) and legacy_nodes:
+        return len(legacy_nodes)
+    graph_ref = payload.get("graph_ref") or {}
+    base = graph_ref.get("n_nodes") if isinstance(graph_ref, dict) else None
+    discovered = payload.get("discovered_nodes")
+    count = base if isinstance(base, int) and base > 0 else 0
+    if isinstance(discovered, list):
+        count += len(discovered)
+    return count
+
+
 def save_session(payload: dict, session_id: str | None = None) -> dict:
     """Create a saved session, or overwrite an existing one in place.
 
     Args:
-        payload: The frontend's session blob — ``{name, seed, layout, nodes,
-            edges, chat, lectures, activeMode}`` (older saves carry a flat
-            ``beats`` and/or a ``hist_trace`` instead). Stored verbatim in
-            ``data``; a few fields are lifted into columns for the list view.
-            A blank name becomes ``"Untitled session"``.
-        session_id: When given, overwrite that session (re-saving a workspace
-            the user already stored — ``created_at`` is preserved); when
-            omitted, a new session with a fresh id is created.
+        payload: The frontend's exploration blob — ``{name, seed, graph_ref,
+            layout, discovered_nodes, discovered_edges, chat, lectures,
+            activeMode}``. Legacy blobs carry the whole graph inline
+            (``nodes``/``edges``) and a flat ``beats``/``hist_trace``
+            instead; both shapes are stored verbatim in ``data``, with a few
+            fields lifted into columns for the list view. A blank name
+            becomes ``"Untitled exploration"``.
+        session_id: When given, overwrite that exploration (the autosave
+            re-POSTing a row it already created — ``created_at`` is
+            preserved); when omitted, a new exploration with a fresh id is
+            created.
 
     Returns:
         The stored metadata row: ``{id, name, seed_id, seed_title, n_nodes,
@@ -127,10 +204,10 @@ def save_session(payload: dict, session_id: str | None = None) -> dict:
         TypeError: When ``payload`` isn't JSON-serializable.
         sqlite3.Error: On database failures.
     """
-    name = (payload.get("name") or "").strip() or "Untitled session"
-    seed = payload.get("seed") or {}
-    nodes = payload.get("nodes") or []
+    name = (payload.get("name") or "").strip() or "Untitled exploration"
+    seed = _seed_of(payload)
     now = time.time()
+    node_count = _count_nodes(payload)
     blob = json.dumps(payload)
 
     with _connect() as conn:
@@ -154,7 +231,7 @@ def save_session(payload: dict, session_id: str | None = None) -> dict:
                 name,
                 seed.get("id"),
                 seed.get("title"),
-                len(nodes),
+                node_count,
                 blob,
                 created_at,
                 now,
@@ -165,7 +242,7 @@ def save_session(payload: dict, session_id: str | None = None) -> dict:
         "name": name,
         "seed_id": seed.get("id"),
         "seed_title": seed.get("title"),
-        "n_nodes": len(nodes),
+        "n_nodes": node_count,
         "created_at": created_at,
         "updated_at": now,
     }
@@ -186,7 +263,7 @@ def rename_session(session_id: str, name: str) -> bool:
 
     Args:
         session_id: The saved session's id.
-        name: The new name; blank falls back to ``"Untitled session"``, the
+        name: The new name; blank falls back to ``"Untitled exploration"``, the
             same floor ``save_session`` applies.
 
     Returns:
@@ -195,7 +272,7 @@ def rename_session(session_id: str, name: str) -> bool:
     Raises:
         sqlite3.Error: On database failures.
     """
-    clean = (name or "").strip() or "Untitled session"
+    clean = (name or "").strip() or "Untitled exploration"
     with _connect() as conn:
         # The name also lives inside the stored blob (the frontend round-trips
         # it), so both copies move together — otherwise a restore would put

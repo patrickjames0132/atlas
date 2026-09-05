@@ -14,7 +14,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode, GraphResponse } from '../../src/api'
 import reducer, {
+  buildSaveBody,
   loadGraph,
+  saveWorkspace,
   nodeSelectionAdded,
   nodeSelectionCleared,
   nodeSelectionSet,
@@ -272,5 +274,324 @@ describe('selectSatelliteCount', () => {
 
   it('never counts the seed itself', () => {
     expect(selectSatelliteCount(stateWith([seed], []))).toBe(0)
+  })
+})
+
+describe('restoring the three exploration shapes', () => {
+  /** The conversation is the durable half — every shape must return it. */
+  const CHAT = [{ role: 'user' as const, text: 'What is a diffusion model?' }]
+
+  it('rebuilds the graph from a reference, and merges the stored discoveries', async () => {
+    // The agent's finds are stored precisely because no rebuild reproduces
+    // them, so they have to survive the rebuild and land on the graph.
+    const api = await import('../../src/api')
+    const getSession = vi.spyOn(api, 'getSession').mockResolvedValue({
+      data: {
+        graph_ref: {
+          seed: { id: 'seed', arxiv_id: '1706.03762', title: 'Attention' },
+          seed_ref: '1706.03762',
+          n_nodes: 2,
+        },
+        provider: 's2',
+        discovered_nodes: [makeNode('found-1')],
+        discovered_edges: [{ source: 'seed', target: 'found-1', type: 'reference' }],
+        chat: CHAT,
+      },
+    } as never)
+    const rebuilt: GraphResponse = {
+      seed: { id: 'seed', arxiv_id: '1706.03762', title: 'Attention' },
+      nodes: [makeNode('seed'), makeNode('other')],
+      edges: [],
+      counts: {},
+    } as never
+    const fetchGraphStream = vi.spyOn(api, 'fetchGraphStream').mockResolvedValue(rebuilt)
+
+    const action = await restoreSession('ref-1')(vi.fn(), vi.fn(), undefined)
+    const payload = action.payload as {
+      graph: GraphResponse | null
+      seedRef: string | null
+      discoveredNodes: GraphNode[]
+    }
+
+    // Rebuilt under the SAME reference it was saved with, so a later Refresh
+    // busts the same cache key.
+    expect(fetchGraphStream).toHaveBeenCalledWith('1706.03762', 's2')
+    expect(payload.graph).toEqual(rebuilt)
+    expect(payload.seedRef).toBe('1706.03762')
+    expect(payload.discoveredNodes).toHaveLength(1)
+
+    const state = reducer(undefined, { type: restoreSession.fulfilled.type, payload })
+    expect(state.discoveredNodes.map((node) => node.id)).toEqual(['found-1'])
+
+    getSession.mockRestore()
+    fetchGraphStream.mockRestore()
+  })
+
+  it('keeps the conversation when the rebuild fails', async () => {
+    // Losing the whole exploration because the provider is down would be a
+    // worse bug than the one the autosave fixed.
+    const api = await import('../../src/api')
+    const getSession = vi.spyOn(api, 'getSession').mockResolvedValue({
+      data: {
+        graph_ref: { seed: { id: 'seed', title: 'Attention' }, seed_ref: '1706.03762' },
+        discovered_nodes: [makeNode('found-1')],
+        chat: CHAT,
+      },
+    } as never)
+    const fetchGraphStream = vi
+      .spyOn(api, 'fetchGraphStream')
+      .mockRejectedValue(new Error('S2 is down'))
+
+    const action = await restoreSession('ref-2')(vi.fn(), vi.fn(), undefined)
+    const payload = action.payload as { graph: GraphResponse | null; transcript: TranscriptState }
+    expect(payload.graph).toBeNull()
+    expect(payload.transcript.chat).toHaveLength(1)
+
+    // Discoveries hang off a graph that isn't there, so they're dropped.
+    const state = reducer(undefined, { type: restoreSession.fulfilled.type, payload })
+    expect(state.discoveredNodes).toEqual([])
+
+    getSession.mockRestore()
+    fetchGraphStream.mockRestore()
+  })
+
+  it('restores a graphless conversation without touching the provider', async () => {
+    const api = await import('../../src/api')
+    const getSession = vi
+      .spyOn(api, 'getSession')
+      .mockResolvedValue({ data: { chat: CHAT } } as never)
+    const fetchGraphStream = vi.spyOn(api, 'fetchGraphStream')
+
+    const action = await restoreSession('chat-only')(vi.fn(), vi.fn(), undefined)
+    const payload = action.payload as {
+      graph: GraphResponse | null
+      seedRef: string | null
+      transcript: TranscriptState
+    }
+
+    expect(fetchGraphStream).not.toHaveBeenCalled()
+    expect(payload.graph).toBeNull()
+    expect(payload.seedRef).toBeNull()
+    expect(payload.transcript.chat).toHaveLength(1)
+
+    getSession.mockRestore()
+    fetchGraphStream.mockRestore()
+  })
+
+  it('uses a legacy inline graph directly, with no rebuild', async () => {
+    // An old save keeps the exact papers it was stored with — rebuilding it
+    // would silently swap them for whatever the provider says today.
+    const api = await import('../../src/api')
+    const getSession = vi.spyOn(api, 'getSession').mockResolvedValue({
+      data: {
+        seed: { id: 'seed', arxiv_id: '1706.03762', title: 'Attention' },
+        nodes: [makeNode('seed'), makeNode('legacy-node')],
+        edges: [],
+        chat: CHAT,
+      },
+    } as never)
+    const fetchGraphStream = vi.spyOn(api, 'fetchGraphStream')
+
+    const action = await restoreSession('legacy')(vi.fn(), vi.fn(), undefined)
+    const payload = action.payload as { graph: GraphResponse | null; seedRef: string | null }
+
+    expect(fetchGraphStream).not.toHaveBeenCalled()
+    expect(payload.graph?.nodes.map((node) => node.id)).toEqual(['seed', 'legacy-node'])
+    expect(payload.seedRef).toBe('1706.03762')
+
+    getSession.mockRestore()
+    fetchGraphStream.mockRestore()
+  })
+})
+
+/**
+ * Wrap one conversation as the whole (keyed) transcript slice.
+ *
+ * The slice holds several conversations so a stream can keep writing to its
+ * own exploration after the reader switches; a save still only ever describes
+ * the active one.
+ *
+ * @param conversation The conversation's fields under test.
+ * @returns A transcript slice with it active.
+ */
+function keyedTranscript(conversation: Record<string, unknown>): TranscriptState {
+  return {
+    byKey: { only: { lectures: {}, lectureSources: {}, activeMode: null, ...conversation } },
+    activeKey: 'only',
+  } as unknown as TranscriptState
+}
+
+describe('saveWorkspace sends a reference, not a graph', () => {
+  /** A store state shaped like a real sitting: a graph plus one agent find. */
+  function stateWith(graph: GraphResponse | null, seedRef: string | null) {
+    return {
+      workspace: {
+        graph,
+        seedRef,
+        discoveredNodes: [makeNode('found-1')],
+        discoveredEdges: [{ source: 'seed', target: 'found-1', type: 'reference' }],
+        layout: 'timeline' as const,
+        provider: 's2' as const,
+      } as unknown as WorkspaceState,
+      transcript: keyedTranscript({ chat: [{ role: 'user' as const, text: 'hi' }] }),
+    }
+  }
+
+  const GRAPH = {
+    seed: { id: 'seed', arxiv_id: '1706.03762', title: 'Attention' },
+    nodes: [makeNode('seed'), makeNode('other')],
+    edges: [],
+    counts: {},
+  } as unknown as GraphResponse
+
+  it('stores the graph reference and the discoveries, but never the graph', async () => {
+    const api = await import('../../src/api')
+    const saveSession = vi
+      .spyOn(api, 'saveSession')
+      .mockResolvedValue({ id: 'row-1', name: 'A name' } as never)
+
+    await saveWorkspace({ name: 'A name' })(
+      vi.fn(),
+      () => stateWith(GRAPH, '1706.03762'),
+      undefined,
+    )
+
+    const body = saveSession.mock.calls[0][0] as Record<string, unknown>
+    expect(body.graph_ref).toEqual({
+      seed: GRAPH.seed,
+      seed_ref: '1706.03762',
+      n_nodes: 2,
+    })
+    // The whole point: the graph's own nodes/edges do not go on the wire.
+    expect(body.nodes).toBeUndefined()
+    expect(body.edges).toBeUndefined()
+    // The agent's finds do, because no rebuild reproduces them.
+    expect(body.discovered_nodes).toHaveLength(1)
+    expect(body.discovered_edges).toHaveLength(1)
+    saveSession.mockRestore()
+  })
+
+  it('saves a graphless conversation instead of throwing', async () => {
+    // This used to throw `No graph to save yet.`, which meant a conversation
+    // held before any graph existed could not be stored at all.
+    const api = await import('../../src/api')
+    const saveSession = vi
+      .spyOn(api, 'saveSession')
+      .mockResolvedValue({ id: 'row-2', name: 'Just a chat' } as never)
+
+    await saveWorkspace({ name: 'Just a chat' })(vi.fn(), () => stateWith(null, null), undefined)
+
+    const body = saveSession.mock.calls[0][0] as Record<string, unknown>
+    expect(body.graph_ref).toBeUndefined()
+    expect(body.chat).toHaveLength(1)
+    saveSession.mockRestore()
+  })
+
+  it('omits the reference when a graph has no seedRef to rebuild from', async () => {
+    // A graph_ref without a usable reference would be unrebuildable — worse
+    // than none, because restore would try and fail rather than degrade.
+    const api = await import('../../src/api')
+    const saveSession = vi
+      .spyOn(api, 'saveSession')
+      .mockResolvedValue({ id: 'row-3', name: 'No ref' } as never)
+
+    await saveWorkspace({ name: 'No ref' })(vi.fn(), () => stateWith(GRAPH, null), undefined)
+
+    expect((saveSession.mock.calls[0][0] as Record<string, unknown>).graph_ref).toBeUndefined()
+    saveSession.mockRestore()
+  })
+})
+
+describe('a saved turn is never mid-stream', () => {
+  /** Switching explorations flushes a save and then aborts the stream, so a
+   *  turn caught mid-answer must not be persisted as "still working". */
+  function stateWithTrace(trace: unknown[]) {
+    return {
+      workspace: {
+        graph: null,
+        seedRef: null,
+        discoveredNodes: [],
+        discoveredEdges: [],
+        layout: 'timeline' as const,
+        provider: 's2' as const,
+      } as unknown as WorkspaceState,
+      transcript: keyedTranscript({
+        chat: [
+          { role: 'user' as const, text: "What's new in quantum computing?" },
+          { role: 'assistant' as const, text: 'Partial answer so far', trace },
+        ],
+      }),
+    }
+  }
+
+  it('settles a pending trace step, keeping the partial answer', async () => {
+    const body = buildSaveBody(
+      stateWithTrace([
+        { action: 'search_web', ok: true, pending: true, need: 'latest news' },
+        { action: 'search_sources', ok: true, found: 2 },
+      ]),
+      'Quantum computing',
+    )
+    const [, assistant] = body.chat
+    // The spinner is gone — this step never finished and never will.
+    expect(assistant.trace?.[0]).toMatchObject({ pending: false, ok: false })
+    // A step that genuinely completed is untouched.
+    expect(assistant.trace?.[1]).toMatchObject({ ok: true, found: 2 })
+    // The partial answer is real work and is kept.
+    expect(assistant.text).toBe('Partial answer so far')
+  })
+
+  it('leaves a settled conversation alone', async () => {
+    const trace = [{ action: 'search_web', ok: true, found: 3 }]
+    const body = buildSaveBody(stateWithTrace(trace), 'Quantum computing')
+    expect(body.chat[1].trace).toBe(trace)
+  })
+})
+
+describe('an abandoned answer is marked when it is saved', () => {
+  /** The tab-close case: the client never reaches the end of the run, so the
+   *  stream cannot mark the turn — the save has to. */
+  function chatEndingWith(turns: unknown[]) {
+    return {
+      workspace: {
+        graph: null,
+        seedRef: null,
+        discoveredNodes: [],
+        discoveredEdges: [],
+        layout: 'timeline' as const,
+        provider: 's2' as const,
+      } as unknown as WorkspaceState,
+      transcript: keyedTranscript({ chat: turns }),
+    }
+  }
+
+  it('marks a last turn that has a trace but never produced prose', () => {
+    const body = buildSaveBody(
+      chatEndingWith([
+        { role: 'user', text: 'What is few-shot learning?' },
+        { role: 'assistant', text: '', trace: [{ action: 'search', ok: true, pending: true }] },
+      ]),
+      'Few-shot learning',
+    )
+    expect(body.chat[1].failed).toBeTruthy()
+    // And the spinner is settled in the same pass.
+    expect(body.chat[1].trace?.[0]).toMatchObject({ pending: false })
+  })
+
+  it('leaves an answer that produced prose alone', () => {
+    const body = buildSaveBody(
+      chatEndingWith([
+        { role: 'user', text: 'q' },
+        { role: 'assistant', text: 'A real answer.' },
+      ]),
+      'Whatever',
+    )
+    expect(body.chat[1].failed).toBeUndefined()
+  })
+
+  it('does not mark a turn that is merely waiting to be asked', () => {
+    // A user turn is not a failed answer.
+    const body = buildSaveBody(chatEndingWith([{ role: 'user', text: 'q' }]), 'Whatever')
+    expect(body.chat[0].failed).toBeUndefined()
   })
 })

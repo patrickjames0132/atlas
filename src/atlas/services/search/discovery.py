@@ -103,6 +103,10 @@ def local_search(
     """Search papers already sitting in the local graph-snapshot cache, scoped to
     one provider.
 
+    Returns **whole node dicts** (plus a ``has_graph`` badge), because one
+    caller builds graph nodes straight out of them; :func:`display_hits`
+    trims them for the search list.
+
     Matches every whitespace token of ``query`` against a paper's title +
     authors (case-insensitive substring). Stale snapshots still count — a
     paper's title doesn't expire. Results are deduped across snapshots (keeping
@@ -126,11 +130,10 @@ def local_search(
         provider: The selected backend — only its snapshots are searched.
 
     Returns:
-        Hit dicts with keys ``id, arxiv_id, title, authors, year,
-        citation_count, url, has_graph`` — ``has_graph`` is True when a *fresh*
-        snapshot exists for the paper as a seed under this provider, i.e.
-        exploring it won't touch the provider's API. (No field filter here —
-        these are cached nodes, matched purely on text.)
+        The matching **graph nodes**, each with an added ``has_graph`` —
+        True when a *fresh* snapshot exists for the paper as a seed under this
+        provider, i.e. exploring it won't touch the provider's API. (No field
+        filter here — these are cached nodes, matched purely on text.)
 
     Raises:
         sqlite3.Error: On cache database failures.
@@ -205,18 +208,40 @@ def local_search(
         )
 
     hits = sorted(best.values(), key=rank)[:limit]
+    # **The whole node, not a projection of it.** These are real graph nodes
+    # lifted out of cached snapshots, and one caller — the paper scout — turns
+    # them straight into `DiscoveredNode`s, which requires the full shape.
+    # Returning the search list's display fields instead used to make every
+    # cache hit raise a `ValidationError` inside `find_papers`, retry once, and
+    # kill the entire answer (see `docs/bugs.md`). The wire shape belongs at
+    # the wire: `display_hits` does that projection for the route.
     return [
         {
-            "id": node["id"],
-            "arxiv_id": node.get("arxiv_id"),
-            "title": node.get("title"),
-            "authors": node.get("authors"),
-            "year": node.get("year"),
-            "citation_count": node.get("citation_count"),
-            "url": node.get("url"),
+            **node,
             "has_graph": bool(
                 fresh_seeds & {ident for ident in (node["id"], node.get("arxiv_id")) if ident}
             ),
         }
         for node in hits
+    ]
+
+
+#: What the search list actually renders. Abstracts are large and the list
+#: shows none of them, so the projection is worth keeping — it just belongs
+#: here, at the boundary, rather than in the shared cache lookup.
+_DISPLAY_FIELDS = ("id", "arxiv_id", "title", "authors", "year", "citation_count", "url")
+
+
+def display_hits(nodes: list[dict]) -> list[dict]:
+    """Trim cached nodes to what the search list shows.
+
+    Args:
+        nodes: Full node dicts from :func:`local_search`.
+
+    Returns:
+        One dict per node with the display fields plus ``has_graph``.
+    """
+    return [
+        {**{key: node.get(key) for key in _DISPLAY_FIELDS}, "has_graph": node.get("has_graph", False)}
+        for node in nodes
     ]

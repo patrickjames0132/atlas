@@ -19,10 +19,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LECTURE_TITLES, streamAsk, streamAskSources, streamLecture } from '../api'
-import type { Beat, GraphNode, LectureMode, PlayedLecture, Provider, SearchOptions } from '../api'
-import { useAppDispatch, useAppSelector } from '../store'
+import type {
+  Beat,
+  GraphNode,
+  HistoryTurn,
+  LectureMode,
+  PlayedLecture,
+  Provider,
+  SearchOptions,
+} from '../api'
+import { useAppDispatch, useAppSelector, useAppStore } from '../store'
 import { highlightSet, selectHighlightSet } from '../store/highlight'
 import {
+  answerFailed,
+  backgroundDiscovery,
   beatAdded,
   chatCleared,
   citedSet,
@@ -35,7 +45,12 @@ import {
   sourceRefsSet,
   provenanceSet,
   paperRefsSet,
+  failedTurnDropped,
   lectureSourcesSet,
+  selectConversation,
+  streamEnded,
+  streamStarted,
+  tracesSettled,
   tokenAppended,
   traceAdded,
   turnStarted,
@@ -117,6 +132,9 @@ function askFilters(filters?: SearchOptions) {
  */
 export function useConversation() {
   const dispatch = useAppDispatch()
+  // Read synchronously when retrying: the history to resend is whatever is
+  // on screen at the moment of the click, not at the last render.
+  const store = useAppStore()
   const seedNode = useAppSelector(selectSeedNode)
   const groundingNodes = useAppSelector(selectGroundingNodes)
   const lectureEdges = useAppSelector(selectGraphEdges)
@@ -128,9 +146,21 @@ export function useConversation() {
   // same backend (and id space) as the graph the question is grounded in, and
   // so the graph-free chat searches the backend the dropdown actually names.
   const provider = useAppSelector((state) => state.workspace.provider)
-  const chatLength = useAppSelector((state) => state.transcript.chat.length)
-  const lectures = useAppSelector((state) => state.transcript.lectures)
-  const activeMode = useAppSelector((state) => state.transcript.activeMode)
+  const chatLength = useAppSelector((state) => selectConversation(state).chat.length)
+  const lectures = useAppSelector((state) => selectConversation(state).lectures)
+  const activeMode = useAppSelector((state) => selectConversation(state).activeMode)
+  // The conversation a stream belongs to, captured when the stream STARTS and
+  // passed to every dispatch it makes. This is what lets an answer keep
+  // running after the reader moves to another exploration: its writes are
+  // addressed to the conversation that asked the question, not to whichever
+  // one happens to be on screen when a chunk lands. Read from a ref, never
+  // from the render closure, so a stream started before a switch still sees
+  // its own key afterwards.
+  const activeKey = useAppSelector((state) => state.transcript.activeKey)
+  const activeKeyRef = useRef(activeKey)
+  useEffect(() => {
+    activeKeyRef.current = activeKey
+  }, [activeKey])
 
   // Which lecture modes are streaming right now. Lectures load independently
   // and in parallel — a lecture can keep generating in the background while
@@ -148,6 +178,14 @@ export function useConversation() {
   // again to clear it (like re-clicking an active beat).
   const [activeRef, setActiveRef] = useState<string | null>(null)
 
+  // A per-stream id, so `running` can hold several at once (an answer and two
+  // lectures) and each removes only its own entry when it finishes.
+  const streamCounter = useRef(0)
+  const nextStreamId = useCallback(() => {
+    streamCounter.current += 1
+    return String(streamCounter.current)
+  }, [])
+
   // One AbortController per in-flight lecture (keyed by mode) plus one for the
   // Q&A/library stream — each cancels independently, so stopping or clearing
   // one never disturbs the others running in parallel.
@@ -161,33 +199,38 @@ export function useConversation() {
     shownModeRef.current = activeMode
   }, [activeMode])
 
-  // Abort every in-flight stream when the panel unmounts. It remounts on each
-  // graph change (the shell keys it on the workspace epoch), so a provider
-  // switch / re-seed / Home / restore stops a running Q&A or lecture instead of
-  // letting it keep streaming discoveries into the NEW graph. (Capturing the ref
-  // objects — stable — so the cleanup reads their live `.current` at unmount.)
-  useEffect(() => {
-    const asks = askCtrl
-    const lectures = lectureCtrls
-    return () => {
-      asks.current?.abort()
-      lectures.current.forEach((ctrl) => ctrl.abort())
-    }
-  }, [])
-  // The one graph change that does NOT remount the panel: a chat-seeded jump
-  // keeps the conversation (and its scroll position), so the unmount cleanup
-  // above never fires and a stream started against the old graph would keep
-  // pushing discoveries into the new one. Abort on the seed changing under a
-  // live panel instead — the same guarantee, just not riding on a remount.
+  // **Nothing is aborted when the reader switches exploration.** This used to
+  // abort every in-flight stream on unmount — the panel remounts on the
+  // workspace epoch — because a single-conversation store gave a running
+  // answer nowhere to write but whatever was now on screen. Conversations are
+  // keyed now and every stream addresses its own, so leaving one running is
+  // safe and is the point: you can ask something slow, go read another
+  // exploration, and come back to a finished answer.
+  //
+  // The controllers still exist for the things that *should* stop a stream —
+  // Stop, Clear, and asking a new question, which supersedes the last.
+  //
+  // The one case that still has to abort is a **re-seed inside the same
+  // conversation**: the graph under the answer is being replaced, so its
+  // discoveries would land on a neighbourhood the question was never about.
+  // Keying can't help there — it really is the same conversation — so the
+  // guard is kept, narrowed to that case. A seed change that comes *with* a
+  // conversation change is just a switch, and must not abort.
   const seedAtMount = useRef(seedNode?.id ?? null)
+  const keyAtMount = useRef(activeKey)
   useEffect(() => {
     const seedId = seedNode?.id ?? null
-    if (seedId === seedAtMount.current) return
+    // Read both previous values BEFORE writing either, or the comparison is
+    // always against what was just stored and the guard never fires.
+    const previousSeed = seedAtMount.current
+    const sameConversation = keyAtMount.current === activeKey
     seedAtMount.current = seedId
+    keyAtMount.current = activeKey
+    if (!sameConversation || seedId === previousSeed) return
     askCtrl.current?.abort()
     lectureCtrls.current.forEach((ctrl) => ctrl.abort())
     lectureCtrls.current.clear()
-  }, [seedNode])
+  }, [seedNode, activeKey])
   // Keys the backend's per-chat history; clearing the chat mints a new one so
   // the fresh conversation also detaches from server-side context.
   const sessionId = useRef(newSessionId())
@@ -316,8 +359,15 @@ export function useConversation() {
       if (!seedNode || lectureCtrls.current.has(mode)) return // already loading
       const ctrl = new AbortController()
       lectureCtrls.current.set(mode, ctrl)
+      // The conversation this lecture belongs to, fixed for the whole run. The
+      // reader may move to another exploration halfway through; every dispatch
+      // below is addressed here so the beats keep landing in the lecture that
+      // asked for them.
+      const key = activeKeyRef.current
+      const streamId = `lecture:${mode}:${nextStreamId()}`
+      dispatch(streamStarted(streamId, key))
       setLoadingModes((prev) => (prev.includes(mode) ? prev : [...prev, mode]))
-      dispatch(lectureStarted(mode)) // empties the slot and shows this mode
+      dispatch(lectureStarted(mode, key)) // empties the slot and shows this mode
       setActiveBeat(null)
       setActiveChat(null)
       setActiveRef(null)
@@ -335,34 +385,42 @@ export function useConversation() {
             signal: ctrl.signal,
             // Arrives before the first beat, so a beat's [Sn, p.N] library
             // citations render as real titles from the moment they appear.
-            onSourceRefs: (refs) => dispatch(lectureSourcesSet({ mode, refs })),
+            onSourceRefs: (refs) => dispatch(lectureSourcesSet({ mode, refs }, key)),
             onBeat: (beat) => {
               // `beat.graph_refs` (the [n] → node-id map) is resolved server-side —
               // a lecture numbers the mode-filtered story nodes, which the
               // frontend never sees, so it can't resolve them itself.
-              dispatch(beatAdded({ mode, beat }))
+              dispatch(beatAdded({ mode, beat }, key))
               // Light up each beat as it arrives — but only while this lecture
-              // is the one on screen (a background one stays quiet).
-              if (shownModeRef.current === mode) {
+              // is the one on screen (a background one stays quiet). A lecture
+              // whose whole exploration is in the background is quiet too.
+              if (shownModeRef.current === mode && activeKeyRef.current === key) {
                 setActiveBeat(beatCount)
                 highlight(beat.node_ids)
               }
               beatCount += 1
             },
-            onError: (message) => setError(message),
+            // An error belongs to the exploration that ran the lecture; only
+            // surface it if that one is still what the reader is looking at.
+            onError: (message) => {
+              if (activeKeyRef.current === key) setError(message)
+            },
           },
         )
         completed = true
       } catch (error) {
-        if (!ctrl.signal.aborted) setError(error instanceof Error ? error.message : String(error))
+        if (!ctrl.signal.aborted && activeKeyRef.current === key) {
+          setError(error instanceof Error ? error.message : String(error))
+        }
       } finally {
         lectureCtrls.current.delete(mode)
         setLoadingModes((prev) => prev.filter((loading) => loading !== mode))
+        dispatch(streamEnded(streamId, key))
         // Don't cache a half-streamed lecture — drop it so a re-click regenerates.
-        if (!completed) dispatch(lectureDropped(mode))
+        if (!completed) dispatch(lectureDropped(mode, key))
       }
     },
-    [seedNode, groundingNodes, lectureEdges, dispatch, highlight],
+    [seedNode, groundingNodes, lectureEdges, dispatch, highlight, nextStreamId],
   )
 
   /** The lecture-button toggle. One button per mode, acting as a show/hide
@@ -407,6 +465,7 @@ export function useConversation() {
       sourceIds: string[] | undefined,
       lectureModes: LectureMode[] | undefined,
       filters?: SearchOptions,
+      history?: HistoryTurn[],
     ) => {
       // Only supersede a previous question — lectures stream on their own
       // controllers, so asking never interrupts one that's loading.
@@ -425,7 +484,25 @@ export function useConversation() {
       // panel, so asking a question no longer costs the reader the beats they
       // were reading.
       askIdxRef.current = chatLength + 1 // the assistant turn we're about to add
-      dispatch(turnStarted(question))
+      // The conversation this answer belongs to, fixed for the whole run —
+      // every dispatch below is addressed to it, so the reader can move to
+      // another exploration mid-answer and this one still lands where it was
+      // asked. `isActive()` guards the things that are about the *screen*
+      // (errors, highlights, the active-turn mark) rather than the transcript.
+      const key = activeKeyRef.current
+      const isActive = () => activeKeyRef.current === key
+      const streamId = `ask:${nextStreamId()}`
+      dispatch(streamStarted(streamId, key))
+      dispatch(turnStarted(question, key))
+      // Why it ended, if it ended badly. The default covers the commonest
+      // case by far — the run was simply abandoned (tab closed, exploration
+      // deleted), which raises nothing worth quoting at a reader.
+      let failure = 'This answer stopped before it finished.'
+      // Whether any prose reached the turn. An answer that produces none has
+      // failed as far as the reader is concerned, however it ended — and the
+      // turn has to say so itself, because the panel's `error` state does not
+      // survive a reload, which is exactly when this is most often seen.
+      let produced = false
       try {
         if (seedNode) {
           // Graph open: the researcher — reads/expands/searches via tool use.
@@ -460,39 +537,58 @@ export function useConversation() {
               provider,
               source_ids: sourceIds,
               lectures: playedLectures.length > 0 ? playedLectures : undefined,
+              history,
               ...askFilters(filters),
             },
             {
               signal: ctrl.signal,
               onToken: (token) => {
                 answerText += token
-                dispatch(tokenAppended(token))
+                produced = true
+                dispatch(tokenAppended(token, key))
               },
-              onTrace: (trace) => dispatch(traceAdded(trace)),
+              onTrace: (trace) => dispatch(traceAdded(trace, key)),
               onDiscovery: (discovery) => {
-                dispatch(discoveryMerged(discovery))
+                // A discovery belongs to the graph of the exploration that
+                // found it. The workspace only holds the ACTIVE exploration's
+                // graph, so merging a background find straight in would drop
+                // this conversation's papers onto a map the reader is reading
+                // for something else — the very cross-contamination the old
+                // abort-on-switch existed to prevent. Off-screen finds wait in
+                // their own conversation and are applied when it is opened.
+                if (isActive()) dispatch(discoveryMerged(discovery))
+                else dispatch(backgroundDiscovery(discovery, key))
                 for (const node of discovery.nodes) {
                   if (typeof node.idx === 'number' && node.idx >= 1) {
                     numberedIds[node.idx - 1] = node.id
                   }
                 }
               },
-              onFigure: (figure) => dispatch(figureAdded(figure)),
-              onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
-              onProvenance: (provenance) => dispatch(provenanceSet(provenance)),
-              onPaperRefs: (refs) => dispatch(paperRefsSet(refs)),
+              onFigure: (figure) => dispatch(figureAdded(figure, key)),
+              onSourceRefs: (refs) => dispatch(sourceRefsSet(refs, key)),
+              onProvenance: (provenance) => dispatch(provenanceSet(provenance, key)),
+              onPaperRefs: (refs) => dispatch(paperRefsSet(refs, key)),
               onCited: (ids) => {
+                dispatch(citedSet(ids, key))
+                // The highlight and the active-turn mark are about the screen,
+                // so a background answer must not move either.
+                if (!isActive()) return
                 highlight(ids)
                 // Mark this answer active, like a beat lights up on arrival.
                 setActiveBeat(null)
                 setActiveChat(askIdxRef.current)
-                dispatch(citedSet(ids))
               },
-              onError: (message) => setError(message),
+              onError: (message) => {
+                // Keep the real reason: this is how the *backend's* account of
+                // the failure ("Tool 'find_papers' exceeded max retries…")
+                // reaches the turn, instead of the generic default.
+                failure = message
+                if (isActive()) setError(message)
+              },
             },
           )
           // Answer complete: freeze the `[n]` → node-id map onto the turn.
-          dispatch(graphRefsSet(resolveGraphRefs(answerText, numberedIds)))
+          dispatch(graphRefsSet(resolveGraphRefs(answerText, numberedIds), key))
         } else {
           // No graph: the same researcher, seedless — it reaches for the
           // library (and the provider) through its tools instead of a numbered
@@ -505,28 +601,81 @@ export function useConversation() {
               session_id: sessionId.current,
               provider,
               source_ids: sourceIds,
+              history,
               ...askFilters(filters),
             },
             {
               signal: ctrl.signal,
-              onSourceRefs: (refs) => dispatch(sourceRefsSet(refs)),
-              onProvenance: (provenance) => dispatch(provenanceSet(provenance)),
-              onPaperRefs: (refs) => dispatch(paperRefsSet(refs)),
-              onTrace: (trace) => dispatch(traceAdded(trace)),
-              onFigure: (figure) => dispatch(figureAdded(figure)),
-              onToken: (token) => dispatch(tokenAppended(token)),
-              onError: (message) => setError(message),
+              onSourceRefs: (refs) => dispatch(sourceRefsSet(refs, key)),
+              onProvenance: (provenance) => dispatch(provenanceSet(provenance, key)),
+              onPaperRefs: (refs) => dispatch(paperRefsSet(refs, key)),
+              onTrace: (trace) => dispatch(traceAdded(trace, key)),
+              onFigure: (figure) => dispatch(figureAdded(figure, key)),
+              onToken: (token) => {
+                produced = true
+                dispatch(tokenAppended(token, key))
+              },
+              onError: (message) => {
+                failure = message
+                if (isActive()) setError(message)
+              },
             },
           )
         }
       } catch (err) {
-        if (!ctrl.signal.aborted) setError(err instanceof Error ? err.message : String(err))
+        // An abort is not worth quoting ("AbortError: signal is aborted…");
+        // the default already says the useful part.
+        if (!ctrl.signal.aborted) failure = err instanceof Error ? err.message : String(err)
+        if (!ctrl.signal.aborted && isActive()) setError(failure)
       } finally {
-        if (askCtrl.current === ctrl) askCtrl.current = null
+        // Read BEFORE releasing the slot, or the comparison is against the
+        // null we just wrote and every answer looks superseded.
+        const superseded = askCtrl.current !== ctrl
+        if (!superseded) askCtrl.current = null
+        dispatch(streamEnded(streamId, key))
+        // Nothing is in progress any more, whatever the outcome — so no chip
+        // may still say it is.
+        dispatch(tracesSettled(key))
+        // An answer that produced nothing gets a durable note on its own turn.
+        // A *superseded* one is excluded: asking a new question deliberately
+        // aborts the last, and that is not a failure to report — the reader
+        // replaced that turn on purpose.
+        if (!produced && !superseded) dispatch(answerFailed(failure, key))
         setAsking(false)
       }
     },
-    [seedNode, groundingNodes, provider, chatLength, activeMode, lectures, dispatch, highlight],
+    [seedNode, groundingNodes, provider, chatLength, lectures, dispatch, highlight, nextStreamId],
+  )
+
+  /**
+   * Ask a failed question again, picking up where it left off.
+   *
+   * The exchange that failed is removed first, so the transcript ends with one
+   * exchange rather than a graveyard of attempts — and the question is re-run
+   * through the ordinary path, so it behaves exactly like asking it now.
+   *
+   * **The history goes with it.** The server's own copy is in memory, keyed by
+   * an id a page reload discards, so after one it has none — which is the very
+   * situation a retry is usually in. The turns still on screen are sent along
+   * and used only if the server has nothing of its own. A failed turn was
+   * never written to history (it is recorded on success only), so what is sent
+   * is exactly the conversation up to the question being retried.
+   *
+   * @param index The failed assistant turn's position in the chat.
+   */
+  const retryAnswer = useCallback(
+    (index: number) => {
+      const conversation = selectConversation(store.getState())
+      const question = conversation.chat[index - 1]
+      if (!question || question.role !== 'user') return
+      const history: HistoryTurn[] = conversation.chat
+        .slice(0, index - 1)
+        .filter((turn) => turn.text.trim())
+        .map((turn) => ({ role: turn.role, content: turn.text }))
+      dispatch(failedTurnDropped(index))
+      void ask(question.text, undefined, undefined, undefined, history)
+    },
+    [ask, dispatch, store],
   )
 
   return {
@@ -545,6 +694,7 @@ export function useConversation() {
     provider,
     toggleLecture,
     ask,
+    retryAnswer,
     stopAsk,
     clearLecture,
     clearChat,

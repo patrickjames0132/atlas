@@ -5,10 +5,11 @@ decides what fills the main pane.
 
 ```
 shell/
-  SideBar.tsx    — the rail: brand + seed, New graph, saved graphs, Library,
-                   Settings, theme, tour, and the data-source picker
-  useSessions.ts — the saved-session list and its CRUD
-  shell.css      — the rail, its menus, and the save confirmation
+  SideBar.tsx    — the rail: brand + seed, New Exploration, explorations,
+                   Library, Settings, theme, tour, and the data-source picker
+  useSessions.ts — the exploration list and its CRUD
+  useAutosave.ts — the autosave: debounce, commit points, once-per-row titling
+  shell.css      — the rail and its menus
 ```
 
 ## Why the header became a rail (v7.8.0)
@@ -18,16 +19,16 @@ and it can't be put away. A rail spends the plentiful one and folds to 56px
 when the map wants the room. It's the shape ChatGPT and Claude both settled
 on, and this is a deliberate copy of it rather than a variation.
 
-The move also let the **saved graphs** stop hiding behind a drawer button. A
+The move also let the **explorations** stop hiding behind a drawer button. A
 thing you accumulate should be visible; that band is what made the rail worth
 building, and the Sessions drawer retired into it.
 
 ## Design decisions worth knowing
 
 - **Three bands, one scroller.** Top (collapse toggle + brand + seed title +
-  New graph) and bottom (data source, Save, Library, Settings, theme, tour)
-  are fixed; only the saved list scrolls, so both fixed bands stay reachable
-  however many graphs have piled up.
+  New Exploration) and bottom (data source, Library, Settings, theme, tour)
+  are fixed; only the exploration list scrolls, so both fixed bands stay
+  reachable however many have piled up.
 - **Collapsed is *actions only*.** The saved list and the labelled data-source
   select are expanded-only. A column of identical 🗂 glyphs distinguishes
   nothing, and titles are the entire point of that list; likewise a bare
@@ -61,23 +62,61 @@ building, and the Sessions drawer retired into it.
   they had is kept, so re-expanding is not a reset. `RAIL_COLLAPSED_WIDTH`
   restates `.rail.collapsed`'s 56px in TS because the unfolding drag has to
   measure from what is on screen.
-- **Saving doesn't prompt for a name.** It names the graph after its seed and
-  you rename in place from the row's ⋮ menu. The moment you want to save is
-  the moment you least want a dialog, and a name is trivially fixable
-  afterwards — which is what `PATCH /api/sessions/<id>` exists for (before
-  it, renaming meant re-saving the whole workspace blob, so it only worked for
-  the session you had open).
-- **Re-saving overwrites its own row.** `openSessionId` is tracked in the
-  shell rather than the store, because it's a fact about this *session of use*
-  — which row to mark, and which one a re-save replaces — not about the graph.
-- **The save confirmation cross-fades with transitions, not keyframes.** The ＋
-  and the ✓ both stay mounted in one grid cell; a transition plays in reverse
-  on its own, so the ✓ leaves the way it arrived with no second animation to
-  keep in sync. The toast carries an explicit `leaving` phase for the same
-  reason: unmounting on the way out is what made the first version vanish in a
-  single frame. (Stacked with `grid-area: 1 / 1` rather than absolute
-  positioning — absolute children take no part in layout, which collapsed both
-  boxes to nothing.)
+- **There is no Save button — every exploration saves itself.** Saving was a
+  manual ＋ until v7.16.0, and forgetting it lost the sitting on tab close.
+  `useAutosave` now writes the same blob without being asked. It is worth
+  knowing *why it doesn't write constantly*: a save is a whole-blob POST, and
+  the 2-second debounce is what collapses a burst into one write. That
+  debounce is also, on its own, what prevents mid-stream saves — a streaming
+  answer rewrites the last chat turn on every chunk, so each chunk pushes the
+  timer out and the quiet period only arrives once the stream settles. No
+  "is it streaming?" flag is consulted, which matters because that flag is
+  component-local to `useConversation` and never reaches the store.
+- **The exploration boundary is explicit, and both sides of it flush.** A row
+  begins at ✎ New Exploration or on opening a saved one; re-seeding *inside*
+  an exploration continues the same row (Patrick, 2026-08-29). Both boundary
+  handlers call `flush()` before clearing, because the last couple of seconds
+  of the exploration being left are still sitting in the debounce — dropping
+  them would be the exact loss the autosave exists to end.
+- **The id and the conversation move together, or explorations copy each
+  other.** Two races were found in browser testing and both had the same
+  shape: an autosave firing while the id pointed at one exploration and the
+  store held another. `openExploration` therefore **awaits the restore before
+  setting `openSessionId`** — setting it up front let a save in the async gap
+  write the outgoing conversation into the row being opened, so both rows
+  ended up with the same history. `useAutosave.save()` likewise captures the
+  id *and* the state synchronously, before it awaits a name, because leaving
+  an exploration clears the store on the very next statement.
+- **A name is written once, then left alone.** The first save asks the server
+  to name the exploration after its conversation (`POST /api/sessions/title`,
+  the summarizer's second entry point); later saves reuse it. Once, because it
+  costs a model call *and* because the reader may have renamed the row from
+  its ⋮ menu — re-titling every two seconds would overwrite them. Titling is
+  its own route rather than a step inside the save for the same reason: model
+  latency has no business on a path that runs all afternoon. If it can't be
+  reached, the fallback is the reader's own first message.
+- **A save must never write less than is already stored.** `saveConversation`
+  compares the prose it is about to send against the last body it wrote for
+  that conversation and refuses to shrink it. This is not defensive
+  programming: browser testing produced exactly this loss — a completed
+  3,000-character answer came back as an empty failed turn, because a blanket
+  unload flush wrote a *reopened* exploration's thinner in-memory copy over
+  the finished one on disk. A whole-blob overwrite makes that the difference
+  between a small bug and destroyed work.
+- **The unload path is deliberately different from every other save.** It skips
+  the titler (naming the exploration from the reader's own words instead) and
+  sends the request `keepalive`. Awaiting a round-trip while the document is
+  being torn down is how the last save — the one that matters most — was
+  silently cancelled and lost. It also flushes only conversations this tab has
+  actually written, for the reason above.
+- **`openSessionId` is tracked in the shell rather than the store**, because
+  it's a fact about this *session of use* — which row to mark, and which one
+  the autosave overwrites — not about the graph.
+- **The autosave reports nothing, and that was a decision** (Patrick,
+  2026-08-29). Dropping the button dropped the only signal that work was safe,
+  so the first cut moved a "Saving… / Saved" label onto the open row. On
+  screen it read as chatter on a rail that is otherwise quiet, and it went.
+  The row appearing in the list is the whole signal.
 - **Both list mutations are optimistic.** Rename and delete change the row
   immediately and re-read afterwards, so a failure corrects itself on the next
   read. That's safe here specifically because neither is destructive to

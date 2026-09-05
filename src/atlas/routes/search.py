@@ -230,7 +230,9 @@ def api_search() -> ResponseReturnValue:
         # break the promise the filter makes.
         if not fields:
             try:
-                instant = search_service.cached_nodes(query, limit, year_from, year_to, provider)
+                instant = search_service.display_hits(
+                    search_service.cached_nodes(query, limit, year_from, year_to, provider)
+                )
             except Exception:
                 log.exception("cache pre-pass failed for %r", query)
                 instant = []

@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
 from ... import factory, prompts
-from .config import AGENT_ID, SKILLS, SYSTEM_PROMPT
+from .config import AGENT_ID, SKILLS, SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)
 
@@ -79,3 +79,63 @@ def summarize(title: str, abstract: str) -> str | None:
         return None
     tldr = result.output.tldr.strip()
     return tldr or None
+
+
+class ConversationTitle(BaseModel):
+    """The titler's structured output.
+
+    A typed field for the same reason ``Summary`` has one: a name goes
+    straight into a list row, so prose the model might wrap around it
+    ("Here's a title:") must not be able to leak in.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+
+
+# A second one-shot agent on the summarizer's id, so it runs on whatever
+# model the summarizer is configured with (see `TITLE_SYSTEM_PROMPT`).
+title_agent: Agent[None, ConversationTitle] = Agent(
+    output_type=ConversationTitle,
+    instructions=[TITLE_SYSTEM_PROMPT],
+)
+
+_TITLE_MAX_CHARS = 1200
+"""How much of the conversation the titler reads. A name comes from what the
+conversation opened with — later turns wander, and a long transcript would
+bill for tokens that cannot improve a six-word phrase."""
+
+
+def title_for_conversation(turns: list[str]) -> str | None:
+    """Name an exploration after the conversation held in it.
+
+    Runs **once per exploration**, when it first has enough content to be
+    worth naming, and never again — the caller stores the result, and the
+    reader can rename it in place afterwards. That is what keeps automatic
+    saving from billing a model call on every keystroke.
+
+    Args:
+        turns: The conversation's opening turns, oldest first, already
+            flattened to plain text by the caller. An empty list (or one
+            holding only blanks) means there is nothing to name yet.
+
+    Returns:
+        The title, or None when there is nothing to name, the model returns
+        nothing usable, or the run fails for **any** reason (no key, network
+        down, rate limit). None is a normal outcome, not an error: the caller
+        falls back to naming the exploration after its own first message,
+        which costs nothing and is always available.
+    """
+    joined = "\n\n".join(turn.strip() for turn in turns if turn and turn.strip())
+    if not joined:
+        return None
+    try:
+        result = title_agent.run_sync(
+            joined[:_TITLE_MAX_CHARS], model=factory.model_for(AGENT_ID)
+        )
+    except Exception:
+        log.warning("exploration title generation failed", exc_info=True)
+        return None
+    title = result.output.title.strip().strip('"').rstrip(".")
+    return title or None

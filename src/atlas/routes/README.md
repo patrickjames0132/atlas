@@ -194,23 +194,43 @@ returns and PUT accepts, so values round-trip byte-for-byte. The location
 endpoint validates the target file before switching the `.config-location`
 sidecar (see `config.py`).
 
-## `sessions.py` — saved workspaces
+## `sessions.py` — explorations
 
 | Endpoint | Job |
 | --- | --- |
-| `GET /api/sessions` | list saved sessions (metadata only, newest first) |
-| `POST /api/sessions` | save the workspace (new, or overwrite by `id`) |
+| `GET /api/sessions` | list explorations (metadata only, newest first) |
+| `POST /api/sessions` | save an exploration (new, or overwrite by `id`) |
 | `GET /api/sessions/<id>` | the full record, to restore |
+| `PATCH /api/sessions/<id>` | rename — `{renamed: bool}` |
 | `DELETE /api/sessions/<id>` | delete — `{deleted: bool}`, idempotent |
+| `POST /api/sessions/title` | name an exploration after its conversation |
 
-Thin CRUD over `storage/sessions.py`. The workspace blob (`{name, seed,
-layout, nodes, edges, chat, beats}`) is **frontend-owned and deliberately
-unvalidated** beyond `nodes` being a non-empty list — the store treats it
-as opaque JSON, and validating its shape here would create a second place
-that has to track the frontend's workspace format. (Old saves may carry a
-`hist_trace` field from the retired lecture backfill; it's simply ignored
-on restore.) Delete returns `{deleted: false}` rather than 404
-(idempotent); a store failure is a canned 500 with details in the log.
+Thin CRUD over `storage/sessions.py`. The blob (`{name, graph_ref, layout,
+discovered_nodes, discovered_edges, chat, lectures}`) is **frontend-owned
+and deliberately unvalidated** — the store treats it as opaque JSON, and
+validating its shape here would create a second place that has to track the
+frontend's format. (Old saves may carry the whole graph inline plus a
+`hist_trace` field from the retired lecture backfill; the former is used on
+restore, the latter ignored.)
+
+Two things about `POST /api/sessions` are load-bearing since v7.16.0, when
+saving became automatic:
+
+- **A graphless body is valid.** The route used to 400 on an empty `nodes`
+  list, which made a conversation held before any graph existed unsavable —
+  the exact data loss the autosave was built to end. Only a non-object body
+  is refused now.
+- **It is written constantly**, on a 2-second debounce from the frontend, so
+  the common case is an overwrite by `id`, not a create. Nothing expensive
+  belongs on this path — which is why titling is a **separate** route rather
+  than a step inside the save: a model call here would put provider latency
+  on a request that fires all afternoon. `POST /api/sessions/title` answers
+  `{title: null}` with HTTP **200** when it can't name the conversation (no
+  key, provider down); that is not an error, because the caller falls back to
+  the reader's own first message and a save must never fail over a nicety.
+
+Delete returns `{deleted: false}` rather than 404 (idempotent); a store
+failure is a canned 500 with details in the log.
 
 ## `sources.py` — the local library
 

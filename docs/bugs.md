@@ -22,6 +22,138 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### Every cache hit killed the answer
+
+*Found 2026-09-05 by Patrick — "the try again button keeps failing". A
+pre-existing bug the retry button made visible: it reproduced the failure on
+demand, which is how it was finally caught.*
+
+- **Symptom.** An answer died with `Tool 'find_papers' exceeded max retries
+  count of 1` printed under the bubble, and **Try again** reproduced it
+  exactly, every time.
+- **Root cause.** A shape mismatch three calls deep, and deterministic rather
+  than flaky. `local_search` — the scan over cached graph snapshots — returned
+  the **search list's display projection** (`id, arxiv_id, title, authors,
+  year, citation_count, url`) rather than the nodes it had actually matched.
+  The paper scout feeds those hits into `deps.found`, and `find_papers` builds
+  a `DiscoveredNode(**found)` from each. `Node` requires `abstract`, `tldr`,
+  `month` and `pub_date` — nullable but **not defaulted**, deliberately, so
+  provider drift fails loudly — so every cached hit raised a `ValidationError`
+  inside the tool. pydantic-ai retried it once, hit `max_retries`, and raised
+  `UnexpectedModelBehavior`, which kills the whole run. **Any question the
+  local cache could answer was therefore unanswerable**, and retrying re-read
+  the same cache and failed the same way.
+- **Fix.** `local_search` returns whole nodes (plus the `has_graph` badge), and
+  the wire shape moved to the wire: `display_hits` does the projection, called
+  by `routes/search.py`. The scout gets real nodes; the search list stays lean
+  (it still drops the abstract, which is most of the payload).
+- **Lesson / guard.** *A function with two consumers that need different shapes
+  will be written for whichever one came first.* The projection was right for
+  the search list and silently wrong for the scout, and nothing typed the
+  boundary between them. Guarded by a test that does what the scout does —
+  takes a `local_search` hit and constructs a `DiscoveredNode` from it — plus
+  one asserting the list projection still drops the abstract. Worth noting the
+  *reporting* was the real obstacle: the failure surfaced only as a red line
+  under the bubble, so the four-deep chain had to be read out of the traceback
+  in `data/atlas.log`.
+
+### The autosave copied one exploration's conversation into another's row
+
+*Found 2026-08-29/09-01 by Patrick, browser-testing the v7.16.0 autosave.
+Three bugs of one shape, each found only by using the thing.*
+
+- **Symptom.** Making two chats and finding **both showed the same history** —
+  "almost like one chat overwrites the other". Separately, clicking New
+  Exploration made the old chat "spin up multiple saves to the side bar".
+- **Root cause — the same race, three times over: an id and the content it
+  names moving independently.** A save is a whole-blob overwrite, so any moment
+  where the autosave's row id points at one exploration while the store holds
+  another is a moment where one can be written over the other.
+  1. `flush()` cannot finish synchronously — it awaits a name before it can
+     POST — so `goHome`'s next statements (clear the workspace, drop the id)
+     landed first. The request then read the *cleared* store and carried no
+     id: a spurious empty row, and the exploration being left overwritten with
+     nothing.
+  2. `onOpenSession` set `openSessionId` immediately, but `restoreSession` is
+     async. In that window the id was the exploration being *opened* while the
+     store still held the one being *left* — so any save landing there copied
+     the old conversation into the new row. Two rows, one history.
+  3. A row created by the *leaving* save was never recorded in the shell's
+     row→conversation table, so reopening that exploration re-read it from
+     disk and discarded whatever its stream had written since.
+- **Fix.** `buildSaveBody` was split out so a save can be **assembled
+  synchronously**, and `useAutosave.save()` captures the state *and* the id
+  before its first `await`. `openExploration` awaits the restore before moving
+  the id. The row→conversation pairing is reported by the autosave itself
+  (`onSaved`), the one place that always knows both.
+- **Lesson / guard.** *An identifier and the data it names must move in the
+  same tick, or not at all.* Three regression tests, and the invariant is
+  written into `shell/README.md` so the next person adding an await on the save
+  path sees why the order matters.
+
+### A save that wrote less than was already stored, and destroyed a finished answer
+
+*Found 2026-09-01 by Claude, browser-testing its own change minutes after
+writing it. The most expensive bug of the batch, and the shortest to state.*
+
+- **Symptom.** A completed ~3,400-character answer, verified on disk, came back
+  an hour later as an **empty turn marked "This answer stopped before it
+  finished."** The work was gone and not recoverable.
+- **Root cause.** The `pagehide` flush was written to save *every* conversation
+  in the store. But the store holds every exploration **opened for reading**,
+  not just the ones this tab has worked in — and a reopened exploration holds
+  whatever the restore put there. Flushing it wrote that thinner copy over the
+  finished one. Because a save is a whole-blob overwrite, "slightly stale" and
+  "destroyed" are the same operation.
+- **Fix.** Two guards, in `useAutosave`. A save **refuses to write less prose
+  than it last wrote** for that conversation (`proseLength`), and the unload
+  path flushes only conversations this tab has actually written.
+- **Lesson / guard.** *A whole-blob overwrite turns every staleness bug into a
+  data-loss bug.* Where the write is not a diff, the guard belongs at the write
+  itself rather than at each of the paths that reach it — there is always
+  another path. Two tests, one of which reproduces the exact loss.
+
+### The last save is the one the browser throws away
+
+*Found 2026-09-01, testing what happens when a tab closes mid-answer.*
+
+- **Symptom.** Asking a question and reloading a few seconds later left **no
+  row at all** — the exploration was never saved, which is the precise failure
+  the autosave exists to prevent.
+- **Root cause.** The unload flush `await`ed a title from the model before it
+  could POST. A page being torn down cancels in-flight requests, so the round
+  trip guaranteed the save that mattered most never left.
+- **Fix.** The unload path names the exploration from the reader's own first
+  message — no network — and sends the save with `keepalive: true` so the
+  request outlives the document.
+- **Lesson / guard.** *Nothing on an unload path may await anything it does not
+  have to.* Covered by a test asserting the titler is not consulted and
+  `keepalive` is set; the 64KB `keepalive` body cap is the accepted trade and
+  is documented at the call site.
+
+### A deleted chat came back from the dead
+
+*Found 2026-09-01 by Patrick: "the deleted chat will reappear at random,
+sometimes a copy of a completely different chat."*
+
+- **Symptom.** Deleting an exploration **while its answer was still streaming**
+  removed the row, which then reappeared moments later.
+- **Root cause.** Deleting removed the server row but left the conversation
+  live in the store, and left the autosave's bookkeeping holding that row's id.
+  `save_session` **upserts** — so the next autosave re-POSTed the deleted id and
+  recreated the row. A still-running conversation saves repeatedly, which is
+  why it resurrected reliably rather than occasionally.
+- **Fix.** Deleting an exploration now drops its conversation from the store as
+  well, which makes the rest of the machinery agree it is gone: the autosave
+  prunes its bookkeeping, a queued save re-checks existence before POSTing, and
+  the stream's remaining writes land nowhere. Deleting the exploration you are
+  *looking at* lands you on a fresh one rather than its husk.
+- **Lesson / guard.** *An upsert makes "delete" a race against every writer that
+  still holds the id.* Deleting has to reach every holder of that id, not just
+  the store of record. (The stream itself still cannot be aborted — its
+  controller belongs to a panel instance that is gone — so it runs to
+  completion server-side and its result is discarded.)
+
 ### A hardcoded model list, and the wrong layer to fix it in
 
 *Found 2026-08-27 by Patrick, switching the lecturer to Google. Fixed in

@@ -8,10 +8,14 @@ different lifecycles, sharing one small connection helper.
 arXiv Atlas fetches everything live and stores no paper corpus — but two
 things still need to persist locally: a **disposable cache** of what's
 already been fetched (so repeat exploration doesn't hammer Semantic
-Scholar's rate limit) and **durable saved workspaces** (a user's own graph +
-chat transcript they explicitly chose to keep). Same technology (SQLite),
+Scholar's rate limit) and **durable explorations** (a reader's own
+conversations, saved automatically as they work). Same technology (SQLite),
 opposite lifecycles, so they're two modules and two separate database
 files.
+
+That split is exactly why an exploration cannot simply *be* a cache row: the
+cache expires after a day and Settings can wipe it outright, so a history
+list backed by it would work all afternoon and then quietly empty overnight.
 
 ## How it's structured
 
@@ -27,15 +31,35 @@ files.
 - **`cache.py`** — a generic **key → JSON blob** TTL cache, in `digest.db`.
   Backs graph snapshots, ar5iv full text/figures, and Hugging Face code
   links — five very different features sharing one table.
-- **`sessions.py`** — the durable **saved-workspace** store, in its own
+- **`sessions.py`** — the durable **exploration** store, in its own
   `sessions.db`. One table, `saved_sessions`: most of the payload is an
-  opaque JSON blob (`data` — the whole graph + transcript), but a few
-  fields (`name`, `seed_id`, `seed_title`, `n_nodes`) are lifted into real
-  columns so the sessions-drawer list view can render without deserializing
-  every saved session's full blob.
+  opaque JSON blob (`data` — the conversation, the lectures, and a
+  *reference* to the graph that was open), but a few fields (`name`,
+  `seed_id`, `seed_title`, `n_nodes`) are lifted into real columns so the
+  rail's list view can render without deserializing every blob.
 
 ## Design decisions worth knowing
 
+- **An exploration stores the conversation, not the graph** (Patrick,
+  2026-08-29). The blob carries a `graph_ref` — the seed reference, provider
+  and layout — and reopening rebuilds the graph, instantly while the snapshot
+  cache is warm and from the provider when it is not. The trade is deliberate
+  and worth stating so nobody "fixes" it later: rows stay small and the chat
+  history is the spine, at the cost of rate-limited calls on a cold reopen and
+  a rebuilt graph that can differ from the one you left, because citation data
+  moves. **The agent's discoveries are the one exception and *are* stored** —
+  no cache holds them and no rebuild reproduces them, since they are a product
+  of the conversation rather than of the seed.
+- **Legacy blobs are read, never migrated.** Rows written before the reference
+  shape carry the whole graph inline; `get_session` hands the blob back
+  verbatim and the frontend uses whichever shape it finds. An old save
+  therefore keeps the exact papers it was stored with, which a rebuild would
+  silently swap for whatever the provider says today. `_count_nodes` reads
+  both shapes for the same reason.
+- **`n_nodes` is a list-view hint, not a guarantee.** For a reference-shaped
+  row nothing in the process has fetched the graph, so the count is whatever
+  the reference recorded plus the stored discoveries. A rebuild can come back
+  a different size; nothing depends on the number being exact.
 - **TTL lives with the caller, not the row.** `cache.get(key, max_age)`
   takes the freshness window as an argument each time; the table itself has
   no opinion on expiry. That's why five unrelated features can share one
@@ -127,8 +151,8 @@ mechanism carries over unchanged.)
 `sessions.py`:
 
 - **`routes/sessions.py`** — the only caller. One Flask blueprint mapping
-  1:1 onto the four storage functions (list/save/get/delete), backing the
-  rail's save/restore/rename/delete UI directly.
+  1:1 onto the storage functions (list/save/get/rename/delete), backing the
+  rail's list/restore/rename/delete UI and the autosave's writes directly.
 
 ## Testing
 

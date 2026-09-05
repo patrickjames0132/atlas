@@ -331,6 +331,45 @@ def api_lecture() -> ResponseReturnValue:
     )
 
 
+def _resumed_history(payload: dict, stored: list[dict]) -> list[dict]:
+    """The conversation history to answer against, preferring the server's own.
+
+    ``_QA_SESSIONS`` lives in memory and is keyed by a client-generated id, so
+    it is empty in exactly the case a **retry** cares about: the reader
+    reloaded the page (or reopened a saved exploration) after an answer failed,
+    and the id they now hold is one this process has never seen. The transcript
+    is still on their screen, so the client can supply what the server lost.
+
+    The server's own copy wins whenever it has one — it is authoritative, and
+    it already excludes failed turns, since history is only written on success.
+    The client's copy is a fallback, accepted only in the shape the model
+    expects and capped by the same ``history_turns`` budget so a crafted body
+    cannot stuff the context window.
+
+    Args:
+        payload: The request body, which may carry ``history``.
+        stored: What this process holds for the session (possibly empty).
+
+    Returns:
+        The history to pass to the agent; ``[]`` when neither side has one.
+    """
+    if stored:
+        return stored
+    raw = payload.get("history")
+    if not isinstance(raw, list):
+        return []
+    clean = [
+        {"role": turn["role"], "content": turn["content"]}
+        for turn in raw
+        if isinstance(turn, dict)
+        and turn.get("role") in {"user", "assistant"}
+        and isinstance(turn.get("content"), str)
+        and turn["content"].strip()
+    ]
+    keep = config.server.history_turns * 2
+    return clean[-keep:] if keep else []
+
+
 @bp.post("/api/ask")
 def api_ask() -> ResponseReturnValue:
     """Answer a question grounded in the visible graph, streamed as SSE.
@@ -339,12 +378,15 @@ def api_ask() -> ResponseReturnValue:
     ``session_id`` so follow-ups keep context, persisted only on success.
 
     Body:
-        ``{question, session_id, seed, nodes, provider?, source_ids?, lectures?}``
-        — ``provider`` (``s2``/``openalex``) matches the graph's backend so the
-        researcher's expand/search/hydrate use it; ``source_ids`` scopes the
-        library search to a subset of uploaded sources; ``lectures`` are the
-        lectures already played this session (``[{title, beats: [{heading,
-        text}]}]``), folded in as context the answer may build on.
+        ``{question, session_id, seed, nodes, provider?, source_ids?,
+        lectures?, history?}`` — ``provider`` (``s2``/``openalex``) matches the
+        graph's backend so the researcher's expand/search/hydrate use it;
+        ``source_ids`` scopes the library search to a subset of uploaded
+        sources; ``lectures`` are the lectures already played this session
+        (``[{title, beats: [{heading, text}]}]``), folded in as context the
+        answer may build on. ``history`` is the client's own copy of the
+        conversation, used **only** when this process holds none for the
+        session — see ``_resumed_history``.
 
     Returns:
         An SSE stream: ``trace`` frames (tool steps), ``discovery`` frames
@@ -369,7 +411,7 @@ def api_ask() -> ResponseReturnValue:
     source_ids = _opt_source_ids(payload)
     lectures = _opt_lectures(payload)
     provider = resolve_provider(payload.get("provider"))
-    history = _QA_SESSIONS.get(session_id, []) if session_id else []
+    history = _resumed_history(payload, _QA_SESSIONS.get(session_id, []) if session_id else [])
 
     return sse_response(
         _relay(
@@ -428,7 +470,9 @@ def api_ask_sources() -> ResponseReturnValue:
     # OpenAlex dropdown ended up searching Semantic Scholar and handing back
     # citations no OpenAlex seed build could resolve.
     provider = resolve_provider(payload.get("provider"))
-    history = _SOURCES_SESSIONS.get(session_id, []) if session_id else []
+    history = _resumed_history(
+        payload, _SOURCES_SESSIONS.get(session_id, []) if session_id else []
+    )
 
     return sse_response(
         _relay(

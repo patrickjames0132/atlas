@@ -154,3 +154,39 @@ def test_cached_nodes_keeps_the_instant_flag_local_search_computed():
         [_node("instseed", "Instant Paper", is_seed=True)]))
     (hit,) = discovery.cached_nodes("instant paper", provider="s2")
     assert hit["has_graph"] is True
+
+
+def test_a_cached_hit_can_become_a_graph_node():
+    """The scout turns these straight into ``DiscoveredNode``s.
+
+    This is the shape contract that matters, and it was broken: ``local_search``
+    used to return the search *list's* projection — no abstract, tldr, month or
+    pub_date — so every cache hit raised a ``ValidationError`` inside
+    ``find_papers``, pydantic-ai retried the tool once, and the whole answer
+    died with "Tool 'find_papers' exceeded max retries count of 1". Because a
+    cache hit is deterministic, retrying reproduced it exactly.
+    """
+    from atlas.agents import events
+
+    cache.set("graph:v2:s2:seedA", _snapshot(
+        {"arxiv_id": None, "id": "seedA", "title": "Attention Is All You Need"},
+        [_node("nB", "Diffusion Models", authors="Ho", abstract=None, tldr=None,
+               month=None, pub_date=None, fields_of_study=[], rels=[])],
+    ))
+    [hit] = discovery.local_search("diffusion", provider="s2")
+    # Exactly what the scout does with it (`_cached_hits` drops the badge).
+    scouted = {key: value for key, value in hit.items() if key != "has_graph"}
+    node = events.DiscoveredNode(**scouted, idx=1)
+    assert node.id == "nB"
+    assert node.idx == 1
+
+
+def test_display_hits_keeps_the_search_list_lean():
+    """Abstracts are large and the list shows none of them, so the projection
+    stays — it just belongs at the wire rather than in the shared lookup."""
+    trimmed = discovery.display_hits(
+        [{**_node("nB", "Diffusion Models", abstract="a very long abstract"), "has_graph": True}]
+    )
+    assert "abstract" not in trimmed[0]
+    assert trimmed[0]["has_graph"] is True
+    assert trimmed[0]["title"] == "Diffusion Models"

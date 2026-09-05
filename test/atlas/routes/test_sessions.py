@@ -48,10 +48,16 @@ def test_save_with_id_overwrites(client):
     assert len(sessions) == 1 and sessions[0]["name"] == "renamed"
 
 
-def test_save_requires_nonempty_nodes(client):
-    assert client.post("/api/sessions", json={}).status_code == 400
-    assert client.post("/api/sessions", json={"nodes": []}).status_code == 400
-    assert client.post("/api/sessions", json={"nodes": "not-a-list"}).status_code == 400
+def test_a_graphless_body_saves_rather_than_400ing(client):
+    """The route used to reject an empty ``nodes`` list, which made a
+    conversation held before any graph existed unsavable — the exact loss the
+    autosave was built to end. Only a non-object body is refused now."""
+    assert client.post("/api/sessions", json={}).status_code == 200
+    assert (
+        client.post("/api/sessions", json={"name": "Just a chat", "chat": []}).status_code == 200
+    )
+    # Not a JSON object at all is still a client error.
+    assert client.post("/api/sessions", data="[]", content_type="application/json").status_code == 400
 
 
 def test_store_failure_returns_a_canned_500(client, monkeypatch):
@@ -105,6 +111,32 @@ def test_rename_validation_and_missing_session(client):
     assert client.patch(f"/api/sessions/{saved['id']}", json={"name": 7}).status_code == 400
     # A blank name is allowed — it falls back, like saving does.
     client.patch(f"/api/sessions/{saved['id']}", json={"name": "   "})
-    assert client.get(f"/api/sessions/{saved['id']}").json["name"] == "Untitled session"
+    assert client.get(f"/api/sessions/{saved['id']}").json["name"] == "Untitled exploration"
     # Absence isn't a 404, matching delete.
     assert client.patch("/api/sessions/nope", json={"name": "x"}).json == {"renamed": False}
+
+
+def test_title_route_validates_and_reports_an_unnameable_conversation(client, monkeypatch):
+    """A null title is a 200, not an error.
+
+    The caller always has a free fallback (the reader's own first message),
+    and an exploration must never fail to save because the titler was
+    unreachable.
+    """
+    assert client.post("/api/sessions/title", json={"turns": "not-a-list"}).status_code == 400
+    assert client.post("/api/sessions/title", json={"turns": [1, 2]}).status_code == 400
+
+    monkeypatch.setattr(sessions_routes.summarizer, "title_for_conversation", lambda turns: None)
+    response = client.post("/api/sessions/title", json={"turns": ["hello"]})
+    assert response.status_code == 200
+    assert response.json == {"title": None}
+
+
+def test_title_route_returns_the_generated_name(client, monkeypatch):
+    monkeypatch.setattr(
+        sessions_routes.summarizer,
+        "title_for_conversation",
+        lambda turns: "Attention vs. convolution",
+    )
+    response = client.post("/api/sessions/title", json={"turns": ["how do they differ?"]})
+    assert response.json == {"title": "Attention vs. convolution"}
