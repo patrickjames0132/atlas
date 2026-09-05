@@ -11,6 +11,7 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
+import { useEffect, useRef, useState } from 'react'
 import type { AnswerFigure, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
@@ -130,6 +131,60 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
 }
 
 /**
+ * The agent's tool trace, collapsible, and self-collapsing when it finishes.
+ *
+ * Watching the agent work is the interesting part *while it works*; once the
+ * answer is there the trace is a wall of chips above the thing the reader
+ * actually came for. So it opens on its own when a run starts and folds away
+ * when the run ends — and a reader who wants it back (or wants it gone early)
+ * has the caret.
+ *
+ * **A reader's own click wins.** Once they have opened or closed it by hand,
+ * the automatic collapse stops fighting them for the rest of that turn: the
+ * point of the affordance is to be in control of it.
+ *
+ * @param trace   The steps to show.
+ * @param working This turn's agent is still running.
+ * @returns The collapsible trace block.
+ */
+function TraceBlock({ trace, working }: { trace: TraceEvent[]; working: boolean }) {
+  const [open, setOpen] = useState(working)
+  const chosenByReader = useRef(false)
+  useEffect(() => {
+    if (!chosenByReader.current) setOpen(working)
+  }, [working])
+  const steps = trace.length
+  return (
+    <div className={`chat-trace${open ? '' : ' collapsed'}`}>
+      <button
+        type="button"
+        className="trace-toggle"
+        aria-expanded={open}
+        onClick={(event) => {
+          // The bubble itself re-lights this answer's papers; toggling the
+          // trace is not that.
+          event.stopPropagation()
+          chosenByReader.current = true
+          setOpen((prev) => !prev)
+        }}
+      >
+        <span className={`trace-caret${open ? ' open' : ''}`} aria-hidden="true">
+          ▸
+        </span>
+        {working ? 'Working' : `${steps} step${steps > 1 ? 's' : ''}`}
+      </button>
+      {open && (
+        <div className="trace-steps">
+          {trace.map((event, index) => (
+            <TraceLine key={index} trace={event} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Render one chat turn end-to-end.
  *
  * @returns The turn's bubble (retrieval line, trace chips, prose, figures).
@@ -138,7 +193,9 @@ export default function ChatMessage({
   message,
   active,
   streaming,
+  working,
   onActivate,
+  onRetry,
   onRefClick,
   onGraphIds,
   onPaperSeed,
@@ -150,8 +207,12 @@ export default function ChatMessage({
   active: boolean
   /** An answer is streaming app-wide (drives the placeholder ellipsis). */
   streaming: boolean
+  /** THIS turn's agent is still running — drives the trace's auto-collapse. */
+  working?: boolean
   /** Re-light this answer's cited papers (undefined = not clickable). */
   onActivate?: () => void
+  /** Ask this turn's question again (undefined = retry unavailable). */
+  onRetry?: () => void
   /** Spotlight one paper from a clicked inline `[n]` marker. */
   onRefClick?: (nodeId: string) => void
   /** Paper ids still on the graph; a `[n]` outside it greys out. */
@@ -185,10 +246,23 @@ export default function ChatMessage({
         </div>
       )}
       {message.trace && message.trace.length > 0 && (
-        <div className="chat-trace">
-          {message.trace.map((event, index) => (
-            <TraceLine key={index} trace={event} />
-          ))}
+        <TraceBlock trace={message.trace} working={!!working} />
+      )}
+      {message.failed && !message.text && (
+        <div className="chat-failed" role="status">
+          <span className="chat-failed-msg">⚠ {message.failed}</span>
+          {onRetry && (
+            <button
+              type="button"
+              className="chat-retry"
+              onClick={(event) => {
+                event.stopPropagation()
+                onRetry()
+              }}
+            >
+              Try again
+            </button>
+          )}
         </div>
       )}
       {(() => {
@@ -199,6 +273,7 @@ export default function ChatMessage({
           // here and a cascade everywhere else.
           return message.role === 'assistant' &&
             streaming &&
+            !message.failed &&
             !message.trace?.length &&
             !message.retrieve ? (
             <HopDots label="Thinking" />

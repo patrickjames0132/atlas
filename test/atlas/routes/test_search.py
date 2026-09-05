@@ -230,15 +230,30 @@ def test_the_cache_answers_first_while_the_scout_is_still_working(client, monkey
     supersedes them, which is the whole point."""
     seen = {}
     stub_scout(monkeypatch, seen, found=[{"id": "s2live", "title": "A Live Paper"}])
+    # `cached_nodes` hands back whole graph nodes now — the paper scout builds
+    # `DiscoveredNode`s straight out of them — so the route is what trims them
+    # for the wire.
     monkeypatch.setattr(
         search_routes.search_service, "cached_nodes",
-        lambda *args, **kwargs: [{"id": "cachedA", "title": "A Cached Paper"}],
+        lambda *args, **kwargs: [{
+            "id": "cachedA", "arxiv_id": None, "title": "A Cached Paper",
+            "abstract": "a long abstract nobody reads in a list", "tldr": None,
+            "year": 2020, "month": None, "pub_date": None, "citation_count": 7,
+            "authors": "Someone", "url": "u", "fields_of_study": [],
+            "rels": [], "is_seed": False, "has_graph": True,
+        }],
     )
     response = client.get("/api/search?q=dqn")
     names = [name for name, _ in frames(response)]
     assert names.index("cached") < names.index("result")
     cached = next(payload for name, payload in frames(response) if name == "cached")
-    assert cached == {"papers": [{"id": "cachedA", "title": "A Cached Paper"}]}
+    [paper] = cached["papers"]
+    assert paper["id"] == "cachedA"
+    assert paper["title"] == "A Cached Paper"
+    assert paper["has_graph"] is True
+    # The list shows no abstract, and an abstract per hit is the bulk of the
+    # payload — so the projection has to actually drop it.
+    assert "abstract" not in paper
 
 
 def test_a_field_filter_suppresses_the_instant_list_too(client, monkeypatch):

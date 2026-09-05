@@ -19,7 +19,7 @@
  */
 
 import { configureStore } from '@reduxjs/toolkit'
-import { useDispatch, useSelector } from 'react-redux'
+import { useDispatch, useSelector, useStore } from 'react-redux'
 import highlight from './highlight'
 import library from './library'
 import transcript from './transcript'
@@ -32,6 +32,19 @@ export const store = configureStore({
 export type RootState = ReturnType<typeof store.getState>
 export type AppDispatch = typeof store.dispatch
 
+export type AppStore = typeof store
+
 /** Typed hooks — components use these, never the raw react-redux ones. */
 export const useAppDispatch = useDispatch.withTypes<AppDispatch>()
 export const useAppSelector = useSelector.withTypes<RootState>()
+/**
+ * The store itself, for reading state **synchronously** at a moment of the
+ * caller's choosing rather than at render time.
+ *
+ * Deliberately rare: a component that reads state this way doesn't re-render
+ * when it changes, which is wrong for anything displayed. It exists for the
+ * autosave, which must snapshot exactly what is on screen *before* it awaits
+ * a name — by the time the request goes out, the reader may have moved to a
+ * different exploration and the store already holds theirs.
+ */
+export const useAppStore = useStore.withTypes<AppStore>()

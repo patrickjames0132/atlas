@@ -1,7 +1,15 @@
 # `agents.summarizer`
 
-A one-shot micro-agent that writes a TL;DR from a paper's title + abstract —
-the detail panel's on-demand summary for papers that don't ship one.
+Two one-shot micro-agents that each write one short piece of text: a **TL;DR**
+from a paper's title + abstract (the detail panel's on-demand summary for
+papers that don't ship one), and an **exploration title** from a
+conversation's opening turns (the name an automatically-saved exploration
+arrives in the rail with).
+
+They share one `AGENT_ID`, and so one configured model. Adding a sixth entry
+to Agent Settings for a six-word phrase would have bought nothing, and the
+summarizer is already the crew's cheapest, safest-to-downgrade member — which
+is exactly the tier a title wants.
 
 ## Why it exists
 
@@ -26,12 +34,24 @@ routes/graph.api_paper_tldr
 ```
 
 - **`config.py`** — `AGENT_ID` (which `config.llm.agents` entry to build
-  from), the complete `SYSTEM_PROMPT`, and an empty `SKILLS` tuple (skills
-  carry teaching-behavior rules; this agent doesn't teach).
-- **`main.py`** — the `Agent` (output type `Summary`; the model arrives per
-  run from `factory.model_for`, never at import — see `agents/README.md`) and
-  `summarize`, the only function callers touch.
-- No `tools.py` — the agent calls nothing.
+  from), the complete `SYSTEM_PROMPT` and `TITLE_SYSTEM_PROMPT`, and an empty
+  `SKILLS` tuple (skills carry teaching-behavior rules; neither agent teaches).
+- **`main.py`** — both `Agent`s (output types `Summary` and
+  `ConversationTitle`; the model arrives per run from `factory.model_for`,
+  never at import — see `agents/README.md`) and the two entry points callers
+  touch, `summarize` and `title_for_conversation`.
+- No `tools.py` — neither agent calls anything.
+
+The titling flow:
+
+```
+useAutosave  (an exploration's FIRST save only)
+      ↓ POST /api/sessions/title {turns: [...]}
+routes/sessions.api_sessions_title
+      ↓ summarizer.title_for_conversation   main.py
+      ↓ title_agent.run_sync → ConversationTitle.title
+      ↓ null → caller falls back to the reader's own first message
+```
 
 ## Design decisions worth knowing
 
@@ -60,15 +80,32 @@ routes/graph.api_paper_tldr
   summarize only what the abstract claims.
 - **A cheap, fast model.** The config entry runs Haiku — one sentence from
   one abstract on an interactive click; flagship models buy nothing here.
+- **A title is written once per exploration, and never on the save path.**
+  The autosave fires every couple of seconds; titling on each write would
+  bill a model call per debounce *and* would overwrite a name the reader had
+  edited from the row's ⋮ menu. So the frontend calls the title route once,
+  on an exploration's first save, and reuses the answer. It is a separate
+  route from `POST /api/sessions` for the same reason — model latency has no
+  business on a request that runs all afternoon.
+- **A null title is a 200, not an error.** Unlike the TL;DR — where the user
+  explicitly asked for a summary, so failure must be visible — nobody asked
+  for a title. The caller has a free fallback in the reader's own first
+  message, and an exploration must never fail to save because a nicety was
+  unavailable.
+- **The output is stripped of a model's habits**: surrounding quotes and a
+  trailing period, both of which read wrong in a list row. The prompt bans
+  the stock openings ("Chat about…", "Exploring…") and asks for the subject
+  rather than the activity.
 
 ## Who uses it, and how/why
 
-- **`routes/graph.py::api_paper_tldr`** — the only caller, wrapping it in
-  the cache check/write. `api_paper` (hydration) additionally back-fills
+- **`routes/graph.py::api_paper_tldr`** — the TL;DR's only caller, wrapping
+  it in the cache check/write. `api_paper` (hydration) additionally back-fills
   `tldr` from the same cache so a generated summary shows up on later
   opens without the frontend asking.
-- **Frontend:** `DetailPanel`'s summary toggle → `api.generateTldr` — the
-  only surface that can trigger a generation.
+- **`routes/sessions.py::api_sessions_title`** — the titler's only caller.
+- **Frontend:** `DetailPanel`'s summary toggle → `api.generateTldr` for the
+  TL;DR; `shell/useAutosave.ts` → `api.titleForConversation` for the title.
 
 ## Testing
 
@@ -77,5 +114,9 @@ routes/graph.api_paper_tldr
 captures the prompt (title + abstract both present), a raising
 `FunctionModel` proves failure degrades to None, and a run *without* an
 override proves the suite's `ALLOW_MODEL_REQUESTS = False` guard trips
-first. Blank-abstract and blank-output edges round it out. The route's
-cache-hit/miss/error behavior lives in `test/atlas/routes/test_graph.py`.
+first. Blank-abstract and blank-output edges round it out. The titler is
+covered the same way — the structured title flows through (stripped of quotes
+and a trailing period), an empty conversation never reaches the model, and a
+raising model degrades to None. The route behaviour lives in
+`test/atlas/routes/test_graph.py` (TL;DR cache hit/miss/error) and
+`test/atlas/routes/test_sessions.py` (title validation, and null-as-200).

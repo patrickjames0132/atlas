@@ -46,21 +46,21 @@ export interface SideBarProps {
   /** Which main-pane view is showing — drives the active entry. */
   view: ShellView
   onView: (view: ShellView) => void
-  /** Clear the workspace and go back to the landing chat. */
+  /** Clear the workspace and start a fresh exploration. */
   onNewGraph: () => void
-  /** The saved sessions, newest-updated first. */
+  /** The saved explorations, newest-updated first. */
   sessions: SavedSessionMeta[]
-  /** The session currently open, so the list can mark it. */
+  /** The exploration currently open, so the list can mark it. */
   openSessionId: string | null
+  /**
+   * Explorations with a stream still running — including ones the reader has
+   * moved away from, which is the point: an answer left running is visibly
+   * still running.
+   */
+  workingSessionIds?: string[]
   onOpenSession: (id: string) => void
   onRenameSession: (id: string, name: string) => void
   onDeleteSession: (id: string) => void
-  /** Save the current workspace as a new session — hidden with no graph. */
-  onSaveSession?: () => void
-  /** A save just landed: the ＋ becomes a ✓ for a beat. Collapsed, this is
-   *  the only feedback there is — the row has no label to change and the
-   *  saved list it feeds isn't rendered. */
-  justSaved?: boolean
   onOpenSettings: () => void
   onStartTour: () => void
   /** 'dark' | 'light' — decides which glyph the theme button shows. */
@@ -173,13 +173,15 @@ function ProviderPicker({ provider, onChange, disabled }: ProviderPickerProps) {
 interface SessionRowProps {
   session: SavedSessionMeta
   active: boolean
+  /** This exploration still has a stream running (here or in the background). */
+  working?: boolean
   onOpen: () => void
   onRename: (name: string) => void
   onDelete: () => void
 }
 
 /**
- * One saved session in the rail: a click opens it, a ⋮ menu renames or
+ * One saved exploration in the rail: a click opens it, a ⋮ menu renames or
  * deletes it.
  *
  * Rename edits **in place** rather than in a modal — the row is the label, so
@@ -187,14 +189,22 @@ interface SessionRowProps {
  * named. Enter commits, Escape abandons, and blur commits too (a click
  * elsewhere reads as "done", not "cancel").
  *
- * @param session The saved session's metadata row.
- * @param active  This session is the one currently open.
- * @param onOpen  Restore this session.
+ * @param session The saved exploration's metadata row.
+ * @param active  This exploration is the one currently open.
+ * @param working This exploration still has a stream running.
+ * @param onOpen  Restore this exploration.
  * @param onRename Commit a new name.
  * @param onDelete Remove it.
  * @returns The rendered row.
  */
-function SessionRow({ session, active, onOpen, onRename, onDelete }: SessionRowProps) {
+function SessionRow({
+  session,
+  active,
+  working = false,
+  onOpen,
+  onRename,
+  onDelete,
+}: SessionRowProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(session.name)
@@ -242,6 +252,16 @@ function SessionRow({ session, active, onOpen, onRename, onDelete }: SessionRowP
       <button type="button" className="rail-session-open" onClick={onOpen} title={session.name}>
         <span className="rail-dot" aria-hidden="true" />
         <span className="rail-label">{session.name}</span>
+        {/* Deliberately the only status the rail shows. It is not chatter
+            about saving — it is the one thing a reader cannot otherwise know
+            once they have walked away from a running answer. */}
+        {working && (
+          <span className="rail-working" role="status" aria-label="Still working">
+            <span className="rail-working-dot" />
+            <span className="rail-working-dot" />
+            <span className="rail-working-dot" />
+          </span>
+        )}
       </button>
       <button
         type="button"
@@ -300,11 +320,10 @@ export default function SideBar({
   onNewGraph,
   sessions,
   openSessionId,
+  workingSessionIds = [],
   onOpenSession,
   onRenameSession,
   onDeleteSession,
-  onSaveSession,
-  justSaved = false,
   onOpenSettings,
   onStartTour,
   theme,
@@ -389,12 +408,12 @@ export default function SideBar({
           className="rail-item"
           data-tour="new-graph"
           onClick={onNewGraph}
-          title="Start fresh — clears the graph and the conversation"
+          title="Start a new exploration — clears the graph and the conversation. The one you're leaving is already saved."
         >
           <span className="rail-glyph" aria-hidden="true">
             ✎
           </span>
-          {open && <span className="rail-label">New graph</span>}
+          {open && <span className="rail-label">New Exploration</span>}
         </button>
       </div>
 
@@ -403,13 +422,14 @@ export default function SideBar({
           and titles are the whole point of the list. Collapsed, the rail is
           actions. */}
       <div className="rail-scroll">
-        {open && sessions.length > 0 && <p className="rail-heading">Saved graphs</p>}
+        {open && sessions.length > 0 && <p className="rail-heading">Explorations</p>}
         {open &&
           sessions.map((session) => (
             <SessionRow
               key={session.id}
               session={session}
               active={session.id === openSessionId}
+              working={workingSessionIds.includes(session.id)}
               onOpen={() => onOpenSession(session.id)}
               onRename={(name) => onRenameSession(session.id, name)}
               onDelete={() => onDeleteSession(session.id)}
@@ -417,7 +437,8 @@ export default function SideBar({
           ))}
         {open && sessions.length === 0 && (
           <p className="rail-empty">
-            Saved graphs appear here. Explore a paper, then save it to come back to it.
+            Your explorations appear here and save themselves — ask a question or open a paper, and
+            you can come back to it.
           </p>
         )}
       </div>
@@ -451,30 +472,6 @@ export default function SideBar({
               ))}
             </select>
           </label>
-        )}
-        {onSaveSession && (
-          <button
-            type="button"
-            className={`rail-item${justSaved ? ' just-saved' : ''}`}
-            onClick={onSaveSession}
-            title="Save this graph and conversation"
-          >
-            {/* Both glyphs stay mounted and cross-fade. A transition (rather
-                than a keyframe animation) gives the exit for free as the
-                reverse of the entrance — swapping the element instead made
-                the ✓ appear with a flourish and then disappear in one
-                frame. */}
-            <span className="rail-glyph rail-save-glyph" aria-hidden="true">
-              <span className={`glyph-face${justSaved ? '' : ' shown'}`}>＋</span>
-              <span className={`glyph-face glyph-check${justSaved ? ' shown' : ''}`}>✓</span>
-            </span>
-            {open && (
-              <span className="rail-label rail-save-label">
-                <span className={`glyph-face${justSaved ? '' : ' shown'}`}>Save this graph</span>
-                <span className={`glyph-face${justSaved ? ' shown' : ''}`}>Saved</span>
-              </span>
-            )}
-          </button>
         )}
         <button
           type="button"

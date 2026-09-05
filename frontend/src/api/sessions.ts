@@ -64,6 +64,16 @@ export interface ChatMsg {
   paperRefs?: Record<string, PaperRef>
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
+  /**
+   * Why this answer never arrived — an assistant turn that ended without
+   * producing any prose.
+   *
+   * Persisted, because the reason it is most often seen is a run the reader
+   * *left*: they closed the tab or deleted the exploration mid-answer, and
+   * came back to a turn that shows a trace and then simply stops. Without a
+   * durable marker the transcript gives no account of itself at all.
+   */
+  failed?: string
   /** Figures the agent pulled into this answer (assistant turns only). */
   figures?: AnswerFigure[]
   /** Library-retrieval summary — set only on the graph-free library-chat path
@@ -79,13 +89,42 @@ export interface SessionSeed {
 }
 
 /**
- * The heavy payload of a saved session: the full graph as it stood (every
- * node and edge, including agent-discovered ones, with their flags) plus the
- * teacher transcript. Restored straight into the explorer — no Semantic
- * Scholar rebuild.
+ * What it takes to put an exploration's graph back, without storing the graph.
+ *
+ * The `seed_ref` is the exact reference the graph was loaded with (arXiv id,
+ * pasted URL or S2 paperId) — the same string `Refresh` keys on — so a reopen
+ * rebuilds under the identical cache key rather than a merely equivalent one.
+ */
+export interface SessionGraphRef {
+  seed: SessionSeed
+  seed_ref: string
+  /** How big the graph was when saved — a list-view hint, not a guarantee. */
+  n_nodes?: number
+}
+
+/**
+ * The payload of a saved exploration: the **conversation**, plus a reference
+ * to whichever graph was open while it was held.
+ *
+ * The graph itself is deliberately not stored (Patrick, 2026-08-29). A reopen
+ * rebuilds it from `graph_ref` — instantly while the 1-day snapshot cache is
+ * warm, from the provider when it is not, which costs rate-limited calls and
+ * can come back a slightly different graph as citation data moves.
+ *
+ * `discovered_nodes`/`discovered_edges` are the exception, and are stored:
+ * the papers the *agent* pulled in mid-conversation exist in no cache and no
+ * rebuild reproduces them, because they are a product of the conversation
+ * rather than of the seed. They are merged back over the rebuilt graph.
  */
 export interface SessionData {
-  seed: SessionSeed
+  /**
+   * Present only on **legacy** saves (before 2026-08-29), which stored the
+   * whole graph inline. New saves carry `graph_ref` instead; a graphless
+   * exploration carries neither.
+   */
+  seed?: SessionSeed
+  /** How to rebuild the graph. Absent on legacy saves and graphless ones. */
+  graph_ref?: SessionGraphRef
   layout: 'force' | 'timeline'
   /**
    * The academic-data backend this graph was built from — restored so a later
@@ -93,8 +132,16 @@ export interface SessionData {
    * saves (they default to 's2' on restore).
    */
   provider?: Provider
-  nodes: GraphNode[]
-  edges: GraphEdge[]
+  /**
+   * Legacy: the full graph as it stood. Only on saves predating the reference
+   * shape — when present, restore uses it directly and skips the rebuild, so
+   * an old save keeps the exact papers it was saved with.
+   */
+  nodes?: GraphNode[]
+  edges?: GraphEdge[]
+  /** Papers the agent found mid-conversation — stored, never rebuildable. */
+  discovered_nodes?: GraphNode[]
+  discovered_edges?: GraphEdge[]
   chat: ChatMsg[]
   /**
    * The per-mode lecture cache (mode → its beats) as it stood when saved —
@@ -188,15 +235,26 @@ export async function getSession(id: string): Promise<SavedSession> {
  * Save the current workspace. A body with an `id` overwrites that saved
  * session; without one, a new session is created.
  *
- * @param body The workspace payload to store (see {@link SaveSessionBody}).
+ * @param body    The workspace payload to store (see {@link SaveSessionBody}).
+ * @param options `keepalive` lets the request survive the page unloading.
  * @returns The stored metadata row (with the new/updated id and timestamps).
  * @throws With the server's error message when the save fails.
  */
-export async function saveSession(body: SaveSessionBody): Promise<SavedSessionMeta> {
+export async function saveSession(
+  body: SaveSessionBody,
+  options: { keepalive?: boolean } = {},
+): Promise<SavedSessionMeta> {
   const res = await fetch('/api/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    // The tab is going away. A normal fetch is cancelled with the page, so
+    // the last save — the one that matters most — simply never lands;
+    // `keepalive` lets the request outlive the document. Its 64KB body cap is
+    // why this is not the default: an ordinary save carries whatever the
+    // conversation has grown to, while the unload path would rather send a
+    // large exploration on a best-effort basis than not send it at all.
+    keepalive: options.keepalive,
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error((data as { error?: string }).error || `Save failed (${res.status})`)
@@ -229,7 +287,7 @@ export async function deleteSession(id: string): Promise<boolean> {
  * costs a flicker rather than an error dialog over a list.
  *
  * @param id   The saved session's id.
- * @param name The new name; blank falls back to "Untitled session".
+ * @param name The new name; blank falls back to "Untitled exploration".
  * @returns True when the session existed and is now renamed.
  */
 export async function renameSession(id: string, name: string): Promise<boolean> {
@@ -243,5 +301,31 @@ export async function renameSession(id: string, name: string): Promise<boolean> 
     return ((await res.json()) as { renamed: boolean }).renamed
   } catch {
     return false
+  }
+}
+
+/**
+ * Ask the server to name an exploration after the conversation held in it.
+ *
+ * Never throws, and a null title is a normal answer, not a failure — the
+ * model may be unreachable (no key, provider down) or the conversation may
+ * not say enough yet. The caller always has a free fallback in the reader's
+ * own first message, and an exploration must never fail to save because a
+ * nicety was unavailable.
+ *
+ * @param turns The conversation's opening turns, oldest first, as plain text.
+ * @returns The generated title, or null when one can't be written.
+ */
+export async function titleForConversation(turns: string[]): Promise<string | null> {
+  try {
+    const res = await fetch('/api/sessions/title', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ turns }),
+    })
+    if (!res.ok) return null
+    return ((await res.json()) as { title: string | null }).title ?? null
+  } catch {
+    return null
   }
 }

@@ -280,7 +280,11 @@ The Vite dev server proxies `/api/*` to Flask.
      brings it back) without dropping the thread or your place in it.
 5. **Your sources** (📚) — drop in PDFs (parallel, with live embedding
    progress) or paste URLs; scope any conversation to a subset of them.
-6. **Sessions** (🗂) — save the workspace, reopen it later free of charge.
+6. **Explorations** — every sitting saves itself, so there is no Save button:
+   ask a question and it appears in the rail, named after what you asked, kept
+   up to date as you work. Leave an answer running and start another
+   exploration — it keeps going in the background and is waiting when you come
+   back.
 7. **Lost?** Hit the header's **?** for a guided coach-mark tour — it auto-runs
    once on first launch (the search surface) and once more on your first graph
    (the graph tools), spotlighting one control at a time; the bubble's title

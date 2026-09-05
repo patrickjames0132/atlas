@@ -62,7 +62,11 @@ import {
 import { useAppDispatch, useAppSelector } from '../store'
 import { selectSatelliteCount } from '../store/workspace'
 import { loadLibrary, selectLibrary } from '../store/library'
-import { selectVisibleBeats, selectVisibleSourceRefs } from '../store/transcript'
+import {
+  selectConversation,
+  selectVisibleBeats,
+  selectVisibleSourceRefs,
+} from '../store/transcript'
 import { REL_COLOR } from '../graph/theme'
 import HopDots from './HopDots'
 import ScopePicker from './ScopePicker'
@@ -158,11 +162,11 @@ export default function Teacher({
   /** Collapse the panel (the header ✕). */
   onClose?: () => void
 }) {
-  const chat = useAppSelector((state) => state.transcript.chat)
+  const chat = useAppSelector((state) => selectConversation(state).chat)
   const beats = useAppSelector(selectVisibleBeats)
   const lectureSourceRefs = useAppSelector(selectVisibleSourceRefs)
-  const lectures = useAppSelector((state) => state.transcript.lectures)
-  const activeMode = useAppSelector((state) => state.transcript.activeMode)
+  const lectures = useAppSelector((state) => selectConversation(state).lectures)
+  const activeMode = useAppSelector((state) => selectConversation(state).activeMode)
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
   // to scope the teacher; 0 means it grounds in every visible paper.
   const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
@@ -184,6 +188,7 @@ export default function Teacher({
     provider,
     toggleLecture,
     ask,
+    retryAnswer,
     stopAsk,
     clearLecture,
     clearChat,
@@ -507,7 +512,11 @@ export default function Teacher({
         message={message}
         active={activeChat === index}
         streaming={asking || searching}
+        // Only the LAST turn can be the one being generated, so only it gets
+        // the live trace treatment; every earlier turn's trace stays folded.
+        working={(asking || searching) && index === chat.length - 1}
         onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
+        onRetry={message.failed ? () => retryAnswer(index) : undefined}
         onRefClick={onRefClick}
         onGraphIds={onGraphIds}
         onPaperSeed={onPaperSeed}

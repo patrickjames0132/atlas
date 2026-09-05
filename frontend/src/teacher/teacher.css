@@ -1180,6 +1180,76 @@
   flex-direction: column;
   gap: 3px;
 }
+.chat-trace.collapsed {
+  margin-bottom: 6px;
+}
+.trace-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* The trace's own header: a caret plus what it is hiding. Quiet by
+   construction — it sits above the answer, and while the answer is what the
+   reader came for the trace should not compete with it. */
+.trace-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px 2px 2px;
+  margin-bottom: 2px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.trace-toggle:hover {
+  color: var(--text);
+}
+.trace-caret {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 0.18s ease;
+}
+.trace-caret.open {
+  transform: rotate(90deg);
+}
+
+/* An answer that never arrived. Stated once, quietly, with the one control
+   that can do anything about it — not an alarm. */
+.chat-failed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.chat-failed-msg {
+  color: #d29922;
+}
+.chat-retry {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.chat-retry:hover {
+  border-color: var(--accent, #58a6ff);
+  color: var(--accent, #58a6ff);
+}
 .trace-line {
   position: relative; /* anchors .trace-spin */
   font-size: 11.5px;

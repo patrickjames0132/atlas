@@ -100,6 +100,31 @@ transcript/
   conversational turn renders no line: a greeting asserts nothing, so
   attributing it would be noise.
 
+## The trace, and answers that never arrive
+
+- **The tool trace collapses itself.** Watching the agent work is the
+  interesting part *while it works*; once the answer is there the trace is a
+  wall of chips above the thing the reader came for. `TraceBlock` opens on its
+  own when a run starts and folds to a one-line summary (`3 steps`) when it
+  ends. **A reader's own click wins from then on** — the automatic collapse
+  stops fighting them for the rest of that turn, because the point of an
+  affordance is to be in control of it.
+- **A failed answer says so on the turn itself**, not in panel state. The
+  commonest failure by far is a run the reader *left* — closed the tab, or the
+  page died mid-answer — so a message living in component state would be gone
+  by the time they came back to look. It is written in two places for that
+  reason: by the stream when it ends without prose, and by the **save** for
+  the case where the client never reached the end of the run at all (see
+  `settleInFlight`, which is the pagehide flush).
+- **Try again re-runs the question, with the conversation behind it.** The
+  failed exchange is dropped first, so the transcript keeps one exchange
+  rather than a graveyard of attempts. The turns still on screen are sent with
+  the request and used **only if the server has none of its own**: its history
+  is in memory keyed by an id a reload discards, which is exactly the state a
+  retry is usually in. A failed turn was never written to that history (it is
+  recorded on success only), so what is sent is precisely the conversation up
+  to the question being retried.
+
 ## Who uses it
 
 `teacher/Teacher.tsx` renders `BeatList` and `ChatMessage`; the click

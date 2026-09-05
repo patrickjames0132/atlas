@@ -253,10 +253,17 @@ export interface AskHandlers {
  *                 scope), the graph's provider (so the researcher's expand/
  *                 search/hydrate use the same backend), optional source_ids
  *                 scoping the researcher's library search to a subset of
- *                 uploaded sources, and optional lectures already played this
- *                 session (extra context the answer may build on).
+ *                 uploaded sources, optional lectures already played this
+ *                 session (extra context the answer may build on), and an
+ *                 optional history for a retry after a reload.
  * @param handlers Event handlers; see {@link AskHandlers}.
  */
+/** One prior exchange, as the model expects to read it back. */
+export interface HistoryTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export async function streamAsk(
   body: {
     question: string
@@ -266,6 +273,14 @@ export async function streamAsk(
     provider: Provider
     source_ids?: string[]
     lectures?: PlayedLecture[]
+    /**
+     * The client's own copy of the conversation, sent only when retrying.
+     * The server's per-session history is in memory and keyed by an id a
+     * reload discards, so after one it holds nothing — this is what lets a
+     * retry pick up where the failed answer left off instead of starting cold.
+     * Ignored whenever the server has its own copy.
+     */
+    history?: HistoryTurn[]
   },
   handlers: AskHandlers,
 ): Promise<void> {
@@ -400,7 +415,14 @@ export interface AskSourcesHandlers {
  * @param handlers Event handlers; see {@link AskSourcesHandlers}.
  */
 export async function streamAskSources(
-  body: { question: string; session_id: string; provider: Provider; source_ids?: string[] },
+  body: {
+    question: string
+    session_id: string
+    provider: Provider
+    source_ids?: string[]
+    /** See `streamAsk` — the client's copy, for a retry after a reload. */
+    history?: HistoryTurn[]
+  },
   handlers: AskSourcesHandlers,
 ): Promise<void> {
   const res = await fetch('/api/ask_sources', {

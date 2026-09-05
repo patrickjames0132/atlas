@@ -15,24 +15,26 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { createAsyncThunk, createSelector, createSlice } from '@reduxjs/toolkit'
+import { createAsyncThunk, createSelector, createSlice, nanoid } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import {
   fetchGraphStream,
   getSession,
   saveSession,
   type Beat,
+  type ChatMsg,
   type BuildProgress,
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
   type LectureMode,
   type Provider,
+  type SaveSessionBody,
   type SavedSessionMeta,
 } from '../api'
 import { cleanNode, countRels } from '../graph/model'
 import type { VNode } from '../graph/model'
-import type { TranscriptState } from './transcript'
+import type { Conversation, TranscriptState } from './transcript'
 
 export interface WorkspaceState {
   graph: GraphResponse | null
@@ -202,25 +204,72 @@ function mapLectures(
 }
 
 /**
- * Reopen a saved session: rebuild its graph directly (no S2 fetch, so no
- * rate-limit cost and the exact discovered papers are preserved). The
- * transcript slice restores itself from this thunk's payload.
+ * Reopen a saved exploration.
+ *
+ * Three shapes arrive here and each restores differently:
+ *
+ * - **Graphless** (no `graph_ref`, no `nodes`) — a conversation held before
+ *   any graph existed. Restores to the landing chat with its transcript;
+ *   `graph: null` is a valid resting state the store already expresses.
+ * - **Reference** (the current shape) — the graph is rebuilt from
+ *   `graph_ref.seed_ref`. Instant while the server's 1-day snapshot cache is
+ *   warm; a real provider fetch when it is not, which is the cost Patrick
+ *   accepted for keeping the conversation, not the graph, as the stored
+ *   thing. A rebuild that **fails** (provider down, seed no longer
+ *   resolvable) is not fatal: the conversation still restores, graphless,
+ *   rather than losing the whole exploration to an unreachable API.
+ * - **Legacy** (`nodes` inline, pre-2026-08-29) — used directly, no rebuild,
+ *   so an old save keeps the exact papers it was stored with.
+ *
+ * The discovered papers are merged back over the rebuilt graph by the
+ * reducer, since no rebuild can reproduce them.
  */
 export const restoreSession = createAsyncThunk('workspace/restoreSession', async (id: string) => {
+  // Minted here so the transcript slice and the shell agree on which
+  // conversation this restore produced, without either having to guess.
+  const conversationKey = nanoid()
   const saved = await getSession(id)
   const data = saved.data
-  const graph: GraphResponse = {
-    seed: {
-      id: data.seed.id,
-      arxiv_id: data.seed.arxiv_id ?? null,
-      title: data.seed.title,
-    },
-    nodes: data.nodes,
-    edges: data.edges,
-    counts: countRels(data.nodes),
+  let graph: GraphResponse | null = null
+  let seedRef: string | null = null
+
+  if (data.nodes?.length && data.seed) {
+    // Legacy: the whole graph is right here.
+    graph = {
+      seed: {
+        id: data.seed.id,
+        arxiv_id: data.seed.arxiv_id ?? null,
+        title: data.seed.title,
+      },
+      nodes: data.nodes,
+      edges: data.edges ?? [],
+      counts: countRels(data.nodes),
+    }
+    seedRef = data.seed.arxiv_id || data.seed.id
+  } else if (data.graph_ref) {
+    seedRef = data.graph_ref.seed_ref
+    try {
+      // The stream API directly, NOT `loadGraph` — dispatching that thunk
+      // would fire its own fulfilled reducer, which resets the discovery
+      // arrays and the epoch, racing the restore's own reducer below.
+      graph = await fetchGraphStream(data.graph_ref.seed_ref, data.provider ?? 's2')
+    } catch {
+      // The conversation is the durable half and it survives this.
+      graph = null
+    }
   }
+
   return {
+    conversationKey,
+    // The name it is already stored under. Without this the shell has no way
+    // to tell the autosave that this conversation is an EXISTING exploration,
+    // and its first save would re-title it — discarding a name the reader may
+    // have set by hand.
+    name: saved.name,
     graph,
+    seedRef,
+    discoveredNodes: data.discovered_nodes ?? [],
+    discoveredEdges: data.discovered_edges ?? [],
     layout: data.layout ?? ('timeline' as const),
     // Pre-v5.0.0 saves have no provider; the app was S2-backed then, so default there.
     provider: data.provider ?? ('s2' as const),
@@ -245,33 +294,117 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
 })
 
 /**
- * Save the current workspace. The store IS the source of truth: the graph's
- * nodes/edges plus the discovery arrays are exactly what the old code
- * reconstructed from the sim-mutated `base` objects — no canvas involvement.
+ * Save the current exploration. The store IS the source of truth.
+ *
+ * **A graphless exploration is a normal save.** This used to throw
+ * `No graph to save yet.`, which — once the landing chat became the front
+ * door — meant a long conversation held before any graph existed could not
+ * be stored at all. That refusal was the data loss the autosave exists to
+ * end, so it is gone.
+ *
+ * What goes on the wire is the *conversation* plus a `graph_ref`, not the
+ * graph: reopening rebuilds it (see `restoreSession`). The discovery arrays
+ * are the deliberate exception — no rebuild can reproduce a paper the agent
+ * found mid-chat, so those travel with the conversation that produced them.
  */
 export const saveWorkspace = createAsyncThunk<
   SavedSessionMeta,
   { name: string; id?: string },
   { state: { workspace: WorkspaceState; transcript: TranscriptState } }
->('workspace/save', ({ name, id }, { getState }) => {
-  const { workspace, transcript } = getState()
+>('workspace/save', ({ name, id }, { getState }) =>
+  saveSession(buildSaveBody(getState(), name, id)),
+)
+
+/**
+ * Build the save body from a store snapshot — **synchronously, and from the
+ * state you hand it**, not from whatever the store holds later.
+ *
+ * That distinction is the whole reason this is a separate function. Leaving
+ * an exploration flushes a save and then immediately clears the workspace;
+ * because the autosave has to await a name before it can POST, a body built
+ * inside the request would be assembled *after* the clear and would write an
+ * empty blob over the conversation being left. The caller snapshots first,
+ * awaits second.
+ *
+ * @param state The two slices to save, read at the moment of the call.
+ * @param name  The exploration's name.
+ * @param id    The row to overwrite; omit to create one.
+ * @returns The POST body for `saveSession`.
+ */
+/**
+ * Settle anything still in flight on a turn before it is written to disk.
+ *
+ * **A saved turn is never mid-stream**, because nothing that reads a saved
+ * blob can resume the request that was running when it was written. Leaving
+ * an exploration flushes a save and then aborts its streams, so without this
+ * a turn interrupted mid-answer is persisted with `pending: true` traces —
+ * and reopening it shows a chip that says "Searching the web…", with a live
+ * spinner, forever.
+ *
+ * The partial answer itself is kept: it is real work the reader may still
+ * want. Only the *claim that something is still happening* is corrected — a
+ * pending step becomes an unfinished one, which the transcript already
+ * renders honestly ("Tried the web").
+ *
+ * @param chat The conversation as it stands in the store.
+ * @returns The same turns, with no step left claiming to be in progress.
+ */
+export function settleInFlight(chat: ChatMsg[]): ChatMsg[] {
+  const last = chat.length - 1
+  return chat.map((turn, index) => {
+    const settled = turn.trace?.some((step) => step.pending)
+      ? {
+          ...turn,
+          trace: turn.trace.map((step) =>
+            step.pending ? { ...step, pending: false, ok: false } : step,
+          ),
+        }
+      : turn
+    // **The commonest failure of all is recorded here**, not by the stream:
+    // the reader closed the tab (or the exploration) mid-answer, so the client
+    // never reached the end of the run to mark it. This save IS that moment —
+    // the flush on `pagehide` — and a turn being written with a trace, no
+    // prose, and nothing left to produce it has plainly not finished. Only the
+    // last turn qualifies: an empty assistant turn earlier in the transcript
+    // would already carry its own marker.
+    if (index === last && settled.role === 'assistant' && !settled.text && !settled.failed) {
+      return { ...settled, failed: 'This answer stopped before it finished.' }
+    }
+    return settled
+  })
+}
+
+export function buildSaveBody(
+  state: { workspace: WorkspaceState; transcript: TranscriptState },
+  name: string,
+  id?: string,
+): SaveSessionBody {
+  const { workspace, transcript } = state
+  // Read directly rather than through `selectConversation`: transcript.ts
+  // imports this module's actions at slice-creation time, so a value import
+  // back would close a cycle. The type import above is erased and safe.
+  const conversation: Conversation | undefined = transcript.byKey[transcript.activeKey]
   const graph = workspace.graph
-  if (!graph) throw new Error('No graph to save yet.')
-  return saveSession({
+  return {
     id,
     name,
-    seed: graph.seed,
+    // A graph on screen but no seedRef would be unrebuildable, so the
+    // reference is what gates `graph_ref` — not the graph's presence.
+    graph_ref:
+      graph && workspace.seedRef
+        ? { seed: graph.seed, seed_ref: workspace.seedRef, n_nodes: graph.nodes.length }
+        : undefined,
     layout: workspace.layout,
     provider: workspace.provider,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
-    nodes: [...graph.nodes, ...workspace.discoveredNodes].map((node) => cleanNode(node as VNode)),
-    edges: [...graph.edges, ...workspace.discoveredEdges],
-    chat: transcript.chat,
-    lectures: transcript.lectures,
-    lectureSources: transcript.lectureSources,
-    activeMode: transcript.activeMode,
-  })
-})
+    discovered_nodes: workspace.discoveredNodes.map((node) => cleanNode(node as VNode)),
+    discovered_edges: workspace.discoveredEdges,
+    chat: settleInFlight(conversation?.chat ?? []),
+    lectures: conversation?.lectures ?? {},
+    lectureSources: conversation?.lectureSources ?? {},
+    activeMode: conversation?.activeMode ?? null,
+  }
+}
 
 const workspaceSlice = createSlice({
   name: 'workspace',
@@ -382,13 +515,18 @@ const workspaceSlice = createSlice({
       state.selectedNodeIds = []
     },
     /**
-     * Home: back to the default no-graph state (the page-load look). The
-     * epoch bump remounts the teacher panel for fresh run state; the
-     * transcript and highlights clear themselves via extraReducers.
+     * New Exploration: back to the default no-graph state (the page-load
+     * look). The epoch bump remounts the teacher panel for fresh run state.
      *
-     * @param state The slice state (mutated via immer).
+     * Carries the key of the conversation to open, so the transcript slice
+     * can start a *new* one rather than wiping what is there — an exploration
+     * left behind may still be streaming, and it stays in the rail.
+     *
+     * @param state   The slice state (mutated via immer).
+     * @param _action Carries the new conversation's key, for the transcript
+     *   slice — this reducer only needs to know that it happened.
      */
-    workspaceCleared(state) {
+    workspaceCleared(state, _action: PayloadAction<{ conversationKey: string }>) {
       state.graph = null
       state.seedRef = null
       state.discoveredNodes = []
@@ -455,11 +593,14 @@ const workspaceSlice = createSlice({
       })
       .addCase(restoreSession.fulfilled, (state, action) => {
         state.graph = action.payload.graph
-        // A restore has no cached-snapshot origin; refreshing it does a real
-        // S2 rebuild, best-effort keyed by the seed's arXiv id (else paperId).
-        state.seedRef = action.payload.graph.seed.arxiv_id ?? action.payload.graph.seed.id
-        state.discoveredNodes = []
-        state.discoveredEdges = []
+        // The saved reference, so a later Refresh busts the same cache key the
+        // rebuild just used. Null on a graphless exploration.
+        state.seedRef = action.payload.seedRef
+        // Merged back over the rebuilt graph: the agent's finds are stored
+        // precisely because no rebuild reproduces them. Dropped when the
+        // rebuild failed — they hang off a graph that isn't there.
+        state.discoveredNodes = action.payload.graph ? action.payload.discoveredNodes : []
+        state.discoveredEdges = action.payload.graph ? action.payload.discoveredEdges : []
         state.visibleNodeIds = []
         state.selectedNodeIds = []
         state.layout = action.payload.layout

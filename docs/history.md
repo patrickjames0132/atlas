@@ -2520,6 +2520,83 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Saved sessions & workspaces
 
+- [x] **Every exploration saves itself, and several can run at once**
+      *(v7.16.0)* — the Save button is gone. Saving was a manual ＋ in the rail,
+      and forgetting it lost the sitting on tab close; explorations now save
+      themselves, arrive in the rail named after what you asked, and keep
+      working when you switch away from them.
+
+      **The vocabulary moved with the behaviour**: *graph* → **exploration**,
+      starting with ✎ New Exploration. An exploration is a sitting at the app —
+      the conversation, the lectures, and a note of which graph was open.
+
+      **An exploration stores the conversation, not the graph** (Patrick's
+      call, 2026-08-29, made against the recommendation and worth recording as
+      his). The blob carries a `graph_ref` and the reopen rebuilds — instantly
+      while the 1-day snapshot cache is warm, from the provider when it is not.
+      The cost is real and was accepted knowingly: a cold reopen spends
+      rate-limited calls, and the rebuilt graph can differ from the one you
+      left as citation data moves. **The agent's discoveries are the one
+      exception and *are* stored** — no cache holds them and no rebuild
+      reproduces them, because they are a product of the conversation rather
+      than of the seed.
+
+      **A graphless conversation is now a first-class exploration.** Since the
+      landing chat became the front door a reader could hold a long
+      conversation before any graph existed, and `POST /api/sessions` 400'd on
+      an empty `nodes` list — so closing the tab threw it away. That was the
+      data loss the whole ticket existed to end, and the route's validation was
+      the thing enforcing it.
+
+      **Conversations run in parallel.** `transcript` held exactly one, which
+      is *why* switching exploration had to abort whatever was streaming: a
+      running answer had nowhere to write but whatever was now on screen. It is
+      keyed by exploration now, every action takes an optional key as its
+      second argument (`meta.key`; omitted, it means the active one — so the
+      ~30 dispatches about what the reader is looking at stayed unkeyed and
+      unchanged, and only the streaming paths had to think about it). Ask
+      something slow, go read another exploration, come back to a finished
+      answer; the rail marks the ones still working. Discoveries are the piece
+      that cannot simply follow — the workspace holds only the active graph, so
+      an off-screen find waits in its own conversation rather than landing on
+      the map being read.
+
+      **Naming, once.** The first save asks the summarizer for a title from the
+      conversation — a second entry point on that agent's id rather than a
+      sixth agent in Settings. Once, because it costs a call *and* because the
+      reader may have renamed the row; it is its own route rather than a step
+      inside the save, since model latency has no business on a path that fires
+      every two seconds. A null title is a 200, not an error: the fallback is
+      the reader's own first message, and a save must never fail over a nicety.
+
+      **Answers that never arrive now say so**, on the turn rather than in
+      panel state — the commonest failure is a run the reader *left*, and a
+      message in component state is gone by the time they look. **Try again**
+      re-runs the question, dropping the failed exchange and sending the
+      conversation with it (used only when the server's in-memory history is
+      empty, which after a reload it always is). The **tool trace collapses
+      itself** when a run finishes, with a caret, and a reader's own click wins
+      from then on.
+
+      Two smaller defects surfaced with it and are fixed here: a chip could
+      keep spinning under a header that had already gone back to `2 steps`
+      (a run dying mid-step leaves `pending` set, which only the *finished*
+      trace clears — now settled in the store the moment a run ends, not just
+      at save time), and the turn reported the generic "stopped before it
+      finished" where the backend had said something specific, because the
+      real message arrives on the SSE `error` frame rather than as an
+      exception.
+
+      **Verified in the browser, and that is where five of the bugs came
+      from** — all four in `bugs.md`, including one that destroyed a finished
+      answer during testing. Their common shape is worth carrying forward: a
+      save is a **whole-blob overwrite**, so every staleness bug on this path is
+      a data-loss bug. The invariants that came out of it — an id and its
+      content move together; a save never writes less than it last wrote;
+      nothing on an unload path awaits what it need not — are recorded in
+      `shell/README.md` beside the code that has to keep them.
+      *(Filed 2026-08-25; built and browser-tested 2026-08-29 → 2026-09-01.)*
+
 - [x] **Phase 4 — Saved sessions & workspaces** *(v1.15.0)* — persistence,
       deliberately dropped at the v1.0 pivot, reintroduced as opt-in. A **🗂
       Sessions drawer** saves the current workspace — the full graph as it stands

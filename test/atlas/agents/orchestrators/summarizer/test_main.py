@@ -77,3 +77,32 @@ def test_untitled_papers_still_summarize():
     with summarizer.agent.override(model=FunctionModel(record)):
         summarizer.summarize("", ABSTRACT)
     assert seen["prompt"].startswith("Title: (untitled)")
+
+
+def test_conversation_title_comes_from_the_structured_output():
+    model = TestModel(custom_output_args={"title": '  "Attention vs. convolution."  '})
+    with summarizer.title_agent.override(model=model):
+        title = summarizer.title_for_conversation(["How do they differ?", "Attention lets…"])
+    # Stripped of whitespace, the quotes a model likes to add, and the period
+    # a headline shouldn't carry into a list row.
+    assert title == "Attention vs. convolution"
+
+
+def test_an_empty_conversation_never_reaches_the_model():
+    def explode(messages, info):
+        raise AssertionError("nothing to name — the model must not be engaged")
+
+    with summarizer.title_agent.override(model=FunctionModel(explode)):
+        assert summarizer.title_for_conversation([]) is None
+        assert summarizer.title_for_conversation(["", "   "]) is None
+
+
+def test_title_failure_degrades_to_none():
+    """None is a normal answer: the caller falls back to the reader's own
+    first message, so a save must never fail because titling did."""
+
+    def boom(messages, info):
+        raise RuntimeError("no api key")
+
+    with summarizer.title_agent.override(model=FunctionModel(boom)):
+        assert summarizer.title_for_conversation(["what is a transformer?"]) is None

@@ -11,12 +11,36 @@ distant parts of the tree earns a slice.**
 store/
   index.ts       — configureStore + the typed useAppDispatch/useAppSelector
   workspace.ts   — the graph, discoveries, layout + load/restore/save thunks
-  transcript.ts  — the teacher's conversation (chat + per-mode lecture cache)
+                   (save stores a graph *reference*; restore rebuilds)
+  transcript.ts  — the reader's conversations, keyed by exploration
   highlight.ts   — the papers the teacher is currently talking about
   library.ts     — the uploaded sources (drawer writes, scope picker reads)
 ```
 
 ## The four slices, and who touches them
+
+- **`transcript` holds MANY conversations, keyed by exploration.** Until
+  v7.16.0 it held exactly one, and that single slot is why switching
+  exploration had to *abort* whatever was streaming: a running answer would
+  otherwise have carried on writing into the conversation the reader had just
+  moved to. Keying it is what lets an answer keep going while you read
+  something else.
+  - **How a stream addresses its own conversation:** every action takes an
+    optional key as its *second* argument (carried in `meta.key`); omitted, it
+    targets the active one. That default is deliberate — dispatches plainly
+    about what the reader is looking at (clicking a lecture mode, clearing the
+    chat) stay unkeyed and unchanged, while the streaming paths in
+    `useConversation` capture their key once at stream start and pass it every
+    time. Only code that can outlive a switch has to think about it.
+  - **Discoveries are the one thing that cannot simply follow.** The workspace
+    holds only the *active* exploration's graph, so a paper found by a
+    background agent would land on a map it has nothing to do with — the exact
+    cross-contamination the old abort existed to prevent. Off-screen finds go
+    to that conversation's `pendingDiscoveries` and are applied when it is
+    opened.
+  - `running` (stream ids, not a flag: an answer and several lectures can be
+    in flight together) drives the rail's still-working dots and tells the
+    autosave a background conversation has settled and is worth writing.
 
 - **`workspace`** — written by the load/restore thunks, the teacher's
   discovery dispatches, and the canvas's view-filter + node-selection
@@ -25,7 +49,7 @@ store/
   `(selected ∩ visible) ∪ discoveries`, via `selectGroundingNodes`; the full
   seed node via `selectSeedNode`), the legend
   (`selectHasDiscovered`/`HasSearchHits`),
-  the header (seed title), and Save. `epoch` bumps on **Home and restore
+  the header (seed title), and the autosave. `epoch` bumps on **Home and restore
   only** — the shell keys the teacher panel on it, so a bump remounts the
   panel and rebuilds the transcript's scroll container at the top. Since a
   conversation now survives a graph change, a graph load must not remount:

@@ -95,14 +95,15 @@ export const HOME_TOUR: TourStep[] = [
   },
   {
     target: '[data-tour="rail"]',
-    title: 'Your saved graphs live here',
+    title: 'Your explorations live here',
     body:
-      'Save the whole workspace — the graph as you built it, every paper the assistant ' +
-      'discovered, and the conversation — and it appears in this list. Reopening rebuilds ' +
-      'the exact graph from the save itself: zero API calls, discovered papers included, ' +
-      'transcript and all. Hover a row for ⋮ to rename or delete it, and collapse the ' +
-      'whole rail when the map wants the room — click its title row, or drag its right ' +
-      'edge; the drag folds it away and pulls it back open.',
+      'Every exploration saves itself — there is no Save button. Ask a question or open ' +
+      'a paper and a row appears here, named after what you were asking about and kept ' +
+      'up to date as you work. Reopening one brings back the conversation, every paper ' +
+      'the assistant discovered, and the graph you were reading. ✎ above starts a new ' +
+      'exploration; the one you leave is already saved. Hover a row for ⋮ to rename or ' +
+      'delete it, and collapse the whole rail when the map wants the room — click its ' +
+      'title row, or drag its right edge; the drag folds it away and pulls it back open.',
   },
   {
     target: '[data-tour="settings-btn"]',

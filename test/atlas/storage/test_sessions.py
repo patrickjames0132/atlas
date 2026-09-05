@@ -1,7 +1,7 @@
 """Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
 
 Description:
-storage.sessions: the durable saved-workspace store (graph + transcript).
+storage.sessions: the durable exploration store (conversation + graph reference).
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -46,8 +46,8 @@ def test_save_session_creates_a_new_session_with_a_fresh_id():
     assert record["created_at"] == record["updated_at"]
 
 
-def test_blank_name_becomes_untitled_session():
-    assert sessions.save_session(_payload(name="   "))["name"] == "Untitled session"
+def test_blank_name_becomes_untitled_exploration():
+    assert sessions.save_session(_payload(name="   "))["name"] == "Untitled exploration"
 
 
 def test_get_session_returns_the_full_payload():
@@ -118,3 +118,85 @@ def test_delete_session_removes_it_and_reports_true():
 
 def test_delete_session_reports_false_for_a_missing_id():
     assert sessions.delete_session("nonexistent") is False
+
+
+def test_a_graphless_exploration_is_a_valid_row():
+    """A conversation held before any graph exists must be storable.
+
+    This is the case the autosave exists for: since the landing chat became
+    the front door, refusing to store a graphless sitting throws away exactly
+    the work the feature promises to keep.
+    """
+    record = sessions.save_session(
+        {"name": "What is a diffusion model?", "chat": [{"role": "user", "text": "hi"}]}
+    )
+    assert record["seed_id"] is None
+    assert record["n_nodes"] == 0
+    fetched = sessions.get_session(record["id"])
+    assert fetched is not None
+    assert fetched["data"]["chat"] == [{"role": "user", "text": "hi"}]
+
+
+def test_node_count_spans_the_reference_and_the_discoveries():
+    """A reference-shaped save counts the graph it names plus what was found.
+
+    Nothing in this process has fetched the graph, so the base count can only
+    come from what the reference recorded; the agent's discoveries are stored
+    outright and add to it.
+    """
+    record = sessions.save_session(
+        {
+            "name": "Reference shaped",
+            "graph_ref": {
+                "seed": {"id": "S2:123", "title": "Attention Is All You Need"},
+                "seed_ref": "1706.03762",
+                "n_nodes": 40,
+            },
+            "discovered_nodes": [{"id": "S2:999"}, {"id": "S2:998"}],
+        }
+    )
+    assert record["n_nodes"] == 42
+
+
+def test_a_legacy_inline_graph_still_counts_and_restores():
+    """Rows written before the reference shape keep working, untouched."""
+    record = sessions.save_session(_payload())
+    assert record["n_nodes"] == 2
+    fetched = sessions.get_session(record["id"])
+    assert fetched is not None
+    # The blob is handed back verbatim, so the frontend can spot `nodes` and
+    # use them directly instead of rebuilding.
+    assert fetched["data"]["nodes"] == [{"id": "S2:123"}, {"id": "S2:456"}]
+
+
+def test_overwriting_in_place_preserves_created_at():
+    """The autosave re-POSTs the same id constantly; that must not fork rows."""
+    first = sessions.save_session(_payload())
+    again = sessions.save_session(_payload(name="Renamed by a later save"), session_id=first["id"])
+    assert again["id"] == first["id"]
+    assert again["created_at"] == first["created_at"]
+    assert len(sessions.list_sessions()) == 1
+
+
+def test_the_seed_columns_are_lifted_from_either_blob_shape():
+    """The list view reads these columns instead of parsing every blob, so
+    they must survive the seed moving down into ``graph_ref``."""
+    reference = sessions.save_session(
+        {
+            "name": "Reference shaped",
+            "graph_ref": {
+                "seed": {"id": "S2:123", "title": "Attention Is All You Need"},
+                "seed_ref": "1706.03762",
+            },
+        }
+    )
+    assert reference["seed_id"] == "S2:123"
+    assert reference["seed_title"] == "Attention Is All You Need"
+
+    # Legacy blobs keep the seed at the top level.
+    assert sessions.save_session(_payload())["seed_id"] == "S2:123"
+
+    # A graphless exploration has no seed at all, and stores NULL.
+    graphless = sessions.save_session({"name": "Just a chat", "chat": []})
+    assert graphless["seed_id"] is None
+    assert graphless["seed_title"] is None

@@ -13,9 +13,10 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 <Atlas>                            Atlas.tsx        — the shell
 ├─ left rail (collapsible)         shell/SideBar.tsx
 │  ├─ brand row (the whole row collapses the rail): "Atlas" · seed title
-│  ├─ ✎ New graph
-│  ├─ saved graphs (⋮ → rename / delete)   shell/useSessions.ts
-│  └─ data source · ＋ Save · 📚 Library · ⚙ Settings · theme · ? tour
+│  ├─ ✎ New Exploration
+│  ├─ explorations (⋮ → rename / delete)  shell/useSessions.ts
+│  │                       autosaved by  shell/useAutosave.ts
+│  └─ data source · 📚 Library · ⚙ Settings · theme · ? tour
 │                                   — the header died here in v7.8.0; the
 │                                   search box had already left in v7.6.0, so
 │                                   the chat bar is the app's only text input
