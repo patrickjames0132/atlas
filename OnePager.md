@@ -390,6 +390,94 @@ than deleted so the plan doesn't get re-proposed.
       rather than model recall. Probably wants the result grounded as
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
 
+- [ ] **Retire the lecture buttons — let the chat bar decide what a message
+      is** — today a lecture is only reachable by pressing one of four mode
+      buttons (`teacher/Teacher.tsx:87`'s `MODES` grid, folded behind the
+      *Lectures* caret since v7.10.0), while everything typed goes to the
+      researcher. The ask is to delete the grid and have *"Lecture me about
+      the attention papers"* or *"Summarize this"* reach the lecturer through
+      the same bar as any other message — beats still rendering as beats in
+      the transcript.
+
+      **This is the router coming back, and it should be honest about that.**
+      `agents/orchestrators/` had exactly this component — one
+      `run(intent, ...)` every route funnelled through — and it was **deleted
+      in v7.0.0** because it dispatched two known intents to two agents and
+      "never grew the model half it was designed around" (see that package's
+      README, *"The router that isn't here"*). This ticket is the model half
+      finally being wanted. Rebuild it as an **agent that classifies**, not as
+      an `Intent` enum round-trip between a route and the function next to it,
+      or v7.0.0 repeats itself.
+
+      **What makes it non-trivial is that the lecturer's argument isn't a
+      question, it's a mode plus a scope.** `POST /api/lecture` takes a
+      `LectureMode` and the visible graph; `lecturer/main.py:367`'s
+      `_MODE_RELATION` then scopes each mode to one edge relation
+      (`history`→`reference`, `evolution`→`citation`, `frontier`→`latest`) and
+      sorts chronologically. So the router can't just pick an agent — for a
+      lecture it has to pick a *mode*, and free text like "walk me through
+      what came after this" is genuinely ambiguous between `evolution` and
+      `frontier`. Two consequences: the classifier's output is a small typed
+      decision (agent + mode), not a boolean; and this ticket is **coupled to
+      the landmark/latest collapse** in *Citations & graph data* — merging
+      those relations removes that particular ambiguity by removing the
+      distinction, so decide that one first.
+
+      **The cost to weigh honestly:** the current dispatch is deliberate.
+      `Teacher.tsx:286` documents it — *"which one runs is decided HERE,
+      before any model is involved, rather than by asking an agent to classify
+      the input"* — and it is free, instant and never wrong. Routing through a
+      model buys discoverability (four buttons most turns never press, per the
+      same file's fold comment) and pays a classification call plus a new
+      failure mode: a misrouted lecture is a slow, expensive wrong answer.
+      Worth building a **visible, correctable** route (the transcript says
+      which agent it picked and offers the other) rather than a silent one.
+      Keep a deterministic fast path for the unambiguous cases the way `ID_RE`
+      already short-circuits a pasted id.
+
+      **Help surfaces to update in the same change** (per CLAUDE.md): the
+      tour's "Four lectures" step (`tour/steps.ts`) targets the grid that this
+      ticket deletes, and the composer's placeholder text
+      (`Teacher.tsx:410`). *(From the developer, 2026-09-08.)*
+
+- [ ] **`@` a paper in the chat bar, instead of arming a search mode** — the
+      direct-search toggle (`search/SearchControls.tsx:186`, "Find papers")
+      is a *mode* you set before typing: armed, the next message goes to the
+      paper scout; unarmed, it goes to the researcher. The ask is to replace
+      the mode with in-line syntax — `@<arxiv id | title | search words>`
+      anywhere in a message — so finding a paper is something you *say*
+      rather than something you switch to.
+
+      **Half of this already exists and is the proof the idea works.**
+      `Teacher.tsx:300` runs `ID_RE` on every message and seeds the graph
+      directly on a pasted arXiv id/URL — no toggle, no model, and
+      deliberately ahead of the toggle check. `@` generalizes that from "the
+      whole message is an id" to "a span inside a message is a paper".
+
+      **The real design question is what `@` returns, because the two halves
+      of the ask want different things.** `@2103.00020` resolves to exactly
+      one paper (seed it, or attach it as context). `@attention is all you
+      need` or `@sparse autoencoders` resolves to *candidates*, which is the
+      scout's streamed list — and a list is a turn in the transcript, not a
+      token in a sentence. Decide up front whether `@` is (a) a **composer
+      autocomplete** that resolves to a chip *before* send, so the message
+      arrives with a real paper id attached and the researcher gets grounding
+      it can trust, or (b) **post-send routing** that turns the message into a
+      direct search. (a) is the better product and the larger build (a
+      typeahead against the scout's `match_title`, debounced, with the
+      rate-limit budget that implies); (b) is nearly free but is the current
+      toggle wearing a sigil.
+
+      **What must not be lost with the toggle:** the *Filters* control
+      (year/field) sits deliberately **outside** it, because the filters bind
+      the researcher's own paper searches too, not just direct search — see
+      `search/README.md`. Removing the toggle must leave the filter popover
+      where it is, and the popover's copy ("Applies to direct search AND to
+      the assistant's own paper searches", `SearchControls.tsx:204`) needs
+      rewording once "direct search" is no longer a thing you arm. The tour's
+      `data-tour="direct-search"` step goes with it. *(From the developer,
+      2026-09-08.)*
+
 ### Citations & graph data
 
 - [ ] **A real switch between the corpus and the live S2 API** — today the
@@ -700,6 +788,69 @@ than deleted so the plan doesn't get re-proposed.
       warns about. Decide whether an incremental release copies-then-updates
       (cheap on a filesystem with reflinks, expensive otherwise) or whether
       `CURRENT` has to move aside for the duration.
+
+- [ ] **Collapse Field Landmarks and Latest Publications into one `citation`
+      relation** — the graph currently ships two kinds of citer as two
+      separate things: `citation` (all-time most-cited citers) and `latest`
+      (the recent-years frontier), with their own colours
+      (`graph/theme.ts:59`), their own legend rows
+      (`controls/Legend.tsx:39-43`), their own cluster angles (landmarks
+      up-right, latest down-right — `graph/clusterForce.ts:50`), their own
+      filter chips, and their own lecture modes (`evolution` / `frontier`).
+      The argument for merging: with citation counts, date filters, and an
+      agent grounded in whatever is selected on screen, **the reader can tell
+      "old and important" from "new" themselves** — we don't need to impose a
+      threshold and call it a taxonomy.
+
+      **The strongest evidence for the ask is that the app already half-does
+      it.** `theme.ts:87-90`'s `BADGE_LABEL` maps `latest` → `"citation"` so
+      the detail panel shows one badge, with the comment *"Latest Publications
+      ARE citing papers"*. And old saves are safe: `theme.ts:99`'s
+      `UNKNOWN_EDGE` exists precisely so *"a retired edge type can't draw an
+      invisible line on an old save"*, so cached snapshots
+      (`graph:v2:<provider>:`) and saved sessions carrying `latest` edges
+      degrade to a visible neutral edge rather than breaking.
+
+      **The trap: the label and the fetch are not the same decision, and only
+      the label is cheap.** They are two different *acquisition* strategies,
+      not two views of one result set. Landmarks are the seed's citers ranked
+      by citation count; the latest band is a separate query **per year**
+      (`services/graph/build.py:184-217`, `bands.py`, `budget.py`), sized by
+      `tau`/`max_span` constants **fitted on a labelled 64-seed corpus** — and
+      the whole reason that machinery exists is that a recent paper has not
+      accumulated citations yet, so it **never survives a citation ranking**.
+      Merge the fetch and the graph silently becomes old-biased: the frontier
+      disappears, and no date filter can bring back a node that was never
+      fetched. `bands.py`'s own docstring is about closing exactly that
+      landmark→latest gap.
+
+      **So the ticket is: keep two fetch strategies, ship one relation.**
+      Concretely — `Edge.type` (`services/graph/model.py:77`) drops to
+      `reference | citation`, `Counts.latest` folds into `Counts.citations`,
+      one colour and one legend row, one cluster angle. What has to be
+      *decided*, not assumed:
+      - **Does the node keep a trace of which query found it?** A
+        non-rendering provenance field costs nothing and keeps the corpus/live
+        note and any future debugging honest; rendering it is what we're
+        removing.
+      - **What happens to the `evolution` and `frontier` lectures?**
+        `lecturer/main.py:367`'s `_MODE_RELATION` scopes them by edge type, so
+        with one relation they narrate the same node set. Either merge them
+        into one "what came after" lecture (four buttons become three — which
+        interacts with the router ticket in *Teacher & agent reach*), or
+        re-scope `frontier` by **date** instead of relation, which is the
+        reader-decides principle applied consistently.
+      - **The date filter has to be good enough to replace the split**, since
+        it inherits the job. Check it can actually express "the last two
+        years" cheaply on a graph where year coverage is uneven (OpenAlex
+        per-work years are unreliable — `bands.py` was designed around that).
+
+      **Docs that stop being true:** `docs/landmark-vocabulary.md` is the
+      single definition of this vocabulary and is linked from the code, the
+      READMEs and the research notebooks; `docs/predict-vs-compute.md` holds
+      the why. Neither should be deleted — the *fetch* rules they describe
+      survive this change — but both need a note that the distinction is no
+      longer user-facing. *(From the developer, 2026-09-08.)*
 
 ### UI & rendering polish
 
