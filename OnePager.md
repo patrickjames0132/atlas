@@ -442,43 +442,37 @@ than deleted so the plan doesn't get re-proposed.
       text. *(From the developer, 2026-09-08; scope narrowed by what shipped
       in v7.17.0.)*
 
-- [ ] **`@` a paper in the chat bar, instead of arming a search mode** — the
-      direct-search toggle (`search/SearchControls.tsx:186`, "Find papers")
-      is a *mode* you set before typing: armed, the next message goes to the
-      paper scout; unarmed, it goes to the researcher. The ask is to replace
-      the mode with in-line syntax — `@<arxiv id | title | search words>`
-      anywhere in a message — so finding a paper is something you *say*
-      rather than something you switch to.
+- [ ] **Stream the `@` lookup's real steps as a live line in the dropdown** —
+      while the full pass works, the panel says only *"Searching…"*. The ask
+      (from the developer, 2026-09-09, with the ChatGPT "Searching
+      www.bls.gov" line as the reference) is to name what is actually
+      happening, the way that line does.
 
-      **Half of this already exists and is the proof the idea works.**
-      `Teacher.tsx:300` runs `ID_RE` on every message and seeds the graph
-      directly on a pasted arXiv id/URL — no toggle, no model, and
-      deliberately ahead of the toggle check. `@` generalizes that from "the
-      whole message is an id" to "a span inside a message is a paper".
+      **Correct the framing first, or the labels will lie.** The scout is
+      *not* what runs here — it runs after you send a bare unresolved
+      `@phrase`, and that path already streams trace chips into the
+      transcript. The dropdown's real steps are three: scanning the reader's
+      cached snapshots, the day-cached provider search, and — only when no
+      candidate's title equals what was typed — the nickname resolve, which is
+      a model call plus a `match_title` verification. The third is the slowest
+      and the only one worth watching, which is exactly the one the frontend
+      cannot see today, because it happens inside the full request.
 
-      **The real design question is what `@` returns, because the two halves
-      of the ask want different things.** `@2103.00020` resolves to exactly
-      one paper (seed it, or attach it as context). `@attention is all you
-      need` or `@sparse autoencoders` resolves to *candidates*, which is the
-      scout's streamed list — and a list is a turn in the transcript, not a
-      token in a sentence. Decide up front whether `@` is (a) a **composer
-      autocomplete** that resolves to a chip *before* send, so the message
-      arrives with a real paper id attached and the researcher gets grounding
-      it can trust, or (b) **post-send routing** that turns the message into a
-      direct search. (a) is the better product and the larger build (a
-      typeahead against the scout's `match_title`, debounced, with the
-      rate-limit budget that implies); (b) is nearly free but is the current
-      toggle wearing a sigil.
+      **So this needs the full pass to stream**, which is the shape
+      `/api/search` next door already has: convert `GET /api/mentions` (the
+      full pass only — `source=local` stays a plain GET, it is instant) to SSE
+      with a `step` frame per phase and a `result` frame at the end, and have
+      `useMentionSuggestions` read it through the existing `readSSE`. The
+      frontend can fake the first two labels from which request is in flight,
+      but not the third, so a half-measure would omit the interesting one.
 
-      **What must not be lost with the toggle:** the *Filters* control
-      (year/field) sits deliberately **outside** it, because the filters bind
-      the researcher's own paper searches too, not just direct search — see
-      `search/README.md`. Removing the toggle must leave the filter popover
-      where it is, and the popover's copy ("Applies to direct search AND to
-      the assistant's own paper searches", `SearchControls.tsx:204`) needs
-      rewording once "direct search" is no longer a thing you arm. The tour's
-      `data-tour="direct-search"` step goes with it. *(From the developer,
-      2026-09-08.)*
+      **A live line, not accumulating collapsibles**, despite the ask's
+      wording: the reference screenshot is itself one self-replacing line, the
+      panel is small and opens upward, and a lookup that finishes in under two
+      seconds turns a step history into noise. Collapsible step *history*
+      belongs to the scout run after send, where it already exists as trace
+      chips. *(From the developer, 2026-09-09.)*
+
 
 ### Citations & graph data
 

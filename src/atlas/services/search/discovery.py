@@ -231,6 +231,13 @@ def local_search(
 #: here, at the boundary, rather than in the shared cache lookup.
 _DISPLAY_FIELDS = ("id", "arxiv_id", "title", "authors", "year", "citation_count", "url")
 
+#: What one `@`-mention suggestion row shows: the title, then
+#: ``authors • venue • year`` underneath. ``venue`` is the only field the
+#: search list doesn't need, which is why this is its own tuple rather than
+#: `_DISPLAY_FIELDS` — a mention row names the publication so two papers with
+#: near-identical titles can be told apart before one is picked.
+_MENTION_FIELDS = ("id", "arxiv_id", "title", "authors", "venue", "year", "citation_count", "url")
+
 
 def display_hits(nodes: list[dict]) -> list[dict]:
     """Trim cached nodes to what the search list shows.
@@ -245,3 +252,112 @@ def display_hits(nodes: list[dict]) -> list[dict]:
         {**{key: node.get(key) for key in _DISPLAY_FIELDS}, "has_graph": node.get("has_graph", False)}
         for node in nodes
     ]
+
+
+def mention_hits(nodes: list[dict]) -> list[dict]:
+    """Trim nodes to what an `@`-mention suggestion row shows.
+
+    Args:
+        nodes: Node dicts, from the local cache or a provider search.
+
+    Returns:
+        One dict per node with the mention row's display fields.
+    """
+    return [{key: node.get(key) for key in _MENTION_FIELDS} for node in nodes]
+
+
+def rank_mentions(nodes: list[dict], query: str) -> list[dict]:
+    """Order `@`-mention candidates by how well each answers what was typed.
+
+    The **final sort**, applied once both sources are in hand — the reader has
+    typed a name, so the list should lead with the paper whose title most
+    nearly *is* that name, whichever source found it. Until this ran, the order
+    was "everything cached, then everything live", which put a barely-relevant
+    cached paper above an exact live match.
+
+    Four keys, in order:
+
+    1. **Exact title match** — you typed the whole title; nothing outranks it.
+    2. **Title starts with the query** — the natural state of a title being
+       typed left to right, and the reason a prefix beats a mid-title hit.
+    3. **Query appears anywhere in the title** — the same phrase test
+       :func:`local_search` ranks by, generalised across both sources.
+    4. **Citation count, descending** — among papers matching equally well,
+       the better-known one is the likelier referent of a bare name.
+
+    Cached hits are NOT privileged here. That is deliberate: being in the cache
+    makes a paper *instant*, which is why it is fetched and shown first, but it
+    says nothing about whether it is the paper the reader means. Ties resolve
+    to the earlier entry, and callers pass cached hits first, so a genuine tie
+    still favours the paper already on hand.
+
+    Args:
+        nodes: The merged candidates.
+        query: What the reader typed after ``@``.
+
+    Returns:
+        The same candidates, most relevant first.
+    """
+    wanted = (query or "").strip().lower()
+
+    def key(node: dict) -> tuple:
+        """Sort key for one candidate (False sorts before True).
+
+        Args:
+            node: A candidate node dict.
+
+        Returns:
+            A tuple ordering better matches first.
+        """
+        title = (node.get("title") or "").strip().lower()
+        return (
+            title != wanted,
+            not title.startswith(wanted),
+            wanted not in title,
+            -(node.get("citation_count") or 0),
+        )
+
+    return sorted(nodes, key=key)
+
+
+def merge_mentions(local: list[dict], live: list[dict], limit: int) -> list[dict]:
+    """Merge cached and live `@`-mention candidates into one deduped list.
+
+    **Local first, deliberately.** A paper already in the reader's cache is one
+    they have seen — usually the very paper they are reaching for when they
+    type ``@`` — and it costs nothing to surface. Live hits fill the rest of
+    the list, which is what makes a paper they have never opened mentionable at
+    all.
+
+    Deduped on **both** identities a paper has here: the provider id, and the
+    arXiv id when it carries one. Either alone lets the same paper appear
+    twice, because a cached node and a fresh provider hit for it can disagree
+    on the provider id (an OpenAlex work resolved from a DOI versus from an
+    arXiv record) while agreeing on the arXiv id, or vice versa.
+
+    Args:
+        local: Hits from :func:`local_search`, in its ranking.
+        live: Hits from a provider search, in the provider's ranking.
+        limit: Maximum candidates to return.
+
+    Returns:
+        The merged candidates, cached ones first, at most ``limit``.
+    """
+    merged: list[dict] = []
+    seen_ids: set[str] = set()
+    seen_arxiv: set[str] = set()
+    for node in [*local, *live]:
+        if len(merged) >= limit:
+            break
+        node_id = str(node.get("id") or "")
+        arxiv_id = str(node.get("arxiv_id") or "").lower()
+        if node_id and node_id in seen_ids:
+            continue
+        if arxiv_id and arxiv_id in seen_arxiv:
+            continue
+        if node_id:
+            seen_ids.add(node_id)
+        if arxiv_id:
+            seen_arxiv.add(arxiv_id)
+        merged.append(node)
+    return merged

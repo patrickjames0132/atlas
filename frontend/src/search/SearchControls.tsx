@@ -2,16 +2,22 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The chat bar's search controls: the direct-search toggle, and the filter
- * popover (publication-year window + field of study) behind it.
+ * The chat bar's filter control: the publication-year window + field of study,
+ * behind a funnel button.
  *
- * Both travel with the source-scope picker, for the same reason that one does:
- * they belong to the thing you are about to send. They sat *inside* the ask
+ * It travels with the source-scope picker, for the same reason that one does:
+ * it belongs to the thing you are about to send. Both sat *inside* the ask
  * pill until v7.11.0, which made a text box look like a toolbar; now they ride
  * beside it — a chip row under the bar with no graph, the Chat section's row
- * with one. The filters deliberately sit outside the direct-search toggle
- * rather than inside it: they bind the researcher's paper searches too, so
- * they are the bar's filters, not direct search's (see `api/search.ts`).
+ * with one.
+ *
+ * **This was two controls until v7.18.0**, when the "Find papers" toggle beside
+ * the funnel was replaced by typing `@` in the bar. The toggle was a *mode*:
+ * you armed it, then typed, and the same words meant different things
+ * depending on a button's state. `@` says the same thing in the sentence
+ * itself. The filters were always deliberately *outside* that toggle — they
+ * bind the researcher's own paper searches too, so they are the bar's filters
+ * rather than one search's — which is why they outlived it unchanged.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -24,10 +30,6 @@ import './search.css'
 
 /** Props for {@link SearchControls}. */
 export interface SearchControlsProps {
-  /** Direct search is armed — the next send goes to the scout, not the
-   *  researcher. */
-  direct: boolean
-  onDirectChange: (direct: boolean) => void
   /** The active filters (all optional; the defaults filter nothing). */
   options: SearchOptions
   onOptions: (next: SearchOptions) => void
@@ -131,13 +133,11 @@ function YearRange({ options, onOptions }: YearRangeProps) {
 }
 
 /**
- * Render the direct-search toggle and the filter popover beside it.
+ * Render the filter button and its popover.
  *
  * @returns The two inline controls (and the popover, when open).
  */
 export default function SearchControls({
-  direct,
-  onDirectChange,
   options,
   onOptions,
   provider,
@@ -183,25 +183,10 @@ export default function SearchControls({
     <div className="search-controls">
       <button
         type="button"
-        className={`bar-toggle ${direct ? 'on' : ''}`}
-        data-tour="direct-search"
-        aria-pressed={direct}
-        onClick={() => onDirectChange(!direct)}
-        title={
-          direct
-            ? 'Direct search is on — your next message looks up papers and lists them, with no answer written'
-            : 'Direct search: look up papers and list them to pick from, instead of asking the assistant a question'
-        }
-      >
-        <span aria-hidden="true">🔍</span>
-        <span className="toggle-label">Find papers</span>
-      </button>
-      <button
-        type="button"
         className={`bar-toggle ${activeCount ? 'on' : ''}`}
         data-tour="search-filters"
         onClick={() => onOpenChange(!open)}
-        title="Restrict which papers can be found — by publication year or field of study. Applies to direct search AND to the assistant's own paper searches."
+        title="Restrict which papers can be found — by publication year or field of study. Applies to the assistant's paper searches and to a paper search you start with @."
       >
         {/* A funnel, drawn rather than borrowed from the emoji table: docked in
             the side panel the labels collapse away and this is all that's
@@ -262,8 +247,8 @@ export default function SearchControls({
           )}
           <div className="filter-foot">
             <span className="filter-hint">
-              Applies to every paper search — direct, and the assistant’s own. Citation links on the
-              graph are never filtered.
+              Applies to every paper search — the assistant’s own, and one you start with @.
+              Citation links on the graph are never filtered.
             </span>
             {activeCount > 0 && (
               <button className="link-btn" onClick={() => onOptions(DEFAULT_SEARCH_OPTIONS)}>

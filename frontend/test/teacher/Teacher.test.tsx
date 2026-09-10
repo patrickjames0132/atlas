@@ -157,14 +157,16 @@ describe('the docked assistant panel', () => {
 
   it('hangs every ask-binding control off the Chat row, not the panel header', () => {
     // The scopes bind the researcher answering below, not the lecturer above,
-    // and the search controls bind the same ask — so the row they sit on is
-    // the claim being made about them. None of the four is in the bar itself.
+    // and the filters bind the same ask — so the row they sit on is the claim
+    // being made about them. None of them is in the bar itself. (There were
+    // four until v7.18.0; the "Find papers" toggle went when `@` replaced it,
+    // and `@` is deliberately IN the bar, being something you type.)
     sources = [SOURCE]
     const { container } = render(<Teacher onClose={() => {}} />)
 
     const row = container.querySelector('.section-head-right')
     const bar = container.querySelector('form.teacher-ask')
-    for (const anchor of ['source-scope', 'direct-search', 'search-filters']) {
+    for (const anchor of ['source-scope', 'search-filters']) {
       const control = container.querySelector(`[data-tour="${anchor}"]`)
       expect(control).toBeTruthy()
       expect(row?.contains(control!)).toBe(true)
@@ -186,7 +188,7 @@ describe('the landing assistant', () => {
     const tools = container.querySelector('.ask-tools')
     const bar = container.querySelector('form.teacher-ask')
     expect(tools).toBeTruthy()
-    for (const anchor of ['source-scope', 'direct-search', 'search-filters']) {
+    for (const anchor of ['source-scope', 'search-filters']) {
       const control = container.querySelector(`[data-tour="${anchor}"]`)
       expect(control).toBeTruthy()
       expect(tools?.contains(control!)).toBe(true)

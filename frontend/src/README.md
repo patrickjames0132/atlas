@@ -42,20 +42,25 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  └─ figure lightbox           figures/Lightbox.tsx
    └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked;
       │                             docked it stacks two folding sections
-      ├─ Lectures section          the four buttons + the shown lecture
+      ├─ Lecture section           the framing choice + button + the lecture
       │  └─ lecture beats          teacher/transcript/BeatList.tsx
       ├─ Chat section              the conversation
       │  ├─ scope pickers          teacher/ScopePicker.tsx (🎓 + 📚, on the
       │  │                          Chat row — they scope the researcher)
-      │  ├─ search controls        search/SearchControls.tsx (🔍 "Find papers"
-      │  │                          + ▽ Filters — year slider, field picker;
-      │  │                          same row, same ask they bind)
+      │  ├─ filters                search/SearchControls.tsx (▽ — year slider,
+      │  │                          field picker; same row, same ask it binds.
+      │  │                          The 🔍 "Find papers" toggle beside it went
+      │  │                          in v7.18.0 — see `mentions/`)
       │  └─ chat turns             teacher/transcript/ChatMessage.tsx
       │     └─ inline figures      teacher/figures/FigCard.tsx
       ├─ ask bar                    the question and nothing else (v7.11.0)
-      │  └─ tool row               with no graph there is no Chat row, so all
-      │                             four controls above sit as chips directly
-      │                             under the bar (`.ask-tools`)
+      │  ├─ @ suggestions          mentions/MentionSuggestions.tsx — opens
+      │  │                          UPWARD out of the bar; the one thing
+      │  │                          anchored to it, because it belongs to the
+      │  │                          text being typed rather than to a control
+      │  └─ tool row               with no graph there is no Chat row, so the
+      │                             controls above sit as chips directly under
+      │                             the bar (`.ask-tools`)
       ├─ "working" dots            teacher/HopDots.tsx (lecture button, send
       │                             control, and a bubble awaiting its first token)
       └─ figure lightbox           figures/Lightbox.tsx (same instance type as above,
@@ -72,8 +77,10 @@ knows URLs and SSE frames), `store/` (the four slices + typed hooks),
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
-`search/useDirectSearch.ts`, `shell/useSessions.ts`, `detail/useSelection.ts`,
-`teacher/useConversation.ts` (each feature's state/logic hooks).
+`mentions/` (the chat bar's `@` paper lookup — its grammar, typeahead and
+dropdown), `search/useDirectSearch.ts`, `shell/useSessions.ts`,
+`detail/useSelection.ts`, `teacher/useConversation.ts` (each feature's
+state/logic hooks).
 
 Every folder has its own README with the full story — this file is just the
 map. Verified by `npm run build` (strict tsc + Vite) and oxlint; behavior

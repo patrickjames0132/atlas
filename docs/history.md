@@ -318,6 +318,100 @@
 
 ### Search & seeding
 
+- [x] **`@` a paper in the chat bar, instead of arming a search mode** *(v7.18.0)* — the
+      direct-search toggle (`search/SearchControls.tsx:186`, "Find papers")
+      was a *mode* you set before typing: armed, the next message goes to the
+      paper scout; unarmed, it goes to the researcher. The ask is to replace
+      the mode with in-line syntax — `@<arxiv id | title | search words>`
+      anywhere in a message — so finding a paper is something you *say*
+      rather than something you switch to.
+
+      **Half of this already exists and is the proof the idea works.**
+      `Teacher.tsx:300` runs `ID_RE` on every message and seeds the graph
+      directly on a pasted arXiv id/URL — no toggle, no model, and
+      deliberately ahead of the toggle check. `@` generalizes that from "the
+      whole message is an id" to "a span inside a message is a paper".
+
+      **The real design question is what `@` returns, because the two halves
+      of the ask want different things.** `@2103.00020` resolves to exactly
+      one paper (seed it, or attach it as context). `@attention is all you
+      need` or `@sparse autoencoders` resolves to *candidates*, which is the
+      scout's streamed list — and a list is a turn in the transcript, not a
+      token in a sentence. Decide up front whether `@` is (a) a **composer
+      autocomplete** that resolves to a chip *before* send, so the message
+      arrives with a real paper id attached and the researcher gets grounding
+      it can trust, or (b) **post-send routing** that turns the message into a
+      direct search. (a) is the better product and the larger build (a
+      typeahead against the scout's `match_title`, debounced, with the
+      rate-limit budget that implies); (b) is nearly free but is the current
+      toggle wearing a sigil.
+
+      **What must not be lost with the toggle:** the *Filters* control
+      (year/field) sits deliberately **outside** it, because the filters bind
+      the researcher's own paper searches too, not just direct search — see
+      `search/README.md`. Removing the toggle must leave the filter popover
+      where it is, and the popover's copy ("Applies to direct search AND to
+      the assistant's own paper searches", `SearchControls.tsx:204`) needs
+      rewording once "direct search" is no longer a thing you arm. The tour's
+      `data-tour="direct-search"` step goes with it. *(From the developer,
+      2026-09-08.)*
+
+      **Shipped as the composer autocomplete, not the cheap post-send
+      routing** — the ticket's open question, decided once `local_search`
+      turned out to make a typeahead genuinely affordable. `@` opens
+      suggestions as you type; picking one attaches a real paper id to the
+      message before it is sent. The new `frontend/src/mentions/` package
+      holds the grammar (`parse.ts`), the typeahead engine and the dropdown;
+      `GET /api/mentions` is the lookup behind it.
+
+      **Three destinations, and still none of them decided by a model.**
+      `readMessage` is a substring check and a `startsWith`: a bare resolved
+      mention seeds the graph (the rule a pasted arXiv id has always
+      followed), a bare *unresolved* one goes to the paper scout (the
+      dropdown's fallback, and exactly what the retired toggle did), and a
+      mention inside a question grounds the answer — the case the toggle could
+      never express at all. A mentioned paper joins that message's numbered
+      nodes and is deliberately **never merged onto the canvas**: asking about
+      a paper is not asking to explore it.
+
+      **Two lookups on two clocks, which took two goes to get right.** It
+      shipped as one blocking call serving both sources, and that was wrong in
+      a way worth recording: the cache-first *ordering* was real but the
+      cache-first *timing* was not, because the response still waited on the
+      provider. Split, the cache-only pass now runs on every keystroke with no
+      debounce (free, offline, milliseconds) while the provider pass waits for
+      a pause, aborts its predecessor, and re-ranks the whole list by how well
+      each title answers what was typed.
+
+      **The nickname problem, and the one model call it justifies.** `@dqn`
+      returned a page of DQN-*titled* papers without *Playing Atari with Deep
+      Reinforcement Learning* anywhere in it. Measured before building
+      anything: S2 free-text cannot reach that paper for that query even at
+      limit 30, `match_title('dqn')` returns nothing, and no field of the
+      cached node — title, authors, abstract, tldr, venue — contains the
+      string, because the 2013 paper predates the name. The mapping is world
+      knowledge, so `summarizer.title_for_paper_name` proposes the real title
+      and the provider **verifies it exists** before it is shown (a model
+      asked for a title will produce one whether or not it knows the paper).
+      It reuses the summarizer's agent id rather than adding a sixth entry to
+      Agent Settings — the precedent the conversation titler set — never runs
+      on the free pass, is skipped when a title already equals the query, and
+      is day-cached per name *including misses*.
+
+      **Two of my own mistakes are pinned by tests rather than quietly
+      fixed:** the first gate on that model call asked "does any title
+      *contain* the query?", which would have suppressed the resolve in
+      exactly the `@dqn` case that prompted it — text matching finding
+      something is not the same as finding the thing; and the re-rank
+      initially tracked the keyboard selection by index, which moves the row
+      under a reader mid-arrow, so it tracks the paper's id instead.
+
+      **What the toggle's removal did not take with it:** the ▽ Filters
+      control, which always bound the researcher's own paper searches and so
+      was never direct search's. It binds everything except an `@` lookup —
+      you named that paper, so a filter has no business hiding it, which is
+      the reading `match_title` already took.
+
 - [x] **One bar: the search box folds into the chat bar, and direct search
       becomes the paper scout** *(v7.6.0)* — the app had **two text inputs**
       asking the same question. Header search went straight from a title to a

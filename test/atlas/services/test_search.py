@@ -190,3 +190,138 @@ def test_display_hits_keeps_the_search_list_lean():
     assert "abstract" not in trimmed[0]
     assert trimmed[0]["has_graph"] is True
     assert trimmed[0]["title"] == "Diffusion Models"
+
+
+# --- merge_mentions -------------------------------------------------------------
+
+
+def test_merge_mentions_keeps_cached_hits_ahead_of_live_ones():
+    local = [{"id": "L1", "title": "Cached"}]
+    live = [{"id": "S1", "title": "Live"}]
+    assert [node["title"] for node in discovery.merge_mentions(local, live, 8)] == [
+        "Cached",
+        "Live",
+    ]
+
+
+def test_merge_mentions_dedupes_on_the_provider_id():
+    local = [{"id": "same", "title": "Cached copy"}]
+    live = [{"id": "same", "title": "Live copy"}, {"id": "other", "title": "Another"}]
+    assert [node["title"] for node in discovery.merge_mentions(local, live, 8)] == [
+        "Cached copy",
+        "Another",
+    ]
+
+
+def test_merge_mentions_also_dedupes_on_the_arxiv_id():
+    """Both identities are checked because either alone lets a paper through
+    twice: a cached node and a fresh provider hit can disagree on the provider
+    id (an OpenAlex work resolved from a DOI versus from an arXiv record) while
+    agreeing on the arXiv id."""
+    local = [{"id": "DOI:10/x", "arxiv_id": "1706.03762", "title": "Cached copy"}]
+    live = [{"id": "W99", "arxiv_id": "1706.03762", "title": "Live copy"}]
+    assert [node["title"] for node in discovery.merge_mentions(local, live, 8)] == ["Cached copy"]
+
+
+def test_merge_mentions_matches_arxiv_ids_case_insensitively():
+    # Old-style ids carry a case-sensitive-looking archive prefix; the cache and
+    # a provider needn't agree on its case.
+    local = [{"id": "A", "arxiv_id": "cs.LG/0701001", "title": "Cached"}]
+    live = [{"id": "B", "arxiv_id": "cs.lg/0701001", "title": "Live"}]
+    assert [node["title"] for node in discovery.merge_mentions(local, live, 8)] == ["Cached"]
+
+
+def test_merge_mentions_respects_the_limit():
+    live = [{"id": f"S{index}", "title": f"Paper {index}"} for index in range(10)]
+    assert len(discovery.merge_mentions([], live, 3)) == 3
+
+
+def test_merge_mentions_tolerates_nodes_with_no_ids_at_all():
+    """A node dict missing both ids can't be deduped against anything, so it is
+    kept rather than dropped — the alternative loses a real paper to a missing
+    field."""
+    merged = discovery.merge_mentions([{"title": "Anonymous"}], [{"title": "Also anonymous"}], 8)
+    assert [node["title"] for node in merged] == ["Anonymous", "Also anonymous"]
+
+
+def test_mention_hits_carries_the_venue_the_search_list_omits():
+    node = {"id": "A", "arxiv_id": None, "title": "T", "authors": "X", "venue": "ICML",
+            "year": 2020, "citation_count": 5, "url": "u", "abstract": "long text"}
+    [row] = discovery.mention_hits([node])
+    assert row["venue"] == "ICML"
+    assert "abstract" not in row  # trimmed: a suggestion row shows four fields
+
+
+# --- rank_mentions --------------------------------------------------------------
+
+
+def test_rank_mentions_leads_with_an_exact_title_match():
+    """You typed the whole title; nothing outranks it — not even a paper with
+    a thousand times the citations."""
+    nodes = [
+        {"title": "Deep reinforcement learning: an overview", "citation_count": 50000},
+        {"title": "DQN", "citation_count": 5},
+    ]
+    assert [node["title"] for node in discovery.rank_mentions(nodes, "dqn")][0] == "DQN"
+
+
+def test_rank_mentions_prefers_a_title_that_starts_with_the_query():
+    """The natural state of a title being typed left to right, which is why a
+    prefix beats a hit buried mid-title."""
+    nodes = [
+        {"title": "Rethinking DQN for control", "citation_count": 900},
+        {"title": "DQN variants compared", "citation_count": 10},
+    ]
+    assert [node["title"] for node in discovery.rank_mentions(nodes, "dqn")] == [
+        "DQN variants compared",
+        "Rethinking DQN for control",
+    ]
+
+
+def test_rank_mentions_prefers_any_title_hit_over_none():
+    nodes = [
+        {"title": "Unrelated but famous", "citation_count": 90000},
+        {"title": "Something about dqn", "citation_count": 1},
+    ]
+    assert [node["title"] for node in discovery.rank_mentions(nodes, "dqn")][0] == (
+        "Something about dqn"
+    )
+
+
+def test_rank_mentions_breaks_equal_matches_by_citation_count():
+    """Among papers matching equally well, the better-known one is the likelier
+    referent of a bare name."""
+    nodes = [
+        {"title": "dqn study a", "citation_count": 5},
+        {"title": "dqn study b", "citation_count": 500},
+    ]
+    assert [node["title"] for node in discovery.rank_mentions(nodes, "dqn")] == [
+        "dqn study b",
+        "dqn study a",
+    ]
+
+
+def test_rank_mentions_does_not_privilege_a_cached_hit():
+    """Being in the cache makes a paper *instant*, which is why it is fetched
+    and shown first — it says nothing about whether it is the paper meant. A
+    genuine tie still favours it, because callers pass cached hits first and
+    the sort is stable."""
+    cached = {"title": "dqn", "citation_count": 5, "has_graph": True}
+    live = {"title": "dqn", "citation_count": 5}
+    assert discovery.rank_mentions([cached, live], "dqn")[0] is cached
+    # Reversed input, same rule: order in decides a tie, not the cache flag.
+    assert discovery.rank_mentions([live, cached], "dqn")[0] is live
+
+
+def test_rank_mentions_is_case_and_whitespace_insensitive():
+    nodes = [{"title": "  Attention Is All You Need  ", "citation_count": 1}]
+    assert discovery.rank_mentions(nodes, "  attention is all you need ")[0]["title"] == (
+        "  Attention Is All You Need  "
+    )
+
+
+def test_rank_mentions_tolerates_a_missing_title():
+    """A provider record with no title can't match anything, but it must not
+    raise on the way to the bottom of the list."""
+    nodes = [{"citation_count": 10}, {"title": "dqn", "citation_count": 1}]
+    assert [node.get("title") for node in discovery.rank_mentions(nodes, "dqn")] == ["dqn", None]

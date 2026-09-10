@@ -6,9 +6,10 @@ search and the shaping that turns a scout result into a transcript turn.
 
 ```
 search/
-  SearchControls.tsx — the ask's two toggles: "Find papers" + "Filters" (with
-                       the year/field popover behind the second). They ride
-                       BESIDE the bar, not in it — see "Who uses it" below.
+  SearchControls.tsx — the ask's "Filters" control (year/field popover). It
+                       rides BESIDE the bar, not in it — see "Who uses it"
+                       below. The "Find papers" toggle sat here until
+                       v7.18.0; typing `@` replaced it (see `../mentions/`).
   useDirectSearch.ts — run the scout, shape its result into a chat message
   search.css         — styles for the toggles and the filter popover
 ```
@@ -34,9 +35,11 @@ its title-recall half became the scout's `match_title` tool.
 - **Three destinations, decided before any model runs.** `Teacher`'s submit
   handler branches on plain facts, not on an agent classifying your intent:
   a pasted arXiv id/URL goes straight to the graph (`ID_RE`, no LLM at all);
-  "Find papers" armed goes to the scout; otherwise the researcher. The id
-  check deliberately runs *first* — you pasted the paper, so there is nothing
-  left to search for, whichever toggle happens to be on.
+  a bare `@phrase` that resolved to nothing goes to the scout; otherwise the
+  researcher. The id check deliberately runs *first* — you pasted the paper,
+  so there is nothing left to search for. (Until v7.18.0 the middle branch was
+  a "Find papers" toggle you armed before typing; `../mentions/` has the story
+  of why saying it beats switching to it.)
 - **The filters bind, and they sit outside the toggle.** `year_from` /
   `year_to` / `fields` ride in the scout's **deps**, not its prompt, so no
   wording the model picks can widen them (it may narrow further inside them —
@@ -65,7 +68,8 @@ its title-recall half became the scout's `match_title` tool.
 - **The summary leads the list.** A negative result ("nothing indexed after
   2021") is a real finding, and it explains a short list rather than leaving
   the reader wondering.
-- **Direct search's brief lives at the call site, not in the shared prompt.**
+- **The scout's seed-search brief lives at the call site, not in the shared
+  prompt.**
   The scout is told to stop as soon as it has what was asked for — right when
   a researcher is waiting, wrong when a *reader* is. The first build of this
   returned exactly one paper for "dqn": correct, and useless, because there

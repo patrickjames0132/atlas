@@ -13,6 +13,25 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from .discovery import cached_nodes, display_hits, local_search, valid_fields
+from .discovery import (
+    cached_nodes,
+    display_hits,
+    local_search,
+    mention_hits,
+    merge_mentions,
+    rank_mentions,
+    valid_fields,
+)
+from .naming import has_exact_title_match, paper_by_name
 
-__all__ = ["cached_nodes", "display_hits", "local_search", "valid_fields"]
+__all__ = [
+    "cached_nodes",
+    "display_hits",
+    "has_exact_title_match",
+    "local_search",
+    "mention_hits",
+    "merge_mentions",
+    "paper_by_name",
+    "rank_mentions",
+    "valid_fields",
+]

@@ -1,0 +1,79 @@
+/* Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+   Description: the `@`-mention dropdown — the panel above the composer and its
+   candidate rows. Colours come from the app's tokens so it reads as part of the
+   panel rather than an overlay pasted on top. */
+
+/* Anchored above the composer: the bar sits at the bottom of the panel, so a
+   list below it would open off-screen. Capped and scrollable because a long
+   title wraps to two lines and eight of those would cover the transcript. */
+.mention-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.mention-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.mention-spin {
+  width: 10px;
+  height: 10px;
+}
+.mention-empty {
+  padding: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mention-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+/* One highlight state for both mouse and keyboard — hover moves the keyboard
+   selection (see `onHighlight`), so the two can never point at different rows
+   and leave the reader guessing what Enter takes. */
+.mention-row.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.mention-icon {
+  flex: none;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.7;
+}
+.mention-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mention-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-strong);
+}
+.mention-meta {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted);
+}

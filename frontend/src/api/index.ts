@@ -10,6 +10,7 @@
  *   graph    — the paper neighborhood graph, detail hydration, figures
  *   agents   — streaming lecture, Q&A, and offline library chat (SSE)
  *   sources  — the user's local semantic library (bring-your-own sources)
+ *   mentions — the composer's `@` paper lookup
  *   sessions — saved workspaces (graph + transcript)
  *   settings — the settings modal's config-file read/write
  *   sse      — the shared text/event-stream reader (internal)
@@ -19,6 +20,7 @@
  */
 
 export * from './search'
+export * from './mentions'
 export * from './graph'
 export * from './agents'
 export * from './sources'

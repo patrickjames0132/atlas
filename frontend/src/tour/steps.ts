@@ -43,18 +43,23 @@ export const HOME_TOUR: TourStep[] = [
       'library needed to begin; just saying hello stays a conversation.',
   },
   {
-    target: '[data-tour="direct-search"]',
-    title: 'Or skip the question',
+    // Anchored to the bar itself: `@` is typed INTO it, so there is no control
+    // to point at — which is the improvement over the toggle this replaced.
+    target: '[data-tour="ask"]',
+    title: 'Type @ to name a paper',
     body:
-      'Switch the same box to a plain paper lookup: it searches, lists what it found, ' +
-      'and writes no answer. Click any paper in the list to map it. Reach for it when ' +
-      'you know roughly what you want and would rather choose for yourself.',
+      'Start any word with @ and suggestions appear as you type — pick one and the ' +
+      'assistant knows exactly which paper you mean. Send just “@” and a paper and it ' +
+      'lands on the map; put one inside a question ("what does @… say about X?") and it ' +
+      'answers from that paper without disturbing the graph you are looking at. If the ' +
+      'paper is new to you, no suggestion appears — send it anyway and Atlas searches ' +
+      'properly and lists what it found.',
   },
   {
     target: '[data-tour="search-filters"]',
     title: 'Narrow what can be found',
     body:
-      'Restrict every paper search to a publication-year window, a field of study, or ' +
+      'Restrict a paper search to a publication-year window, a field of study, or ' +
       'both. These are hard limits, not hints — and they apply to the assistant’s own ' +
       'searches too, not just the direct lookup. Citation links on the graph are never ' +
       'filtered: those are edges somebody actually wrote.',
