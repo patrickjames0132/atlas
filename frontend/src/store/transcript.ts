@@ -38,7 +38,6 @@ import type {
   ChatMsg,
   GraphEdge,
   GraphNode,
-  LectureMode,
   PaperRef,
   ProvenanceEvent,
   RetrieveEvent,
@@ -51,22 +50,27 @@ import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 export interface Conversation {
   chat: ChatMsg[]
   /**
-   * Per-mode lecture cache: a mode maps to its generated beats once it has
-   * been played. Re-selecting a cached mode reloads its beats without a
-   * re-fetch; the four modes are independent, so switching between them is
-   * instant after the first play.
+   * This exploration's lecture, once played — its beats in order, or null if
+   * none has been played (or the last one was dropped).
+   *
+   * This was a per-mode cache (`Partial<Record<LectureMode, Beat[]>>`) until
+   * v7.17.0: four independent slots, one per mode button, so switching
+   * between the four stories was instant after the first play of each. With
+   * one lecture whose subject is the reader's scope there is nothing to cache
+   * *between* — the scope has usually changed by the time they ask again, so
+   * a second lecture is a different lecture, not a revisit.
    */
-  lectures: Partial<Record<LectureMode, Beat[]>>
+  lecture: Beat[] | null
   /**
-   * Per-mode library index for the `[Sn]` markers a lecture's beats cite —
-   * one map per lecture, not per beat, because every beat of a lecture cites
-   * the same retrieved sources. Only intuition-mode lectures retrieve, so the
-   * other modes never get an entry.
+   * The library index for the `[Sn]` markers the lecture's beats cite — one
+   * map for the lecture, not per beat, because every beat cites the same
+   * retrieved sources. Empty unless the lecture was a solo one (the scope was
+   * the seed alone), which is the only shape that retrieves.
    */
-  lectureSources: Partial<Record<LectureMode, Record<string, SourceRef>>>
-  /** Which cached lecture is currently shown on screen (null = none visible —
-   *  every mode button is deselected). */
-  activeMode: LectureMode | null
+  lectureSources: Record<string, SourceRef>
+  /** Whether the played lecture is showing on screen. Kept separate from
+   *  `lecture` so hiding it doesn't throw the beats away. */
+  lectureShown: boolean
   /**
    * Ids of the streams still running in this conversation.
    *
@@ -99,14 +103,14 @@ export interface TranscriptState {
 /**
  * A fresh, empty conversation.
  *
- * @returns A conversation with no chat, no lectures and nothing running.
+ * @returns A conversation with no chat, no lecture and nothing running.
  */
 export function emptyConversation(): Conversation {
   return {
     chat: [],
-    lectures: {},
+    lecture: null,
     lectureSources: {},
-    activeMode: null,
+    lectureShown: false,
     running: [],
     pendingDiscoveries: { nodes: [], edges: [] },
   }
@@ -345,80 +349,69 @@ const transcriptSlice = createSlice({
       prepare: keyed<number>(),
     },
     /**
-     * A lecture starts streaming: make its mode the visible one and reset its
-     * cache slot to empty, ready for the beats to stream in. The chat and every
-     * other mode's cached beats are left untouched.
+     * A lecture starts streaming: show it and reset the slot to empty, ready
+     * for the beats to stream in. The chat is left untouched.
      *
      * @param state  The slice state (mutated via immer).
-     * @param action Carries the lecture mode, and the conversation in `meta`.
+     * @param action Carries the conversation in `meta`.
      */
     lectureStarted: {
-      reducer(state, action: PayloadAction<LectureMode, string, Keyed>) {
+      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
         const conversation = target(state, action.meta.key)
         if (!conversation) return
-        conversation.activeMode = action.payload
-        conversation.lectures[action.payload] = []
-        delete conversation.lectureSources[action.payload]
+        conversation.lectureShown = true
+        conversation.lecture = []
+        conversation.lectureSources = {}
       },
-      prepare: keyed<LectureMode>(),
+      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
     },
     /**
-     * The library index for a lecture's `[Sn]` markers, which arrives before
-     * its first beat. Carried per mode (like the beats) so a lecture
-     * streaming in the background fills the right slot.
+     * The library index for the lecture's `[Sn]` markers, which arrives before
+     * its first beat.
      *
      * @param state  The slice state (mutated via immer).
-     * @param action Carries the mode and its map, and the conversation in `meta`.
+     * @param action Carries the map, and the conversation in `meta`.
      */
     lectureSourcesSet: {
-      reducer(
-        state,
-        action: PayloadAction<
-          { mode: LectureMode; refs: Record<string, SourceRef> },
-          string,
-          Keyed
-        >,
-      ) {
+      reducer(state, action: PayloadAction<Record<string, SourceRef>, string, Keyed>) {
         const conversation = target(state, action.meta.key)
-        if (conversation) conversation.lectureSources[action.payload.mode] = action.payload.refs
+        if (conversation) conversation.lectureSources = action.payload
       },
-      prepare: keyed<{ mode: LectureMode; refs: Record<string, SourceRef> }>(),
+      prepare: keyed<Record<string, SourceRef>>(),
     },
     /**
-     * One finished lecture beat arrives from the stream — appended to its own
-     * mode's cache slot. The mode is carried explicitly (not read from
-     * `activeMode`) so a lecture streaming in the background — deselected, or
-     * running alongside another that's on screen — still fills the right slot.
+     * One finished lecture beat arrives from the stream. The conversation is
+     * addressed explicitly (via `meta`, like every other action here) so a
+     * lecture streaming for an exploration the reader has navigated away from
+     * still lands in the right transcript.
      *
      * @param state  The slice state (mutated via immer).
-     * @param action Carries the beat and mode, and the conversation in `meta`.
+     * @param action Carries the beat, and the conversation in `meta`.
      */
     beatAdded: {
-      reducer(state, action: PayloadAction<{ mode: LectureMode; beat: Beat }, string, Keyed>) {
+      reducer(state, action: PayloadAction<Beat, string, Keyed>) {
         const conversation = target(state, action.meta.key)
         if (!conversation) return
-        const { mode, beat } = action.payload
-        ;(conversation.lectures[mode] ??= []).push(beat)
+        ;(conversation.lecture ??= []).push(action.payload)
       },
-      prepare: keyed<{ mode: LectureMode; beat: Beat }>(),
+      prepare: keyed<Beat>(),
     },
     /**
-     * Show an already-cached lecture without re-fetching it (clicking a mode
-     * button whose lecture was played earlier this session).
+     * Show the already-played lecture again without re-fetching it.
      *
      * @param state  The slice state (mutated via immer).
-     * @param action Carries the mode, and the conversation in `meta`.
+     * @param action Carries the conversation in `meta`.
      */
-    lectureShown: {
-      reducer(state, action: PayloadAction<LectureMode, string, Keyed>) {
+    lectureShownAgain: {
+      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
         const conversation = target(state, action.meta.key)
-        if (conversation) conversation.activeMode = action.payload
+        if (conversation) conversation.lectureShown = true
       },
-      prepare: keyed<LectureMode>(),
+      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
     },
     /**
-     * Hide the visible lecture (deselecting its button) while keeping its beats
-     * cached, so re-selecting the mode reloads them instantly.
+     * Hide the lecture while keeping its beats, so showing it again is
+     * instant.
      *
      * @param state  The slice state (mutated via immer).
      * @param action Carries the conversation in `meta`.
@@ -426,27 +419,27 @@ const transcriptSlice = createSlice({
     lectureHidden: {
       reducer(state, action: PayloadAction<undefined, string, Keyed>) {
         const conversation = target(state, action.meta.key)
-        if (conversation) conversation.activeMode = null
+        if (conversation) conversation.lectureShown = false
       },
       prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
     },
     /**
-     * Drop a mode's cached beats (a stream that was aborted or errored before
-     * finishing, so it should regenerate on the next click rather than reload a
-     * partial lecture). Also hides it if it was the visible one.
+     * Drop the cached beats (a stream that was aborted or errored before
+     * finishing, so the next ask regenerates rather than reloading a partial
+     * lecture) and hide it.
      *
      * @param state  The slice state (mutated via immer).
-     * @param action Carries the mode, and the conversation in `meta`.
+     * @param action Carries the conversation in `meta`.
      */
     lectureDropped: {
-      reducer(state, action: PayloadAction<LectureMode, string, Keyed>) {
+      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
         const conversation = target(state, action.meta.key)
         if (!conversation) return
-        delete conversation.lectures[action.payload]
-        delete conversation.lectureSources[action.payload]
-        if (conversation.activeMode === action.payload) conversation.activeMode = null
+        conversation.lecture = null
+        conversation.lectureSources = {}
+        conversation.lectureShown = false
       },
-      prepare: keyed<LectureMode>(),
+      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
     },
     /**
      * A question begins: the user turn plus the empty assistant turn the
@@ -659,11 +652,11 @@ const transcriptSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // A new graph keeps your conversation and drops the lectures. The two
+      // A new graph keeps your conversation and drops the lecture. The two
       // halves of this slice belong to different owners: the chat is the
       // user's — they asked those questions, and nothing about loading another
       // graph says they're finished with the answers, so clearing it is theirs
-      // to do (the Clear button, or Home). Lectures belong to the *graph*: a
+      // to do (the Clear button, or Home). A lecture belongs to the *graph*: a
       // lecture narrates the neighborhood you built, and its beats point at
       // that graph's nodes, so carrying one onto a different graph would
       // narrate papers that aren't there.
@@ -680,9 +673,9 @@ const transcriptSlice = createSlice({
       .addCase(loadGraph.fulfilled, (state) => {
         const conversation = state.byKey[state.activeKey]
         if (!conversation) return
-        conversation.lectures = {}
+        conversation.lecture = null
         conversation.lectureSources = {}
-        conversation.activeMode = null
+        conversation.lectureShown = false
       })
       // ✎ New Exploration: a brand-new conversation, with the old one left
       // exactly as it was — it may still be streaming, and it is still listed
@@ -716,7 +709,7 @@ export const {
   lectureStarted,
   lectureSourcesSet,
   beatAdded,
-  lectureShown,
+  lectureShownAgain,
   lectureHidden,
   lectureDropped,
   turnStarted,
@@ -766,21 +759,21 @@ export const selectRunningKeys = (state: { transcript: TranscriptState }): strin
     .map(([key]) => key)
 
 /**
- * The beats of the currently-shown lecture, or a stable empty array when no
- * mode is selected — what the panel renders.
+ * The beats of the lecture while it is showing, or a stable empty array when
+ * it is hidden or was never played — what the panel renders.
  *
  * @param state The root state.
  * @returns The visible lecture's beats.
  */
 export const selectVisibleBeats = (state: { transcript: TranscriptState }): Beat[] => {
-  const { activeMode, lectures } = selectConversation(state)
-  return (activeMode && lectures[activeMode]) || NO_BEATS
+  const { lectureShown, lecture } = selectConversation(state)
+  return (lectureShown && lecture) || NO_BEATS
 }
 
 /**
- * The library index for the currently-shown lecture's `[Sn]` markers, or a
- * stable empty map when no mode is selected (or the lecture cited no library
- * passage).
+ * The library index for the lecture's `[Sn]` markers while it is showing, or a
+ * stable empty map when it is hidden, was never played, or cited no library
+ * passage.
  *
  * @param state The root state.
  * @returns The visible lecture's `[Sn]` index → source map.
@@ -788,6 +781,6 @@ export const selectVisibleBeats = (state: { transcript: TranscriptState }): Beat
 export const selectVisibleSourceRefs = (state: {
   transcript: TranscriptState
 }): Record<string, SourceRef> => {
-  const { activeMode, lectureSources } = selectConversation(state)
-  return (activeMode && lectureSources[activeMode]) || NO_SOURCE_REFS
+  const conversation = selectConversation(state)
+  return conversation.lectureShown ? conversation.lectureSources : NO_SOURCE_REFS
 }

@@ -28,7 +28,7 @@ function makeProps(overrides: Partial<GraphControlsProps> = {}): GraphControlsPr
   return {
     layout: 'force',
     onLayout: () => {},
-    enabled: new Set(['reference', 'citation', 'latest']),
+    enabled: new Set(['reference', 'citation']),
     onToggleType: () => {},
     minYear: 2000,
     maxYear: 2026,
@@ -171,10 +171,34 @@ describe('GraphControls Release button', () => {
   })
 })
 
+describe('the seed chip', () => {
+  it('gives the seed a chip of its own', () => {
+    // Added in v7.17.0 because a lecture now narrates exactly what is on
+    // screen: without a chip the seed was the one paper a reader could not
+    // scope out, so "summarize these five citers" always came out as six.
+    renderPanel({})
+    expect(screen.getByRole('button', { name: /Seed paper/i })).toBeTruthy()
+  })
+
+  it('toggles like any other chip', () => {
+    const onToggleType = vi.fn()
+    renderPanel({ onToggleType })
+    fireEvent.click(screen.getByRole('button', { name: /Seed paper/i }))
+    expect(onToggleType).toHaveBeenCalledWith('seed')
+  })
+
+  it('reads as off when it is not enabled', () => {
+    const { container } = renderPanel({ enabled: new Set(['reference', 'citation']) })
+    const chips = [...container.querySelectorAll('.rel-toggle')]
+    const seedChip = chips.find((chip) => chip.textContent?.includes('Seed paper'))
+    expect(seedChip?.classList.contains('on')).toBe(false)
+  })
+})
+
 describe('per-chip count sliders', () => {
   const withCaps = {
     showRelCaps: true,
-    relTotals: { reference: 40, citation: 120, latest: 30 },
+    relTotals: { reference: 40, citation: 120 },
   }
 
   it('shows no sliders while the build is adaptive', () => {
@@ -187,7 +211,7 @@ describe('per-chip count sliders', () => {
   it('gives each enabled relation a slider once sizing is user-controlled', () => {
     renderPanel(withCaps)
     expect(screen.getByRole('slider', { name: /References shown/i })).toBeTruthy()
-    expect(screen.getByRole('slider', { name: /Field Landmarks shown/i })).toBeTruthy()
+    expect(screen.getByRole('slider', { name: /Citations shown/i })).toBeTruthy()
   })
 
   it('bounds a slider by that relation and defaults to showing all of it', () => {
@@ -214,9 +238,9 @@ describe('per-chip count sliders', () => {
 
   it('drops the slider for a relation whose chip is off', () => {
     // A cap on a hidden relation would trim nothing visible.
-    renderPanel({ ...withCaps, enabled: new Set(['citation', 'latest']) })
+    renderPanel({ ...withCaps, enabled: new Set(['citation']) })
     expect(screen.queryByRole('slider', { name: /References shown/i })).toBeNull()
-    expect(screen.getByRole('slider', { name: /Field Landmarks shown/i })).toBeTruthy()
+    expect(screen.getByRole('slider', { name: /Citations shown/i })).toBeTruthy()
   })
 
   it('drops the slider for a relation with nothing to trim', () => {
@@ -234,10 +258,10 @@ describe('per-chip count sliders', () => {
   })
 
   it('still shows the chip for a relation with no slider', () => {
-    // Field Landmarks with a single paper: no slider, but the chip must remain
-    // so it can still be toggled off/on.
+    // Citations with a single paper: no slider, but the chip must remain so it
+    // can still be toggled off/on.
     renderPanel({ ...withCaps, relTotals: { citation: 1 } })
-    expect(screen.getByRole('button', { name: /Field Landmarks/i })).toBeTruthy()
-    expect(screen.queryByRole('slider', { name: /Field Landmarks shown/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Citations/i })).toBeTruthy()
+    expect(screen.queryByRole('slider', { name: /Citations shown/i })).toBeNull()
   })
 })

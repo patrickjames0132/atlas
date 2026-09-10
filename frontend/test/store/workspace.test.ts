@@ -23,6 +23,7 @@ import reducer, {
   nodeSelectionToggled,
   providerSet,
   selectGroundingNodes,
+  selectLectureNodes,
   selectSatelliteCount,
   restoreSession,
   visibleNodesSet,
@@ -52,7 +53,7 @@ function makeGraph(nodes: GraphNode[]): GraphResponse {
     seed: { id: nodes[0]?.id ?? 'seed', arxiv_id: null, title: 'seed' },
     nodes,
     edges: [],
-    counts: { references: 0, citations: 0, latest: 0, nodes: nodes.length },
+    counts: { references: 0, citations: 0, nodes: nodes.length },
   }
 }
 
@@ -126,6 +127,47 @@ describe('selectGroundingNodes', () => {
       stateWith({ visibleNodeIds: ['a', 'b'], selectedNodeIds: ['c'] }),
     )
     expect(grounding).toEqual([])
+  })
+})
+
+describe('selectLectureNodes — strictly what is on screen', () => {
+  const graph = makeGraph([makeNode('a'), makeNode('b'), makeNode('c')])
+
+  /** Build a root state around a workspace patch, from the slice's initial. */
+  function stateWith(patch: Partial<WorkspaceState>) {
+    return { workspace: { ...initial(), graph, ...patch } }
+  }
+
+  it('drops a discovery the filters exclude, where grounding keeps it', () => {
+    // The one place the two scopes diverge, and the reason there are two. An
+    // answer may draw on a paper the agent found even when a filter hides it —
+    // the agent pulled it in deliberately. A lecture promises to narrate the
+    // papers you have ON SCREEN, so narrating one you cannot see breaks its
+    // only rule, and you have no way to tell why it appeared.
+    const hidden = makeNode('d', { discovered: true })
+    const state = stateWith({ visibleNodeIds: ['a', 'b'], discoveredNodes: [hidden] })
+    expect(selectGroundingNodes(state).map((node) => node.id)).toEqual(['a', 'b', 'd'])
+    expect(selectLectureNodes(state).map((node) => node.id)).toEqual(['a', 'b'])
+  })
+
+  it('keeps a discovery that IS visible', () => {
+    // Discoveries are merged into the graph and normally visible; only a
+    // filter excluding one makes the scopes differ at all.
+    const shown = makeNode('d', { discovered: true })
+    const state = stateWith({ visibleNodeIds: ['a', 'd'], discoveredNodes: [shown] })
+    expect(selectLectureNodes(state).map((node) => node.id)).toEqual(['a', 'd'])
+  })
+
+  it('still narrows to selected ∩ visible like grounding does', () => {
+    const state = stateWith({ visibleNodeIds: ['a', 'b'], selectedNodeIds: ['a', 'c'] })
+    expect(selectLectureNodes(state).map((node) => node.id)).toEqual(['a'])
+  })
+
+  it('is empty when nothing is visible, so the backend falls back to the seed', () => {
+    // A reader can now filter every paper away — the seed has a chip too — and
+    // an empty scope is a real state, not a bug. `_story_nodes` on the backend
+    // treats it as "lecture the seed".
+    expect(selectLectureNodes(stateWith({ visibleNodeIds: [] }))).toEqual([])
   })
 })
 
@@ -213,7 +255,7 @@ describe('restoring a save from before the graphRefs rename', () => {
     const { transcript } = action.payload as { transcript: TranscriptState }
 
     expect(transcript.chat[1].graphRefs).toEqual({ '1': 'node-attention' })
-    expect(transcript.lectures.history?.[0].graph_refs).toEqual({ '2': 'node-rnn' })
+    expect(transcript.lecture?.[0].graph_refs).toEqual({ '2': 'node-rnn' })
     getSession.mockRestore()
   })
 
@@ -416,7 +458,7 @@ describe('restoring the three exploration shapes', () => {
  */
 function keyedTranscript(conversation: Record<string, unknown>): TranscriptState {
   return {
-    byKey: { only: { lectures: {}, lectureSources: {}, activeMode: null, ...conversation } },
+    byKey: { only: { lecture: null, lectureSources: {}, lectureShown: false, ...conversation } },
     activeKey: 'only',
   } as unknown as TranscriptState
 }

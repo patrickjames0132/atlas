@@ -1,15 +1,18 @@
 """Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
 
 Description:
-Shared vocabulary for the agents package: the workflow intents, the
-lecture modes, and the played-lecture context the researcher receives.
+Shared vocabulary for the agents package: the played-lecture context the
+researcher receives.
 
-They live at the package root (not inside the lecturer's or researcher's
-package) because they're the *vocabulary of the package's public surface* —
-routes construct them, the agents take them, and workflows
-receive them. ``StrEnum`` so members compare and serialize as their wire
-strings (``LectureMode.HISTORY == "history"``), which keeps the HTTP layer and
-the ``MODE_INTENTS`` prompt table oblivious to the enum-ness.
+It lives at the package root (not inside the lecturer's or researcher's
+package) because it's the *vocabulary of the package's public surface* —
+routes construct these, the agents take them, and workflows receive them.
+
+``LectureMode`` used to live here too: a five-member ``StrEnum`` naming which
+story a lecture told. It went in v7.17.0 with the mode buttons themselves —
+a lecture now narrates whatever the reader has scoped on screen, and the one
+remaining variation (the bridge) is signalled by the presence of a target
+paper rather than by a string the route has to parse and validate.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -17,19 +20,7 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
-from enum import StrEnum
-
 from pydantic import BaseModel, ConfigDict
-
-
-class LectureMode(StrEnum):
-    """Which story a lecture tells."""
-
-    HISTORY = "history"
-    INTUITION = "intuition"
-    EVOLUTION = "evolution"
-    FRONTIER = "frontier"
-    BRIDGE = "bridge"
 
 
 class PlayedBeat(BaseModel):

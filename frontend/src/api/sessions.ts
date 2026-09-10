@@ -13,7 +13,6 @@ import type { GraphNode, GraphEdge, Provider } from './graph'
 import type {
   AnswerFigure,
   Beat,
-  LectureMode,
   PaperRef,
   ProvenanceEvent,
   RetrieveEvent,
@@ -143,24 +142,33 @@ export interface SessionData {
   discovered_nodes?: GraphNode[]
   discovered_edges?: GraphEdge[]
   chat: ChatMsg[]
+  /** The exploration's lecture as it stood when saved (v7.17.0 onward). */
+  lecture?: Beat[]
   /**
-   * The per-mode lecture cache (mode → its beats) as it stood when saved —
-   * every lecture the user had played this session, so a restore brings them
-   * all back, not just the visible one.
+   * The library index for the `[Sn]` markers the lecture's beats cite. Absent
+   * on saves predating structured library citations — those beats' markers
+   * (if any) degrade to raw text on restore.
+   *
+   * **Two shapes live under this one key.** A v6-era save wrote a map of
+   * *mode* → marker index, alongside the per-mode `lectures` cache below; a
+   * current save writes the marker index directly. Which one a given save
+   * holds is told by whether `lecture` or `lectures` is present, so
+   * `restoredLecture` narrows it there rather than guessing per read. The
+   * union is deliberate: renaming the field for the new shape would have left
+   * every existing save's sources unreadable.
    */
-  lectures?: Partial<Record<LectureMode, Beat[]>>
+  lectureSources?: Record<string, SourceRef> | Partial<Record<string, Record<string, SourceRef>>>
   /**
-   * Per-mode library index for the `[Sn]` markers each cached lecture's beats
-   * cite. Absent on saves predating structured library citations — those
-   * beats' markers (if any) degrade to raw text on restore.
+   * Legacy (v6-era): the per-mode lecture cache, from when four mode buttons
+   * each had their own lecture. A restore picks ONE out of it — see
+   * `restoredLecture` — because this build has room for one.
    */
-  lectureSources?: Partial<Record<LectureMode, Record<string, SourceRef>>>
-  /** Which cached lecture was on screen when saved (null/absent = none). */
-  activeMode?: LectureMode | null
+  lectures?: Partial<Record<string, Beat[]>>
+  /** Legacy (v6-era): which cached lecture was on screen when saved. */
+  activeMode?: string | null
   /**
-   * Legacy: a single un-attributed lecture's beats, from saves made before
-   * per-mode caching. New saves omit it; restore folds it into `lectures`
-   * (see `restoreSession`).
+   * Legacy (ancient): a single un-attributed lecture's beats, from saves made
+   * before per-mode caching. New saves omit it; restore falls back to it.
    */
   beats?: Beat[]
   /**

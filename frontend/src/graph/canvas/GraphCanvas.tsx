@@ -74,6 +74,17 @@ export interface GraphCanvasProps {
  *
  * @returns The configured ForceGraph2D element.
  */
+/** Zoom past which every node wears its title. */
+const LABEL_ZOOM = 1.6
+
+/**
+ * How many nodes a pick or highlight may hold and still be labelled while
+ * zoomed out. Small sets are the reason the exemption exists — you picked
+ * three papers and want to see which — while a large marquee labelled at every
+ * zoom paints an unreadable block of overlapping text over the graph.
+ */
+const LABEL_ALL_MAX = 12
+
 export default function GraphCanvas({
   fgRef,
   width,
@@ -128,6 +139,9 @@ export default function GraphCanvas({
         // A hand-picked selection dims everything outside it (like focus), on
         // top of any hover/highlight dimming, so the scoped cluster stands out.
         const hasSelection = selectedIds.size > 0
+        // Whether the pick / highlight is small enough to label at any zoom.
+        const pickedFew = selectedIds.size <= LABEL_ALL_MAX
+        const litFew = highlightIds.size <= LABEL_ALL_MAX
         const dim =
           (focusSet ? !focusSet.has(node.id) : false) || (hasSelection && !selectedIds.has(node.id))
         const isPicked = selectedIds.has(node.id)
@@ -187,7 +201,23 @@ export default function GraphCanvas({
           ctx.strokeStyle = canvasInk.hard
           ctx.stroke()
         }
-        if (!dim && (node.is_seed || isSel || isLit || isPicked || globalScale > 1.6)) {
+        // Labels: always for the seed and the detail selection, and for a
+        // *small* pick or highlight — otherwise only when zoomed in past
+        // `LABEL_ZOOM`.
+        //
+        // The count gate is what keeps a large selection readable. The
+        // exemption exists so a deliberate pick of a few papers stays
+        // identifiable while zoomed out; a hundred-node marquee is not that,
+        // and labelling all of it painted a solid white block over the graph
+        // (and over the papers it was meant to name). Same for a beat's
+        // highlight, which can now light every paper the beat cites.
+        const labelled =
+          node.is_seed ||
+          isSel ||
+          (isLit && litFew) ||
+          (isPicked && pickedFew) ||
+          globalScale > LABEL_ZOOM
+        if (!dim && labelled) {
           const fontSize = Math.max(11 / globalScale, 2)
           ctx.font = `${fontSize}px -apple-system, sans-serif`
           ctx.textAlign = 'center'

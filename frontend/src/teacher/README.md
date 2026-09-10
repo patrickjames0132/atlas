@@ -11,7 +11,7 @@ lecture buttons + agentic Q&A (the lecturer and researcher).
 ```
 teacher/
   Teacher.tsx        — the slim shell: title row, the two folding sections
-                       (Lectures / Q&A), ask form
+                       (Lecture / Q&A), ask form
   useConversation.ts — the stream engine: runs the 3 streams, dispatches
                        events into the store, owns panel run-state
   HopDots.tsx        — the one "working on it" indicator, shared by a
@@ -39,17 +39,18 @@ structure rule's nesting case (the `graph/hooks` precedent).
 
 ## The state split (the directive, applied to the hardest case)
 
-- **In the store:** the transcript (chat + the per-mode lecture cache — Save
+- **In the store:** the transcript (chat + the exploration's lecture — Save
   needs it), the highlight ids (the canvas needs them), discoveries (the graph
   and Save need them). `useConversation` dispatches; nothing is reported
   upward through props anymore — the old `onStateChange`/`initial*` prop
   plumbing and the Atlas-side duplicate are gone.
-- **Panel-local, on purpose:** the input box, the `asking` flag and the
-  `loadingModes` set (which lectures are streaming), the
+- **Panel-local, on purpose:** the input box, the `asking` and `lecturing`
+  flags, the
   stream error, activeBeat/activeChat (which entry is lit is panel UI —
   only the resulting ids are global), the scope pickers' exclusion sets
-  (`excludedSources`/`excludedLectures` — exclusion-tracked so a new
-  source/lecture is in scope by default) plus which picker's popover is open
+  (`excludedSources` — exclusion-tracked so a new source is in scope by
+  default; the lecture's is the plain `lectureInScope` flag) plus which
+  picker's popover is open
   (`openScope`, one shared slot so the two popovers can't overlap), the
   lightbox, the abort/session refs, and whether the transcript is currently
   following its own bottom (a ref, not state — it changes on every scroll
@@ -113,31 +114,41 @@ structure rule's nesting case (the `graph/hooks` precedent).
   `{message}`, no `discard` handler (the researcher's pre-answer narration is
   never streamed). Lectures stream beats only — they never expand the
   graph, so the lecture handler has no trace/discovery callbacks.
-- **Lecture buttons are colour-coded to their relation** (`MODES` in
-  `Teacher.tsx`): each mode narrates one graph relation, so its button is tinted
-  that relation's node colour (`REL_COLOR` via a `--c` custom property, the same
-  hex the filter chips and legend dots use) and shows only that relation's short
-  node-type word ("References" / "Landmarks" / "Latest" / "This paper"), centred
-  — the button visibly belongs to the nodes it lights up. The full lecture name
-  (`label`) lives in the button's tooltip/aria-label and in the **"Now playing"
-  header** above the transcript (`.lecture-now`, also tinted `--c`), so a long
-  name never clutters the button. The idle/hover tints are `color-mix` alphas of
-  `--c`; the shown (`.active`) button fills solid with it. The lecture section
-  itself is ruled off under the panel title with a divider and a one-line intro
-  (`.lecture-intro`). (The `--lecture` periwinkle triple now only tints the
-  beat/chat/trace surfaces, not the buttons.)
+- **The lecture reads `selectLectureNodes`, not the researcher's grounding.**
+  The two differ on exactly one thing — whether a discovery the filters exclude
+  stays in scope — and the lecture's answer is no, because it promises to
+  narrate the papers on screen. See `store/README.md`.
+- **A framing choice above the button** — `Summary | History`, panel-local
+  (`framing` in `Teacher.tsx`), sent per request. It sits *above* rather than
+  beside the button because it is a setting the press consumes, not a second
+  action: read the framing, then press. It **disables while a lecture is
+  shown**, since that lecture was told under the framing selected at the time
+  and a control drifting away from the beats on screen would describe the wrong
+  thing — clearing the lecture frees it. Summary is the default: a chronological
+  arc is a strong claim to make about an arbitrary selection, and forcing one
+  produced beats about the timeline instead of the papers (see the lecturer's
+  README).
+- **One Lecture button, tinted the seed's gold** (v7.17.0). Each of four
+  buttons used to be tinted its relation's node colour, because each mode
+  narrated one relation — the button visibly belonged to the nodes it lit up.
+  With one lecture whose subject is whatever the reader has scoped, there is no
+  single relation to match, so it wears the seed's colour: the one node every
+  lecture is anchored on. Its accessible name is "Play the lecture" rather than
+  "Lecture", because the section header above is already named that and two
+  controls sharing an accessible name inside one section is a screen-reader
+  coin toss.
 - **The panel is two folding sections** (v7.10.0 — `lecturesOpen` / `qaOpen`,
-  `.panel-section` + `.section-toggle` / `.section-body`). **Lectures** holds
-  the four buttons, the intro, and the shown lecture's beats; **Chat** holds the
+  `.panel-section` + `.section-toggle` / `.section-body`). **Lecture** holds
+  the button, the intro, and the shown lecture's beats; **Chat** holds the
   conversation. Each has a caret row that names it and folds it. Details that
   make the fold safe: the states are **initial values only** (open one and it
-  stays open for the session — a menu you come back to); Lectures starts
-  **folded** because four buttons in the panel's prime vertical space are not
+  stays open for the session); Lecture starts
+  **folded** because a control in the panel's prime vertical space is not
   what most turns need, while Chat starts **open** because it is what the
   composer writes into; the tour **stages both open** (`stagedOpen`, the same
   contract `GraphControls` has), which is also how a first-time reader learns
   the lectures exist; asking a question **unfolds Chat** (a turn landing in a
-  folded section reads as nothing happening); and while Lectures is folded, a
+  folded section reads as nothing happening); and while Lecture is folded, a
   **generating lecture still reports itself** on its caret row with the shared
   spinner, since its button's own dots are out of sight. Opening replays the
   panel's one entrance (`rise` + `fade`, quicker); folding is instant, and
@@ -146,55 +157,54 @@ structure rule's nesting case (the `graph/hooks` precedent).
   A long conversation used to bury its own header: folding the chat away, or
   reaching its scope pickers, meant scrolling all the way back to the top
   first (Patrick, 2026-08-16). A sticky box is confined to its own containing
-  block, so the two headers don't stack up — the Lectures one leaves with its
+  block, so the two headers don't stack up — the Lecture one leaves with its
   section and the Chat one takes the top from it — and the row is opaque
   because turns now pass behind it.
 - **Each section reports its own work on its header**, with the app's shared
   `.spin` rather than `HopDots`: the hopping dots are a *voice* ("an agent is
   composing" — a lecture button, the send control, a bubble awaiting its first
   token) and a header is a status line, the same distinction the trace chips
-  draw. Lectures shows it only while **folded**, since its four buttons are a
-  better readout when open (they say *which* mode). Chat shows it whenever the
+  draw. Lecture shows it only while **folded**, since the button's own hopping
+  dots are the better readout when open. Chat shows it whenever the
   agent is working, folded or not — with the header pinned, it is the only
   thing still on screen while a reader scrolls back through history.
 - **Lecture buttons are cached toggles** (`toggleLecture` in `useConversation`):
-  each of the four modes is a show/hide switch over its cached beats. First
-  click on a mode streams and caches it (`lectureStarted`/`beatAdded` write the
-  mode's slot — `beatAdded` carries its mode so a background stream fills the
-  right slot); re-clicking the shown mode hides it (`lectureHidden`, cache
-  kept) and clicking a hidden mode that's cached or still loading reveals it
-  instantly (`lectureShown`, no re-fetch). A run dropped before it finishes
-  (cleared) drops its partial via `lectureDropped`, so the next click
-  regenerates rather than reloading half a lecture.
-- **Everything streams in parallel** — the single "teaching" flag and shared
-  abort controller are gone. Each in-flight lecture has its own controller in a
-  `Map<mode, AbortController>` (`loadingModes` state drives the buttons' hopping
-  dots); the chat has its own. So a lecture keeps generating in the background
-  when you deselect it, ask a question, or start another mode — nothing
-  interrupts anything else. `onBeat` only drives the graph highlight when its
-  mode is the one on screen (`shownModeRef`); background lectures stay quiet.
-- **Played lectures ride along on a Q&A** (`useConversation.ask`): every `ask`
-  packs the transcript cache's lectures (trimmed to each beat's heading + text,
-  titled via the shared `LECTURE_TITLES`) into `streamAsk`'s `lectures`, so the
-  researcher can build on a story the student already watched instead of
-  re-deriving it (and re-paying the tokens). The backend budgets the block. A
-  **🎓 scope picker** (the same `ScopePicker` the sources use) filters which
-  played lectures are fed — tracked in `Teacher.tsx` by **exclusion** (default
-  none excluded = all fed), so a lecture played after the user last touched the
-  picker is included automatically; `onAsk` passes the checked modes to `ask`. A
-  quiet line above the ask bar notes how many are in play.
+  the button is a show/hide switch over the exploration's lecture. First press
+  streams and stores it (`lectureStarted`/`beatAdded`); pressing it while shown
+  hides it (`lectureHidden`, beats kept) and pressing it while hidden reveals
+  what is there — live if still streaming, instant if done
+  (`lectureShownAgain`). Note what a second press is *not*: a re-ask over a
+  changed scope. That is `clearLecture` then press again, and it is worth
+  revisiting once lectures are asked for in words (the chat-routing ticket),
+  where "lecture me on these five instead" is a new request rather than a
+  second press of the same control.
+- **The lecture streams on its own controller** (`lectureCtrl`, with
+  `lecturing` driving the button's hopping dots); the chat has its own. So a
+  lecture keeps generating in the background when you hide it or ask a
+  question — neither interrupts the other. `onBeat` only drives the graph
+  highlight while the lecture is on screen (`shownRef`) and its exploration is
+  the one being read.
+- **The played lecture rides along on a Q&A** (`useConversation.ask`): every
+  `ask` packs it (trimmed to each beat's heading + text, titled via the shared
+  `LECTURE_TITLE`) into `streamAsk`'s `lectures`, so the researcher can build
+  on a story the student already watched instead of re-deriving it (and
+  re-paying the tokens). The backend budgets the block. A **🎓 scope picker**
+  (the same `ScopePicker` the sources use) says whether it is fed —
+  `lectureInScope` in `Teacher.tsx`, ticked by default, since a lecture the
+  reader just heard is context they expect an answer to build on. A quiet line
+  above the ask bar notes when it is in play.
 - **The lecture and the conversation no longer take turns** (v7.10.0). They
-  used to share one scroll, gated on `activeMode`: a shown lecture took the
-  panel over, and **asking a question hid the lecture** (`ask` dispatched
+  used to share one scroll, gated on which mode was shown: a shown lecture took
+  the panel over, and **asking a question hid the lecture** (`ask` dispatched
   `lectureHidden`) so the two could never stack. Sections made that unnecessary
   and then wrong — a reader deep in a lecture would ask a follow-up and watch
   the beats they were reading vanish — so that dispatch is gone and a shown
-  lecture stays shown. `selectVisibleBeats` still keys off `activeMode`, which
-  now means only *which* lecture the section shows; the chat is always the full
-  list. Both remain a pure render choice over persistent state: the lecture
-  cache and the chat both live in the store.
+  lecture stays shown. `selectVisibleBeats` keys off `lectureShown`, which means
+  only whether the section shows it; the chat is always the full list. Both
+  remain a pure render choice over persistent state: the lecture and the chat
+  both live in the store.
 - **Two Clears, one per section** — `clearLecture` (stop it if loading,
-  `lectureDropped`, unlight the graph) sits on the Lectures caret row, and
+  `lectureDropped`, unlight the graph) sits on the Lecture caret row, and
   `clearChat` (`chatCleared` + a fresh session id) is the bin in the composer,
   which belongs to Chat. It was one contextual button until v7.10.0; with both
   sections on screen at once, a single button could no longer say which of the
@@ -398,19 +408,24 @@ modes.
 
 ## The lecture intro says what a lecture will leave out (v7.7.0)
 
-`.lecture-intro` above the mode buttons gained a conditional sentence: when
-papers on the graph hang off *another* paper rather than the seed, it names
-how many and says no lecture covers them, closing with the action that does
-("Re-seed on one to hear its story").
+`.lecture-intro` above the Lecture button carries a conditional sentence: when
+papers on the graph hang off *another* paper rather than the seed, it names how
+many.
 
-It exists because the alternative is worse than silence: a reader who has just
-expanded a paper and then plays a lecture sees those papers go unmentioned,
-which reads as the lecture quietly skipping things rather than as a boundary.
+**The sentence was inverted in v7.17.0, and that inversion is the point.** It
+used to say no lecture covered them ("Re-seed on one to hear its story"),
+because each mode was scoped to the seed's own neighbours and a satellite fell
+outside every one of them — silence there would have read as the lecture
+quietly skipping papers rather than as a stated boundary. A lecture now
+narrates whatever is scoped, so satellites ARE covered, and the sentence says
+so ("That includes the 3 papers you expanded"). Same count, opposite claim:
+worth stating either way, because a reader who has been expanding the graph
+needs to know which of the two they are getting.
 
-The count comes from `selectSatelliteCount`, which asks **exactly the question
-the backend scopes by** — is this joined to the seed by an edge? — rather than
-reusing the frontend's own `_origin` layout hint. Two independent notions of
-"satellite" is how a note like this goes stale and starts contradicting the
-lecture it describes. It counts over the *grounding* nodes, so filtering a
-satellite off the canvas drops it from the count: the number tracks what a
-lecture would actually skip right now.
+The count comes from `selectSatelliteCount`, which asks *is this joined to the
+seed by an edge?* rather than reusing the frontend's own `_origin` layout hint.
+It used to match the backend's scoping predicate exactly, which was the reason
+to prefer it; now that nothing on the backend scopes by relation, it is simply
+the honest reading of "hangs off another paper". It counts over the *grounding*
+nodes, so filtering a satellite off the canvas drops it from the count — the
+number tracks what the lecture will actually cover right now.

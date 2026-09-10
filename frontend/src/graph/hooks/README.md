@@ -116,7 +116,7 @@ Pins are just `fx`/`fy`, but their *semantics* are layout-aware:
   of the Timeline view**, while Force (where x carries no date meaning)
   still shows them. Only an undated *seed* survives the filter, since the
   seed always renders; it anchors at the earliest year. The backend also
-  stopped shipping undated *citers* as Field Landmarks (a landmark is
+  stopped shipping undated *citers* among the most-cited pool (a landmark is
   "top-cited citer of year Y" — a claim an undated paper can't make; see
   `services/graph/budget.py`), so in practice little reaches this filter.
 - **Timeline physics:** pin every x, add a radius-sized collide force so a

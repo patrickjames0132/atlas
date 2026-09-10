@@ -38,35 +38,37 @@ export interface Beat {
   /**
    * A real paper figure attached to this beat (proxied image + the paper's
    * caption + the figure's number in the lecture's pool). `title` names the
-   * source paper when the lecture drew from several (history/evolution);
-   * null when every figure is the seed's own (intuition). Absent on bridge
-   * lectures and older saved sessions.
+   * source paper when the lecture drew from several; null when every figure
+   * is the seed's own (a solo lecture — the scope was the seed alone).
+   * Absent on bridge lectures and older saved sessions.
    */
   figure?: { image: string; caption: string; number: number; title?: string | null } | null
 }
 
 /**
- * What story the lecture tells, each pinned to one kind of graph node: the
- * seed's references (`history`), the seed paper itself read in chapters
- * (`intuition`), the landmark papers that cite it (`evolution`), the latest
- * publications (`frontier`), or a conceptual bridge from the seed to a target
- * paper (`bridge`).
+ * The lecture's display name, shown in the transcript's "Now playing" header
+ * and sent to the researcher as a played lecture's title.
+ *
+ * There used to be a `LectureMode` union here and a title per mode — five
+ * stories, four of them on their own button. v7.17.0 replaced them with one
+ * lecture whose subject is whatever the reader has scoped on screen, so there
+ * is one title left. It stays in this module rather than in a component so
+ * the panel and the ask-payload builder can't drift on it.
  */
-export type LectureMode = 'history' | 'intuition' | 'evolution' | 'frontier' | 'bridge'
+export const LECTURE_TITLE = 'Lecture'
 
 /**
- * The display name of each lecture mode — the single source of the copy shown
- * on the mode buttons, in the "Now playing" header, and sent to the researcher
- * as a played lecture's title. Kept here (not in a component) so the panel and
- * the ask-payload builder can't drift.
+ * How the lecture frames whatever the reader has scoped: `summary` groups the
+ * papers into their key themes, `history` tells them as a chronological arc.
+ *
+ * This is not the mode grid returning. A mode said *which papers* a lecture
+ * was about, and overrode the reader's own scope to get them; framing says how
+ * to tell the papers they already chose — the one thing a selection cannot
+ * express, since the same set is a fair subject for either. `summary` is the
+ * default: a chronological arc is a strong claim to make about an arbitrary
+ * selection.
  */
-export const LECTURE_TITLES: Record<LectureMode, string> = {
-  history: 'How we got here',
-  intuition: "This paper's intuition",
-  evolution: "What's evolved since",
-  frontier: 'The current frontier',
-  bridge: 'Bridging two topics',
-}
+export type LectureFraming = 'summary' | 'history'
 
 /**
  * A lecture already played this session, trimmed to what the researcher needs
@@ -105,25 +107,26 @@ export interface LectureHandlers {
 }
 
 /**
- * Stream a lecture over the visible graph. Beats arrive one at a time; a
- * lecture never expands the graph, so beats and the up-front library index
- * are the only payload frames.
+ * Stream a lecture over the reader's scoped graph. Beats arrive one at a
+ * time; a lecture never expands the graph, so beats and the up-front library
+ * index are the only payload frames.
  *
- * @param body     The seed, the visible nodes, the lecture mode, and (bridge
- *                 mode only) the target paper. Nodes are the FULL graph-node
- *                 shapes — the backend's typed boundary rejects trimmed ones.
+ * @param body     The seed, the scoped nodes, the framing, and optionally a
+ *                 bridge target.
+ *                 `nodes` IS the subject of the lecture — send what is on
+ *                 screen, and the backend narrates exactly that. They are the
+ *                 FULL graph-node shapes; the backend's typed boundary rejects
+ *                 trimmed ones. (The `mode` and `edges` fields went in
+ *                 v7.17.0: both existed so a mode could carve its own slice
+ *                 out of the graph, overriding the reader's scope.)
  * @param handlers Event handlers; see {@link LectureHandlers}.
  */
 export async function streamLecture(
   body: {
     seed: GraphNode
     nodes: GraphNode[]
-    mode: LectureMode
+    framing?: LectureFraming
     target?: GraphNode
-    /** Every graph edge — how the backend tells the seed's own neighbours
-     *  from papers expanded off them. Omitted, it falls back to node tags,
-     *  which over-include on an expanded graph. */
-    edges?: GraphEdge[]
   },
   handlers: LectureHandlers,
 ): Promise<void> {

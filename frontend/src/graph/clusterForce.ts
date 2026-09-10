@@ -10,8 +10,8 @@
  *
  * Geometry: each relation owns a fixed compass heading (stable across graphs,
  * so the map always reads the same way) — references west, echoing Timeline's
- * past-is-left; the two citing relations east (landmarks up, latest down);
- * the researcher's discoveries on the remaining diagonals. A cluster's orbit
+ * past-is-left; citations due east; the researcher's discoveries on the
+ * remaining diagonals. A cluster's orbit
  * radius grows with the square root of its population (area scales linearly
  * with the papers in it), which spaces big clusters farther from the seed —
  * and from each other — while small ones stay close. Anchors are computed
@@ -39,16 +39,20 @@ import type { VNode } from './model'
 
 /**
  * Each relation's compass heading around the seed, in radians (canvas y grows
- * downward). References west — the past on the left, matching Timeline —
- * citing relations east (landmarks up-right, latest down-right). A relation
- * with no heading here falls back to the default orbit — which is what the two
- * retired relations (`search`, v7.3.0; `similar`, v7.5.0) now do on a session
- * saved before they went.
+ * downward). References west — the past on the left, matching Timeline — and
+ * citations due east, opposite them. A relation with no heading here falls
+ * back to the default orbit, which is what the retired relations (`search`,
+ * v7.3.0; `similar`, v7.5.0) do on a session saved before they went.
+ *
+ * Citations sat at -PI/3 (up-right) until v7.17.0, sharing the eastern half
+ * with `latest` at +PI/3 (down-right) — one sector each for the two citer
+ * pools. With one citing relation the split has nothing left to separate, so
+ * the sector recentres on due east: the axis now reads references-west /
+ * citations-east, which is the whole story the layout is trying to tell.
  */
 const SECTOR_ANGLE: Record<string, number> = {
   reference: Math.PI,
-  citation: -Math.PI / 3,
-  latest: Math.PI / 3,
+  citation: 0,
 }
 
 /** The smallest cluster orbit — clear air between the seed and any cluster. */

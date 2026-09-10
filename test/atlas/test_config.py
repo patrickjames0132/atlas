@@ -178,7 +178,6 @@ class TestAgentExtras:
         loaded = Config.model_validate(self._with_extras("lecturer", {}))
         lecturer = next(entry for entry in loaded.llm.agents if entry.id == "lecturer")
         assert lecturer.extras == {
-            "frontier_window_months": 60,
             "min_beats": 7,
             "max_beats": 12,
         }

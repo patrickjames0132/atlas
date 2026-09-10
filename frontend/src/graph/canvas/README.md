@@ -54,3 +54,20 @@ zoomToFit, `onRenderFramePre` the timeline year axis painter).
 
 `tsc --noEmit` strict + oxlint; the painting itself (rings, labels,
 dimming) is exactly what the end-of-phase browser milestone eyeballs.
+
+## Labels: why the always-on exemptions are size-capped
+
+A node wears its title when it is the seed, the detail selection, part of a
+*small* pick or highlight, or the canvas is zoomed past `LABEL_ZOOM` (1.6).
+
+The pick/highlight exemptions exist so a deliberate selection of a few papers
+stays identifiable while zoomed out — you alt-dragged three papers and want to
+see which. They were unconditional until v7.17.0, and a marquee over a hundred
+nodes then drew a hundred labels at every zoom level: a solid block of
+overlapping white text covering the graph, including the very papers it was
+meant to name. `LABEL_ALL_MAX` (12) caps both, so a large selection falls back
+to the zoom gate like any other node.
+
+The highlight half of that cap matters more than it used to: a lecture beat now
+lights **every** paper it discusses, not just the handful the model listed, so a
+single beat can legitimately light a dozen or more.

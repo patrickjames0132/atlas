@@ -27,12 +27,13 @@ import {
   type GraphEdge,
   type GraphNode,
   type GraphResponse,
-  type LectureMode,
+  type SessionData,
+  type SourceRef,
   type Provider,
   type SaveSessionBody,
   type SavedSessionMeta,
 } from '../api'
-import { cleanNode, countRels } from '../graph/model'
+import { cleanNode, countRels, foldRetiredEdgeTypes, foldRetiredNodeRels } from '../graph/model'
 import type { VNode } from '../graph/model'
 import type { Conversation, TranscriptState } from './transcript'
 
@@ -188,19 +189,57 @@ function withBeatGraphRefs(beat: Beat): Beat {
 }
 
 /**
- * Apply a per-beat migration across every cached lecture in a save.
- *
- * @param lectures The saved per-mode lecture cache.
- * @param migrate  The per-beat transform to apply.
- * @returns The cache with each mode's beats migrated.
+ * The order a pre-v7.17.0 save's cached lectures are preferred in, when the
+ * save doesn't say which one was on screen. `history` first because it was
+ * the default mode and the one most saves hold.
  */
-function mapLectures(
-  lectures: Partial<Record<LectureMode, Beat[]>>,
+const LEGACY_MODE_ORDER = ['history', 'intuition', 'evolution', 'frontier', 'bridge'] as const
+
+/**
+ * Pick the one lecture to restore out of a save's lecture state, whatever era
+ * the save is from.
+ *
+ * Three shapes exist. A **current** save carries a single `lecture` array. A
+ * **v6-era** save carries a per-mode cache (`lectures`) and the mode that was
+ * on screen (`activeMode`) — up to four lectures where this build has room
+ * for one, so the shown one wins, falling back to the first played mode in
+ * `LEGACY_MODE_ORDER`. An **ancient** save carries a flat `beats` array from
+ * before per-mode caching existed. Dropping the extras is the honest trade:
+ * they narrate a scope the reader no longer has, and the alternative is
+ * inventing a mode picker for saves alone.
+ *
+ * @param data    The saved session payload.
+ * @param migrate The per-beat transform to apply (graph-ref backfill).
+ * @returns The beats to restore and the library index that goes with them.
+ */
+function restoredLecture(
+  data: SessionData,
   migrate: (beat: Beat) => Beat,
-): Partial<Record<LectureMode, Beat[]>> {
-  return Object.fromEntries(
-    Object.entries(lectures).map(([mode, beats]) => [mode, (beats ?? []).map(migrate)]),
-  )
+): { lecture: Beat[] | null; lectureSources: Record<string, SourceRef> } {
+  if (data.lecture?.length) {
+    // Current shape: `lectureSources` is the marker index itself.
+    return {
+      lecture: data.lecture.map(migrate),
+      lectureSources: (data.lectureSources ?? {}) as Record<string, SourceRef>,
+    }
+  }
+  const cache = data.lectures ?? {}
+  const played = LEGACY_MODE_ORDER.filter((mode) => cache[mode]?.length)
+  const mode = (data.activeMode && cache[data.activeMode]?.length && data.activeMode) || played[0]
+  if (mode) {
+    // v6-era shape: `lectureSources` is keyed by mode, so index into it with
+    // the mode whose lecture we just chose.
+    const byMode = (data.lectureSources ?? {}) as Partial<Record<string, Record<string, SourceRef>>>
+    return {
+      lecture: (cache[mode] ?? []).map(migrate),
+      lectureSources: byMode[mode] ?? {},
+    }
+  }
+  // Ancient: a flat, un-attributed beats array.
+  return {
+    lecture: data.beats?.length ? data.beats.map(migrate) : null,
+    lectureSources: {},
+  }
 }
 
 /**
@@ -234,16 +273,19 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
   let seedRef: string | null = null
 
   if (data.nodes?.length && data.seed) {
-    // Legacy: the whole graph is right here.
+    // Legacy: the whole graph is right here. The folds rewrite relation tags
+    // this build no longer has — a pre-v7.17.0 save carries `latest` nodes,
+    // which belong to no filter chip and would come back invisible.
+    const restoredNodes = foldRetiredNodeRels(data.nodes)
     graph = {
       seed: {
         id: data.seed.id,
         arxiv_id: data.seed.arxiv_id ?? null,
         title: data.seed.title,
       },
-      nodes: data.nodes,
-      edges: data.edges ?? [],
-      counts: countRels(data.nodes),
+      nodes: restoredNodes,
+      edges: foldRetiredEdgeTypes(data.edges ?? []),
+      counts: countRels(restoredNodes),
     }
     seedRef = data.seed.arxiv_id || data.seed.id
   } else if (data.graph_ref) {
@@ -259,6 +301,8 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     }
   }
 
+  const restored = restoredLecture(data, withBeatGraphRefs)
+
   return {
     conversationKey,
     // The name it is already stored under. Without this the shell has no way
@@ -268,8 +312,10 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     name: saved.name,
     graph,
     seedRef,
-    discoveredNodes: data.discovered_nodes ?? [],
-    discoveredEdges: data.discovered_edges ?? [],
+    // Folded like the graph's own: a discovery merged onto the old `latest`
+    // relation would otherwise belong to no chip either.
+    discoveredNodes: foldRetiredNodeRels(data.discovered_nodes ?? []),
+    discoveredEdges: foldRetiredEdgeTypes(data.discovered_edges ?? []),
     layout: data.layout ?? ('timeline' as const),
     // Pre-v5.0.0 saves have no provider; the app was S2-backed then, so default there.
     provider: data.provider ?? ('s2' as const),
@@ -277,18 +323,13 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     // backfill — ignored; lectures no longer expand the graph.)
     transcript: {
       chat: (data.chat ?? []).map(withGraphRefs),
-      // New saves carry the per-mode lecture cache directly. A pre-caching
-      // save has only a flat `beats` array with no mode recorded — fold it in
-      // under `history` (the primary "how we got here" mode) so the lecture
-      // isn't lost, and show it.
-      lectures: mapLectures(
-        data.lectures ?? (data.beats?.length ? { history: data.beats } : {}),
-        withBeatGraphRefs,
-      ),
+      // One lecture, whatever era the save is from (see `restoredLecture`).
       // Saves from before structured library citations carry no source maps;
       // their beats' [Sn] markers (if any) degrade to raw text, as designed.
-      lectureSources: data.lectureSources ?? {},
-      activeMode: data.activeMode ?? (data.beats?.length ? ('history' as const) : null),
+      ...restored,
+      // Shown if there is one: a restore that hid it would leave the reader
+      // looking at an empty panel with no hint a lecture is there.
+      lectureShown: restored.lecture !== null,
     },
   }
 })
@@ -400,9 +441,10 @@ export function buildSaveBody(
     discovered_nodes: workspace.discoveredNodes.map((node) => cleanNode(node as VNode)),
     discovered_edges: workspace.discoveredEdges,
     chat: settleInFlight(conversation?.chat ?? []),
-    lectures: conversation?.lectures ?? {},
+    // One lecture per exploration since v7.17.0; the legacy `lectures`
+    // per-mode cache and `activeMode` are read on restore but never written.
+    lecture: conversation?.lecture ?? undefined,
     lectureSources: conversation?.lectureSources ?? {},
-    activeMode: conversation?.activeMode ?? null,
   }
 }
 
@@ -650,53 +692,93 @@ export const selectSeedNode = createSelector(
 )
 
 /**
- * The teacher's grounding scope: the nodes VISIBLE on the canvas plus
- * everything discovered this session, deduped — narrowed to the user's
- * hand-picked selection when there is one. Grounding tracks what's on
- * screen — the graph ships a much larger pool than the filters show, and the
- * agents must reason over the papers the user actually sees, not the hidden
- * remainder.
+ * The papers the agents may reason over, in two flavours that differ on one
+ * question: **may a paper the reader cannot currently see be in scope?**
  *
- * When `selectedNodeIds` is non-empty the graph side is the **intersection**
- * of the selection with the visible set (`selected ∩ visible`): a hand-pick
- * narrows *within* what the filters already show, so hiding a relation after
- * selecting also drops those nodes from scope. An empty selection means "no
- * manual pick" and the whole visible set grounds. Either way, **discoveries
- * are always kept** (the agent pulled them in), even if a filter or the
- * selection would exclude them.
+ * Both start from the nodes VISIBLE on the canvas — grounding tracks what's on
+ * screen, because the graph ships a much larger pool than the filters show and
+ * an agent must reason over the papers the user actually sees, not the hidden
+ * remainder. When `selectedNodeIds` is non-empty the graph side is the
+ * **intersection** of the selection with the visible set (`selected ∩
+ * visible`): a hand-pick narrows *within* what the filters already show, so
+ * hiding a relation after selecting also drops those nodes. An empty selection
+ * means "no manual pick" and the whole visible set grounds.
  *
  * `visibleNodeIds` is published by GraphExplorer's view filter; before it
  * lands (e.g. the instant a graph loads) grounding is just the discoveries,
  * which corrects on the next render.
+ *
+ * @param graph           The current graph.
+ * @param discovered      Papers the agent pulled in this session.
+ * @param visibleNodeIds  The ids surviving the view filter.
+ * @param selectedNodeIds The reader's hand-picked selection.
+ * @param keepHidden      Whether a discovery excluded by the filters stays in
+ *                        scope (see the two selectors below).
+ * @returns The scoped nodes, on-screen ones first, then discoveries.
+ */
+function scopedNodes(
+  graph: GraphResponse | null,
+  discovered: GraphNode[],
+  visibleNodeIds: string[],
+  selectedNodeIds: string[],
+  keepHidden: boolean,
+): GraphNode[] {
+  if (!graph) return []
+  const visible = new Set(visibleNodeIds)
+  const hasSelection = selectedNodeIds.length > 0
+  const selected = new Set(selectedNodeIds)
+  const seen = new Set<string>()
+  const merged: GraphNode[] = []
+  for (const node of graph.nodes) {
+    if (!visible.has(node.id) || seen.has(node.id)) continue
+    if (hasSelection && !selected.has(node.id)) continue
+    seen.add(node.id)
+    merged.push(node)
+  }
+  for (const node of discovered) {
+    if (seen.has(node.id)) continue
+    if (!keepHidden && !visible.has(node.id)) continue
+    seen.add(node.id)
+    merged.push(node)
+  }
+  return merged
+}
+
+/**
+ * The **researcher's** grounding scope: what's on screen, plus every paper the
+ * agent has discovered this session — kept even when a filter or the selection
+ * would exclude it, because the agent pulled it in deliberately and an answer
+ * that silently forgets its own find is worse than one that mentions a paper
+ * currently filtered away.
  */
 export const selectGroundingNodes = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,
   (state: StateWithWorkspace) => state.workspace.visibleNodeIds,
   (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
-  (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] => {
-    if (!graph) return []
-    const visible = new Set(visibleNodeIds)
-    const hasSelection = selectedNodeIds.length > 0
-    const selected = new Set(selectedNodeIds)
-    const seen = new Set<string>()
-    const merged: GraphNode[] = []
-    // On-screen graph nodes first — trimmed to the hand-picked set when one is
-    // active — then all discoveries (kept regardless of filter/selection,
-    // since the agent pulled them in).
-    for (const node of graph.nodes) {
-      if (!visible.has(node.id) || seen.has(node.id)) continue
-      if (hasSelection && !selected.has(node.id)) continue
-      seen.add(node.id)
-      merged.push(node)
-    }
-    for (const node of discovered) {
-      if (seen.has(node.id)) continue
-      seen.add(node.id)
-      merged.push(node)
-    }
-    return merged
-  },
+  (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] =>
+    scopedNodes(graph, discovered, visibleNodeIds, selectedNodeIds, true),
+)
+
+/**
+ * The **lecture's** scope: strictly what is on screen. Same as the
+ * researcher's, except a discovery the filters exclude is excluded too.
+ *
+ * The two diverge because they make different promises. An answer is about a
+ * question, and drawing on a paper the agent found is honest even if a filter
+ * currently hides it. A lecture, since v7.17.0, promises to narrate *the papers
+ * you have on screen* — so narrating one the reader cannot see breaks the only
+ * rule it has, and the reader has no way to tell why an unfamiliar paper
+ * appeared. (Reachable only in a narrow case: the agent finds a 2019 paper
+ * mid-chat, the reader filters to 2024+, then presses Lecture.)
+ */
+export const selectLectureNodes = createSelector(
+  (state: StateWithWorkspace) => state.workspace.graph,
+  (state: StateWithWorkspace) => state.workspace.discoveredNodes,
+  (state: StateWithWorkspace) => state.workspace.visibleNodeIds,
+  (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
+  (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] =>
+    scopedNodes(graph, discovered, visibleNodeIds, selectedNodeIds, false),
 )
 
 /**

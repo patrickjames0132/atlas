@@ -55,7 +55,7 @@ overlays).
   muted; this brings the two number fields to match.
 - **The citations-corpus path lives under Data Providers ▸ Semantic Scholar**,
   not a section of its own — it's an S2 setting (`storage.s2_corpus`, the offline
-  corpus the s2 provider draws Field Landmarks from), so it sits with the rest of
+  corpus the s2 provider draws its citers from), so it sits with the rest of
   the S2 connection knobs.
 - **General carries the browser-level defaults** — default data source
   and colour theme — which config *seeds* and an in-app control then

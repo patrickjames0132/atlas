@@ -27,8 +27,9 @@ lives on for the researcher's ``expand_node``). Node identity still dedups
 within a provider — a paper reached through two relations, or an OpenAlex
 duplicate work, merges into one node via its arXiv id.
 
-Edges are tagged ``reference | citation | latest`` so the frontend can colour and
-route them. The whole snapshot is cached (see ``storage/cache.py``), keyed by
+Edges are tagged ``reference | citation`` so the frontend can colour and
+route them — one tag for every citer since v7.17.0, though the recent-years
+pool is still fetched by its own query (see the citation loop below). The whole snapshot is cached (see ``storage/cache.py``), keyed by
 **provider *and* seed** so an OpenAlex graph is never served for an S2 selection.
 
 The graph is a typed **Pydantic** ``Graph`` (not a bare dict — the models live
@@ -66,14 +67,15 @@ log = logging.getLogger(__name__)
 #: by the caller (the header dropdown), defaulting to ``config.providers.default_provider``.
 Provider = Literal["s2", "openalex"]
 
-SNAPSHOT_VERSION = "v2"
+SNAPSHOT_VERSION = "v3"
 """Schema version baked into every graph-snapshot cache key.
 
 Bump it whenever the ``Graph`` model **loses** a field: ``extra="forbid"``
 turns a stored snapshot carrying the dead field into a validation *error*
 rather than a miss, so old entries have to become unreadable instead of
-poisonous. They age out on the TTL. (v2 = v7.5.0, which dropped
-``Counts.similar``.)"""
+poisonous. They age out on the TTL. (v2 = v7.5.0, which dropped ``Counts.similar``;
+v3 = v7.17.0, which dropped ``Counts.latest`` and narrowed ``Edge.type`` to
+``reference | citation``.)"""
 
 
 def snapshot_prefix(provider: Provider) -> str:
@@ -416,7 +418,7 @@ def build_graph(
 
         Args:
             node_data: The normalized node dict (from the active provider).
-            rel: The relation that surfaced it (``reference | citation | latest``).
+            rel: The relation that surfaced it (``reference | citation``).
 
         Returns:
             The node-table key this paper resolved to (the surviving node's id).
@@ -453,14 +455,14 @@ def build_graph(
     seen_edges: set[tuple[str, str, str]] = set()
 
     def add_edge(source: str, target: str,
-                 edge_type: Literal["reference", "citation", "latest"],
+                 edge_type: Literal["reference", "citation"],
                  influential: bool | None, rank: int) -> bool:
         """Append one edge unless it's a self-loop or already drawn.
 
         Args:
             source: The citing end's canonical node id.
             target: The cited end's canonical node id.
-            edge_type: The relation tag (``reference | citation | latest``).
+            edge_type: The relation tag (``reference | citation``).
             influential: S2's influential-citation flag (None where it doesn't
                 apply).
             rank: The edge's reveal rank within its relation.
@@ -479,10 +481,9 @@ def build_graph(
         return True
 
     # Each relation arrives already ranked (references/citations by citation
-    # count, latest oldest-first so the reveal walks toward the present), so an
-    # edge's emission index within its relation IS its `rank` — the order the
-    # frontend's per-relation count slider reveals through. A skipped duplicate
-    # doesn't burn a rank.
+    # count, the recent-years pool oldest-first so the reveal walks toward the
+    # present), so an edge's emission index within its relation IS its `rank`.
+    # A skipped duplicate doesn't burn a rank.
 
     # References: papers the SEED cites. The seed is the citer, so the arrow
     # runs seed -> ancestor. ``influential`` flags S2's "highly influential
@@ -495,18 +496,21 @@ def build_graph(
 
     # Citations: papers that cite the SEED. Now the neighbor is the citer, so
     # the arrow runs descendant -> seed (the opposite direction from above).
-    # Two disjoint relations from the same split: landmark citers ("citation")
-    # and the recent frontier ("latest"), both citer -> seed.
+    #
+    # **Both citer pools become ONE relation** (v7.17.0). The traversal still
+    # returns them separately — the landmark pool ranked by citation count, the
+    # recent-years pool banded per year — because they are fetched by two
+    # different queries and the second is the only reason a recent paper makes
+    # it into the graph at all (it has not had time to out-cite anything in the
+    # first). What changed is that the reader is no longer shown that seam: a
+    # citer is a citer, and the year and citation-count filters let them draw
+    # their own line. The landmark pool is emitted first so the shared rank
+    # counter keeps the most-cited citers at the front of the relation.
     citation_rank = 0
-    for citation in landmark_cites:
+    for citation in list(landmark_cites) + list(latest_cites):
         node_id = add_neighbor(citation["node"], "citation")
         if add_edge(node_id, seed_id, "citation", citation["influential"], citation_rank):
             citation_rank += 1
-    latest_rank = 0
-    for latest in latest_cites:
-        node_id = add_neighbor(latest["node"], "latest")
-        if add_edge(node_id, seed_id, "latest", latest["influential"], latest_rank):
-            latest_rank += 1
 
     graph = Graph(
         seed=Seed(arxiv_id=seed_node.arxiv_id, id=seed_id, title=seed_node.title),
@@ -518,7 +522,6 @@ def build_graph(
         counts=Counts(
             references=reference_rank,
             citations=citation_rank,
-            latest=latest_rank,
             nodes=len(nodes),
         ),
         citation_source=citation_source,

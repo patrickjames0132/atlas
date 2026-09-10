@@ -55,14 +55,14 @@ function makeWorld(seedId: string) {
     seed: { id: seedId, arxiv_id: null, title: seedId },
     nodes: [seed, neighbor],
     edges: [],
-    counts: { reference: 0, citation: 1, latest: 0 },
+    counts: { reference: 0, citation: 1 },
   } as unknown as GraphResponse
   const base: Base = {
     nodes: [seed, neighbor],
     links: [],
     minYear: 2019,
     maxYear: 2021,
-    counts: { reference: 0, citation: 1, latest: 0 },
+    counts: { reference: 0, citation: 1 },
     minCitations: 0,
     maxCitations: 10,
   }

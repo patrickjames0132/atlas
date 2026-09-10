@@ -88,9 +88,16 @@ def fake_openalex(monkeypatch):
 
 
 def test_build_graph_shape_s2(fake_s2):
-    """The S2 path: seed + reference + landmark + latest, correct edge directions,
+    """The S2 path: seed + reference + two citers, correct edge directions,
     ranks, and counts. The `similar` relation left the build in v5.0.0 and the
-    schema entirely in v7.5.0, so there is no longer a field to assert 0."""
+    schema entirely in v7.5.0, so there is no longer a field to assert 0.
+
+    **Both citer pools ship as one `citation` relation** (v7.17.0). The two
+    queries behind them are unchanged — the landmark pool is still ranked by
+    citation count and the recent pool still banded per year — but the reader
+    is no longer shown that seam, so `latest` is gone from the wire and the
+    recent citer arrives as an ordinary citation edge one rank behind the
+    landmark it was emitted after."""
     graph = build.build_graph("1706.03762", provider="s2")
     assert isinstance(graph, Graph)
     assert graph.seed == Seed(arxiv_id=None, id="seed", title="The Seed")
@@ -105,8 +112,10 @@ def test_build_graph_shape_s2(fake_s2):
     # Edge directions: seed cites ref (seed->ref); citer cites seed (cite->seed).
     assert Edge(source="seed", target="ref1", type="reference", influential=True, rank=0) in graph.edges
     assert Edge(source="cite1", target="seed", type="citation", influential=False, rank=0) in graph.edges
-    assert Edge(source="latest1", target="seed", type="latest", influential=False, rank=0) in graph.edges
-    assert graph.counts == Counts(references=1, citations=1, latest=1, nodes=4)
+    assert Edge(source="latest1", target="seed", type="citation", influential=False, rank=1) in graph.edges
+    # The recent citer is tagged like any other citer — one relation, one chip.
+    assert by_id["latest1"].rels == ["citation"]
+    assert graph.counts == Counts(references=1, citations=2, nodes=4)
 
 
 def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
@@ -126,7 +135,7 @@ def test_s2_build_prefers_corpus_over_live(fake_s2, monkeypatch):
     graph = build.build_graph("1706.03762", provider="s2")
     by_id = {node.id: node for node in graph.nodes}
     assert by_id["CorpusId:2"].rels == ["citation"] and by_id["CorpusId:2"].title == "BERT"
-    assert by_id["CorpusId:3"].rels == ["latest"]
+    assert by_id["CorpusId:3"].rels == ["citation"]
     assert graph.citation_source == "corpus"  # surfaced to the UI's Field-Landmarks note
 
 
@@ -163,10 +172,10 @@ def test_build_graph_shape_openalex(fake_openalex):
     by_id = {node.id: node for node in graph.nodes}
     assert by_id["ref1"].rels == ["reference"]
     assert by_id["DOI:10/oa-cite"].rels == ["citation"]
-    assert by_id["DOI:10/oa-latest"].rels == ["latest"]
+    assert by_id["DOI:10/oa-latest"].rels == ["citation"]
     assert Edge(source="DOI:10/oa-cite", target="seed", type="citation",
                 influential=False, rank=0) in graph.edges
-    assert graph.counts == Counts(references=1, citations=1, latest=1, nodes=4)
+    assert graph.counts == Counts(references=1, citations=2, nodes=4)
     assert graph.citation_source is None  # not applicable to OpenAlex's sorted citers
 
 

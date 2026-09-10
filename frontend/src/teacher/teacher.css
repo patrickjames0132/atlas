@@ -617,24 +617,59 @@
   line-height: 1.5;
   color: var(--muted);
 }
-/* The four lecture modes as an even 2×2 grid — equal-height cells so the long
-   labels ("This paper's intuition") sit as tidily as the short
-   ones instead of jumbling the row. */
-.lecture-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-auto-rows: 1fr;
-  gap: 8px;
+/* The framing choice — Summary | History — as a small segmented control above
+   the Lecture button. It sits ABOVE rather than beside it because it is a
+   setting the press consumes, not a second action: read the framing, then
+   press. Disabled while a lecture is shown, since it framed those beats. */
+.lecture-framing {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
 }
-/* Each button is tinted its lecture's relation colour, passed in as `--c`
-   (REL_COLOR in graph/theme.ts) — the same colour as that relation's filter
-   chip / legend dot, so a button visibly belongs to the nodes it narrates.
-   color-mix keeps the single hex source of truth while varying the alpha.
-   The button shows only the short node-type word, centred; the full lecture
-   name lives in the tooltip and the transcript's "Now playing" header. */
+.framing-btn {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.framing-btn:hover:not(:disabled):not(.on) {
+  color: var(--text-strong);
+  border-color: var(--muted);
+}
+.framing-btn.on {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.framing-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The single Lecture button, full width of the section. This was a 2×2 grid of
+   four mode buttons until v7.17.0; with one lecture whose subject is the
+   reader's scope, there is one control. */
+.lecture-row {
+  display: flex;
+}
+/* Tinted with the seed's gold, passed in as `--c` (REL_COLOR in
+   graph/theme.ts). It used to take its relation's colour — each mode narrated
+   one relation and matched that filter chip — but a lecture now narrates
+   whatever is on screen, so it wears the seed's colour: the one node every
+   lecture is anchored on. color-mix keeps the single hex source of truth
+   while varying the alpha. */
 .teach-btn {
   position: relative; /* anchors the .cached dot */
-  height: 100%;
+  flex: 1;
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -659,8 +694,8 @@
   background: color-mix(in srgb, var(--c) 16%, transparent);
   border-color: color-mix(in srgb, var(--c) 60%, transparent);
 }
-/* The shown lecture — its button is filled with the relation colour, reading as
-   pressed/selected. The relation colours are all bright, so text goes dark. */
+/* The shown lecture — its button is filled, reading as pressed/selected. The
+   tint is bright, so text goes dark. */
 .teach-btn.active {
   background: var(--c);
   border-color: var(--c);
@@ -670,8 +705,7 @@
 .teach-btn.active:hover:not(:disabled) {
   filter: brightness(1.08);
 }
-/* A played-but-hidden lecture wears a small dot: "cached — click to show."
-   Top-left, clear of the top-right relation tag. */
+/* A played-but-hidden lecture wears a small dot: "played — click to show." */
 .teach-btn.cached::after {
   content: '';
   position: absolute;
@@ -792,31 +826,6 @@
 .teacher-error {
   color: #f78ca0;
   margin-top: 10px;
-}
-
-/* The "now playing" header above the transcript, naming the shown lecture in
-   its relation colour (`--c`) — the full name the button no longer spells out.
-   A left colour bar + faint tint tie it back to the button you clicked. */
-.lecture-now {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-bottom: 10px;
-  padding: 8px 11px;
-  border-left: 3px solid var(--c);
-  border-radius: 0 6px 6px 0;
-  background: color-mix(in srgb, var(--c) 9%, transparent);
-}
-.lecture-now-eyebrow {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-.lecture-now-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--c);
 }
 
 /* --- lecture beats --- */

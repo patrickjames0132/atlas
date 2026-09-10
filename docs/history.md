@@ -1684,6 +1684,119 @@
 
 ### Citation graph — landmark/latest & mega-papers
 
+- [x] **Collapse Field Landmarks and Latest Publications into one `citation`
+      relation — and, with it, four lecture modes into one lecture over what the
+      reader has scoped** *(v7.17.0)* — the graph shipped two kinds of citer as two
+      separate things: `citation` (all-time most-cited citers) and `latest`
+      (the recent-years frontier), with their own colours
+      (`graph/theme.ts:59`), their own legend rows
+      (`controls/Legend.tsx:39-43`), their own cluster angles (landmarks
+      up-right, latest down-right — `graph/clusterForce.ts:50`), their own
+      filter chips, and their own lecture modes (`evolution` / `frontier`).
+      The argument for merging: with citation counts, date filters, and an
+      agent grounded in whatever is selected on screen, **the reader can tell
+      "old and important" from "new" themselves** — we don't need to impose a
+      threshold and call it a taxonomy.
+
+      **The strongest evidence for the ask is that the app already half-does
+      it.** `theme.ts:87-90`'s `BADGE_LABEL` maps `latest` → `"citation"` so
+      the detail panel shows one badge, with the comment *"Latest Publications
+      ARE citing papers"*. And old saves are safe: `theme.ts:99`'s
+      `UNKNOWN_EDGE` exists precisely so *"a retired edge type can't draw an
+      invisible line on an old save"*, so cached snapshots
+      (`graph:v2:<provider>:`) and saved sessions carrying `latest` edges
+      degrade to a visible neutral edge rather than breaking.
+
+      **The trap: the label and the fetch are not the same decision, and only
+      the label is cheap.** They are two different *acquisition* strategies,
+      not two views of one result set. Landmarks are the seed's citers ranked
+      by citation count; the latest band is a separate query **per year**
+      (`services/graph/build.py:184-217`, `bands.py`, `budget.py`), sized by
+      `tau`/`max_span` constants **fitted on a labelled 64-seed corpus** — and
+      the whole reason that machinery exists is that a recent paper has not
+      accumulated citations yet, so it **never survives a citation ranking**.
+      Merge the fetch and the graph silently becomes old-biased: the frontier
+      disappears, and no date filter can bring back a node that was never
+      fetched. `bands.py`'s own docstring is about closing exactly that
+      landmark→latest gap.
+
+      **So the ticket is: keep two fetch strategies, ship one relation.**
+      Concretely — `Edge.type` (`services/graph/model.py:77`) drops to
+      `reference | citation`, `Counts.latest` folds into `Counts.citations`,
+      one colour and one legend row, one cluster angle. What has to be
+      *decided*, not assumed:
+      - **Does the node keep a trace of which query found it?** A
+        non-rendering provenance field costs nothing and keeps the corpus/live
+        note and any future debugging honest; rendering it is what we're
+        removing.
+      - **What happens to the `evolution` and `frontier` lectures?**
+        `lecturer/main.py:367`'s `_MODE_RELATION` scopes them by edge type, so
+        with one relation they narrate the same node set. Either merge them
+        into one "what came after" lecture (four buttons become three — which
+        interacts with the router ticket in *Teacher & agent reach*), or
+        re-scope `frontier` by **date** instead of relation, which is the
+        reader-decides principle applied consistently.
+      - **The date filter has to be good enough to replace the split**, since
+        it inherits the job. Check it can actually express "the last two
+        years" cheaply on a graph where year coverage is uneven (OpenAlex
+        per-work years are unreliable — `bands.py` was designed around that).
+
+      **Docs that stop being true:** `docs/landmark-vocabulary.md` is the
+      single definition of this vocabulary and is linked from the code, the
+      READMEs and the research notebooks; `docs/predict-vs-compute.md` holds
+      the why. Neither should be deleted — the *fetch* rules they describe
+      survive this change — but both need a note that the distinction is no
+      longer user-facing. *(From the developer, 2026-09-08.)*
+
+      **Shipped, and it grew a second half.** Collapsing the relation was the
+      small part: `Edge.type` dropped to `reference | citation`,
+      `Counts.latest` folded in, and one colour / legend row / chip / cluster
+      sector (citations moved from -PI/3 to due east) replaced two.
+      `SNAPSHOT_VERSION` went v2 -> v3 because `Counts` lost a field, and a
+      restore folds a pre-v7.17.0 save's `latest` tags via
+      `foldRetiredNodeRels` — not cosmetic: the chips are keyed by relation, so
+      an unfolded `latest` node belongs to no chip and would come back
+      invisible. **Both fetch queries survive untouched**, `tau`/`max_span`
+      included; only the seam went. `docs/landmark-vocabulary.md` and
+      `docs/predict-vs-compute.md` carry a note that their terms now name two
+      *queries*, not two things a reader sees.
+
+      **The lecture half was the developer's call, made while the ticket was
+      open** (the entry's own open question — "what happens to the `evolution`
+      and `frontier` lectures?" — with the answer "retire the modes
+      entirely"). `LectureMode` is gone, and `_story_nodes` no longer rebuilds
+      a node set from the edge list: it narrates the scope the frontend sends
+      and adds nothing to it. The four buttons had been *overriding* the
+      reader's own filters and selection — select five papers, press a button,
+      watch it narrate something else — which is the v7.7.0 scoping bug's own
+      lesson (the app deciding it knew better than what the reader did) one
+      level up. Three intents remain, chosen structurally: a `target` means the
+      bridge lecture, a scope of **one paper — any paper, not just the seed**
+      means a solo deep read of it, and anything else takes the reader's
+      `framing`.
+
+      **`framing` (summary | history) is the one input the scope cannot
+      express**, and the line is worth holding: *which papers* is always the
+      scope's answer, *how to tell them* is always the reader's. Summary is the
+      default, because a chronological arc is a strong claim to make about an
+      arbitrary selection — and forcing one produced beats about the *timeline*
+      ("notice the gap after [1], the graph jumps to 2023-2026") rather than
+      about any paper. The era-banded list and span line are now history-only,
+      and a `SYSTEM_PROMPT` rule bans narrating the list itself.
+
+      **Three things browser testing turned up**, each its own fix: a beat lit
+      3 papers while naming 16 (`node_ids` was the model's 1-4 picks, the prose
+      cited far more via `graph_refs` — now unioned and deduped; see
+      `docs/bugs.md`); a large marquee drew a label per node at every zoom,
+      painting a white block over the graph (`LABEL_ALL_MAX` caps the
+      always-label exemption at 12); and the seed had no chip, making it the
+      one paper a reader could not scope out — so `CHIP_TYPES` was split from
+      `REL_TYPES` and the seed got one. The lecture's scope also became
+      *strictly* visible (`selectLectureNodes`), diverging from the
+      researcher's grounding on one question: grounding keeps a discovered
+      paper a filter hides, a lecture must not narrate a paper the reader
+      cannot see.
+
 - [x] **A truncated shard passed as a finished download — the corpus pull now
       measures completeness, and `atlas corpus verify` audits what's already on
       disk** *(v7.12.0)* — an ingest of the 2026-08-05 release died 36 minutes

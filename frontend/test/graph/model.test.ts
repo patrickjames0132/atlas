@@ -19,6 +19,8 @@ import {
   cleanNode,
   countRels,
   findMatches,
+  foldRetiredEdgeTypes,
+  foldRetiredNodeRels,
   formatPubDate,
   nodeRadius,
   primaryRel,
@@ -93,7 +95,7 @@ describe('primaryRel', () => {
   })
 
   it('picks the first graph relation in priority order', () => {
-    expect(primaryRel(makeNode({ rels: ['latest', 'reference'] }))).toBe('reference')
+    expect(primaryRel(makeNode({ rels: ['citation', 'reference'] }))).toBe('reference')
   })
 
   // The function has to stay TOTAL: its result indexes REL_COLOR, so a
@@ -172,13 +174,13 @@ describe('countRels', () => {
       makeNode({ rels: ['reference'] }),
       // A retired relation counts toward nothing and has no slot to count into.
       makeNode({ rels: ['citation', 'similar'] }),
+      // A pre-v7.17.0 save's `latest` node counts as the citation it is.
       makeNode({ rels: ['latest'] }),
       makeNode({ is_seed: true, rels: [] }),
     ]
     expect(countRels(nodes)).toEqual({
       references: 1,
-      citations: 1,
-      latest: 1,
+      citations: 2,
       nodes: 4,
     })
   })
@@ -202,4 +204,39 @@ describe('ID_RE — the pasted-id fast path', () => {
       expect(ID_RE.test(input)).toBe(false)
     },
   )
+})
+
+describe('foldRetiredNodeRels / foldRetiredEdgeTypes', () => {
+  it('folds a pre-v7.17.0 `latest` node into the citation relation', () => {
+    // Not cosmetic: the filter chips are keyed by relation, so an unfolded
+    // `latest` node belongs to no chip and is filtered off the canvas — a
+    // saved exploration would come back missing its recent papers.
+    const folded = foldRetiredNodeRels([makeNode({ rels: ['latest'] })])
+    expect(folded[0].rels).toEqual(['citation'])
+  })
+
+  it('does not duplicate the tag when a node carried both', () => {
+    const folded = foldRetiredNodeRels([makeNode({ rels: ['citation', 'latest'] })])
+    expect(folded[0].rels).toEqual(['citation'])
+  })
+
+  it('leaves other relations, retired or current, exactly as they are', () => {
+    // `similar` and `search` were removed outright rather than merged, so
+    // rendering them as `unknown` is the honest treatment — folding them into
+    // citations would claim a relationship the data never had.
+    const folded = foldRetiredNodeRels([
+      makeNode({ rels: ['reference'] }),
+      makeNode({ rels: ['similar'] }),
+      makeNode({ rels: ['search'] }),
+    ])
+    expect(folded.map((node) => node.rels)).toEqual([['reference'], ['similar'], ['search']])
+  })
+
+  it('folds a `latest` edge so it draws in the citing colour, not the unknown stroke', () => {
+    const folded = foldRetiredEdgeTypes([
+      { source: 'a', target: 'b', type: 'latest' as never },
+      { source: 'b', target: 'c', type: 'reference' },
+    ])
+    expect(folded.map((edge) => edge.type)).toEqual(['citation', 'reference'])
+  })
 })
