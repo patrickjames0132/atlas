@@ -280,3 +280,234 @@ def test_a_broken_cache_read_does_not_break_the_search(client, monkeypatch):
     )
     response = client.get("/api/search?q=dqn")
     assert result_of(response)["count"] == 1
+
+
+# --- /api/mentions — the composer's `@` typeahead -------------------------------
+
+
+def test_a_short_mention_query_does_no_lookup_at_all(client, monkeypatch):
+    """One or two characters match almost everything, so the list would be
+    noise and the live search would be spent on it. Nothing is called."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search",
+        lambda *args, **kwargs: pytest.fail("no lookup for a 2-character mention"),
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda *args, **kwargs: pytest.fail("no live search for a 2-character mention"),
+    )
+    assert client.get("/api/mentions?q=dq").get_json() == {"papers": [], "partial": False}
+    # And the free pass refuses it too, so the composer's every-keystroke call
+    # doesn't scan the cache for a query that matches almost everything.
+    assert client.get("/api/mentions?q=dq&source=local").get_json() == {
+        "papers": [],
+        "partial": False,
+    }
+
+
+def test_a_local_only_mention_lookup_never_touches_the_provider(client, monkeypatch):
+    """The whole point of splitting the endpoint. The composer fires this one on
+    every keystroke with no debounce, so it must be free — serving both sources
+    from one blocking call meant the free half bought nothing, because the
+    response still waited on the provider."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search",
+        lambda query, limit=8, provider="s2": [{"id": "L1", "title": "Cached"}],
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda *args, **kwargs: pytest.fail("a local-only lookup must not hit the provider"),
+    )
+    body = client.get("/api/mentions?q=dqn&source=local").get_json()
+    assert [paper["title"] for paper in body["papers"]] == ["Cached"]
+    # The composer needs to know this list is provisional, so it doesn't treat
+    # a cache miss as "no such paper".
+    assert body["partial"] is True
+
+
+def test_the_full_mention_lookup_says_it_is_not_partial(client, monkeypatch):
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(search_routes.traversal, "search", lambda *args, **kwargs: [])
+    assert client.get("/api/mentions?q=dqn").get_json()["partial"] is False
+
+
+def test_the_full_mention_lookup_reranks_across_both_sources(client, monkeypatch):
+    """An exact live title match must lead a barely-relevant cached paper. Until
+    the re-rank ran, the order was "everything cached, then everything live",
+    which put the reader's own stale hit above the paper they just named."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search",
+        lambda query, limit=8, provider="s2": [
+            {"id": "L1", "title": "A survey mentioning DQN in passing", "citation_count": 9000}
+        ],
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": [
+            {"node": {"id": "S1", "title": "DQN", "citation_count": 10}}
+        ],
+    )
+    papers = client.get("/api/mentions?q=dqn").get_json()["papers"]
+    assert [paper["title"] for paper in papers] == [
+        "DQN",
+        "A survey mentioning DQN in passing",
+    ]
+
+
+def test_mentions_put_cached_papers_first_then_live_ones(client, monkeypatch):
+    """A paper already in the reader's cache is one they have seen — usually the
+    paper they are reaching for — and costs nothing. Live hits fill the rest,
+    which is what makes a paper they've never opened mentionable at all."""
+    # Neither title contains the query, so the relevance sort can't reorder
+    # them and this test is about the merge alone (see the re-rank test above).
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search",
+        lambda query, limit=8, provider="s2": [
+            {"id": "L1", "arxiv_id": "1312.5602", "title": "Playing Atari", "venue": "NeurIPS",
+             "citation_count": 100}
+        ],
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": [
+            {"node": {"id": "S9", "arxiv_id": None, "title": "Rainbow", "venue": "ICML",
+                      "citation_count": 50}}
+        ],
+    )
+    papers = client.get("/api/mentions?q=dqn").get_json()["papers"]
+    assert [paper["title"] for paper in papers] == ["Playing Atari", "Rainbow"]
+    # The row shows the venue, which the ordinary search list has no need for.
+    assert papers[0]["venue"] == "NeurIPS"
+
+
+def test_a_dead_provider_degrades_to_the_cached_mentions(client, monkeypatch):
+    """A typeahead that errors is worse than one that returns less: the reader
+    is mid-sentence, and the fallback for an unresolvable name already exists —
+    send the message and the scout searches properly."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search",
+        lambda query, limit=8, provider="s2": [{"id": "L1", "title": "Playing Atari"}],
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": (_ for _ in ()).throw(RuntimeError("429")),
+    )
+    response = client.get("/api/mentions?q=dqn")
+    assert response.status_code == 200
+    assert [paper["title"] for paper in response.get_json()["papers"]] == ["Playing Atari"]
+
+
+def test_the_year_filter_deliberately_does_not_bind_a_mention(client, monkeypatch):
+    """Unlike every other paper search in the app. Those filters narrow a
+    *search* for papers the reader hasn't named; a mention names one. Filtering
+    to 2020+ and then failing to resolve `@attention is all you need` (2017)
+    would be maddening — the same reading `match_title` already takes."""
+    seen: dict = {}
+
+    def record_local(query, limit=8, provider="s2", **kwargs):
+        seen["local"] = kwargs
+        return []
+
+    def record_live(query, limit, provider="s2", **kwargs):
+        seen["live"] = kwargs
+        return []
+
+    monkeypatch.setattr(search_routes.search_service, "local_search", record_local)
+    monkeypatch.setattr(search_routes.traversal, "search", record_live)
+    client.get("/api/mentions?q=attention&year_from=2020&fields=Computer+Science")
+    # Neither bound is forwarded — the query args are simply not read.
+    assert seen["local"] == {} and seen["live"] == {}
+
+
+# --- the nickname resolve, the one model call in the mention path ---------------
+
+
+def test_a_nickname_resolves_to_the_top_of_the_mention_list(client, monkeypatch):
+    """The case that prompted this. `@dqn` returns a page of DQN-*titled*
+    papers while the paper actually called DQN — *Playing Atari with Deep
+    Reinforcement Learning* — shares no word with the query and cannot be
+    reached by any text search. Measured, not assumed: S2 free-text can't
+    reach it at limit 30, `match_title('dqn')` returns nothing, and no field
+    of the cached node contains the string."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": [
+            {"node": {"id": "S1", "title": "Deep Exploration via Bootstrapped DQN",
+                      "citation_count": 1561}}
+        ],
+    )
+    monkeypatch.setattr(
+        search_routes.search_service, "paper_by_name",
+        lambda name, provider="s2": {
+            "id": "S9", "title": "Playing Atari with Deep Reinforcement Learning",
+            "citation_count": 13985,
+        },
+    )
+    papers = client.get("/api/mentions?q=dqn").get_json()["papers"]
+    # Prepended, not re-ranked in: an identity match on what was typed
+    # outranks any word overlap, however well-cited.
+    assert papers[0]["title"] == "Playing Atari with Deep Reinforcement Learning"
+
+
+def test_the_nickname_resolve_is_skipped_when_a_title_already_matches_exactly(
+    client, monkeypatch
+):
+    """The one case world knowledge cannot improve on: the reader typed a
+    paper's full title and it came back."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": [
+            {"node": {"id": "S1", "title": "Attention Is All You Need"}}
+        ],
+    )
+    monkeypatch.setattr(
+        search_routes.search_service, "paper_by_name",
+        lambda name, provider="s2": pytest.fail("no model call when the title already matches"),
+    )
+    body = client.get("/api/mentions?q=attention+is+all+you+need")
+    assert body.status_code == 200
+
+
+def test_the_nickname_resolve_is_NOT_gated_on_a_mere_contains_match(client, monkeypatch):
+    """The bug in the first cut of this gate, pinned so it can't come back.
+    "Text matching found something" is not the same as "found the right
+    thing" — every result containing DQN is still the wrong paper."""
+    called: list[str] = []
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": [
+            {"node": {"id": "S1", "title": "Multi-DQN: an ensemble for stock forecasting"}}
+        ],
+    )
+
+    def record(name, provider="s2"):
+        called.append(name)
+        return None
+
+    monkeypatch.setattr(search_routes.search_service, "paper_by_name", record)
+    client.get("/api/mentions?q=dqn")
+    assert called == ["dqn"]  # the contains-match did NOT suppress it
+
+
+def test_the_local_pass_never_resolves_a_nickname(client, monkeypatch):
+    """The free pass has to stay free: it runs on every keystroke, and a model
+    call there is exactly what the debounce exists to prevent."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        search_routes.search_service, "paper_by_name",
+        lambda name, provider="s2": pytest.fail("no model call on the free pass"),
+    )
+    assert client.get("/api/mentions?q=dqn&source=local").status_code == 200

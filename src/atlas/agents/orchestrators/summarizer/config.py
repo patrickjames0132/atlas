@@ -1,8 +1,8 @@
 """Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
 
 Description:
-The summarizer's words and knobs: its agent id, system prompt, and skills.
-Model choice and tunables live in its ``config.llm.agents`` entry.
+The summarizer's words and knobs: its agent id, its three system prompts, and
+skills. Model choice and tunables live in its ``config.llm.agents`` entry.
 
 Authors:
 Charles Patrick James <charles.patrick.james@gmail.com>
@@ -44,3 +44,37 @@ SYSTEM_PROMPT = (
     "Summarize only what the abstract actually claims — no outside "
     "knowledge, no evaluation, no lead-ins like 'This paper' or 'TL;DR:'."
 )
+
+PAPER_NAME_SYSTEM_PROMPT = (
+    "You turn the informal name of a research paper into its real title. "
+    "Researchers refer to papers by nicknames and acronyms — 'DQN', 'the "
+    "ResNet paper', 'BERT', 'Attention is all you need' — and the title on "
+    "the paper often contains none of those words. Given such a name, return "
+    "two fields:\n"
+    "- title: the paper's actual, full title as published, or an empty "
+    "string if you don't know it.\n"
+    "- confident: true only when you are sure this name refers to that one "
+    "specific paper.\n\n"
+    "Be strict about `confident`. 'DQN' means one paper (Playing Atari with "
+    "Deep Reinforcement Learning) and deserves true. 'transformers', "
+    "'reinforcement learning' and 'graph networks' name whole fields, not "
+    "papers — return an empty title and false. A name you half-recognize is "
+    "also false: a wrong title sends the reader to the wrong paper, while "
+    "false just leaves them with the ordinary search results they already "
+    "have. Never invent a plausible-sounding title."
+)
+"""The paper-name resolver's prompt. On the summarizer's *agent id* for the
+same reason ``TITLE_SYSTEM_PROMPT`` is — a one-shot micro-agent emitting a
+short piece of text, run on the crew's cheapest configured model rather than
+adding a sixth entry to Agent Settings.
+
+**Why a model is here at all**, in a lookup path documented as model-free: no
+amount of text matching gets from "dqn" to *Playing Atari with Deep
+Reinforcement Learning*. Measured, not assumed — S2's free-text search cannot
+reach that paper for that query even at limit 30, ``match_title('dqn')``
+returns nothing, and no field of the cached node (title, authors, abstract,
+tldr, venue) contains the string, because the 2013 paper predates the name.
+The mapping is world knowledge, so the only thing that can supply it is a
+model. It runs **only** when text matching has already failed, only on the
+debounced pass, and its answer is cached per query — see
+``services/search/naming.py``."""

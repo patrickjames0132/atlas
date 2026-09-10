@@ -24,6 +24,7 @@ import type {
   GraphNode,
   HistoryTurn,
   LectureFraming,
+  MentionPaper,
   PlayedLecture,
   Provider,
   SearchOptions,
@@ -130,6 +131,34 @@ function askFilters(filters?: SearchOptions) {
  *
  * @returns The run state + the lecture/ask/clear entry points.
  */
+/**
+ * Widen an `@`-mention row into the full `GraphNode` the ask boundary wants.
+ *
+ * The dropdown's rows are trimmed to what a suggestion shows, and the backend
+ * types `nodes` strictly (it rejects partial ones), so the missing fields are
+ * filled with the same "not known yet" values a neighbour carries before
+ * hydration. `rels: []` is the honest tag: the paper is in the question's
+ * scope, not on the graph, so it has no relation to the seed — and nothing
+ * paints it, because it is never merged onto the canvas.
+ *
+ * @param paper The picked mention row.
+ * @returns The paper as a graph node.
+ */
+function mentionNode(paper: MentionPaper): GraphNode {
+  return {
+    id: paper.id,
+    arxiv_id: paper.arxiv_id,
+    title: paper.title,
+    authors: paper.authors ?? null,
+    venue: paper.venue ?? null,
+    year: paper.year ?? null,
+    citation_count: paper.citation_count ?? null,
+    url: paper.url ?? null,
+    rels: [],
+    is_seed: false,
+  }
+}
+
 export function useConversation() {
   const dispatch = useAppDispatch()
   // Read synchronously when retrying: the history to resend is whatever is
@@ -477,6 +506,7 @@ export function useConversation() {
       useLecture: boolean,
       filters?: SearchOptions,
       history?: HistoryTurn[],
+      mentioned?: MentionPaper[],
     ) => {
       // Only supersede a previous question — the lecture streams on its own
       // controller, so asking never interrupts one that's loading.
@@ -521,7 +551,20 @@ export function useConversation() {
           // backend's node_lines ordering; discovered papers slot in at their
           // server-assigned idx as they stream. Plus the raw answer text, so we
           // can resolve which `[n]`s were actually used once it's done.
-          const numberedIds = groundingNodes.map((node) => node.id)
+          // Papers the reader `@`-mentioned inside the question join the
+          // grounding, ahead of the graph's own nodes so they take the low
+          // `[n]` numbers the answer is most likely to cite. They are NOT
+          // merged onto the canvas: the reader asked about a paper, which is
+          // not the same as asking to explore it, and rearranging their graph
+          // as a side effect of a question is exactly the override this app
+          // keeps having to remove. A mention already on screen is deduped
+          // rather than numbered twice.
+          const onScreen = new Set(groundingNodes.map((node) => node.id))
+          const attached = (mentioned ?? [])
+            .filter((paper) => !onScreen.has(paper.id))
+            .map((paper) => mentionNode(paper))
+          const askNodes = [...attached, ...groundingNodes]
+          const numberedIds = askNodes.map((node) => node.id)
           // The lecture already played this session (trimmed to title + beat
           // heading/text) becomes extra context, so the answer can build on
           // it instead of re-deriving a story the student already heard.
@@ -542,7 +585,7 @@ export function useConversation() {
               question,
               session_id: sessionId.current,
               seed: seedNode,
-              nodes: groundingNodes,
+              nodes: askNodes,
               provider,
               source_ids: sourceIds,
               lectures: playedLectures.length > 0 ? playedLectures : undefined,

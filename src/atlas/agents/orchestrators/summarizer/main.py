@@ -27,7 +27,13 @@ from pydantic import BaseModel, ConfigDict
 from pydantic_ai import Agent
 
 from ... import factory, prompts
-from .config import AGENT_ID, SKILLS, SYSTEM_PROMPT, TITLE_SYSTEM_PROMPT
+from .config import (
+    AGENT_ID,
+    PAPER_NAME_SYSTEM_PROMPT,
+    SKILLS,
+    SYSTEM_PROMPT,
+    TITLE_SYSTEM_PROMPT,
+)
 
 log = logging.getLogger(__name__)
 
@@ -138,4 +144,67 @@ def title_for_conversation(turns: list[str]) -> str | None:
         log.warning("exploration title generation failed", exc_info=True)
         return None
     title = result.output.title.strip().strip('"').rstrip(".")
+    return title or None
+
+
+class PaperName(BaseModel):
+    """The paper-name resolver's structured output.
+
+    ``confident`` is a field rather than a judgement made downstream on the
+    prose, because the caller has to be able to *throw the answer away*: an
+    unrecognised nickname must cost the reader nothing, and a model asked for
+    a title will usually produce one whether or not it knows the paper.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    confident: bool
+
+
+# A third one-shot agent on the summarizer's id — see PAPER_NAME_SYSTEM_PROMPT.
+paper_name_agent: Agent[None, PaperName] = Agent(
+    output_type=PaperName,
+    instructions=[PAPER_NAME_SYSTEM_PROMPT],
+)
+
+_NAME_MAX_CHARS = 120
+"""How much of the typed text the resolver reads. A paper's informal name is a
+few words; anything longer is a sentence, and billing for it cannot improve a
+title lookup."""
+
+
+def title_for_paper_name(name: str) -> str | None:
+    """Resolve a paper's informal name or acronym to its real title.
+
+    The one model call in the `@`-mention lookup, and it earns its place by
+    doing what no text match can: *Playing Atari with Deep Reinforcement
+    Learning* shares no word with "DQN". The caller runs it only after text
+    matching has failed and caches the answer per name, so a given nickname
+    costs one call rather than one per keystroke.
+
+    Args:
+        name: The informal name typed after ``@`` — an acronym, a nickname, or
+            a half-remembered title. Blank means there is nothing to resolve.
+
+    Returns:
+        The paper's real title, or None when the name is blank, the model is
+        not confident it names one specific paper, it returns nothing usable,
+        or the run fails for **any** reason. None is the normal outcome for a
+        name that isn't a paper's, and it costs the reader nothing: they keep
+        the ordinary search results they already had.
+    """
+    name = (name or "").strip()
+    if not name:
+        return None
+    try:
+        result = paper_name_agent.run_sync(
+            name[:_NAME_MAX_CHARS], model=factory.model_for(AGENT_ID)
+        )
+    except Exception:
+        log.warning("paper-name resolution failed for %r", name, exc_info=True)
+        return None
+    if not result.output.confident:
+        return None
+    title = result.output.title.strip().strip('"')
     return title or None

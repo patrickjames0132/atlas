@@ -93,7 +93,8 @@ Design decisions worth knowing:
 
 | Endpoint | Job |
 | --- | --- |
-| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | direct search (SSE): the paper scout, run alone |
+| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | paper search (SSE): the paper scout, run alone |
+| `GET /api/mentions?q=&provider=&source=` | the composer's `@` typeahead: a plain, cheap paper lookup. `source=local` is the cache-only answer the composer fires per keystroke; the full one adds a day-cached provider search, re-ranks both by relevance, and (when no title matches exactly) resolves a nickname through one cached model call |
 | `GET /api/taxonomy/<provider>` | a provider's field vocabulary (`s2` / `openalex`) |
 
 Design decisions worth knowing:
@@ -339,7 +340,7 @@ The React frontend (Phase 6) is the only caller: the search/seed flow hits
 `/api/graph`, clicking a node hydrates via `/api/paper/<ref>`, and the
 detail panel lazily loads `/figures`, `/code`, and `/categories`. `<img>` tags
 point at `/api/figure_proxy` URLs (both panel figures and the researcher's
-inline answer figures use it). The chat bar's **Find papers** toggle streams
+inline answer figures use it). A bare `@phrase` in the chat bar streams
 `/api/search`; the Filters popover loads `/api/taxonomy/<provider>` once,
 lazily. (`/api/local_search` is gone — the scout reads that cache itself.)
 

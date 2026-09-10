@@ -57,6 +57,7 @@ import {
   LECTURE_TITLE,
   type AnswerFigure,
   type LectureFraming,
+  type MentionPaper,
   type SearchOptions,
 } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
@@ -73,6 +74,9 @@ import ScopePicker from './ScopePicker'
 import SearchControls from '../search/SearchControls'
 import { useDirectSearch } from '../search/useDirectSearch'
 import { ID_RE } from '../graph/model'
+import MentionSuggestions from '../mentions/MentionSuggestions'
+import { insertMention, readMessage } from '../mentions/parse'
+import { useMentionSuggestions } from '../mentions/useMentionSuggestions'
 import Lightbox from '../figures/Lightbox'
 import BeatList from './transcript/BeatList'
 import ChatMessage from './transcript/ChatMessage'
@@ -224,25 +228,32 @@ export default function Teacher({
   // selection, and it was what produced beats *about the timeline* ("notice the
   // gap after [1]") when every lecture was forced into one.
   const [framing, setFraming] = useState<LectureFraming>('summary')
+  // The papers picked from the `@` dropdown in the message being composed,
+  // keyed by the text inserted for each. A ref rather than state because
+  // nothing renders from it — it is read once, at send — and re-rendering the
+  // composer on every pick would fight the textarea's own caret handling.
+  const resolvedMentions = useRef<Map<string, MentionPaper>>(new Map())
+  const mentions = useMentionSuggestions(provider)
   // Which scope picker's popover is open — one shared slot, so opening either
   // picker closes the other (their popovers overlap when both are open).
   const [openScope, setOpenScope] = useState<'lectures' | 'sources' | 'filters' | null>(null)
-  // Direct search armed: the next send goes to the paper scout and comes
-  // back as a list to pick from, instead of to the researcher for an answer.
-  const [direct, setDirect] = useState(false)
-  // The bar's filters. They bind BOTH modes (see api/search.ts), which is
-  // why they live out here beside the input rather than inside `direct`.
+  // The bar's filters. They bind every paper search — the reader's `@`
+  // lookups excepted (see routes/search.py's api_mentions) and the
+  // assistant's own included — which is why they sit beside the input rather
+  // than inside any one search control. The "Find papers" toggle they used to
+  // sit outside is gone in v7.18.0: a search is now something you say, with
+  // `@`, not a mode you arm.
   const [searchOptions, setSearchOptions] = useState<SearchOptions>(DEFAULT_SEARCH_OPTIONS)
   // The answer figure opened full-screen (null = closed).
   const [lightbox, setLightbox] = useState<AnswerFigure | null>(null)
-  // Direct search's own failure slot. Separate from the conversation's
+  // The paper scout's own failure slot. Separate from the conversation's
   // `error` because only a transport failure lands here — the scout
   // degrades internally, so a rate-limited provider arrives as a normal
   // result whose summary says so.
   const [searchError, setSearchError] = useState<string | null>(null)
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.teacherWidth', 340)
-  // Direct search shares the bar's busy state with the researcher: one bar,
-  // one spinner, and neither mode can be fired while the other is running.
+  // A scout run shares the bar's busy state with the researcher: one bar, one
+  // spinner, and neither can be fired while the other is running.
   const { searching, runSearch } = useDirectSearch(provider, searchOptions, setSearchError)
 
   // First reader fetches; the loaded flag keeps the drawer (and the remounts
@@ -285,23 +296,39 @@ export default function Teacher({
     const question = input.trim()
     if (!question || asking || searching) return
     setInput('')
+    mentions.reset()
     // Whatever this turns into lands in the conversation, so make sure the
     // reader can see it — asking into a folded section reads as nothing
     // happening at all.
     setChatOpen(true)
     // A pasted arXiv id/URL is a statement of intent, not a question: land on
-    // that exact paper. Deliberately ahead of the direct-search toggle — you
-    // pasted the paper, so there is nothing left to search for, whichever
-    // mode happens to be armed.
+    // that exact paper. Still first, and still needing no lookup at all — the
+    // id IS the answer, where every branch below has to resolve something.
     if (ID_RE.test(question)) {
       onPaperSeed(question)
       return
     }
-    if (direct) {
-      void runSearch(question)
+    // What the words turn out to be. One bar, three destinations, and which
+    // one runs is STILL decided here on plain facts rather than by asking an
+    // agent to classify the input — `readMessage` is a substring check and a
+    // startsWith. What changed in v7.18.0 is that the reader says which they
+    // meant, with `@`, instead of arming a mode beforehand.
+    const intent = readMessage(question, resolvedMentions.current)
+    resolvedMentions.current = new Map()
+    if (intent.kind === 'seed') {
+      // A resolved mention alone: we already hold the exact paper, so seed on
+      // its id rather than re-resolving the title we just looked up.
+      onPaperSeed(intent.paper.arxiv_id || intent.paper.id)
       return
     }
-    ask(question, scopeArg, lectureScope, searchOptions)
+    if (intent.kind === 'find') {
+      // `@words` that resolved to nothing, alone on the line — the dropdown's
+      // fallback. This is what the "Find papers" toggle used to do, now said
+      // rather than switched to.
+      void runSearch(intent.query)
+      return
+    }
+    ask(question, scopeArg, lectureScope, searchOptions, undefined, intent.mentioned)
   }
 
   const onAsk = (event: FormEvent) => {
@@ -312,7 +339,58 @@ export default function Teacher({
   // The ask box is a textarea so long questions wrap and stay readable. Keep
   // the chat convention: Enter sends, Shift+Enter drops a newline (letting a
   // question run multiple lines without hitting the Ask button).
+  /**
+   * Accept a suggestion: splice the paper's title in and remember what it
+   * resolved to, so `readMessage` can find it again at send.
+   *
+   * @param paper The picked paper.
+   */
+  const pickMention = (paper: MentionPaper) => {
+    const field = inputRef.current
+    if (!field || !mentions.active) return
+    const { text: next, caret } = insertMention(input, mentions.active, paper)
+    resolvedMentions.current.set(`@${paper.title}`, paper)
+    setInput(next)
+    mentions.reset()
+    // The caret has to be restored after React paints the new value, or the
+    // browser parks it at the end of the message and the reader's sentence
+    // continues in the wrong place.
+    requestAnimationFrame(() => {
+      field.focus()
+      field.setSelectionRange(caret, caret)
+    })
+  }
+
+  /**
+   * Re-read the composer after any change that could move the caret.
+   *
+   * @param field The textarea, read for both its value and its caret.
+   */
+  const syncMentions = (field: HTMLTextAreaElement) => {
+    mentions.onInput(field.value, field.selectionStart ?? field.value.length)
+  }
+
   const onInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While the dropdown is open it owns the arrows, Enter, Tab and Escape —
+    // the keys a reader picking from a list expects to work. Everything else
+    // still reaches the textarea, so typing never stops.
+    if (mentions.open) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        mentions.move(event.key === 'ArrowDown' ? 1 : -1)
+        return
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && mentions.choice) {
+        event.preventDefault()
+        pickMention(mentions.choice)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        mentions.dismiss()
+        return
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       submitQuestion()
@@ -399,11 +477,15 @@ export default function Teacher({
   // promised books and PDFs whenever there was no graph — fine back when a
   // library was the price of admission, and a lie now that the assistant is
   // the landing surface for everyone. Only name the library when there is one.
+  // The placeholder is where `@` is taught, because it is the only help
+  // surface a reader is already looking at when they would need it. Every
+  // variant names it: the gesture is the same with a graph, without one, and
+  // with a library.
   const askPlaceholder = hasGraph
-    ? 'Ask about the papers on screen…'
+    ? 'Ask about the papers on screen… or @ a paper'
     : libraryItems.length > 0
-      ? 'Ask your books, PDFs, or the literature…'
-      : 'Ask a research question…'
+      ? 'Ask your books, PDFs, or the literature… or @ a paper'
+      : 'Ask a research question… or @ a paper'
 
   // The one-line "Answers also draw on …" note above the ask bar: lectures and
   // sources share it (space is tight), each part naming its picker's icon.
@@ -464,15 +546,14 @@ export default function Teacher({
     />
   )
 
-  // The two search controls (arm direct search · open the filters), and they
-  // travel with the source picker above for the same reason and to the same
-  // two places — the tool row under the bar without a graph, the Chat row with
-  // one. Their filter popover anchors to whichever container it lands in, so
-  // it still spans the panel rather than the button that opened it.
+  // The filter control, which travels with the source picker above for the
+  // same reason and to the same two places — the tool row under the bar
+  // without a graph, the Chat row with one. Its popover anchors to whichever
+  // container it lands in, so it still spans the panel rather than the button
+  // that opened it. It was two controls until v7.18.0, when the "Find papers"
+  // toggle beside it was replaced by typing `@`.
   const searchControls = (
     <SearchControls
-      direct={direct}
-      onDirectChange={setDirect}
       options={searchOptions}
       onOptions={setSearchOptions}
       provider={provider}
@@ -807,10 +888,32 @@ export default function Teacher({
           slid would read as two separate controls. */}
       <div className="ask-dock" ref={askRef}>
         <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
+          {/* The `@` dropdown, anchored to the bar (which is positioned) and
+              opening upward — the composer sits at the bottom of the panel, so
+              a list below it would open off-screen. */}
+          {mentions.open && (
+            <MentionSuggestions
+              papers={mentions.papers}
+              highlighted={mentions.highlighted}
+              loading={mentions.loading}
+              onPick={pickMention}
+              onHighlight={mentions.setHighlighted}
+            />
+          )}
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => {
+              setInput(event.target.value)
+              syncMentions(event.target)
+            }}
+            // Clicking and arrowing move the caret without changing the text,
+            // and a mention is defined relative to the caret — so the dropdown
+            // has to re-read on both, or it goes on offering candidates for a
+            // mention the reader has navigated out of.
+            onKeyUp={(event) => syncMentions(event.currentTarget)}
+            onClick={(event) => syncMentions(event.currentTarget)}
+            onBlur={mentions.reset}
             onKeyDown={onInputKeyDown}
             rows={1}
             placeholder={askPlaceholder}

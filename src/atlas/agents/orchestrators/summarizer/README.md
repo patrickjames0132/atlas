@@ -1,15 +1,40 @@
 # `agents.summarizer`
 
-Two one-shot micro-agents that each write one short piece of text: a **TL;DR**
-from a paper's title + abstract (the detail panel's on-demand summary for
-papers that don't ship one), and an **exploration title** from a
+Three one-shot micro-agents that each write one short piece of text: a
+**TL;DR** from a paper's title + abstract (the detail panel's on-demand
+summary for papers that don't ship one), an **exploration title** from a
 conversation's opening turns (the name an automatically-saved exploration
-arrives in the rail with).
+arrives in the rail with), and a **paper name** resolved from an acronym or
+nickname (the composer's `@` lookup).
 
-They share one `AGENT_ID`, and so one configured model. Adding a sixth entry
-to Agent Settings for a six-word phrase would have bought nothing, and the
+They share one `AGENT_ID`, and so one configured model. Adding an entry to
+Agent Settings for a six-word phrase would have bought nothing, and the
 summarizer is already the crew's cheapest, safest-to-downgrade member — which
-is exactly the tier a title wants.
+is exactly the tier these want.
+
+## The paper-name resolver (v7.18.0)
+
+`title_for_paper_name('dqn')` → *"Playing Atari with Deep Reinforcement
+Learning"*. It exists because that mapping is **world knowledge and nothing
+else can supply it**, which was measured before the agent was written: S2's
+free-text search does not return that paper for that query even at limit 30,
+`match_title('dqn')` returns nothing, and no field of the cached node —
+title, authors, abstract, tldr, venue — contains the string, because the 2013
+paper predates the name.
+
+Two properties of its contract matter more than the prompt:
+
+- **It emits `confident` as a field**, and the caller throws the answer away
+  when it is false. A model asked for a title will usually produce one whether
+  or not it knows the paper, and an invented title at the top of a suggestion
+  list is worse than no suggestion at all. "transformers" and "reinforcement
+  learning" name fields, not papers, and must come back false.
+- **Its caller verifies before trusting.** `services/search/naming.py` runs
+  the proposed title through the provider and keeps the paper only if one
+  matches — the model proposes, the corpus confirms. That module also caches
+  per name (misses included) and only calls this at all when no candidate's
+  title already equals what was typed, so a nickname costs one model call
+  rather than one per keystroke.
 
 ## Why it exists
 

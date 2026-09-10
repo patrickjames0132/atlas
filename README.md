@@ -160,16 +160,32 @@ The Vite dev server proxies `/api/*` to Flask.
 
 1. **Find a paper** — everything starts in the **chat bar**; there is no
    separate search box. Ask a research question and the assistant goes
-   looking, or flip **🔍 Find papers** to skip the question and get a plain
-   list to pick from. Either way you can paste an **arXiv id / URL** to jump
-   straight to that paper — a pasted id is exact, so it goes straight to the
-   graph with no model involved. Direct search streams: papers already in
-   your cache appear immediately (⚡ **opens instantly** marks the ones whose
-   whole neighborhood is cached, so a click costs no API call), then the
-   scout's finds arrive lookup by lookup with a trace chip each. The
-   **Filters** popover holds a publication-year window (1800 → now) and
-   **fields of study** — hard limits, not hints, and they bind the
-   assistant's own paper searches too. Citation links on the graph are never
+   looking, or **type `@`** to name a paper: suggestions appear as you type,
+   and picking one attaches that exact paper to your message. What happens
+   next depends on what you said — the same rule a pasted id has always
+   followed, that naming one paper and nothing else is a statement of intent:
+
+   | What you send | What it does |
+   | --- | --- |
+   | `@` + a paper you picked | lands on that paper's graph |
+   | `@` + words nothing matched | searches properly and lists what it found |
+   | a question with `@…` in it | answers *from* that paper, leaving your graph alone |
+   | an **arXiv id / URL** | goes straight to the graph, no model involved |
+
+   The suggestions arrive in two passes: your **cached papers appear as you
+   type** (a local scan — free, offline, no wait), then a real search fills the
+   list out when you pause, re-ranked so the paper whose title most nearly *is*
+   what you typed leads. So a paper you have never opened is still nameable,
+   and one you have seen shows up instantly. (There was a **🔍 Find papers** toggle for this until
+   v7.18.0. It made the same words mean different things depending on a
+   button's state, and it couldn't express "answer from *this* paper" at all.)
+   A search streams: cached papers appear immediately (⚡ **opens instantly**
+   marks the ones whose whole neighborhood is cached, so a click costs no API
+   call), then the scout's finds arrive lookup by lookup with a trace chip
+   each. The **Filters** popover holds a publication-year window (1800 → now)
+   and **fields of study** — hard limits, not hints, and they bind the
+   assistant's own paper searches too (though never an `@` lookup: you named
+   that paper, so a filter has no business hiding it). Citation links on the graph are never
    filtered.
 2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations.
    (💗 found-by-search too, on a session saved before v7.3.0 — free-text hits

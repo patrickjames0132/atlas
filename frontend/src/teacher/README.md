@@ -229,7 +229,9 @@ scopes ride the Chat caret row** (v7.10.0): they bind the *researcher* — what
 it may read and search when it answers — not the lecturer above, and both a
 peer "Grounding" section and a slot in the panel header would imply they
 scope everything (Patrick's call, and the reason they landed here). The
-**🔍 direct-search toggle and the ▽ filters joined them there in v7.11.0**,
+**🔍 direct-search toggle and the ▽ filters joined them there in v7.11.0**
+(the toggle then went in v7.18.0, replaced by typing `@` — see
+`../mentions/README.md`),
 for the same reason and out of the same place.
 
 **The ask bar holds the question and nothing else** (v7.11.0). Those four
@@ -358,7 +360,7 @@ hides the symptom and silently clips those three.
 
 `tsc --noEmit` strict + oxlint, plus `test/teacher/Teacher.test.tsx` — the
 lecture fold's default and its `stagedOpen` unfold, and which of the two homes
-each ask-binding control (📚 scope, 🔍 direct search, ▽ filters) renders in
+each ask-binding control (📚 scope, ▽ filters) renders in
 for each shape — including that none of them is inside the bar. Browser-milestone items: a
 lecture lighting beats as they stream, a researcher answer with trace chips +
 an inline figure, the library chat with a scope subset, Clear detaching
@@ -390,7 +392,7 @@ runs the scout.
 
 Two consequences worth knowing:
 
-- **Direct search has no reducer of its own.** It drives `turnStarted` →
+- **A scout search has no reducer of its own.** It drives `turnStarted` →
   `traceAdded` → `answerSet` → `paperRefsSet` — the same path a streamed
   answer walks — so its result is an ordinary assistant turn that
   `ChatMessage` renders, a click reseeds, and a saved session keeps it. The
@@ -401,7 +403,7 @@ Two consequences worth knowing:
   mode can be fired while the other runs, and the send button shows the same
   hopping dots either way.
 
-The filters ride on `ask` too, not just on direct search — see
+The filters ride on `ask` too, not just on a scout search — see
 `search/README.md` for why they belong to the bar rather than to one of its
 modes.
 

@@ -1328,11 +1328,13 @@
    docked panel deliberately — the chat should not change character just
    because a graph appeared beside it. */
 .teacher-ask {
-  /* No `position: relative` any more, and its absence is the point: the bar
-     used to be the containing block for the scope and filter popovers, back
-     when their triggers sat inside it. Nothing in here is absolutely
-     positioned now (v7.11.0) — the popovers anchor to the rows the triggers
-     moved to. */
+  /* `position: relative` again, for one child only. It was dropped in v7.11.0
+     when the scope and filter popovers moved out of the bar to the rows their
+     triggers went to — and that still holds: those anchor to their own rows,
+     not here. What brought it back is the `@`-mention dropdown, which belongs
+     to the *text being typed* rather than to any control, so the bar is the
+     only correct containing block for it. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
