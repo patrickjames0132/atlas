@@ -44,10 +44,21 @@ canvas about what "a reference" looks like, and both style via
   `stagedOpen` prop), which re-expands a collapsed panel so the walk has
   something to spotlight; it never re-collapses after (no tidy-up, same as
   the detail panel's staged seed selection).
-- **The relation chips are the only node-type filter.** Each toggles one
-  relation on/off; a hidden relation's edges drop, and neighbors reachable
-  only through them fall out of the view. The chips are driven by `REL_TYPES`
-  (References / Field Landmarks / Latest Publications) — `similar` was retired
+- **The chips are the only node-type filter, and the seed has one** (v7.17.0).
+  Each toggles one kind of node on/off; a hidden relation's edges drop, and
+  neighbors reachable only through them fall out of the view. They are driven
+  by **`CHIP_TYPES`** — `REL_TYPES` plus `'seed'` — deliberately a different
+  list from `REL_TYPES` itself, because that one is the set of *relations a
+  neighbour can have*: `primaryRel` handles the seed before consulting it and
+  the per-relation rank maps exclude it, so adding `'seed'` there would have
+  quietly changed both. The seed earned a chip because a lecture now narrates
+  exactly what is on screen, and without one the seed was the single paper a
+  reader could not scope out — "summarize these five citers" always came out as
+  six papers. It stays exempt from the *year* and *citation* sliders, which trim
+  a population of neighbours the seed isn't part of. Labels are
+  (Seed paper / References / Citations) — the two citer pools became one `citation`
+  relation in v7.17.0, so there is no Latest Publications chip; `similar` was
+  retired
   from the seed graph in v5.0.0, so there's no Similar chip; `search`- and
   `similar`-tagged papers (both only from the researcher) have no chip and stay
   visible. (The old per-relation count sliders were retired too — the backend
@@ -113,13 +124,13 @@ canvas about what "a reference" looks like, and both style via
   disables while a load is in flight.
 - **The `providerNote` line** surfaces a provider-specific caveat under the
   controls when one applies — currently the Semantic Scholar ~10k citer-offset
-  limit (Field Landmarks come from the recent citer tip, not the full history).
+  limit (the most-cited citers come from the recent citer tip, not the full
+  history).
   `GraphExplorer` passes the string (or `null`) based on the active provider.
 
 ## `Legend` — never explain marks that aren't on screen
 
-The four relation entries (Seed / References / Field Landmarks / Latest
-Publications) are static; one entry is conditional — "Discovered by teacher"
+The three relation entries (Seed / References / Citations) are static; one entry is conditional — "Discovered by teacher"
 (dashed ring) appears only once the agent has actually pulled a paper in
 mid-conversation, from the workspace slice's `selectHasDiscovered` via
 `GraphExplorer`. A "Found by search" (pink) entry sat beside it until v7.5.0,

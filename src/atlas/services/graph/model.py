@@ -63,23 +63,33 @@ class Edge(BaseModel):
     """A directed edge between two nodes, tagged by relation.
 
     Direction encodes citation semantics: an edge always points from the citing
-    paper to the cited one — so both ``citation`` (landmark citers) and
-    ``latest`` (recent citers, last ~12 months) run citer -> seed.
-    ``influential`` (S2's "highly influential citation" flag) is carried on
-    the citing relations only. ``latest`` and ``citation`` are disjoint: a citer in the recent
-    window is a ``latest`` edge, everything older competes as a ``citation``.
+    paper to the cited one — so a ``citation`` edge runs citer -> seed, while a
+    ``reference`` edge runs seed -> cited. ``influential`` (S2's "highly
+    influential citation" flag) is carried on the citing relation only.
+
+    **``citation`` is every citer, since v7.17.0.** There used to be a third
+    type, ``latest``, splitting the recent frontier off from the all-time
+    landmarks — two relations because they arrive from two different queries
+    (see ``build.py``). Both queries still run and still shape what gets
+    fetched; what went is the *distinction on the wire*, because it forced the
+    app's own definition of "landmark" onto a reader who has citation counts,
+    a year filter and a citation-count filter and can judge for themselves.
+    Old cached snapshots and saved sessions still carry ``latest`` edges;
+    ``routes/agents.py`` folds them into ``citation`` on the way in, and the
+    frontend draws an unrecognised type in a neutral colour.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     source: str
     target: str
-    type: Literal["reference", "citation", "latest"]
+    type: Literal["reference", "citation"]
     influential: bool | None = None
     rank: int = 0
     """0-based position within this edge's relation, in the relation's own
-    order (references by influence, citations by citation count, latest by
-    recency). The frontend ships the whole ranked set
+    order (references by influence, citations by the order the traversal
+    produced them — the landmark pool by citation count, then the recent-years
+    pool). The frontend ships the whole ranked set
     and the per-relation count slider reveals a prefix — ``rank < slider`` — so
     raising a slider shows more without a re-query. Defaults to 0 so snapshots
     cached before this field validate."""
@@ -96,13 +106,17 @@ class Seed(BaseModel):
 
 
 class Counts(BaseModel):
-    """Per-relation traversal sizes plus the final deduped node count."""
+    """Per-relation traversal sizes plus the final deduped node count.
+
+    ``citations`` is every citer the build shipped — the landmark pool and the
+    recent-years pool together, which since v7.17.0 are one relation (see
+    ``Edge``). It was two fields until then.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     references: int
     citations: int
-    latest: int
     nodes: int
 
 

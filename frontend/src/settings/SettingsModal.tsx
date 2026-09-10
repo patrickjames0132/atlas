@@ -65,7 +65,7 @@ const SECTIONS = [
     icon: '🕸',
     label: 'Graph',
     blurb:
-      "How big a graph comes back and how its Latest Publications are banded. Left automatic, Atlas sizes each graph from the seed's own citation pool; turn that off to set the bands yourself.",
+      "How big a graph comes back and how far back its recent-citer queries reach. Left automatic, Atlas sizes each graph from the seed's own citation pool; turn that off to size it yourself.",
   },
   {
     id: 'providers',
@@ -579,15 +579,15 @@ const ROW_DEFS: RowDef[] = [
     section: 'graph',
     group: 'Sizing',
     label: 'Size graphs automatically',
-    hint: 'On, the app picks how many landmark citers to ship and where the Latest bands start, per seed. Off, it ships everything it can and you size the bands yourself — and the filter chips gain count sliders to trim what you see. Kept in this browser, not the config file.',
+    hint: 'On, the app picks how many most-cited citers to ship and how far back the per-year recent-citer queries reach, per seed. Off, it ships everything it can and you set those yourself — and the filter chips gain count sliders to trim what you see. Kept in this browser, not the config file.',
     control: () => <AdaptiveToggle />,
   },
   {
     key: 'cluster-start',
     section: 'graph',
-    group: 'Latest bands',
+    group: 'Recent years',
     label: 'Cluster start year',
-    hint: 'First year the Latest bands cover. Blank falls back to the band count below. Only used while automatic sizing is off.',
+    hint: 'Earliest year to run a per-year citer query for. These queries are what puts a paper too new to have out-cited anything on the graph at all. Blank falls back to the count below. Only used while automatic sizing is off.',
     control: () => (
       <BandNumber field="clusterStart" min={1800} max={CURRENT_YEAR} placeholder="auto" />
     ),
@@ -595,17 +595,17 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'number-of-bands',
     section: 'graph',
-    group: 'Latest bands',
-    label: 'Number of bands',
-    hint: 'How many one-year bands to cover below the landmark cutoff, when no cluster start year is set.',
+    group: 'Recent years',
+    label: 'Number of years',
+    hint: 'How many one-year queries to run below the most-cited cutoff, when no cluster start year is set.',
     control: () => <BandNumber field="numberOfBands" min={1} max={MAX_BANDS} />,
   },
   {
     key: 'nodes-per-band',
     section: 'graph',
-    group: 'Latest bands',
-    label: 'Papers per band',
-    hint: 'Top-N most-cited papers each one-year band keeps. Capped at 200 — a single provider query can return no more.',
+    group: 'Recent years',
+    label: 'Papers per year',
+    hint: 'Top-N most-cited papers each one-year query keeps. Capped at 200 — a single provider query can return no more.',
     control: () => <BandNumber field="nodesPerBand" min={1} max={MAX_PER_BAND} />,
   },
   {

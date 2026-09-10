@@ -18,12 +18,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LECTURE_TITLES, streamAsk, streamAskSources, streamLecture } from '../api'
+import { LECTURE_TITLE, streamAsk, streamAskSources, streamLecture } from '../api'
 import type {
   Beat,
   GraphNode,
   HistoryTurn,
-  LectureMode,
+  LectureFraming,
   PlayedLecture,
   Provider,
   SearchOptions,
@@ -39,7 +39,7 @@ import {
   figureAdded,
   lectureDropped,
   lectureHidden,
-  lectureShown,
+  lectureShownAgain,
   lectureStarted,
   graphRefsSet,
   sourceRefsSet,
@@ -58,8 +58,8 @@ import {
 import {
   discoveryMerged,
   loadGraph,
-  selectGraphEdges,
   selectGroundingNodes,
+  selectLectureNodes,
   selectSeedNode,
   selectWorkspaceNodeIds,
 } from '../store/workspace'
@@ -137,7 +137,9 @@ export function useConversation() {
   const store = useAppStore()
   const seedNode = useAppSelector(selectSeedNode)
   const groundingNodes = useAppSelector(selectGroundingNodes)
-  const lectureEdges = useAppSelector(selectGraphEdges)
+  // Strictly what's on screen — the lecture's promise, and the one place it
+  // differs from the researcher's grounding (see `selectLectureNodes`).
+  const lectureNodes = useAppSelector(selectLectureNodes)
   // Which cited papers are still reachable — a transcript now outlives the
   // graph it was written against, so `[n]` chips are checked before they
   // render as controls.
@@ -147,8 +149,8 @@ export function useConversation() {
   // so the graph-free chat searches the backend the dropdown actually names.
   const provider = useAppSelector((state) => state.workspace.provider)
   const chatLength = useAppSelector((state) => selectConversation(state).chat.length)
-  const lectures = useAppSelector((state) => selectConversation(state).lectures)
-  const activeMode = useAppSelector((state) => selectConversation(state).activeMode)
+  const lecture = useAppSelector((state) => selectConversation(state).lecture)
+  const lectureShown = useAppSelector((state) => selectConversation(state).lectureShown)
   // The conversation a stream belongs to, captured when the stream STARTS and
   // passed to every dispatch it makes. This is what lets an answer keep
   // running after the reader moves to another exploration: its writes are
@@ -162,11 +164,11 @@ export function useConversation() {
     activeKeyRef.current = activeKey
   }, [activeKey])
 
-  // Which lecture modes are streaming right now. Lectures load independently
-  // and in parallel — a lecture can keep generating in the background while
-  // you deselect it, ask a question, or start another one — so this is a set,
-  // not one "teaching" flag. Drives each button's hopping-dots indicator.
-  const [loadingModes, setLoadingModes] = useState<LectureMode[]>([])
+  // Whether the lecture is streaming right now. It still runs independently
+  // of the chat — a lecture keeps generating while you hide it or ask a
+  // question — but there is one of them now, so one flag rather than the set
+  // of streaming modes this used to hold. Drives the button's hopping dots.
+  const [lecturing, setLecturing] = useState(false)
   const [asking, setAsking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Which lecture beat / chat answer is "active" (its papers lit on the
@@ -178,26 +180,26 @@ export function useConversation() {
   // again to clear it (like re-clicking an active beat).
   const [activeRef, setActiveRef] = useState<string | null>(null)
 
-  // A per-stream id, so `running` can hold several at once (an answer and two
-  // lectures) and each removes only its own entry when it finishes.
+  // A per-stream id, so `running` can hold several at once (an answer and a
+  // lecture) and each removes only its own entry when it finishes.
   const streamCounter = useRef(0)
   const nextStreamId = useCallback(() => {
     streamCounter.current += 1
     return String(streamCounter.current)
   }, [])
 
-  // One AbortController per in-flight lecture (keyed by mode) plus one for the
-  // Q&A/library stream — each cancels independently, so stopping or clearing
-  // one never disturbs the others running in parallel.
-  const lectureCtrls = useRef(new Map<LectureMode, AbortController>())
+  // One AbortController for the lecture and one for the Q&A/library stream —
+  // they cancel independently, so stopping or clearing one never disturbs the
+  // other running alongside it.
+  const lectureCtrl = useRef<AbortController | null>(null)
   const askCtrl = useRef<AbortController | null>(null)
-  // The mode currently on screen, mirrored into a ref so a streaming lecture's
-  // onBeat can tell whether it should drive the live highlight (only the shown
-  // lecture lights the graph as its beats arrive; background ones stay quiet).
-  const shownModeRef = useRef<LectureMode | null>(activeMode)
+  // Whether the lecture is on screen, mirrored into a ref so a streaming
+  // lecture's onBeat can tell if it should drive the live highlight (a hidden
+  // one stays quiet).
+  const shownRef = useRef(lectureShown)
   useEffect(() => {
-    shownModeRef.current = activeMode
-  }, [activeMode])
+    shownRef.current = lectureShown
+  }, [lectureShown])
 
   // **Nothing is aborted when the reader switches exploration.** This used to
   // abort every in-flight stream on unmount — the panel remounts on the
@@ -228,8 +230,8 @@ export function useConversation() {
     keyAtMount.current = activeKey
     if (!sameConversation || seedId === previousSeed) return
     askCtrl.current?.abort()
-    lectureCtrls.current.forEach((ctrl) => ctrl.abort())
-    lectureCtrls.current.clear()
+    lectureCtrl.current?.abort()
+    lectureCtrl.current = null
   }, [seedNode, activeKey])
   // Keys the backend's per-chat history; clearing the chat mints a new one so
   // the fresh conversation also detaches from server-side context.
@@ -315,28 +317,27 @@ export function useConversation() {
   }, [])
 
   /** Clear the shown lecture: stop it if it's still loading, drop its cache,
-   *  and unlight the graph — leaving the chat and the other lectures intact.
-   *  A no-op with no lecture on screen.
+   *  and unlight the graph — leaving the chat intact. A no-op with no lecture
+   *  on screen.
    *
    *  Two clears, not one contextual one (v7.10.0): the panel now shows the
    *  lecture and the chat as separate sections at the same time, so a single
    *  button could no longer say which of the two it would wipe. Each section
    *  owns its own. */
   const clearLecture = useCallback(() => {
-    if (!activeMode) return
+    if (!lectureShown) return
     setError(null)
-    const ctrl = lectureCtrls.current.get(activeMode)
     // A loading lecture's abort runs runLecture's finally, which drops the
-    // partial and clears activeMode; a finished one is dropped here directly.
-    if (ctrl) ctrl.abort()
-    else dispatch(lectureDropped(activeMode))
+    // partial and hides it; a finished one is dropped here directly.
+    if (lectureCtrl.current) lectureCtrl.current.abort()
+    else dispatch(lectureDropped())
     setActiveBeat(null)
     setActiveRef(null)
     highlight([])
-  }, [activeMode, dispatch, highlight])
+  }, [lectureShown, dispatch, highlight])
 
-  /** Clear the Q&A chat and detach its server session, leaving every cached
-   *  lecture where it is. */
+  /** Clear the Q&A chat and detach its server session, leaving the lecture
+   *  where it is. */
   const clearChat = useCallback(() => {
     setError(null)
     askCtrl.current?.abort()
@@ -349,25 +350,25 @@ export function useConversation() {
     sessionId.current = newSessionId()
   }, [dispatch, highlight])
 
-  /** Generate a lecture for `mode` from scratch: stream its beats into the
-   *  mode's cache slot and show them live. Runs on its own controller, so it
-   *  streams in parallel with the chat and any other lecture. A run aborted
-   *  (stopped, or cleared) before finishing drops its partial cache, so the
-   *  next click regenerates rather than reloading half a lecture. */
+  /** Generate the lecture from scratch: stream its beats in and show them
+   *  live. Runs on its own controller, so it streams in parallel with the
+   *  chat. A run aborted (stopped, or cleared) before finishing drops its
+   *  partial beats, so the next ask regenerates rather than reloading half a
+   *  lecture. */
   const runLecture = useCallback(
-    async (mode: LectureMode) => {
-      if (!seedNode || lectureCtrls.current.has(mode)) return // already loading
+    async (framing: LectureFraming) => {
+      if (!seedNode || lectureCtrl.current) return // already loading
       const ctrl = new AbortController()
-      lectureCtrls.current.set(mode, ctrl)
+      lectureCtrl.current = ctrl
       // The conversation this lecture belongs to, fixed for the whole run. The
       // reader may move to another exploration halfway through; every dispatch
       // below is addressed here so the beats keep landing in the lecture that
       // asked for them.
       const key = activeKeyRef.current
-      const streamId = `lecture:${mode}:${nextStreamId()}`
+      const streamId = `lecture:${nextStreamId()}`
       dispatch(streamStarted(streamId, key))
-      setLoadingModes((prev) => (prev.includes(mode) ? prev : [...prev, mode]))
-      dispatch(lectureStarted(mode, key)) // empties the slot and shows this mode
+      setLecturing(true)
+      dispatch(lectureStarted(key)) // empties the slot and shows the lecture
       setActiveBeat(null)
       setActiveChat(null)
       setActiveRef(null)
@@ -377,24 +378,28 @@ export function useConversation() {
       let completed = false
       try {
         await streamLecture(
-          // `edges` is what lets the backend scope a lecture to the seed's
-          // OWN neighbours; without it a graph the reader has expanded gets
-          // its satellites narrated as if the seed had cited them.
-          { seed: seedNode, nodes: groundingNodes, edges: lectureEdges, mode },
+          // `lectureNodes` IS the lecture's subject: strictly what's on screen
+          // after the reader's filters, narrowed to their selection when they
+          // have one. The backend narrates exactly this (see the lecturer's
+          // `_story_nodes`) rather than re-deriving a set of its own — and it
+          // is `selectLectureNodes`, not the researcher's grounding, because a
+          // lecture must not narrate a paper the reader cannot see.
+          { seed: seedNode, nodes: lectureNodes, framing },
           {
             signal: ctrl.signal,
             // Arrives before the first beat, so a beat's [Sn, p.N] library
             // citations render as real titles from the moment they appear.
-            onSourceRefs: (refs) => dispatch(lectureSourcesSet({ mode, refs }, key)),
+            onSourceRefs: (refs) => dispatch(lectureSourcesSet(refs, key)),
             onBeat: (beat) => {
-              // `beat.graph_refs` (the [n] → node-id map) is resolved server-side —
-              // a lecture numbers the mode-filtered story nodes, which the
-              // frontend never sees, so it can't resolve them itself.
-              dispatch(beatAdded({ mode, beat }, key))
-              // Light up each beat as it arrives — but only while this lecture
-              // is the one on screen (a background one stays quiet). A lecture
-              // whose whole exploration is in the background is quiet too.
-              if (shownModeRef.current === mode && activeKeyRef.current === key) {
+              // `beat.graph_refs` (the [n] → node-id map) is resolved
+              // server-side — a lecture numbers its story nodes in
+              // chronological order, which the frontend never sees, so it
+              // can't resolve them itself.
+              dispatch(beatAdded(beat, key))
+              // Light up each beat as it arrives — but only while the lecture
+              // is on screen, and only while its exploration is the one being
+              // read.
+              if (shownRef.current && activeKeyRef.current === key) {
                 setActiveBeat(beatCount)
                 highlight(beat.node_ids)
               }
@@ -413,30 +418,36 @@ export function useConversation() {
           setError(error instanceof Error ? error.message : String(error))
         }
       } finally {
-        lectureCtrls.current.delete(mode)
-        setLoadingModes((prev) => prev.filter((loading) => loading !== mode))
+        lectureCtrl.current = null
+        setLecturing(false)
         dispatch(streamEnded(streamId, key))
-        // Don't cache a half-streamed lecture — drop it so a re-click regenerates.
-        if (!completed) dispatch(lectureDropped(mode, key))
+        // Don't keep a half-streamed lecture — drop it so the next ask regenerates.
+        if (!completed) dispatch(lectureDropped(key))
       }
     },
-    [seedNode, groundingNodes, lectureEdges, dispatch, highlight, nextStreamId],
+    [seedNode, lectureNodes, dispatch, highlight, nextStreamId],
   )
 
-  /** The lecture-button toggle. One button per mode, acting as a show/hide
-   *  switch over that mode's lecture:
-   *    • the shown mode → hide it. A lecture still loading keeps generating in
-   *      the background (its button keeps its dots); nothing is aborted, so
-   *      re-selecting it picks the stream back up. A finished one just hides,
-   *      its cache kept.
-   *    • a hidden mode that's loading or cached → reveal it with no re-fetch
-   *      (live if it's still streaming, instant if it's done);
-   *    • an un-played mode → generate it (see {@link runLecture}), in parallel
-   *      with whatever else is running. */
+  /** The Lecture button. One button, acting as a show/hide switch over this
+   *  exploration's lecture:
+   *    • shown → hide it. A lecture still loading keeps generating in the
+   *      background (the button keeps its dots); nothing is aborted, so
+   *      showing it again picks the stream back up. A finished one just hides,
+   *      its beats kept.
+   *    • hidden but loading or already played → reveal it with no re-fetch
+   *      (live if still streaming, instant if done);
+   *    • never played → generate it (see {@link runLecture}).
+   *
+   *  Note what is NOT here any more: a re-ask over a *changed* scope. Pressing
+   *  the button again shows the lecture you already have, because that is what
+   *  a toggle means — regenerating is `clearLecture` then press again. Worth
+   *  revisiting once lectures are asked for in words (the chat-routing
+   *  ticket), where "lecture me on these five instead" is a new request rather
+   *  than a second press of the same control. */
   const toggleLecture = useCallback(
-    (mode: LectureMode) => {
+    (framing: LectureFraming) => {
       if (!seedNode) return
-      if (activeMode === mode) {
+      if (lectureShown) {
         dispatch(lectureHidden())
         setActiveBeat(null)
         setActiveChat(null)
@@ -444,31 +455,31 @@ export function useConversation() {
         highlight([])
         return
       }
-      const loading = lectureCtrls.current.has(mode)
-      const cached = (lectures[mode]?.length ?? 0) > 0
-      if (loading || cached) {
-        dispatch(lectureShown(mode))
+      const loading = lectureCtrl.current !== null
+      const played = (lecture?.length ?? 0) > 0
+      if (loading || played) {
+        dispatch(lectureShownAgain())
         setActiveBeat(null)
         setActiveChat(null)
         setActiveRef(null)
         highlight([])
         return
       }
-      runLecture(mode)
+      runLecture(framing)
     },
-    [seedNode, activeMode, lectures, dispatch, highlight, runLecture],
+    [seedNode, lectureShown, lecture, dispatch, highlight, runLecture],
   )
 
   const ask = useCallback(
     async (
       question: string,
       sourceIds: string[] | undefined,
-      lectureModes: LectureMode[] | undefined,
+      useLecture: boolean,
       filters?: SearchOptions,
       history?: HistoryTurn[],
     ) => {
-      // Only supersede a previous question — lectures stream on their own
-      // controllers, so asking never interrupts one that's loading.
+      // Only supersede a previous question — the lecture streams on its own
+      // controller, so asking never interrupts one that's loading.
       askCtrl.current?.abort()
       const ctrl = new AbortController()
       askCtrl.current = ctrl
@@ -511,22 +522,20 @@ export function useConversation() {
           // server-assigned idx as they stream. Plus the raw answer text, so we
           // can resolve which `[n]`s were actually used once it's done.
           const numberedIds = groundingNodes.map((node) => node.id)
-          // Lectures already played this session (trimmed to title + beat
-          // heading/text) become extra context, so the answer can build on
-          // them instead of re-deriving a story the student already heard.
-          // `lectureModes` is the user's scope pick (undefined = all played);
-          // a mode not in it is left out of context.
-          const allowedModes = lectureModes ? new Set(lectureModes) : null
-          const playedLectures: PlayedLecture[] = (
-            Object.entries(lectures) as [LectureMode, Beat[]][]
-          )
-            .filter(
-              ([mode, beats]) => beats.length > 0 && (!allowedModes || allowedModes.has(mode)),
-            )
-            .map(([mode, beats]) => ({
-              title: LECTURE_TITLES[mode],
-              beats: beats.map((beat) => ({ heading: beat.heading, text: beat.text })),
-            }))
+          // The lecture already played this session (trimmed to title + beat
+          // heading/text) becomes extra context, so the answer can build on
+          // it instead of re-deriving a story the student already heard.
+          // `useLecture` is the reader's scope pick — unticking it asks the
+          // question without the lecture in play.
+          const playedLectures: PlayedLecture[] =
+            useLecture && lecture?.length
+              ? [
+                  {
+                    title: LECTURE_TITLE,
+                    beats: lecture.map((beat) => ({ heading: beat.heading, text: beat.text })),
+                  },
+                ]
+              : []
           let answerText = ''
           await streamAsk(
             {
@@ -644,7 +653,7 @@ export function useConversation() {
         setAsking(false)
       }
     },
-    [seedNode, groundingNodes, provider, chatLength, lectures, dispatch, highlight, nextStreamId],
+    [seedNode, groundingNodes, provider, chatLength, lecture, dispatch, highlight, nextStreamId],
   )
 
   /**
@@ -673,7 +682,7 @@ export function useConversation() {
         .filter((turn) => turn.text.trim())
         .map((turn) => ({ role: turn.role, content: turn.text }))
       dispatch(failedTurnDropped(index))
-      void ask(question.text, undefined, undefined, undefined, history)
+      void ask(question.text, undefined, true, undefined, history)
     },
     [ask, dispatch, store],
   )
@@ -681,7 +690,7 @@ export function useConversation() {
   return {
     hasGraph: !!seedNode,
     groundingNodes: groundingNodes as GraphNode[],
-    loadingModes,
+    lecturing,
     asking,
     error,
     activeBeat,

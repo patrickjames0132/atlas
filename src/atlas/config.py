@@ -347,16 +347,14 @@ class LLMProvidersConfig(ConfigModel):
 
 
 class LecturerExtras(ConfigModel):
-    """The lecturer's knobs: the frontier window and the beat-count bounds."""
+    """The lecturer's knobs: the beat-count bounds.
 
-    frontier_window_months: PositiveInt = Field(
-        default=60,
-        description="THE CURRENT FRONTIER's recency window, in months. Wide (~5 years) "
-        "on purpose: since the OpenAlex hybrid (v4.0.0) the graph's light-green 'Latest "
-        "Publications' nodes span the newest years plus the per-year bands below them "
-        "(caps.LATEST_NUMBER_OF_BANDS), so the old 12-month lecture window narrated "
-        "almost none of what the user sees.",
-    )
+    ``frontier_window_months`` sat here until v7.17.0, sizing THE CURRENT
+    FRONTIER lecture's recency window. That lecture is gone — one lecture now
+    narrates whatever the reader scoped — so the knob had nothing left to
+    size.
+    """
+
     min_beats: PositiveInt = Field(
         default=7,
         description="Fewest beats a lecture asks for. Too few for a multi-decade story "

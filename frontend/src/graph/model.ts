@@ -220,17 +220,59 @@ export function cleanNode(node: VNode): GraphNode {
  * restoring a saved session (whose stored node set already includes
  * discovered papers).
  *
+ * `latest` counts as a citation, so a session saved before v7.17.0 reports
+ * the same total a fresh build of the same seed would.
+ *
  * @param nodes The restored nodes.
  * @returns Per-relation totals plus the node count.
  */
 export function countRels(nodes: GraphNode[]): GraphResponse['counts'] {
-  const counts = { references: 0, citations: 0, latest: 0, nodes: nodes.length }
+  const counts = { references: 0, citations: 0, nodes: nodes.length }
   nodes.forEach((node) =>
     node.rels.forEach((rel) => {
       if (rel === 'reference') counts.references++
-      else if (rel === 'citation') counts.citations++
-      else if (rel === 'latest') counts.latest++
+      else if (rel === 'citation' || rel === 'latest') counts.citations++
     }),
   )
   return counts
+}
+
+/**
+ * Fold retired relation tags on nodes into the ones this build knows.
+ *
+ * Only `latest` -> `citation` today (v7.17.0 merged the two citer pools into
+ * one relation). It matters because a tag this build doesn't recognise is not
+ * merely uncoloured: the filter chips are keyed by relation, so an unfolded
+ * `latest` node belongs to no chip and is filtered off the canvas entirely —
+ * a saved exploration would silently come back missing its recent papers.
+ * `similar` and `search` are deliberately NOT folded: those relations were
+ * removed outright rather than merged into another, so `primaryRel` renders
+ * them as `unknown`, which is honest.
+ *
+ * @param nodes Nodes straight out of a saved session.
+ * @returns The same nodes with retired tags rewritten, deduped.
+ */
+export function foldRetiredNodeRels(nodes: GraphNode[]): GraphNode[] {
+  return nodes.map((node) =>
+    node.rels.includes('latest')
+      ? {
+          ...node,
+          rels: [...new Set(node.rels.map((rel) => (rel === 'latest' ? 'citation' : rel)))],
+        }
+      : node,
+  )
+}
+
+/**
+ * The edge twin of `foldRetiredNodeRels` — a saved `latest` edge becomes a
+ * `citation` one, so it draws in the citing relation's colour instead of the
+ * neutral unknown stroke.
+ *
+ * @param edges Edges straight out of a saved session.
+ * @returns The same edges with retired types rewritten.
+ */
+export function foldRetiredEdgeTypes(edges: GraphEdge[]): GraphEdge[] {
+  return edges.map((edge) =>
+    (edge.type as string) === 'latest' ? { ...edge, type: 'citation' as const } : edge,
+  )
 }

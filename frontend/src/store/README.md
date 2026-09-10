@@ -28,7 +28,7 @@ store/
   - **How a stream addresses its own conversation:** every action takes an
     optional key as its *second* argument (carried in `meta.key`); omitted, it
     targets the active one. That default is deliberate — dispatches plainly
-    about what the reader is looking at (clicking a lecture mode, clearing the
+    about what the reader is looking at (showing the lecture, clearing the
     chat) stay unkeyed and unchanged, while the streaming paths in
     `useConversation` capture their key once at stream start and pass it every
     time. Only code that can outlive a switch has to think about it.
@@ -90,17 +90,41 @@ store/
   that opened the new seed's detail panel on arrival; both flag and panel
   went in v7.11.0 (the panel covered the graph the click was waiting for), so
   a graph load now says nothing about what is selected.
-  Lectures are held as a **per-mode cache** (`lectures`: mode → beats) plus the
-  `activeMode` on screen, so each of the four modes is played once and then
-  toggled show/hide for free; `selectVisibleBeats` reads out the shown mode's
-  beats. Save persists the whole cache (a restore brings every played lecture
-  back, not just the visible one); a pre-caching save's flat `beats` folds into
-  the `history` slot on restore. `lectureSources` is the parallel per-mode map
-  resolving the `[Sn]` library citations a lecture's beats may carry — one map
-  per lecture, not per beat, because every beat cites the same retrieved
-  sources (chat turns carry their own `sourceRefs` on the message instead).
-  Saves predating structured library citations have neither; those markers
-  degrade to raw text on restore.
+  An exploration holds **one lecture** (`lecture`: its beats, or null) plus
+  `lectureShown`, so hiding it doesn't throw the beats away and showing it
+  again is free; `selectVisibleBeats` reads it out while shown. This was a
+  per-mode cache until v7.17.0 — four slots, one per mode button, each played
+  once and then toggled — which made sense while a lecture's subject was the
+  button you pressed. Now the subject is the reader's scope, and by the time
+  they ask again the scope has usually moved, so a second lecture is a
+  different lecture rather than a revisit: `lectureStarted` replaces.
+  `lectureSources` resolves the `[Sn]` library citations the beats may carry —
+  one map for the lecture, not per beat, because every beat cites the same
+  retrieved sources (chat turns carry their own `sourceRefs` on the message
+  instead), and it is cleared on `lectureStarted` so a new lecture can't
+  resolve its markers against the old one's books.
+  **Restore reads three eras** (`restoredLecture` in `workspace.ts`): a current
+  save's single `lecture`; a v6-era per-mode `lectures` cache, out of which it
+  picks the one that was on screen (else the first played, in
+  `LEGACY_MODE_ORDER`) and drops the rest; and an ancient flat `beats` array.
+  Note that `lectureSources` holds **two shapes** across those eras — a marker
+  index now, a map of mode → marker index then — discriminated by which
+  lecture field the save carries, because renaming the field would have left
+  every existing save's sources unreadable. Saves predating structured library
+  citations have none; those markers degrade to raw text on restore.
+- **Two grounding scopes, differing on one question** (`scopedNodes` +
+  `selectGroundingNodes` / `selectLectureNodes`): may a paper the reader cannot
+  currently see be in scope? Both are the visible nodes, narrowed to
+  `selected ∩ visible` when there is a hand-picked selection. They part on
+  discoveries: the **researcher's** keeps every paper the agent found this
+  session even when a filter hides it (it pulled the paper in deliberately, and
+  an answer that forgets its own find is worse than one citing a filtered
+  paper), while the **lecture's** drops it. A lecture promises to narrate *the
+  papers you have on screen*, so narrating an invisible one breaks its only
+  rule and the reader has no way to tell why an unfamiliar paper appeared.
+  Reachable only in a narrow case — the agent finds a 2019 paper mid-chat, the
+  reader filters to 2024+, then presses Lecture — which is exactly the kind of
+  case that would have gone unexplained.
 - **`highlight`** — the teacher writes (active beat / cited answer), the
   canvas glows. Stored as an id array (serializable); `selectHighlightSet`
   memoizes the Set the canvas wants.

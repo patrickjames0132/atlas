@@ -9,7 +9,7 @@ graph/
   model.py   — the Pydantic Graph / Node / Edge / Seed / Counts
   budget.py  — adaptive landmark-budget serving: predict it from the seed (the
                trained model) or measure it from a pool in hand (the density rule)
-  bands.py   — adaptive latest-band serving: where a seed's Latest bands start
+  bands.py   — adaptive recent-band serving: which years get their own citer query
   shape.py   — the per-request BuildShape: adaptive (the app sizes itself) vs.
                user-sized, and the cache-key suffix that keeps them apart
 ```
@@ -25,8 +25,17 @@ seed — is the output of one function, `build_graph()`. `routes/graph.py`'s
 `/api/graph` endpoint is a thin HTTP wrapper over it.
 
 Given a **seed paper** and a **provider**, it produces a Connected-Papers-style
-graph: the seed at the center, surrounded by three kinds of neighbor —
-references, landmark citations, and latest (recent-frontier) citations.
+graph: the seed at the center, surrounded by two kinds of neighbor — its
+**references** and its **citations**.
+
+**Citations arrive from two queries but ship as one relation** (v7.17.0). The
+landmark pool is the seed's citers ranked by citation count; the recent pool is
+one query *per year* over the recent years, and it exists because a paper too
+new to have out-cited anything never survives a citation ranking. Both are
+still fetched — `budget.py` sizes the first, `bands.py` places the second — but
+the seam is no longer on the wire: a citer is a citer, and the reader draws
+their own line with the year and citation-count filters. Before v7.17.0 they
+were `citation` and `latest`, two colours and two legend rows.
 
 ## One provider per graph (v5.0.0)
 
@@ -68,8 +77,8 @@ by both the graph and search routes.
               │
               │  edge: descendant ──▶ seed       (the descendant is the citer)
               ▼
-        citations (papers that cite the seed — its descendants:
-                   landmark "citation" + recent-frontier "latest")
+        citations (papers that cite the seed — its descendants; the
+                   landmark pool and the recent-years pool, one relation)
 ```
 
 `build_graph()` returns a typed **Pydantic `Graph`** (not a bare dict), with:
@@ -77,10 +86,10 @@ by both the graph and search routes.
 - **`nodes`** (`list[Node]`) — deduped papers, each the normalized node fields
   plus a `rels` list (which relations surfaced it) and an `is_seed` flag.
 - **`edges`** (`list[Edge]`) — `{source, target, type, influential, rank}`;
-  `type` is `reference | citation | latest` from the build (the `similar` literal
-  survives on the model for researcher-discovered nodes, but the seed build never
-  emits it); `influential` is S2's highly-influential flag (always `None` under
-  OpenAlex); `rank` is the edge's 0-based position within its relation's order.
+  `type` is `reference | citation` from the build; `influential` is S2's
+  highly-influential flag (always `None` under OpenAlex); `rank` is the edge's
+  0-based position within its relation's order (the landmark pool first, then
+  the recent-years pool).
 - **`counts`** (`Counts`) — post-dedupe edge counts per relation plus the final
   deduped node count.
 - **`citation_source`** (`"corpus"` / `"live"` / `None`) — for an s2 graph, where
@@ -226,9 +235,9 @@ cache hit, a deliberate trade.
 5. **Build typed edges — direction is load-bearing.** An edge always points from
    the citing paper to the cited one:
    - **reference** → `seed → ancestor` (the seed cites it), carries `influential`.
-   - **citation** (landmark) and **latest** (recent-frontier) → `descendant →
-     seed` (it cites the seed) — *opposite* direction — carry `influential`. Both
-     are citers, split by recency into two relations (see the provider READMEs).
+   - **citation** → `descendant → seed` (it cites the seed) — *opposite*
+     direction — carries `influential`. Every citer takes this one tag, from
+     both fetch pools (see the provider READMEs for how each is queried).
 
    Getting a direction backwards would silently invert the citation arrows in the
    UI, which is why this is the most-commented part of the code.
@@ -285,8 +294,8 @@ cache hit, a deliberate trade.
 
 `test_graph.py` monkeypatches each provider's traversal calls with canned node
 dicts and uses the real SQLite cache on the per-test temp DB. It asserts: the S2
-and OpenAlex build shapes (seed + references + landmark + latest, correct edge
-directions and counts, `similar` always 0); that a mutual-citation paper and an
+and OpenAlex build shapes (seed + references + both citer pools as one
+`citation` relation, correct edge directions and counts); that a mutual-citation paper and an
 OpenAlex duplicate-work merge into one node; that a citer that *is* the seed never
 self-loops; that the cache is **keyed by provider** (S2 and OpenAlex snapshots
 don't collide, and each is served from its own entry); `model_dump()` round-trips

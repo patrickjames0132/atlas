@@ -171,26 +171,33 @@ The Vite dev server proxies `/api/*` to Flask.
    **fields of study** — hard limits, not hints, and they bind the
    assistant's own paper searches too. Citation links on the graph are never
    filtered.
-2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations · 🌱 latest.
+2. **Read the map** — 🟡 seed · 🔵 references · 🟢 citations.
    (💗 found-by-search too, on a session saved before v7.3.0 — free-text hits
    used to be drawn as edgeless pink dots; now the assistant numbers what it
    finds and you promote a paper onto the graph by clicking its citation.)
-   Citers split into two relations: **Field Landmarks**
-   (green) are the most-cited papers citing the seed — the historic giants
-   (under **OpenAlex**, the true all-time top-cited, returned directly by a sorted
-   `cites:` query; under **Semantic Scholar**, the whole citation history when the
-   offline corpus serves it or the seed's citer list is fully reachable live —
-   the graph's own note names which source is behind them; see
+   **Every paper that cites the seed is one `citations` relation** — from the
+   historic giants to work published this month — and **which of them matters is
+   yours to decide** with the year and citation-count sliders, not ours to
+   decide with a threshold. (They were two relations, *Field Landmarks* and
+   *Latest Publications*, until v7.17.0.)
+
+   Behind that one relation are still **two queries**, because they have to be:
+   the most-cited citers come back ranked by citation count (under **OpenAlex**,
+   the true all-time top-cited from a sorted `cites:` query; under **Semantic
+   Scholar**, the whole citation history when the offline corpus serves it or the
+   seed's citer list is fully reachable live — the graph's own note names which
+   source is behind them; see
    [docs/citation-coverage.md](docs/citation-coverage.md) for how the two sources
-   compare), with **how many to show measured per-seed from
-   the real citer pool** (an old classic maps out large, a young hot paper stays
-   tight — the STOP rule in `services/graph/budget.py`); **Latest Publications**
-   (light green) is the recent frontier — recent citers, per-year banded for even
-   coverage, with the band's **start sized per-seed from fitted constants**
-   so an old classic's bands widen back to meet its landmark cluster instead of
-   leaving a gap (see `services/graph/bands.py`) — as a filterable relation of
-   its own. (Every term here — *landmark*, *band*, *tail edge*, the sizing
-   rules — is defined once, with a worked example, in
+   compare), with **how many to show measured per-seed from the real citer pool**
+   (an old classic maps out large, a young hot paper stays tight — the STOP rule
+   in `services/graph/budget.py`). A second query runs **per recent year**, and
+   it is the only reason recent work appears at all: citation counts measure
+   attention *and* elapsed time together, so a paper from this year never
+   survives a citation ranking. Its start year is **sized per-seed from fitted
+   constants** so an old classic's coverage reaches back to meet its dense
+   cluster instead of leaving a gap (see `services/graph/bands.py`). (Every term
+   here — *landmark*, *band*, *tail edge*, the sizing rules — is defined once,
+   with a worked example, in
    [docs/landmark-vocabulary.md](docs/landmark-vocabulary.md).) Node size =
    citations; thick links = influential citations; a
    dashed ring = discovered by the teacher mid-chat. Click a node for
@@ -217,31 +224,38 @@ The Vite dev server proxies `/api/*` to Flask.
    have it ship everything it can and size the bands yourself, and each filter
    chip gains a **count slider** to trim how many of that relation you see.
 4. **Learn** (the 🎓 Assistant panel):
-   - **Lectures** — the past → present → future arc, narrated over the
-     graph **as you built it** (lectures never expand it — only the research
-     agent does), each pinned to one kind of graph node so they don't overlap:
-     "How we got here" (chronologically through the seed's **references**,
-     ending AT the seed), "This paper's intuition" (the seed **alone** — it
-     reads the paper's full text and teaches it in chapters with its real math,
-     no detours to other papers), "What's evolved since" (the
-     **landmark citers** onward through the work that built on it), and "The
-     current frontier" (just the graph's **Latest Publications**). Each lecture
-     is **grounded in the papers currently shown on the graph** — filter the
-     graph, or hand-pick a cluster with the node selector (alt-drag), and you
-     scope the lecture (and Q&A) to it. The chronological lectures are nudged to
-     span the whole publication history — both ends, not just the oldest,
-     most-cited papers. Lecture length is tunable too (`min_beats`/`max_beats`
-     in the lecturer's config `extras`, default 7–12). Beats light up their
-     papers and carry the papers' **real figures** inline — click to enlarge.
-     The four mode buttons are **colour-coded to the graph nodes** they narrate
-     (blue references / green landmarks / light-green latest / gold seed) and are
-     **cached show/hide toggles** that generate in parallel: play one, then flip
-     between them instantly (or start another while one still loads). Docked beside a
-     graph the panel is a stack of **two folding sections** — **Lectures** (the
-     four buttons and whichever lecture is playing) and **Chat** (the
-     conversation, its caret row carrying the 🎓 lecture and 📚 source scopes,
-     which bind the researcher answering there). Lectures starts folded so the
-     canvas and the conversation get the room; both headers pin to the top as
+   - **Lecture** — a narrated tour of the papers **you have on screen**, oldest
+     first, over the graph as you built it (lectures never expand it — only the
+     research agent does). **What it covers is your choice, not a menu's:**
+     filter to the references and you get the story of how the field arrived
+     here; keep only recent work and you get the current frontier; alt-drag a
+     cluster and it narrates those; scope it to a single paper and it teaches
+     that paper in chapters, reading its full text for the real math — **any**
+     paper, not just the seed, so learning about something you found no longer
+     means re-seeding the graph on it first. Four mode buttons did that carving
+     for you until v7.17.0 — and in doing so *overrode* whatever you had
+     filtered or selected.
+     Scoping is not just hand-picking: the **filter chips** (the seed included —
+     it has its own chip now), the **year range**, the **citation window** and the
+     per-chip count sliders all narrow what a lecture covers, because they all
+     narrow what is on screen. And the lecture takes that literally — it will
+     not narrate a paper the assistant found earlier if your filters are
+     currently hiding it.
+     **One choice the scope can't make for you, so you make it:** `Summary`
+     groups the scoped papers into their key themes, `History` tells them as a
+     chronological arc. Summary is the default — a chronological arc is a
+     strong claim to make about an arbitrary selection.
+     The lecture is nudged to span the whole publication history it is given —
+     both ends, not just the oldest, most-cited papers. Length is tunable
+     (`min_beats`/`max_beats` in the lecturer's config `extras`, default 7–12).
+     Beats light up their papers and carry the papers' **real figures**
+     inline — click to enlarge. The button is a **show/hide toggle** over the
+     lecture you played, and it keeps generating in the background if you hide
+     it or ask a question. Docked beside a graph the panel is a stack of **two
+     folding sections** — **Lecture** (the button and the beats) and **Chat**
+     (the conversation, its caret row carrying the 🎓 lecture and 📚 source
+     scopes, which bind the researcher answering there). Lecture starts folded so
+     the canvas and the conversation get the room; both headers pin to the top as
      you scroll, and each reports its own work with a spinner. They were one
      surface with two views until v7.10.0, which meant asking a question tucked
      away the lecture you were reading — now the two simply coexist.

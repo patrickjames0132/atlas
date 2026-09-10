@@ -22,6 +22,46 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A lecture beat lit three papers while naming sixteen
+
+*Found 2026-09-09 by Patrick, browser-testing the one-lecture rework — "the
+beats aren't properly scoping all the papers when I highlight the bubble". A
+latent bug from the day beats existed, invisible until a lecture's scope got
+wide enough for the gap to show.*
+
+- **Symptom.** Clicking a beat whose prose cited sixteen papers by `[n]` lit
+  **three** nodes on the graph, and the beat card's footer read "3 papers ✦".
+  The numbers were not random — always a small handful, always fewer than the
+  prose named.
+- **Root cause.** A beat carries two independent paper sets, and only one of
+  them drove the highlight. `LectureBeat.nodes` is what the model *picks*, and
+  the prompt asks for "the 1-4 papers the beat is about" — a deliberate cap, so
+  a beat has a focus. `graph_refs` is the separate marker map resolved from the
+  prose by `prompts.graph_refs_from_text`, built so `[n]` renders as a
+  clickable citation. `_beat` passed the first to `node_ids` and the second to
+  `graph_refs`, and both the graph highlight and the footer count read
+  `node_ids` alone. So a beat could *discuss* any number of papers while
+  offering at most four to light up, and the cap was doing exactly what it was
+  written to do.
+- **Why it hid so long.** While each lecture was scoped to one relation of the
+  seed's own neighbourhood, a beat covering 1-4 papers *was* most of what it
+  had to say — the prose rarely cited far beyond its picks. Widening a lecture
+  to whatever the reader has on screen (v7.17.0) made beats that sweep a dozen
+  papers ordinary, and the divergence went from invisible to glaring in the
+  same release.
+- **Fix.** `_beat` (`agents/orchestrators/lecturer/main.py`) now unions the
+  two: the model's picks first (the emphasis, hallucinated indices already
+  dropped by `idx_to_id`), then every id in `graph_refs` it didn't list, in
+  first-mention order, deduped. The dedupe is not incidental — `idx_to_id` maps
+  indices one-for-one, so a model listing the same index twice used to light it
+  twice and count it twice.
+- **Lesson / guard.** *A count the reader can check against the prose is a
+  claim, and it has to be computed from the same thing the prose is.* Two
+  tests pin the union and the dedupe. The frontend fix that followed is a
+  consequence worth noting: a beat can now light a dozen nodes, which is what
+  made the canvas's unconditional "always label a highlighted node" rule
+  paint an unreadable block — see `graph/canvas/README.md`.
+
 ### Every cache hit killed the answer
 
 *Found 2026-09-05 by Patrick — "the try again button keeps failing". A

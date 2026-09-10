@@ -393,12 +393,17 @@ See its own README.
 
 ### `lecturer` — the streamed graph lecture *(built)*
 
-- **Input:** seed, visible nodes (numbered), mode
-  (`history` / `intuition` / `evolution` / `frontier` / `bridge`), target paper
-  (bridge only). Lectures never expand the graph, and the orchestrator scopes
-  each mode to one graph relation (history = references ending at the seed;
-  evolution = landmark citers onward; frontier = the Latest Publications;
-  intuition = the seed alone, read from its full text).
+- **Input:** seed, the reader's **scoped** nodes (numbered), a `framing`
+  (`summary` | `history`), and an optional target paper. Lectures never expand
+  the graph, and the scope is the lecture's subject — passed through untouched
+  rather than re-derived. Since v7.17.0 there is no `mode`: the four mode
+  buttons that each carved their own slice out of the graph are gone, because
+  doing so overrode whatever the reader had filtered or selected. The two
+  remaining shapes are read off the request — a target means the bridge
+  lecture, a scope of *one paper* (any paper, not just the seed) means the solo
+  one, that paper taught in chapters from its full text. **`framing` is the one
+  input the scope can't replace**: which papers is the scope's answer, how to
+  tell them is the reader's.
 - **Tools:** none.
 - **Output:** a streamed sequence of typed `Beat` objects
   (`heading`, `text`, `node_indices` → mapped back to node ids) so the
@@ -406,11 +411,12 @@ See its own README.
   Structured output replaces the old NDJSON protocol and its fence-stripping
   parser.
 - **Skills:** `numbered-papers`, `teaching-voice`, `citation-discipline`.
-- **Config:** the five mode-intent paragraphs; `extras` knobs (typed as
-  `config.LecturerExtras`) for the frontier narration window
-  (`frontier_window_months`, default 60 — now frames the FRONTIER wording only,
-  no longer a node filter) and the beat-count bounds (`min_beats`/`max_beats`,
-  default 7–12 — widened as a full-span lever; the model enforces min ≤ max).
+- **Config:** the four intent paragraphs (summary / history / solo / bridge);
+  `extras`
+  knobs (typed as `config.LecturerExtras`) for the beat-count bounds
+  (`min_beats`/`max_beats`, default 7–12 — widened as a full-span lever; the
+  model enforces min ≤ max). `frontier_window_months` sat here until v7.17.0,
+  sizing a lecture that no longer exists.
 
 ### `researcher` — agentic Q&A over the graph *(built)*
 

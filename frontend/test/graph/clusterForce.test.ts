@@ -3,8 +3,8 @@
  *
  * Description:
  * The Force layout's relation clustering: sector directions (references pull
- * west, landmarks east-up, latest east-down), √population orbits, seed and
- * unknown-relation exemptions, and re-initialization picking up discoveries.
+ * west, citations east), √population orbits, seed and unknown-relation
+ * exemptions, and re-initialization picking up discoveries.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -101,16 +101,24 @@ describe('clusterForce', () => {
 
   it('pulls each relation toward its own sector around the seed', () => {
     const reference = makeNode('ref', ['reference'])
-    const landmark = makeNode('cite', ['citation'])
-    const latest = makeNode('new', ['latest'])
-    runOnce([seed(), reference, landmark, latest])
-    // References go west (negative x), both citing relations east — landmarks
-    // upward (negative y in canvas coords), latest downward.
+    const citer = makeNode('cite', ['citation'])
+    runOnce([seed(), reference, citer])
+    // References west (negative x), citations east — the axis the layout is
+    // there to draw. Citations sat at -PI/3 (up-right) until v7.17.0, sharing
+    // the eastern half with `latest` at +PI/3; with one citing relation the
+    // sector recentres on due east.
     expect(reference.vx!).toBeLessThan(0)
-    expect(landmark.vx!).toBeGreaterThan(0)
-    expect(landmark.vy!).toBeLessThan(0)
-    expect(latest.vx!).toBeGreaterThan(0)
-    expect(latest.vy!).toBeGreaterThan(0)
+    expect(citer.vx!).toBeGreaterThan(0)
+  })
+
+  it('gives a retired `latest` tag the default orbit rather than a sector', () => {
+    // A pre-v7.17.0 save is folded to `citation` on restore
+    // (`foldRetiredNodeRels`), so this only bites if a stray tag slips
+    // through — it must still be placed, not dropped.
+    const stale = makeNode('old', ['latest'])
+    runOnce([seed(), stale])
+    expect(Number.isFinite(stale.vx!)).toBe(true)
+    expect(Number.isFinite(stale.vy!)).toBe(true)
   })
 
   it('anchors relative to the seed’s live position', () => {

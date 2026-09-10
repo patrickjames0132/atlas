@@ -14,6 +14,16 @@ assumes nothing.
 The **why** behind these choices lives in
 [`predict-vs-compute.md`](predict-vs-compute.md). This page is only the *what*.
 
+> **The distinction stopped being user-facing in v7.17.0.** Every term below
+> still describes live code — both citer pools are fetched exactly as written
+> here, the `tau`/`max_span` rule included — but the graph no longer *shows*
+> the seam: landmark citers and recent-years citers arrive as one `citation`
+> relation, with one colour and one legend row. The reader draws their own line
+> with the year and citation-count filters. So read "Field Landmarks" and
+> "Latest Publications" below as the names of two **queries**, not of two
+> things a reader sees.
+
+
 ---
 
 ## The one example everything refers to

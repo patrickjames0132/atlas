@@ -1,5 +1,11 @@
 # Predict or compute? — models vs. banding in the citation budgets
 
+> **Still current, with one caveat:** v7.17.0 merged the two citer relations
+> into one on the *wire and the screen*. Both pools are still fetched by the
+> two different queries this page reasons about, so every argument below holds;
+> what changed is that the reader is no longer shown which pool a paper came
+> from. See [`landmark-vocabulary.md`](landmark-vocabulary.md).
+
 A design question Patrick raised (2026-07-16) while revisiting the S2 live
 fallback: *why does the live path band landmarks per year while OpenAlex uses
 the cite-budget model — shouldn't we just train an S2-specific model? And why

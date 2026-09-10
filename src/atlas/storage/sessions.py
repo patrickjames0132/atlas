@@ -185,11 +185,12 @@ def save_session(payload: dict, session_id: str | None = None) -> dict:
 
     Args:
         payload: The frontend's exploration blob — ``{name, seed, graph_ref,
-            layout, discovered_nodes, discovered_edges, chat, lectures,
-            activeMode}``. Legacy blobs carry the whole graph inline
-            (``nodes``/``edges``) and a flat ``beats``/``hist_trace``
-            instead; both shapes are stored verbatim in ``data``, with a few
-            fields lifted into columns for the list view. A blank name
+            layout, discovered_nodes, discovered_edges, chat, lecture,
+            lectureSources}``. Legacy blobs carry the whole graph inline
+            (``nodes``/``edges``), a per-mode ``lectures`` cache with an
+            ``activeMode``, or a flat ``beats``/``hist_trace``; every shape is
+            stored verbatim in ``data``, with a few fields lifted into columns
+            for the list view. A blank name
             becomes ``"Untitled exploration"``.
         session_id: When given, overwrite that exploration (the autosave
             re-POSTing a row it already created — ``created_at`` is

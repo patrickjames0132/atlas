@@ -26,8 +26,16 @@ export const PROVIDER_LABEL: Record<Provider, string> = {
   openalex: 'OpenAlex',
 }
 
-/** How two papers on the graph relate. */
-export type EdgeType = 'reference' | 'citation' | 'latest'
+/** How two papers on the graph relate.
+ *
+ * `latest` was a third type until v7.17.0, splitting the recent-years citers
+ * off from the all-time landmarks. Both pools are still fetched by their own
+ * query — the recent one is the only reason a paper too new to out-cite
+ * anything reaches the graph — but they arrive as one relation now, because
+ * the reader has citation counts, a year filter and a citation-count filter
+ * and can draw that line better than a fitted threshold can. A restored
+ * session may still carry `latest`; see `foldRetiredRels`. */
+export type EdgeType = 'reference' | 'citation'
 
 /**
  * One paper on the graph. Shape mirrors the backend's `services.graph.Node`
@@ -73,10 +81,11 @@ export interface GraphNode {
    *  when there's no ar5iv render. Detail-tier under S2; absent on
    *  pre-v5.27 sessions/snapshots. */
   oa_pdf?: string | null
-  /** Roles relative to the seed: 'seed' | 'reference' | 'citation' | 'latest'.
-   * A restored session may also carry 'similar' or 'search', both retired
-   * (v7.5.0, v7.3.0) — `primaryRel` renders anything it doesn't know as
-   * `unknown` rather than uncoloured, which is why this stays `string[]`. */
+  /** Roles relative to the seed: 'seed' | 'reference' | 'citation'.
+   * A restored session may also carry 'latest', 'similar' or 'search', all
+   * retired (v7.17.0, v7.5.0, v7.3.0) — `primaryRel` renders anything it
+   * doesn't know as `unknown` rather than uncoloured, which is why this stays
+   * `string[]`. */
   rels: string[]
   is_seed: boolean
   /** Added mid-conversation by the researcher's expand_node tool. */
@@ -97,7 +106,7 @@ export interface GraphEdge {
   influential?: boolean | null
   /**
    * 0-based position within this edge's relation, in the relation's own order
-   * (references/citations by citation count, latest by recency, similar by S2
+   * (references by influence, citations by the traversal's own order, similar by S2
    * similarity). The frontend no longer trims by rank (the per-relation count
    * sliders were retired in favor of the citation-count threshold slider), but
    * the backend still ranks the shipped pool, so the field is preserved for
@@ -113,8 +122,9 @@ export interface GraphResponse {
   edges: GraphEdge[]
   counts: {
     references: number
+    /** Every citer — the landmark pool and the recent-years pool together,
+     *  which have been one relation since v7.17.0. */
     citations: number
-    latest: number
     nodes: number
   }
   /**

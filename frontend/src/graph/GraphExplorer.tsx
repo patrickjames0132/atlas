@@ -47,7 +47,7 @@ import FindBar from './controls/FindBar'
 import GraphControls from './controls/GraphControls'
 import Legend from './controls/Legend'
 import { useBuildShape } from './buildShape'
-import { REL_TYPES } from './theme'
+import { CHIP_TYPES, REL_TYPES } from './theme'
 import { deriveOrigins } from './clusterForce'
 import { useDiscovery } from './hooks/useDiscovery'
 import { useEscapeClear } from './hooks/useEscapeClear'
@@ -75,24 +75,24 @@ import {
  * @returns The graph exploration area.
  */
 /**
- * The Field-Landmarks provider note: tells the user which citation source backs
- * an s2 graph's landmarks, or null when it doesn't apply (OpenAlex returns its
- * landmarks server-sorted; no graph yet means nothing to annotate).
+ * The citation-source note: tells the user which citation source backs an s2
+ * graph's citers, or null when it doesn't apply (OpenAlex returns its citers
+ * server-sorted; no graph yet means nothing to annotate).
  *
  * @param provider        The active data provider.
  * @param citationSource  Where the s2 graph's citers came from ('corpus' full
  *                        history, or 'live' recency-biased), when known.
  * @returns The note text, or null when no note should show.
  */
-function landmarkNote(
+function citationNote(
   provider: 's2' | 'openalex',
   citationSource: 'corpus' | 'live' | null | undefined,
 ): string | null {
   if (provider !== 's2') return null
   if (citationSource === 'corpus') {
-    return 'Semantic Scholar: Field Landmarks are drawn from the offline citations corpus — the full citation history, ranked by citation count.'
+    return 'Semantic Scholar: citations are drawn from the offline citations corpus — the full citation history, ranked by citation count.'
   }
-  return 'Semantic Scholar: Field Landmarks are the top-cited among the ~10k most recent citers (live-API limit), not the full citation history — the citations corpus will lift this.'
+  return 'Semantic Scholar: the most-cited citers here are the top-cited among the ~10k most recent (live-API limit), not the full citation history — the citations corpus will lift this.'
 }
 
 export default function GraphExplorer({
@@ -114,7 +114,7 @@ export default function GraphExplorer({
   // chip of their own; neither can be created any more (v7.3.0, v7.5.0), so a
   // node still carrying one comes from a session saved before that and is
   // shown via the edge-less branch in `nodeOk` below.
-  const [enabled, setEnabled] = useState<Set<string>>(new Set(REL_TYPES))
+  const [enabled, setEnabled] = useState<Set<string>>(new Set(CHIP_TYPES))
   const [yearLo, setYearLo] = useState(0)
   const [yearHi, setYearHi] = useState(0)
   // The citation-count window's knob positions (0…CITE_SLIDER_STEPS). Full-open
@@ -176,7 +176,7 @@ export default function GraphExplorer({
     const years = nodes
       .map((node) => node.year)
       .filter((year): year is number => typeof year === 'number')
-    const counts: Record<string, number> = { reference: 0, citation: 0, latest: 0 }
+    const counts: Record<string, number> = { reference: 0, citation: 0 }
     nodes.forEach((node) =>
       node.rels.forEach((rel) => {
         if (rel in counts) counts[rel]++
@@ -205,7 +205,7 @@ export default function GraphExplorer({
   // pins reset themselves inside their own hooks.)
   useEffect(() => {
     if (!base) return
-    setEnabled(new Set(REL_TYPES))
+    setEnabled(new Set(CHIP_TYPES))
     setYearLo(base.minYear)
     setYearHi(base.maxYear)
     // A fresh graph shows every citation count; the user narrows from there.
@@ -366,7 +366,11 @@ export default function GraphExplorer({
       }
     })
     const nodeOk = (node: VNode) => {
-      if (node.is_seed) return true // the seed is always shown, ignoring filters
+      // The seed has its own chip since v7.17.0 — it used to be unconditionally
+      // shown, which made it the one paper a reader could not scope out of a
+      // lecture. Still exempt from the year and citation sliders below: those
+      // trim a *population* of neighbours, and the seed isn't part of one.
+      if (node.is_seed) return enabled.has('seed')
       // Timeline is a time axis: placing a paper on it claims a publication
       // date, and an undated paper gives us none to claim. They used to be
       // parked on the seed's column, which drew them as a vertical bar through
@@ -588,7 +592,7 @@ export default function GraphExplorer({
             onFit={() => fgRef.current?.zoomToFit(400, 60)}
             onRefresh={onRefresh}
             refreshing={loading}
-            providerNote={landmarkNote(provider, graph?.citation_source)}
+            providerNote={citationNote(provider, graph?.citation_source)}
             stagedOpen={tourStage === 'controls'}
           />
         )}

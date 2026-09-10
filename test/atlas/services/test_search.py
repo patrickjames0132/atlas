@@ -14,10 +14,14 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 
 from __future__ import annotations
 
+from atlas.services.graph import snapshot_prefix
 from atlas.services.search import discovery
 from atlas.storage import cache
 
 # --- local_search (cache-first) --------------------------------------------------
+
+# Keys are built from the real prefix, never a literal `graph:v2:` — a
+# hardcoded schema version is what let the v7.5.0 regression below hide.
 
 
 def _node(paper_id: str, title: str, **extra) -> dict:
@@ -32,7 +36,7 @@ def _snapshot(seed: dict, nodes: list[dict]) -> dict:
 
 
 def test_local_search_matches_tokens_and_flags_fresh_graph():
-    cache.set("graph:v2:s2:1706.03762", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}1706.03762", _snapshot(
         {"arxiv_id": "1706.03762", "id": "seedA", "title": "Attention Is All You Need"},
         [
             _node("seedA", "Attention Is All You Need", is_seed=True,
@@ -49,10 +53,10 @@ def test_local_search_matches_tokens_and_flags_fresh_graph():
 def test_local_search_is_scoped_to_the_selected_provider():
     """A cached paper surfaces only for the provider whose snapshot holds it —
     the other provider's cache is invisible, so the 'instant' badge is truthful."""
-    cache.set("graph:v2:s2:X", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}X", _snapshot(
         {"id": "s2seed", "title": "S2 Snapshot"},
         [_node("s2paper", "Reinforcement Learning Survey", is_seed=True)]))
-    cache.set("graph:v2:openalex:Y", _snapshot(
+    cache.set(f"{snapshot_prefix('openalex')}Y", _snapshot(
         {"id": "oaseed", "title": "OpenAlex Snapshot"},
         [_node("oapaper", "Reinforcement Learning Survey", is_seed=True)]))
 
@@ -64,9 +68,9 @@ def test_local_search_is_scoped_to_the_selected_provider():
 
 def test_local_search_dedupes_keeping_the_richer_record():
     # The same paper as a bare neighbor in one snapshot and hydrated in another.
-    cache.set("graph:v2:s2:s1", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}s1", _snapshot(
         {"id": "s1", "title": "Seed One"}, [_node("shared", "Shared Paper Title")]))
-    cache.set("graph:v2:s2:s2b", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}s2b", _snapshot(
         {"id": "s2b", "title": "Seed Two"},
         [_node("shared", "Shared Paper Title", authors="Rich Author")]))
     (hit,) = discovery.local_search("shared paper", provider="s2")
@@ -74,7 +78,7 @@ def test_local_search_dedupes_keeping_the_richer_record():
 
 
 def test_local_search_year_filter_excludes_out_of_range_and_undated():
-    cache.set("graph:v2:s2:y", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}y", _snapshot(
         {"id": "y", "title": "Y"},
         [
             _node("old", "Deep Learning 2010", year=2010, authors="A"),
@@ -87,7 +91,7 @@ def test_local_search_year_filter_excludes_out_of_range_and_undated():
 
 
 def test_local_search_ranks_phrase_title_then_seed_then_citations():
-    cache.set("graph:v2:s2:r", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}r", _snapshot(
         {"id": "seedX", "title": "Neural Networks"},
         [
             _node("seedX", "Neural Networks", is_seed=True, authors="S", citation_count=5),
@@ -134,8 +138,6 @@ def test_local_search_reads_the_same_key_prefix_build_graph_writes():
     releases. No error, no empty-cache warning: a cache-first search that had
     quietly stopped being cache-first. Both sides read `snapshot_prefix` now,
     and this asserts they agree rather than trusting them to."""
-    from atlas.services.graph import snapshot_prefix
-
     cache.set(f"{snapshot_prefix('s2')}vkey", _snapshot(
         {"id": "vk", "title": "Versioned"},
         [_node("vpaper", "Versioned Key Paper", is_seed=True)]))
@@ -147,8 +149,6 @@ def test_local_search_reads_the_same_key_prefix_build_graph_writes():
 def test_cached_nodes_keeps_the_instant_flag_local_search_computed():
     """`has_graph` survives the hand-off: a paper whose own graph is already on
     disk opens with no provider call, and the reader is told so."""
-    from atlas.services.graph import snapshot_prefix
-
     cache.set(f"{snapshot_prefix('s2')}inst", _snapshot(
         {"id": "instseed", "title": "Instant Paper"},
         [_node("instseed", "Instant Paper", is_seed=True)]))
@@ -168,7 +168,7 @@ def test_a_cached_hit_can_become_a_graph_node():
     """
     from atlas.agents import events
 
-    cache.set("graph:v2:s2:seedA", _snapshot(
+    cache.set(f"{snapshot_prefix('s2')}seedA", _snapshot(
         {"arxiv_id": None, "id": "seedA", "title": "Attention Is All You Need"},
         [_node("nB", "Diffusion Models", authors="Ho", abstract=None, tldr=None,
                month=None, pub_date=None, fields_of_study=[], rels=[])],

@@ -21,7 +21,7 @@
 
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { REL_COLOR, REL_LABEL, REL_TYPES } from '../theme'
+import { CHIP_TYPES, REL_COLOR, REL_LABEL } from '../theme'
 import { CITE_SLIDER_STEPS, citationThreshold } from '../model'
 import '../graph.css'
 
@@ -215,7 +215,7 @@ export default function GraphControls({
             how many of that relation show. */}
         {showRelCaps ? (
           <div className="rel-caps" data-tour="relations">
-            {REL_TYPES.map((type) => {
+            {CHIP_TYPES.map((type) => {
               const on = enabled.has(type)
               const total = relTotals[type] ?? 0
               // A slider only under a chip that's on and has more than one paper
@@ -265,7 +265,7 @@ export default function GraphControls({
           </div>
         ) : (
           <div className="ctrl-rels" data-tour="relations">
-            {REL_TYPES.map((type) => {
+            {CHIP_TYPES.map((type) => {
               const on = enabled.has(type)
               return (
                 <button

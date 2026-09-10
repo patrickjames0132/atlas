@@ -36,11 +36,7 @@ export default function Legend({ hasDiscovered }: LegendProps) {
       </span>
       <span>
         <i style={{ background: REL_COLOR.citation }} />
-        Field Landmarks
-      </span>
-      <span>
-        <i style={{ background: REL_COLOR.latest }} />
-        Latest Publications
+        Citations
       </span>
       {hasDiscovered && (
         <span>

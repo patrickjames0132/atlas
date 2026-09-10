@@ -28,7 +28,7 @@ import { useEffect, useState } from 'react'
 import type { AnswerFigure, CategoriesResponse, CodeLinksResponse, FiguresResponse } from '../api'
 import type { VNode } from '../graph/model'
 import { formatPubDate } from '../graph/model'
-import { BADGE_COLOR, BADGE_LABEL } from '../graph/theme'
+import { BADGE_COLOR } from '../graph/theme'
 import MathText from '../notation/MathText'
 import { useResizablePanel } from '../ui/useResizablePanel'
 import './detail.css'
@@ -330,14 +330,13 @@ export default function DetailPanel({
   onGenerateTldr,
 }: DetailPanelProps) {
   const { width, onHandlePointerDown, dragging } = useResizablePanel('atlas.detailWidth', 340)
-  // Both citing relations show one "citation" badge (BADGE_LABEL), so dedupe by
-  // displayed label — a node that's somehow both a landmark and latest never
-  // renders "CITATION" twice. Map keeps the first relation seen for each label
-  // (its colour), in node.rels order.
+  // Deduped in node.rels order. The dedupe used to matter because the two
+  // citer relations shared one "citation" badge; a restore now folds them into
+  // one relation before the panel ever sees them (`foldRetiredNodeRels`), so
+  // this is just belt-and-braces against a repeated tag.
   const badges = new Map<string, string>()
   for (const rel of node.rels) {
-    const label = BADGE_LABEL[rel] ?? rel
-    if (!badges.has(label)) badges.set(label, rel)
+    if (!badges.has(rel)) badges.set(rel, rel)
   }
   // ONE joint gate for every loadable section. The arXiv-keyed fetches fire
   // on first open for every arXiv paper and cache their failures, so an

@@ -54,9 +54,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent, KeyboardEvent } from 'react'
 import {
   DEFAULT_SEARCH_OPTIONS,
-  LECTURE_TITLES,
+  LECTURE_TITLE,
   type AnswerFigure,
-  type LectureMode,
+  type LectureFraming,
   type SearchOptions,
 } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
@@ -79,17 +79,6 @@ import ChatMessage from './transcript/ChatMessage'
 import { useConversation } from './useConversation'
 import { useResizablePanel } from '../ui/useResizablePanel'
 import './teacher.css'
-
-// Each lecture narrates one graph relation, so its button is tinted that
-// relation's node colour (`rel` → REL_COLOR) and carries a small `tag` in the
-// top-right corner naming the relation — the same colour as the graph's filter
-// chips and legend dots, so the button visibly ties to the nodes it lights up.
-const MODES: { key: LectureMode; label: string; rel: string; tag: string }[] = [
-  { key: 'history', label: LECTURE_TITLES.history, rel: 'reference', tag: 'References' },
-  { key: 'intuition', label: LECTURE_TITLES.intuition, rel: 'seed', tag: 'This paper' },
-  { key: 'evolution', label: LECTURE_TITLES.evolution, rel: 'citation', tag: 'Landmarks' },
-  { key: 'frontier', label: LECTURE_TITLES.frontier, rel: 'latest', tag: 'Latest' },
-]
 
 /**
  * The bin the two Clear controls share — the composer's (which wipes the
@@ -165,17 +154,19 @@ export default function Teacher({
   const chat = useAppSelector((state) => selectConversation(state).chat)
   const beats = useAppSelector(selectVisibleBeats)
   const lectureSourceRefs = useAppSelector(selectVisibleSourceRefs)
-  const lectures = useAppSelector((state) => selectConversation(state).lectures)
-  const activeMode = useAppSelector((state) => selectConversation(state).activeMode)
+  const lecture = useAppSelector((state) => selectConversation(state).lecture)
+  const lectureShown = useAppSelector((state) => selectConversation(state).lectureShown)
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
   // to scope the teacher; 0 means it grounds in every visible paper.
   const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
-  // Papers on the graph that hang off another paper rather than the seed —
-  // the ones no lecture will narrate (see the lecture intro).
+  // Papers on the graph that hang off another paper rather than the seed.
+  // They used to be the ones no lecture would narrate; since v7.17.0 a
+  // lecture narrates whatever is scoped, satellites included — see the
+  // Lecture row's hint.
   const satelliteCount = useAppSelector(selectSatelliteCount)
   const {
     hasGraph,
-    loadingModes,
+    lecturing,
     asking,
     error,
     activeBeat,
@@ -195,21 +186,18 @@ export default function Teacher({
   } = useConversation()
 
   // Each section owns its own Clear now that both are on screen at once: the
-  // lecture's sits on the Lectures row, and this one — in the composer, which
+  // lecture's sits on the Lecture row, and this one — in the composer, which
   // belongs to Q&A — wipes the conversation.
-  // The shown lecture's metadata (name + relation colour), for the transcript's
-  // "Now playing" header. null when no lecture is shown (a Q&A chat, or idle).
-  const activeModeMeta = MODES.find((mode) => mode.key === activeMode) ?? null
 
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  // The lecture buttons, folded away behind their caret. INITIAL VALUE ONLY —
-  // once opened they stay open for the session, because the four modes are a
-  // menu you come back to. Folded is the default because the grid sat
-  // permanently expanded directly above the ask box, spending the panel's
-  // prime vertical space on four buttons most turns never press; a first-time
-  // reader still meets them through the tour, which stages this open.
-  const [lecturesOpen, setLecturesOpen] = useState(false)
+  // The Lecture row, folded away behind its caret. INITIAL VALUE ONLY — once
+  // opened it stays open for the session. Folded is still the default: the
+  // four-button grid this replaced spent the panel's prime vertical space on
+  // buttons most turns never pressed, and one button is not a reason to spend
+  // it again. A first-time reader meets it through the tour, which stages
+  // this open.
+  const [lectureOpen, setLectureOpen] = useState(false)
   // The conversation, on the other hand, starts open: it is what the composer
   // below writes into, and a reader who folds it away has said so deliberately.
   const [chatOpen, setChatOpen] = useState(true)
@@ -226,9 +214,16 @@ export default function Teacher({
   // the picker is searchable by default. Checked = current sources minus
   // these; a deleted source's lingering id here is inert.
   const [excludedSources, setExcludedSources] = useState<string[]>([])
-  // Lectures the researcher may NOT use as context, tracked by EXCLUSION so a
-  // lecture played after the user last touched the picker is fed by default.
-  const [excludedLectures, setExcludedLectures] = useState<LectureMode[]>([])
+  // Whether the researcher may use the played lecture as context. Ticked by
+  // default — a lecture the reader just heard is context they expect an answer
+  // to build on — and unticking it is how they ask without it.
+  const [lectureInScope, setLectureInScope] = useState(true)
+  // How the lecture frames whatever is scoped — the reader's one remaining
+  // choice about a lecture, since the scope already says which papers. Summary
+  // leads: a chronological arc is a strong claim to make about an arbitrary
+  // selection, and it was what produced beats *about the timeline* ("notice the
+  // gap after [1]") when every lecture was forced into one.
+  const [framing, setFraming] = useState<LectureFraming>('summary')
   // Which scope picker's popover is open — one shared slot, so opening either
   // picker closes the other (their popovers overlap when both are open).
   const [openScope, setOpenScope] = useState<'lectures' | 'sources' | 'filters' | null>(null)
@@ -257,11 +252,11 @@ export default function Teacher({
     if (!libraryLoaded) dispatch(loadLibrary())
   }, [libraryLoaded, dispatch])
 
-  // The tour walks to the lecture grid and to the Q&A row's scope pickers, so
+  // The tour walks to the Lecture row and to the Q&A row's scope pickers, so
   // unfold both first — a spotlight on a hidden element has nothing to point at.
   useEffect(() => {
     if (stagedOpen) {
-      setLecturesOpen(true)
+      setLectureOpen(true)
       setChatOpen(true)
     }
   }, [stagedOpen])
@@ -275,13 +270,11 @@ export default function Teacher({
   const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
   const scopeArg = scopeAll ? undefined : scopeIds
 
-  // The played lectures, and which of them the researcher may use as context
-  // (the checked ones — all played minus the user's exclusions).
-  const playedModes = MODES.map((mode) => mode.key).filter(
-    (key) => (lectures[key]?.length ?? 0) > 0,
-  )
-  const lectureScope = playedModes.filter((mode) => !excludedLectures.includes(mode))
-  const lectureItems = playedModes.map((mode) => ({ id: mode, title: LECTURE_TITLES[mode] }))
+  // Whether a lecture has been played at all — what the scope picker and the
+  // "Answers also draw on" note key off.
+  const lecturePlayed = (lecture?.length ?? 0) > 0
+  const lectureScope = lecturePlayed && lectureInScope
+  const lectureItems = lecturePlayed ? [{ id: 'lecture', title: LECTURE_TITLE }] : []
 
   // One bar, three destinations — and which one runs is decided HERE, before
   // any model is involved, rather than by asking an agent to classify the
@@ -414,7 +407,7 @@ export default function Teacher({
 
   // The one-line "Answers also draw on …" note above the ask bar: lectures and
   // sources share it (space is tight), each part naming its picker's icon.
-  // Only what's actually in play appears — no lectures played and no sources
+  // Only what's actually in play appears — no lecture played and no sources
   // scoped means no note.
   //
   // Graph mode only, both halves. There the two pickers are bare icons on the
@@ -423,11 +416,7 @@ export default function Teacher({
   // so the note would be saying the same thing twice a centimetre apart.
   const askContextParts: string[] = []
   if (hasGraph) {
-    if (lectureScope.length > 0) {
-      askContextParts.push(
-        `${lectureScope.length} played lecture${lectureScope.length > 1 ? 's' : ''} (🎓)`,
-      )
-    }
+    if (lectureScope) askContextParts.push('the lecture (🎓)')
     if (scopeIds.length > 0) {
       askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
     }
@@ -578,27 +567,27 @@ export default function Teacher({
               <div className="section-head">
                 <button
                   type="button"
-                  className={`section-toggle${lecturesOpen ? ' open' : ''}`}
-                  onClick={() => setLecturesOpen((open) => !open)}
-                  aria-expanded={lecturesOpen}
+                  className={`section-toggle${lectureOpen ? ' open' : ''}`}
+                  onClick={() => setLectureOpen((open) => !open)}
+                  aria-expanded={lectureOpen}
                   title={
-                    lecturesOpen
-                      ? 'Fold the lectures away'
-                      : 'Play a lecture — four narrated tours of the papers on the graph'
+                    lectureOpen
+                      ? 'Fold the lecture away'
+                      : 'Play a lecture — a narrated tour of the papers you have on the graph'
                   }
                 >
                   <span className="section-caret" aria-hidden="true">
                     ▸
                   </span>
-                  <span className="section-name">Lectures</span>
+                  <span className="section-name">Lecture</span>
                   {/* Folded, this row is the only place a generating lecture
-                      can report itself — its button's dots are out of sight.
+                      can report itself — the button's dots are out of sight.
                       The app's shared spinner rather than those dots: the dots
-                      are a *voice* ("an agent is composing" — a lecture button,
-                      the send control, a bubble awaiting its first token), and
-                      a section header is a status line. Same reasoning as the
-                      trace chips. */}
-                  {!lecturesOpen && loadingModes.length > 0 && (
+                      are a *voice* ("an agent is composing" — the lecture
+                      button, the send control, a bubble awaiting its first
+                      token), and a section header is a status line. Same
+                      reasoning as the trace chips. */}
+                  {!lectureOpen && lecturing && (
                     <span
                       className="spin section-spin"
                       role="status"
@@ -606,89 +595,102 @@ export default function Teacher({
                     />
                   )}
                 </button>
-                {activeModeMeta && (
+                {lectureShown && (
                   <button
                     type="button"
                     className="section-clear"
                     onClick={clearLecture}
-                    title={`Clear ${activeModeMeta.label}`}
+                    title="Clear the lecture"
                     aria-label="Clear lecture"
                   >
                     <ClearGlyph />
                   </button>
                 )}
               </div>
-              <div className="section-body" hidden={!lecturesOpen}>
+              <div className="section-body" hidden={!lectureOpen}>
                 <p className="lecture-intro">
-                  Play a lecture to summarize different node types. Each lecture is grounded in the
-                  papers currently shown on the graph — filter it, or alt-drag on the canvas to
-                  hand-pick a cluster, to narrow what it covers.
-                  {/* Said here rather than left for the reader to notice: once you
-                      expand a paper, its own neighbours are on the graph but are
-                      not this seed's references or citers, so no lecture covers
-                      them. Without this line their absence looks like the lecture
-                      quietly skipping papers. */}
+                  A lecture narrates <strong>the papers you have on screen</strong>, oldest first —
+                  so what it covers is yours to choose: filter the graph, alt-drag on the canvas to
+                  hand-pick a cluster, or narrow by year, and the lecture follows. Scope it to a
+                  single paper and it teaches that paper instead.
+                  {/* Said here rather than left for the reader to notice: an
+                      expanded paper's neighbours ARE narrated now (they are on
+                      screen), which is the opposite of the old behaviour, and
+                      worth stating because it changes what the reader should
+                      expect from a graph they have been expanding. */}
                   {satelliteCount > 0 && (
                     <>
                       {' '}
+                      That includes the{' '}
                       <strong>
                         {satelliteCount} paper{satelliteCount > 1 ? 's' : ''} you expanded
-                      </strong>{' '}
-                      {satelliteCount > 1 ? 'sit' : 'sits'} outside this paper’s own neighbourhood —
-                      a lecture won’t cover {satelliteCount > 1 ? 'them' : 'it'}. Re-seed on one to
-                      hear its story.
+                      </strong>
+                      .
                     </>
                   )}
                 </p>
-                <div className="lecture-grid" data-tour="lectures">
-                  {MODES.map((mode) => {
-                    const active = activeMode === mode.key
-                    const loading = loadingModes.includes(mode.key)
-                    // The "click to show" dot marks a played-but-hidden lecture;
-                    // a loading one shows its hopping dots instead.
-                    const cached = !loading && (lectures[mode.key]?.length ?? 0) > 0
-                    // The button shows only the short node-type word; the full
-                    // lecture name rides in the tooltip, the aria-label, and the
-                    // "Now playing" header below.
-                    const stateHint = loading
-                      ? active
+                <div className="lecture-framing" role="group" aria-label="How to frame the lecture">
+                  {(
+                    [
+                      ['summary', 'Summary', 'Group the scoped papers into their key themes'],
+                      ['history', 'History', 'Tell the scoped papers as a chronological story'],
+                    ] as const
+                  ).map(([key, label, hint]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`framing-btn${framing === key ? ' on' : ''}`}
+                      aria-pressed={framing === key}
+                      // Disabled while a lecture is on screen: it framed the
+                      // beats you are reading, so letting the control drift
+                      // away from them would leave it describing the wrong
+                      // thing. Clear the lecture to pick the other framing.
+                      disabled={lectureShown || lecturing}
+                      onClick={() => setFraming(key)}
+                      title={hint}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="lecture-row" data-tour="lectures">
+                  {(() => {
+                    // The "click to show" state marks a played-but-hidden
+                    // lecture; a loading one shows its hopping dots instead.
+                    const played = !lecturing && lecturePlayed
+                    const stateHint = lecturing
+                      ? lectureShown
                         ? 'click to hide (still loading)'
                         : 'loading — click to show'
-                      : active
+                      : lectureShown
                         ? 'click to hide'
-                        : cached
+                        : played
                           ? 'click to show'
                           : 'click to play'
                     return (
                       <button
-                        key={mode.key}
-                        className={`teach-btn${active ? ' active' : ''}${
-                          cached && !active ? ' cached' : ''
+                        className={`teach-btn${lectureShown ? ' active' : ''}${
+                          played && !lectureShown ? ' cached' : ''
                         }`}
-                        style={{ '--c': REL_COLOR[mode.rel] } as CSSProperties}
-                        // Lectures load in parallel — every button stays live so
-                        // you can show/hide or start another while one generates.
-                        onClick={() => toggleLecture(mode.key)}
-                        aria-pressed={active}
-                        aria-label={mode.label}
-                        title={`${mode.label} — ${stateHint}`}
+                        style={{ '--c': REL_COLOR.seed } as CSSProperties}
+                        onClick={() => toggleLecture(framing)}
+                        aria-pressed={lectureShown}
+                        // Deliberately not just "Lecture": the section header
+                        // above is already named that, and two controls with
+                        // the same accessible name inside one section is a
+                        // screen-reader coin toss over which one plays it.
+                        aria-label="Play the lecture"
+                        title={`${LECTURE_TITLE} — ${stateHint}`}
                       >
-                        {loading ? <HopDots label="Loading lecture" /> : mode.tag}
+                        {lecturing ? <HopDots label="Loading lecture" /> : 'Lecture'}
                       </button>
                     )
-                  })}
+                  })()}
                 </div>
-                {/* The shown lecture reads inside its own section now, rather
-                    than taking over the panel's one scroll. */}
-                {activeModeMeta && (
+                {/* The lecture reads inside its own section, rather than taking
+                    over the panel's one scroll. */}
+                {lectureShown && (
                   <>
-                    <div
-                      className="lecture-now"
-                      style={{ '--c': REL_COLOR[activeModeMeta.rel] } as CSSProperties}
-                    >
-                      <span className="lecture-now-eyebrow">Now playing</span>
-                      <span className="lecture-now-title">{activeModeMeta.label}</span>
-                    </div>
                     <BeatList
                       beats={beats}
                       sourceRefs={lectureSourceRefs}
@@ -698,7 +700,7 @@ export default function Teacher({
                       onGraphIds={onGraphIds}
                       onEnlarge={setLightbox}
                     />
-                    {beats.length === 0 && loadingModes.includes(activeModeMeta.key) && (
+                    {beats.length === 0 && lecturing && (
                       <div className="teacher-hint">Preparing the lecture…</div>
                     )}
                   </>
@@ -735,30 +737,25 @@ export default function Teacher({
                     researcher answering below, not the lecturer above, and
                     docked there is no room for any of them in the pill. */}
                 <div className="section-head-right">
-                  {playedModes.length > 0 && (
+                  {lecturePlayed && (
                     <ScopePicker
                       items={lectureItems}
-                      checkedIds={lectureScope}
+                      checkedIds={lectureInScope ? ['lecture'] : []}
                       dataTour="lecture-scope"
                       open={openScope === 'lectures'}
                       onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
-                      onToggle={(id) =>
-                        setExcludedLectures((prev) =>
-                          prev.includes(id as LectureMode)
-                            ? prev.filter((mode) => mode !== id)
-                            : [...prev, id as LectureMode],
-                        )
-                      }
-                      onSelectAll={() => setExcludedLectures([])}
-                      onDeselectAll={() => setExcludedLectures(playedModes)}
+                      onToggle={() => setLectureInScope((inScope) => !inScope)}
+                      onSelectAll={() => setLectureInScope(true)}
+                      onDeselectAll={() => setLectureInScope(false)}
                       labels={{
                         icon: '🎓',
                         unit: 'lecture',
                         heading: 'Use as context',
-                        allHint: 'Every played lecture is fed to the researcher.',
-                        someHint: 'Only the checked lectures are fed to the researcher.',
-                        noneHint: 'No lectures selected — answers ignore them.',
-                        buttonTitle: 'Choose which played lectures the researcher uses as context',
+                        allHint: 'The played lecture is fed to the researcher.',
+                        someHint: 'The played lecture is fed to the researcher.',
+                        noneHint: 'The lecture is not fed to the researcher.',
+                        buttonTitle:
+                          'Choose whether the researcher uses the played lecture as context',
                       }}
                     />
                   )}

@@ -16,15 +16,17 @@ Pydantic, not begged for in the prompt.
 convenience wrapper delivered the whole lecture in one burst at the end
 against the live API — verified with frame timestamps. See ``streams.py``.)
 
-Mode picks the story (``history`` / ``intuition`` / ``evolution`` /
-``bridge``); every mode narrates the visible node set exactly as handed in —
-the lecturer never expands the graph (pulling new papers in is the
-researcher's job, on explicit questions). Lectures are illustrated: each
-storytelling mode gets a deterministic pre-fetched **figure pool** (the
-seed's own ar5iv figures for intuition; the story's landmark papers' for
-history/evolution) whose entries beats can attach; intuition additionally
-grounds in the seed's **full text** (ar5iv, equations kept as LaTeX — it
-reads the paper and teaches it in chapters) and retrieved library passages.
+**The scope is the subject** (v7.17.0): the lecture narrates the node set
+handed in — what the reader has filtered or hand-picked on screen — exactly
+as given, and never expands the graph (pulling new papers in is the
+researcher's job, on explicit questions). The four mode buttons that used to
+each carve their own slice out of that set are gone; see ``_story_nodes``.
+Two shapes are still read off the request rather than chosen: a ``target``
+makes it a bridge lecture, and a scope of nothing but the seed makes it a
+solo one, which teaches that paper in chapters and is the only shape
+grounded in the seed's **full text** (ar5iv, equations kept as LaTeX) and
+retrieved library passages. Lectures are illustrated either way, from a
+deterministic pre-fetched **figure pool** whose entries beats can attach.
 No tools involved — all fetched (cached) before the run. Model failures
 propagate — the caller ends the event stream with ``Error``.
 
@@ -51,11 +53,19 @@ from pydantic_core import from_json
 
 from ....integrations.arxiv import figures as figures_mod
 from ....integrations.arxiv import fulltext as fulltext_mod
-from ....services.graph import Edge, Node
+from ....services.graph import Node
 from ....services.sources import retrieval
 from ... import events, factory, prompts, streams
-from ...models import LectureMode
-from .config import AGENT_ID, MODE_INTENTS, SKILLS, SYSTEM_PROMPT
+from .config import (
+    AGENT_ID,
+    BRIDGE_INTENT,
+    HISTORY_INTENT,
+    SKILLS,
+    SOLO_INTENT,
+    SUMMARY_INTENT,
+    SYSTEM_PROMPT,
+    Framing,
+)
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +74,7 @@ class LectureBeat(BaseModel):
     """One beat as the model emits it: numbered-list indices, not node ids
     (the model never sees ids — ``prompts.idx_to_id`` maps them back), plus
     optionally the number of a pooled figure to show with the beat (the
-    prompt lists the mode's figure pool; a mode with an empty pool maps any
+    prompt lists the lecture's figure pool; a lecture with an empty pool maps any
     value to nothing).
     """
 
@@ -84,29 +94,18 @@ agent: Agent[None, list[LectureBeat]] = Agent(
 )
 
 
-# The story modes' figure pool: how many landmark papers (beyond the seed)
+# The many-paper figure pool: how many papers (beyond the seed)
 # contribute figures, and how many figures each may contribute. Bounded so
 # the pre-lecture ar5iv fetches (cached, but a cold run pays them) and the
 # prompt's figure list stay small.
 _FIGURE_PAPERS = 4
 _FIGURES_PER_PAPER = 3
 
-# How much of the seed's full text the intuition lecture reads. Bounded so the
+# How much of the seed's full text a solo lecture reads. Bounded so the
 # prompt stays a sane size; the ar5iv reader caches the whole text, this just
 # caps what's fed at request time (the paper's front matter — problem, method,
 # results — leads, which is what the chapters teach from).
 _SEED_FULLTEXT_CHARS = 12000
-
-# The chronological, many-paper modes: their numbered list is sorted oldest
-# first and banded by era, and they carry the full-span guardrail. HISTORY and
-# EVOLUTION are arcs; FRONTIER is a thematic survey but still oriented forward
-# in time, so it gets the same temporal scaffolding (era-banded list + span
-# line). Intuition (seed only) and bridge (a two-paper conceptual link) are not
-# banded.
-_CHRONOLOGICAL_MODES = frozenset(
-    {LectureMode.HISTORY, LectureMode.EVOLUTION, LectureMode.FRONTIER}
-)
-
 
 def _paper_figures(paper: Node) -> list[dict]:
     """One paper's ar5iv figures, for the lecture's figure pool.
@@ -126,80 +125,84 @@ def _paper_figures(paper: Node) -> list[dict]:
     return result.get("figures") or []
 
 
-def _figure_pool(seed: Node, nodes: list[Node], mode: LectureMode) -> list[dict]:
+def _figure_pool(lead: Node, nodes: list[Node], solo: bool) -> list[dict]:
     """The figures a lecture may attach to its beats, as a flat numbered pool.
 
-    Intuition stays on the seed, so its pool is the seed's own figures
-    (untitled — there's only one paper in play). History, evolution, and the
-    current frontier tell a many-paper story, so their pool draws from the seed
-    plus the ``_FIGURE_PAPERS`` most-cited arXiv papers among the (already
-    mode-scoped) visible nodes, ``_FIGURES_PER_PAPER`` figures each — every
-    entry titled with its source paper so both the model and the beat card
-    can attribute it. Bridge shows no figures.
+    The pool's shape follows the **scope**, not a mode the reader picked. A
+    solo lecture shows its subject paper's own figures, untitled — there is
+    only one paper in play, so attribution would be noise. A many-paper
+    lecture draws from the seed plus the ``_FIGURE_PAPERS`` most-cited arXiv
+    papers on the list, ``_FIGURES_PER_PAPER`` figures each, every entry
+    titled with its source paper so both the model and the beat card can
+    attribute it.
 
     Args:
-        seed: The seed paper (its figures lead every pool).
-        nodes: The mode-scoped visible nodes the landmarks are drawn from.
-        mode: The lecture mode (decides the pool's shape).
+        lead: The paper whose figures lead the pool — the solo subject, or
+            the seed for a many-paper lecture.
+        nodes: The scoped nodes the story's papers are drawn from.
+        solo: The scope is a single paper (see ``_solo_subject``).
 
     Returns:
-        ``[{"image", "caption", "title"}]`` entries (``title`` None for the
-        intuition pool).
+        ``[{"image", "caption", "title"}]`` entries (``title`` None when solo).
     """
-    if mode is LectureMode.INTUITION:
-        return [{**figure, "title": None} for figure in _paper_figures(seed)]
-    if mode not in (LectureMode.HISTORY, LectureMode.EVOLUTION, LectureMode.FRONTIER):
-        return []
-    landmarks = sorted(
-        (node for node in nodes if node.arxiv_id and not node.is_seed),
+    if solo:
+        return [{**figure, "title": None} for figure in _paper_figures(lead)]
+    others = sorted(
+        (node for node in nodes if node.arxiv_id and node.id != lead.id),
         key=lambda node: node.citation_count or 0,
         reverse=True,
     )[:_FIGURE_PAPERS]
     pool: list[dict] = []
-    for paper in ([seed] if seed.arxiv_id else []) + landmarks:
+    for paper in ([lead] if lead.arxiv_id else []) + others:
         for figure in _paper_figures(paper)[:_FIGURES_PER_PAPER]:
             pool.append({**figure, "title": paper.title})
     return pool
 
 
-def _seed_passages(seed: Node) -> list[dict]:
-    """Library passages about the seed, for the intuition lecture.
+def _paper_passages(paper: Node) -> list[dict]:
+    """Library passages about the lecture's subject paper, for a solo lecture.
 
-    The same hybrid retrieval search_sources uses, queried with the
-    seed's title — extra context the lecture MAY draw on (attributed
-    inline). Empty when the library is empty/unavailable or on any failure.
+    The same hybrid retrieval ``search_sources`` uses, queried with the paper's
+    title — extra context the lecture MAY draw on (attributed inline). Empty
+    when the library is empty/unavailable or on any failure.
+
+    Args:
+        paper: The paper the solo lecture is about.
+
+    Returns:
+        The retrieved passages, or an empty list.
     """
-    query = (seed.title or "").strip()
+    query = (paper.title or "").strip()
     if not query:
         return []
     try:
         return retrieval.search(query)
     except Exception:
-        log.warning("seed passage retrieval failed", exc_info=True)
+        log.warning("passage retrieval failed", exc_info=True)
         return []
 
 
-def _seed_fulltext(seed: Node) -> str:
-    """The seed paper's readable full text, for the intuition lecture to teach from.
+def _paper_fulltext(paper: Node) -> str:
+    """The subject paper's readable full text, for a solo lecture to teach from.
 
     The same ar5iv reader the researcher uses — equations preserved as LaTeX
-    (``keep_math``) so the chapters can quote the paper's actual math — truncated
-    to ``_SEED_FULLTEXT_CHARS``. Empty for a non-arXiv seed, when ar5iv has no
-    render, or on any failure: the intuition lecture still runs from the
+    (``keep_math``) so the chapters can quote the paper's actual math —
+    truncated to ``_SEED_FULLTEXT_CHARS``. Empty for a non-arXiv paper, when
+    ar5iv has no render, or on any failure: the lecture still runs from the
     abstract, figures, and library passages.
 
     Args:
-        seed: The seed paper.
+        paper: The paper the solo lecture is about.
 
     Returns:
         The truncated full text, or an empty string when unavailable.
     """
-    if not seed.arxiv_id:
+    if not paper.arxiv_id:
         return ""
     try:
-        result = fulltext_mod.get_fulltext(seed.arxiv_id)
+        result = fulltext_mod.get_fulltext(paper.arxiv_id)
     except Exception:
-        log.warning("seed fulltext fetch failed for %s", seed.arxiv_id, exc_info=True)
+        log.warning("fulltext fetch failed for %s", paper.arxiv_id, exc_info=True)
         return ""
     if not result.get("available"):
         return ""
@@ -214,7 +217,7 @@ def _span_line(nodes: list[Node]) -> str:
     fewer than two distinct years are present (nothing to span).
 
     Args:
-        nodes: The mode-scoped story nodes.
+        nodes: The scoped story nodes.
 
     Returns:
         A one-line reminder like ``The numbered list spans 1998–2024; …``, or
@@ -232,33 +235,50 @@ def _span_line(nodes: list[Node]) -> str:
 def _prompt(
     seed: Node,
     nodes: list[Node],
-    mode: LectureMode,
+    subject: Node | None,
     target: Node | None,
+    framing: Framing,
     figures: list[dict],
     passages: list[dict],
     fulltext: str,
 ) -> str:
-    """Assemble the lecture request: mode intent, seed/target header, the
-    numbered paper list (era-banded for the chronological modes), and — intuition
-    mode — the seed's full text, figure list, and retrieved library passages.
+    """Assemble the lecture request: the intent, the paper header, the numbered
+    paper list, and — for a solo lecture — the subject's full text, figure
+    list, and retrieved library passages.
+
+    Which intent leads is decided **structurally** from the request rather than
+    from a mode the reader chose: a ``target`` means the bridge lecture, a
+    single scoped paper means the solo one, and anything else is a many-paper
+    lecture whose framing the reader picked. Only a *history*-framed many-paper
+    lecture gets the era-banded list and the span line, because it is the only
+    shape telling a story across time — a summary orders its beats by idea, and
+    handing it a timeline invited beats about the timeline itself.
 
     Args:
-        seed: The seed paper.
-        nodes: The visible graph nodes, in display order (oldest-first for the
-            chronological modes).
-        mode: Which story to tell.
-        target: The bridge target (bridge mode only), or None.
-        figures: The mode's figure pool (see ``_figure_pool``; may be empty).
-        passages: Retrieved library passages (empty outside intuition mode).
-        fulltext: The seed's full text (intuition mode only; empty otherwise).
+        seed: The seed paper, named as the graph's centre for a many-paper
+            lecture.
+        nodes: The scoped nodes, in display order.
+        subject: The single scoped paper for a solo lecture, else None.
+        target: The bridge target, or None for an ordinary lecture.
+        framing: The reader's choice of summary or history.
+        figures: The figure pool (see ``_figure_pool``; may be empty).
+        passages: Retrieved library passages (solo lecture only).
+        fulltext: The subject's full text (solo lecture only; empty otherwise).
 
     Returns:
         The full user prompt.
     """
-    header = f"SEED paper: {seed.title}"
-    if mode == "bridge" and target:
-        header += f"\nTARGET paper: {target.title}"
-    if mode in _CHRONOLOGICAL_MODES:
+    if target:
+        intent = BRIDGE_INTENT
+        header = f"SEED paper: {seed.title}\nTARGET paper: {target.title}"
+    elif subject is not None:
+        intent = SOLO_INTENT
+        header = f"SUBJECT paper: {subject.title}"
+    else:
+        intent = HISTORY_INTENT if framing == "history" else SUMMARY_INTENT
+        header = f"SEED paper: {seed.title}"
+    banded = target is None and subject is None and framing == "history"
+    if banded:
         # Oldest-first, banded by era, with the concrete year span spelled out —
         # the rendering + reminder half of the full-span guardrail.
         paper_section = (
@@ -270,11 +290,11 @@ def _prompt(
             paper_section += f"\n\n{span}"
     else:
         paper_section = f"Papers on the graph (numbered):\n{prompts.node_lines(nodes)}"
-    sections = [MODE_INTENTS[mode], header, paper_section]
+    sections = [intent, header, paper_section]
     if fulltext:
         sections.append(
-            "Full text of the SEED paper (read it and teach from it — quote its "
-            "actual equations, quantities, and numbers):\n" + fulltext
+            "Full text of the SUBJECT paper (read it and teach from it — quote "
+            "its actual equations, quantities, and numbers):\n" + fulltext
         )
     if figures:
         figure_lines = []
@@ -283,9 +303,7 @@ def _prompt(
             caption = (figure.get("caption") or "(no caption)")[:200]
             figure_lines.append(f"{number}. {source}{caption}")
         pool_name = (
-            "Figures of the SEED paper"
-            if mode is LectureMode.INTUITION
-            else "Figures from the story's papers"
+            "Figures of the SUBJECT paper" if subject is not None else "Figures from the papers"
         )
         sections.append(
             f"{pool_name} (attach one to a beat by setting the beat's "
@@ -333,8 +351,11 @@ def _beat(beat: LectureBeat, nodes: list[Node], figures: list[dict]) -> events.B
     """Convert a model beat to the event the frontend consumes: indices
     mapped back to node ids, and a valid ``figure`` number resolved to the
     pooled figure's proxied image + caption + source paper (an out-of-range
-    or spurious number — including any in a mode whose pool is empty — just
-    means no figure, never a failure).
+    or spurious number — including any when the pool is empty — just means no
+    figure, never a failure).
+
+    ``node_ids`` is the union of the model's chosen papers and every paper it
+    cites inline, so lighting a beat lights everything it talks about.
     """
     figure = None
     if beat.figure is not None and 1 <= beat.figure <= len(figures):
@@ -347,35 +368,37 @@ def _beat(beat: LectureBeat, nodes: list[Node], figures: list[dict]) -> events.B
             title=chosen.get("title"),
         )
     text = beat.text.strip()
+    # Resolve the beat's inline [n] markers against the same numbered list so
+    # the frontend can make them clickable.
+    graph_refs = prompts.graph_refs_from_text(nodes, text)
+    # **Light up every paper the beat actually discusses**, not just the handful
+    # the model put in `nodes`. The prompt asks for 1-4 there — the beat's
+    # focus — but a beat covering a broad scope routinely cites a dozen more
+    # inline, and those were silently unlit: the reader clicked a beat naming
+    # sixteen papers and watched three of them glow. The model's own picks lead
+    # (they are the emphasis, and `idx_to_id` already dropped hallucinated
+    # indices), then any cited paper it didn't list, in first-mention order.
+    # Deduped, order-preserving: ``idx_to_id`` maps indices one-for-one, so a
+    # model that lists the same paper twice (or picks one it also cites inline)
+    # would otherwise light it twice and inflate the beat card's paper count.
+    node_ids: list[str] = []
+    for node_id in [*prompts.idx_to_id(nodes, beat.nodes), *graph_refs.values()]:
+        if node_id not in node_ids:
+            node_ids.append(node_id)
     return events.Beat(
         heading=beat.heading.strip(),
         text=text,
-        node_ids=prompts.idx_to_id(nodes, beat.nodes),
-        # Resolve the beat's inline [n] markers against the same numbered list
-        # (the mode-filtered story nodes) so the frontend can make them clickable.
-        graph_refs=prompts.graph_refs_from_text(nodes, text),
+        node_ids=node_ids,
+        graph_refs=graph_refs,
         figure=figure,
     )
-
-
-# Which graph relation each directional lecture narrates. A mode is now pinned
-# to exactly ONE kind of neighbor (the tag ``build.py`` writes into a node's
-# ``rels``) rather than to a slice of the timeline: HISTORY tells the story of
-# the seed's references, LANDMARKS ("evolution") of the landmark citers, and
-# FRONTIER of the recent "Latest Publications" bands. INTUITION and BRIDGE
-# aren't relation-scoped (see ``_story_nodes``).
-_MODE_RELATION: dict[LectureMode, str] = {
-    LectureMode.HISTORY: "reference",
-    LectureMode.EVOLUTION: "citation",
-    LectureMode.FRONTIER: "latest",
-}
 
 
 def _chronological(nodes: list[Node]) -> list[Node]:
     """The nodes sorted oldest-first, undated ones last.
 
     The ordering half of the full-span guardrail: the lecturer numbers the
-    story in this order and (via ``prompts.node_lines_by_era``) can band it by
+    story in this order and (via ``prompts.node_lines_by_era``) bands it by
     era, so a beat's papers read left-to-right in time instead of by citation
     count. ``node_lines``/``idx_to_id`` stay consistent because the same
     ordered list is both numbered and mapped back.
@@ -389,136 +412,109 @@ def _chronological(nodes: list[Node]) -> list[Node]:
     return sorted(nodes, key=lambda node: (node.year is None, node.year or 0))
 
 
-def _seed_neighbors(seed: Node, edges: list[Edge], relation: str) -> set[str]:
-    """Ids joined **directly to the seed** by an edge of one relation.
+def _solo_subject(nodes: list[Node]) -> Node | None:
+    """The single paper a solo lecture is about, or None for a many-paper one.
 
-    The question a lecture actually needs answered, and the one ``rels``
-    cannot: a node's tags record what its relation *is*, never what it is
-    *to*. A paper pulled in by ``expand_node`` carries the tag for the
-    relation it has to *the paper it was expanded from* — so a
-    reference-of-a-reference is tagged ``reference`` and is indistinguishable,
-    by tag alone, from something the seed actually cites.
-
-    Deliberately **direction-agnostic**. A ``reference`` edge runs seed →
-    cited and a ``citation``/``latest`` edge runs citer → seed (see
-    ``Edge``), but the question here isn't which way the arrow points — it is
-    whether this paper and the seed are joined by *this kind* of edge at all.
-    Asking about adjacency rather than direction means a future relation can't
-    be silently mis-scoped by getting its arrow backwards.
+    **Any paper, not just the seed** — select one node anywhere on the graph
+    and the lecture is a deep read of that node. The old INTUITION mode could
+    only ever teach the seed, so learning about a paper you found meant
+    re-seeding the whole graph on it first; scoping already says which paper
+    you mean.
 
     Args:
-        seed: The seed paper.
-        edges: The visible graph's edges.
-        relation: The edge type this mode narrates (``reference`` /
-            ``citation`` / ``latest``).
+        nodes: The scoped nodes.
 
     Returns:
-        The ids of the seed's own neighbors under that relation.
+        The one scoped paper, or None when there is more than one.
     """
-    neighbors = set()
-    for edge in edges:
-        if edge.type != relation:
-            continue
-        if edge.source == seed.id:
-            neighbors.add(edge.target)
-        elif edge.target == seed.id:
-            neighbors.add(edge.source)
-    return neighbors
+    return nodes[0] if len(nodes) == 1 else None
 
 
-def _story_nodes(
-    seed: Node, nodes: list[Node], edges: list[Edge], mode: LectureMode
-) -> list[Node]:
-    """The node set a lecture mode may narrate.
+def _story_nodes(seed: Node, nodes: list[Node]) -> list[Node]:
+    """The nodes a lecture narrates: **whatever the reader has scoped**.
 
-    A lecture never expands the graph — and each mode is pinned to exactly one
-    kind of neighbor so the four lectures don't overlap. Scoping is by
-    *relation to the seed*, not by year: HISTORY narrates the seed's
-    **references**, EVOLUTION ("The landmark papers since") the **landmark
-    citers**, and FRONTIER the recent **Latest Publications** — each keeping
-    only the seed's own neighbors under that relation (plus the seed itself),
-    then sorted chronologically (see ``_chronological``). INTUITION stays on
-    the **seed alone**, so it structurally can't wander onto another paper.
-    BRIDGE sees the whole visible set.
+    **This is where four lectures became one (v7.17.0).** Each mode used to
+    own a slice of the graph — HISTORY the seed's references, EVOLUTION its
+    landmark citers, FRONTIER the recent bands — and this function threw away
+    the caller's node list to rebuild that slice from the edges. The reader's
+    own filtering and hand-picked selection (``selectGroundingNodes`` on the
+    frontend) was therefore *overridden* by whichever button they pressed:
+    selecting five papers and asking for a lecture narrated something else
+    entirely.
 
-    **Scoped by edges since v7.7.0, and that is the whole point.** This used
-    to filter on ``relation in node.rels``, which reads a node's tags — and a
-    tag says what a relation *is*, not what it is *to*. Once the graph could
-    grow past its seed (``expand_node``), a paper hanging off a reference
-    carried the tag ``reference`` and swept straight into the HISTORY lecture,
-    which then narrated papers the seed never cited. Latent from the day
-    expansion shipped; invisible until someone expanded a graph and then
-    played a lecture over it.
+    Now the scope IS the request, and this function adds nothing to it. In
+    particular it does **not** slot the seed in: a reader who selects one
+    paper wants a lecture on that paper, and quietly adding the seed would
+    turn it into a two-paper story about something they didn't ask about.
+    The seed is the fallback for an empty scope only, because a lecture has to
+    be about something.
 
     Args:
-        seed: The seed paper (always included in every mode's set).
-        nodes: The visible graph nodes.
-        edges: The visible graph's edges — what makes "the seed's own
-            neighbor" answerable. **Empty falls back to tag scoping**, i.e.
-            the pre-v7.7.0 behavior: wrong for an expanded graph, but a
-            lecture that narrates too much beats one that finds no papers at
-            all and narrates nothing.
-        mode: The lecture mode being narrated.
+        seed: The seed paper — the fallback subject when nothing is scoped.
+        nodes: The scoped nodes, as the caller sees them on screen.
 
     Returns:
-        The mode-scoped node list to hand the lecturer.
+        The scoped nodes oldest-first, or just the seed when the scope is empty.
     """
-    if mode is LectureMode.INTUITION:
-        return [node for node in nodes if node.is_seed or node.id == seed.id]
-    relation = _MODE_RELATION.get(mode)
-    if relation is None:  # BRIDGE (and any future non-directional mode)
-        return list(nodes)
-    if edges:
-        in_scope = _seed_neighbors(seed, edges, relation)
-    else:
-        in_scope = {node.id for node in nodes if relation in node.rels}
-    return _chronological(
-        [node for node in nodes if node.is_seed or node.id == seed.id or node.id in in_scope]
-    )
+    if not nodes:
+        return [seed]
+    return _chronological(nodes)
 
 
 def lecture(
     seed: Node,
     nodes: list[Node],
-    mode: LectureMode = LectureMode.HISTORY,
     target: Node | None = None,
-    edges: list[Edge] | None = None,
+    framing: Framing = "summary",
 ) -> Iterator[events.Beat | events.SourceRefs]:
-    """Stream a lecture over the visible graph as typed beats.
+    """Stream a lecture over the reader's scoped graph as typed beats.
+
+    **One lecture, whose subject is the scope** (v7.17.0). There is no mode
+    argument: what the lecture is *about* is what the caller sent, which is
+    what the reader has on screen. Two shapes are read off the request rather
+    than named by it — a ``target`` selects the bridge lecture, and a scope of
+    exactly one paper selects the solo lecture, a deep read of that paper.
+
+    ``framing`` is the one thing the scope cannot express and so the one thing
+    the reader still chooses: the same set of papers is a fair subject for a
+    themed summary or a chronological history, and only they know which they
+    wanted.
 
     Args:
-        seed: The seed paper.
-        nodes: The visible graph nodes. The lecture's entire world — it
-            narrates them as-is and never expands the graph — and it scopes
-            them to the mode itself (``_story_nodes``), so callers pass
-            everything on screen rather than pre-filtering.
-        mode: ``history``, ``intuition``, ``evolution``, or ``bridge``.
-        target: The bridge target paper (bridge mode only), or None.
-        edges: The visible graph's edges, which is how a mode tells the seed's
-            **own** neighbors from papers expanded off them (see
-            ``_story_nodes``). None/empty falls back to tag scoping.
+        seed: The seed paper — the subject only when the scope is empty.
+        nodes: The scoped graph nodes — the lecture's entire world, narrated
+            as-is (it never expands the graph). Callers send what is on
+            screen: visible after filters, narrowed to the hand-picked
+            selection when there is one.
+        target: The bridge target paper, or None for an ordinary lecture.
+        framing: ``summary`` (themes) or ``history`` (a chronological arc).
+            Ignored for a bridge lecture, which has its own shape.
 
     Yields:
-        One ``events.SourceRefs`` first when the intuition lecture retrieved
-        library passages (resolving the ``[Sn]`` markers its beats may cite),
-        then ``events.Beat`` per beat, as soon as each is complete — a beat is
+        One ``events.SourceRefs`` first when a solo lecture retrieved library
+        passages (resolving the ``[Sn]`` markers its beats may cite), then
+        ``events.Beat`` per beat, as soon as each is complete — a beat is
         final once the model starts the next one, so narration begins before
-        the lecture ends. Beats with blank text are dropped. A beat may
-        carry one figure from the mode's pool (the seed's own in intuition;
-        the story's landmark papers' in history/evolution).
+        the lecture ends. Beats with blank text are dropped. A beat may carry
+        one figure from the pool (the subject paper's own when solo; the
+        story's most-cited papers' otherwise).
 
     Raises:
         Exception: Model/stream failures propagate — the caller ends the
             event stream with ``Error``.
     """
-    nodes = _story_nodes(seed, nodes, list(edges or []), mode)
-    # Every storytelling mode gets a figure pool (the seed's own figures for
-    # intuition; the story's landmark papers' for history/evolution — see
-    # _figure_pool); library passages and the seed's full text ground the
-    # intuition lecture only (it reads the paper and teaches it in chapters).
-    figures = _figure_pool(seed, nodes, mode)
-    passages = _seed_passages(seed) if mode is LectureMode.INTUITION else []
-    fulltext = _seed_fulltext(seed) if mode is LectureMode.INTUITION else ""
+    nodes = _story_nodes(seed, nodes)
+    # A scope of one paper is a request to teach that paper — any paper, not
+    # just the seed. It gets that paper's own figures plus the two groundings
+    # that only make sense with a single subject: its full text and the
+    # reader's library passages about it (see _solo_subject / config.SOLO_INTENT).
+    subject = _solo_subject(nodes)
+    # A bridge lecture shows no figures — it argues a conceptual link between
+    # two named papers rather than walking a set of them, so a figure pool
+    # would be illustrating papers the lecture may never reach.
+    figures = [] if target else _figure_pool(subject or seed, nodes, subject is not None)
+    passages = _paper_passages(subject) if subject and not target else []
+    fulltext = _paper_fulltext(subject) if subject and not target else ""
 
     emitted = 0
     args_buffer = ""
@@ -543,7 +539,7 @@ def lecture(
             }
         )
 
-    prompt = _prompt(seed, nodes, mode, target, figures, passages, fulltext)
+    prompt = _prompt(seed, nodes, subject, target, framing, figures, passages, fulltext)
     for event in streams.drive(agent, prompt, model=factory.model_for(AGENT_ID)):
         if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
             if event.part.tool_name == streams.OUTPUT_TOOL:

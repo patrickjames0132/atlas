@@ -69,25 +69,24 @@ def test_lecture_types_the_payload_and_relays_by_event_type(client, monkeypatch)
         yield events.Beat(heading="Roots", text="It began.", node_ids=["node02"])
 
     patch_agents(monkeypatch, fake_run)
-    response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "intuition"})
+    response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES})
     assert frames(response) == [
         ("beat", {"heading": "Roots", "text": "It began.", "node_ids": ["node02"],
                   "graph_refs": {}, "figure": None}),
         ("done", {}),
     ]
-    assert seen["kwargs"]["mode"] == "intuition"
     # The route delivered typed Nodes, sim baggage stripped, annotations kept.
     typed_seed = seen["kwargs"]["seed"]
     assert typed_seed.id == "seed01" and typed_seed.is_seed is True
     assert not hasattr(typed_seed, "x")
 
 
-def test_lecture_accepts_edges_as_ids_or_as_the_sim_mutated_node_objects(client, monkeypatch):
-    """The gotcha this parsing exists for: react-force-graph REPLACES a link's
-    `source`/`target` STRINGS with the node objects themselves, in place. So an
-    edge arriving as `{"source": {...node...}}` is the normal case off a live
-    canvas, not a malformed one, and both shapes have to resolve to an id — or
-    the lecture silently falls back to tag scoping and the bug comes back."""
+def test_lecture_passes_the_scope_through_untouched(client, monkeypatch):
+    """The v7.17.0 contract. The reader's scope IS the lecture's subject, so
+    the route hands the node list to the lecturer exactly as it arrived — no
+    relation filtering, and no `mode` deciding a different set. It used to
+    also parse an `edges` list, which existed only so a mode could rebuild its
+    own slice of the graph; nothing needs it now."""
     seen = {}
 
     def fake_run(**kwargs):
@@ -95,44 +94,61 @@ def test_lecture_accepts_edges_as_ids_or_as_the_sim_mutated_node_objects(client,
         yield events.Beat(heading="Roots", text="It began.", node_ids=[])
 
     patch_agents(monkeypatch, fake_run)
-    client.post("/api/lecture", json={
-        "seed": SEED, "nodes": NODES, "mode": "history",
-        "edges": [
-            {"source": "seed01", "target": "node02", "type": "reference"},
-            {"source": {"id": "node02"}, "target": {"id": "seed01"}, "type": "citation"},
-            {"source": "seed01", "target": "node02", "type": "nonsense"},  # dropped
-            {"source": "seed01", "type": "reference"},  # no target — dropped
-            "not an edge at all",
-        ],
-    })
-    edges = seen["kwargs"]["edges"]
-    assert [(edge.source, edge.target, edge.type) for edge in edges] == [
-        ("seed01", "node02", "reference"),
-        ("node02", "seed01", "citation"),
-    ]
+    client.post("/api/lecture", json={"seed": SEED, "nodes": NODES})
+    assert [node.id for node in seen["kwargs"]["nodes"]] == [node["id"] for node in NODES]
+    assert seen["kwargs"]["target"] is None
+    assert "mode" not in seen["kwargs"] and "edges" not in seen["kwargs"]
 
 
-def test_lecture_without_edges_still_runs(client, monkeypatch):
-    """Absent edges is not an error — it degrades to tag scoping, which
-    over-includes on an expanded graph but always has papers in it."""
+def test_lecture_ignores_a_mode_from_an_older_client(client, monkeypatch):
+    """A browser holding a pre-v7.17.0 bundle still posts `mode`, and a saved
+    session may replay one. The field selects nothing now, so it is ignored
+    rather than rejected — 400-ing a stale tab would be a worse answer than
+    giving it the lecture it asked for."""
+    def fake_run(**kwargs):
+        yield events.Beat(heading="Roots", text="It began.", node_ids=[])
+
+    patch_agents(monkeypatch, fake_run)
+    for stale in ("history", "frontier", "opera"):
+        response = client.post(
+            "/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": stale}
+        )
+        assert response.status_code == 200
+
+
+def test_lecture_passes_the_readers_framing_through(client, monkeypatch):
+    """Framing is the reader's one remaining choice about a lecture — the scope
+    already says which papers — so it has to reach the lecturer."""
     seen = {}
 
     def fake_run(**kwargs):
         seen["kwargs"] = kwargs
-        yield events.Beat(heading="Roots", text="It began.", node_ids=[])
+        yield events.Beat(heading="Themes", text="It began.", node_ids=[])
 
     patch_agents(monkeypatch, fake_run)
-    response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "history"})
-    assert response.status_code == 200
-    assert seen["kwargs"]["edges"] == []
+    client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "framing": "history"})
+    assert seen["kwargs"]["framing"] == "history"
+
+
+def test_lecture_defaults_to_a_summary_and_never_400s_on_a_bad_framing(client, monkeypatch):
+    """A framing is a preference, so an unknown one falls back rather than
+    refusing the lecture — and the fallback is `summary`, because a
+    chronological arc is a strong claim to make about an arbitrary selection."""
+    seen = {}
+
+    def fake_run(**kwargs):
+        seen["kwargs"] = kwargs
+        yield events.Beat(heading="Themes", text="It began.", node_ids=[])
+
+    patch_agents(monkeypatch, fake_run)
+    for body in ({}, {"framing": "opera"}, {"framing": None}, {"framing": 7}):
+        response = client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, **body})
+        assert response.status_code == 200
+        assert seen["kwargs"]["framing"] == "summary"
 
 
 def test_lecture_input_validation(client):
     assert client.post("/api/lecture", json={"seed": SEED, "nodes": []}).status_code == 400
-    assert (
-        client.post("/api/lecture", json={"seed": SEED, "nodes": NODES, "mode": "opera"}).status_code
-        == 400
-    )
     broken = {**SEED}
     del broken["url"]  # a required core field
     assert (

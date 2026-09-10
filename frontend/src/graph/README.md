@@ -81,7 +81,7 @@ to anything in this folder.
 ## `model.ts` helpers & `theme.ts`
 
 - `primaryRel`: the one relation that colors a node — seed wins, then
-  reference/citation/latest in priority order (`REL_TYPES`), then topic-search
+  reference/citation in priority order (`REL_TYPES`), then topic-search
   hits get their own color, falling back to `similar` (which now only appears on
   researcher-discovered papers — the seed-graph *Similar* relation was retired in
   v5.0.0).
@@ -99,13 +99,23 @@ to anything in this folder.
   id/URL jumps straight to a graph, skipping a search round-trip. Deliberate
   duplication; the backend stays authoritative.
 - `theme.ts` is the single source of visual truth (node/edge colors, dim
-  states, `YEAR_SPACING`, filter labels) so the canvas painting and the DOM
+  states, `YEAR_SPACING`, `REL_TYPES` vs `CHIP_TYPES`, filter labels) so the
+  canvas painting and the DOM
   chrome can never disagree about what "a reference" looks like. `REL_COLOR`
-  drives the graph, chips, legend, and lecture buttons; `BADGE_COLOR` /
-  `BADGE_LABEL` drive the detail-panel badges, where both citing relations
-  (`citation` and `latest`) read as one "citation" badge in a lighter green
-  (the graph's landmark green was darkened to separate it from `latest`, so the
-  badge keeps the original in-between shade).
+  drives the graph, chips, and legend; `BADGE_COLOR` drives the detail-panel
+  badges, in a lighter green that reads better on the panel's surface.
+  (`BADGE_LABEL` sat beside it to make a `latest` node show a "citation"
+  badge — the one place the two citer pools were already presented as one
+  relation, years before v7.17.0 made that true everywhere. It went with the
+  relation itself.)
+- `foldRetiredNodeRels` / `foldRetiredEdgeTypes`: rewrite relation tags this
+  build no longer has, for a graph arriving from a **saved session** rather
+  than the backend. Only `latest` → `citation` today. It is not cosmetic: the
+  filter chips are keyed by relation, so an unfolded `latest` node belongs to
+  no chip and is filtered off the canvas — a saved exploration would come back
+  missing its recent papers. `similar` and `search` are deliberately *not*
+  folded, because they were removed outright rather than merged, and
+  `primaryRel` renders them as `unknown`, which is honest.
 
 ## `buildShape.ts` — how much graph the backend ships
 

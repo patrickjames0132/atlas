@@ -21,7 +21,8 @@ import reducer, {
   chatCleared,
   lectureDropped,
   lectureHidden,
-  lectureShown,
+  lectureShownAgain,
+  lectureSourcesSet,
   lectureStarted,
   backgroundDiscovery,
   conversationDropped,
@@ -34,6 +35,7 @@ import reducer, {
   traceAdded,
   tracesSettled,
   selectVisibleBeats,
+  selectVisibleSourceRefs,
   tokenAppended,
   turnStarted,
 } from '../../src/store/transcript'
@@ -81,104 +83,87 @@ function play(...actions: Parameters<typeof reducer>[1][]): TranscriptState {
   )
 }
 
-describe('transcript lecture caching', () => {
-  it('caches a played lecture under its mode and shows it', () => {
+describe('the exploration lecture', () => {
+  it('stores a played lecture and shows it', () => {
     const beat = makeBeat({ heading: 'One' })
-    const state = play(lectureStarted('history'), beatAdded({ mode: 'history', beat }))
-    expect(active(state).activeMode).toBe('history')
-    expect(active(state).lectures.history).toEqual([beat])
+    const state = play(lectureStarted(), beatAdded(beat))
+    expect(active(state).lectureShown).toBe(true)
+    expect(active(state).lecture).toEqual([beat])
     expect(selectVisibleBeats({ transcript: state })).toEqual([beat])
   })
 
-  it('routes a background beat to its own mode, not the shown one', () => {
-    // Both lectures are playing; frontier is brought on screen while a history
-    // beat arrives in the background — it must land in history's slot, not
-    // frontier's.
-    const historyBeat = makeBeat({ heading: 'H' })
+  it('starting a lecture empties the previous one rather than appending', () => {
+    // The v7.17.0 shape in one test. There is one slot, so a second lecture
+    // REPLACES the first — where the four per-mode slots used to coexist, a
+    // second lecture over a different scope is a different lecture, not an
+    // addition to the last.
+    const first = makeBeat({ heading: 'First' })
+    const second = makeBeat({ heading: 'Second' })
+    const state = play(lectureStarted(), beatAdded(first), lectureStarted(), beatAdded(second))
+    expect(active(state).lecture).toEqual([second])
+  })
+
+  it('starting a lecture clears the previous one’s library index', () => {
+    // Sources arrive before the first beat, so a stale map left in place would
+    // resolve the new lecture's [Sn] markers against the old lecture's books.
+    const refs = { S1: { id: 'src1', title: 'Sutton & Barto' } }
     const state = play(
-      lectureStarted('frontier'),
-      lectureStarted('history'),
-      lectureShown('frontier'),
-      beatAdded({ mode: 'history', beat: historyBeat }),
+      lectureStarted(),
+      lectureSourcesSet(refs),
+      beatAdded(makeBeat()),
+      lectureStarted(),
     )
-    expect(active(state).activeMode).toBe('frontier')
-    expect(active(state).lectures.history).toEqual([historyBeat])
-    expect(active(state).lectures.frontier).toEqual([])
+    expect(active(state).lectureSources).toEqual({})
   })
 
-  it('keeps every mode cached when switching between them', () => {
-    const historyBeat = makeBeat({ heading: 'H' })
-    const frontierBeat = makeBeat({ heading: 'F' })
-    const state = play(
-      lectureStarted('history'),
-      beatAdded({ mode: 'history', beat: historyBeat }),
-      lectureStarted('frontier'),
-      beatAdded({ mode: 'frontier', beat: frontierBeat }),
-    )
-    // Both lectures are cached; only the last-played is visible.
-    expect(active(state).lectures.history).toEqual([historyBeat])
-    expect(active(state).lectures.frontier).toEqual([frontierBeat])
-    expect(active(state).activeMode).toBe('frontier')
-  })
-
-  it('re-shows a cached lecture without re-fetching (no beat replay)', () => {
-    const historyBeat = makeBeat({ heading: 'H' })
-    const frontierBeat = makeBeat({ heading: 'F' })
-    let state = play(
-      lectureStarted('history'),
-      beatAdded({ mode: 'history', beat: historyBeat }),
-      lectureStarted('frontier'),
-      beatAdded({ mode: 'frontier', beat: frontierBeat }),
-    )
-    // Re-select history: the cached beats reappear, untouched.
-    state = reducer(state, lectureShown('history'))
-    expect(active(state).activeMode).toBe('history')
-    expect(selectVisibleBeats({ transcript: state })).toEqual([historyBeat])
-    expect(active(state).lectures.history).toEqual([historyBeat])
-  })
-
-  it('hides the visible lecture but keeps its cache', () => {
-    const beat = makeBeat()
-    let state = play(lectureStarted('history'), beatAdded({ mode: 'history', beat }))
+  it('re-shows the played lecture without replaying its beats', () => {
+    const beat = makeBeat({ heading: 'H' })
+    let state = play(lectureStarted(), beatAdded(beat))
     state = reducer(state, lectureHidden())
-    expect(active(state).activeMode).toBeNull()
-    expect(selectVisibleBeats({ transcript: state })).toEqual([])
-    // Still cached — a later lectureShown reloads it.
-    expect(active(state).lectures.history).toEqual([beat])
+    state = reducer(state, lectureShownAgain())
+    expect(active(state).lectureShown).toBe(true)
+    expect(selectVisibleBeats({ transcript: state })).toEqual([beat])
+    expect(active(state).lecture).toEqual([beat])
   })
 
-  it('drops a partial lecture and clears it if it was visible', () => {
+  it('hides the lecture but keeps its beats', () => {
     const beat = makeBeat()
-    let state = play(lectureStarted('history'), beatAdded({ mode: 'history', beat }))
-    state = reducer(state, lectureDropped('history'))
-    expect(active(state).activeMode).toBeNull()
-    expect(active(state).lectures.history).toBeUndefined()
+    let state = play(lectureStarted(), beatAdded(beat))
+    state = reducer(state, lectureHidden())
+    expect(active(state).lectureShown).toBe(false)
+    expect(selectVisibleBeats({ transcript: state })).toEqual([])
+    // Still there — a later lectureShownAgain reveals it.
+    expect(active(state).lecture).toEqual([beat])
   })
 
-  it('a drop leaves a different visible mode untouched', () => {
-    const state = play(
-      lectureStarted('history'),
-      beatAdded({ mode: 'history', beat: makeBeat() }),
-      lectureStarted('frontier'),
-      beatAdded({ mode: 'frontier', beat: makeBeat({ heading: 'F' }) }),
-      lectureDropped('history'),
-    )
-    expect(active(state).activeMode).toBe('frontier')
-    expect(active(state).lectures.history).toBeUndefined()
-    expect(active(state).lectures.frontier).toHaveLength(1)
+  it('drops a partial lecture and hides it', () => {
+    const beat = makeBeat()
+    let state = play(lectureStarted(), beatAdded(beat))
+    state = reducer(state, lectureDropped())
+    expect(active(state).lectureShown).toBe(false)
+    expect(active(state).lecture).toBeNull()
+    expect(active(state).lectureSources).toEqual({})
   })
 
-  it('clearing the chat leaves cached lectures intact', () => {
+  it('clearing the chat leaves the lecture intact', () => {
     const state = play(
       turnStarted('a question'),
-      lectureStarted('history'),
-      beatAdded({ mode: 'history', beat: makeBeat() }),
+      lectureStarted(),
+      beatAdded(makeBeat()),
       lectureHidden(),
       chatCleared(),
     )
     expect(active(state).chat).toEqual([])
-    expect(active(state).lectures.history).toHaveLength(1)
-    expect(active(state).activeMode).toBeNull()
+    expect(active(state).lecture).toHaveLength(1)
+    expect(active(state).lectureShown).toBe(false)
+  })
+
+  it('the library index only resolves while the lecture is shown', () => {
+    const refs = { S1: { id: 'src1', title: 'Sutton & Barto' } }
+    let state = play(lectureStarted(), lectureSourcesSet(refs), beatAdded(makeBeat()))
+    expect(selectVisibleSourceRefs({ transcript: state })).toEqual(refs)
+    state = reducer(state, lectureHidden())
+    expect(selectVisibleSourceRefs({ transcript: state })).toEqual({})
   })
 })
 
@@ -211,18 +196,18 @@ describe('transcript survival across a graph load', () => {
     expect(active(state).chat[0].text).toBe('What is new in quantum computing?')
   })
 
-  it('drops the cached lectures, which belong to the graph that is going away', () => {
+  it('drops the lecture, which belongs to the graph that is going away', () => {
     // A lecture narrates the neighborhood you built and its beats point at
     // that graph's nodes — carrying one onto a different graph would narrate
     // papers that aren't there.
     const state = play(
-      lectureStarted('history'),
-      beatAdded({ mode: 'history', beat: makeBeat() }),
+      lectureStarted(),
+      beatAdded(makeBeat()),
       turnStarted('And what about DQN?'),
       graphLoaded(),
     )
-    expect(active(state).lectures).toEqual({})
-    expect(active(state).activeMode).toBeNull()
+    expect(active(state).lecture).toBeNull()
+    expect(active(state).lectureShown).toBe(false)
     expect(active(state).chat).toHaveLength(2)
   })
 })

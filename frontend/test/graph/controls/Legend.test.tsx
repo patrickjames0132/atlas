@@ -16,11 +16,17 @@ import { render, screen } from '@testing-library/react'
 import Legend from '../../../src/graph/controls/Legend'
 
 describe('Legend', () => {
-  it('always shows the four relation entries', () => {
+  it('always shows the three relation entries', () => {
     render(<Legend hasDiscovered={false} />)
-    for (const label of ['Seed', 'References', 'Field Landmarks', 'Latest Publications']) {
+    for (const label of ['Seed', 'References', 'Citations']) {
       expect(screen.getByText(label)).toBeTruthy()
     }
+  })
+
+  it('no longer splits citations into landmarks and latest (v7.17.0)', () => {
+    render(<Legend hasDiscovered={false} />)
+    expect(screen.queryByText('Field Landmarks')).toBeNull()
+    expect(screen.queryByText('Latest Publications')).toBeNull()
   })
 
   it('no longer shows a Similar entry (relation retired from the build)', () => {

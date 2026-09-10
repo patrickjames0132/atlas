@@ -156,11 +156,12 @@ export const GRAPH_TOUR: TourStep[] = [
     stage: 'controls',
     title: 'Relation filters',
     body:
-      'Each chip shows or hides one kind of neighbor, and the chip colors match the ' +
-      'nodes. Blue references are the papers this one built on. Both greens are ' +
-      'citations — papers that built on it: deep-green Field Landmarks are its ' +
-      'most-cited citers of all time, pale-green Latest Publications the newest ones ' +
-      'at the frontier. Same relationship, two eras.',
+      'Each chip shows or hides one kind of node, and the chip colors match them. ' +
+      'Gold is the seed paper itself — hide it and a lecture covers only the papers around ' +
+      'it. Blue references are the papers this one built on; green citations are the ' +
+      'papers that built on it — every one of them, from its most-cited classics to work ' +
+      'published this year. Which of those you care about is yours to say: the year and ' +
+      'citation-count sliders below draw that line however you like.',
   },
   {
     target: '[data-tour="relations"]',
@@ -291,28 +292,30 @@ export const GRAPH_TOUR: TourStep[] = [
     target: '[data-tour="lectures"]',
     stage: 'assistant',
     presentIf: '[data-tour="assistant-btn"]',
-    title: 'Four lectures',
+    title: 'The lecture',
     body:
-      'Four stories, each told over one slice of the graph — and each button wears its ' +
-      'slice’s color. Blue walks the references: how the field arrived at this paper. ' +
-      'Green covers the landmark papers that built on it. Light green surveys the ' +
-      'current frontier. Gold teaches the seed paper itself, chapter by chapter. Papers ' +
-      'light up on the map as their part of the story arrives, and the lecture reads here ' +
-      'in its own section while the conversation below keeps its own. The four fold away ' +
-      'behind the “Lectures” caret by default, so the chat gets the room — press it ' +
-      'whenever you want them back.',
+      'Press it and the assistant narrates the papers you have on screen — so you decide ' +
+      'what the lecture is about. Filter to the references and you get the story of how the ' +
+      'field arrived here; keep only recent work and you get the current frontier; alt-drag ' +
+      'a cluster and it narrates just those. Scope it to a single paper — any paper — and it ' +
+      'teaches that one, chapter by chapter. The one thing your selection can’t say is how ' +
+      'to tell it, so that’s the choice above: “Summary” groups the papers into their key ' +
+      'themes, “History” walks them oldest to newest. Papers light up on the map as their ' +
+      'part of the story arrives, and the lecture reads here in its own section while the ' +
+      'conversation below keeps its own. It folds away behind the “Lecture” caret by ' +
+      'default, so the chat gets the room.',
   },
   {
     target: '[data-tour="lecture-scope"]',
     stage: 'assistant',
     presentIf: '[data-tour="lecture-scope"]',
-    title: 'Which lectures feed the answers',
+    title: 'Whether the lecture feeds the answers',
     body:
-      'The lectures you’ve played so far — the researcher builds on what they already ' +
-      'said instead of re-deriving it. Untick any you’d rather it ignore; a note above ' +
-      'the ask bar shows how many are in play. It rides on the Chat row rather than the ' +
-      'panel’s, because that is whose reach it scopes: the researcher answering below, ' +
-      'not the lecturer above.',
+      'The lecture you’ve played — the researcher builds on what it already said instead ' +
+      'of re-deriving it. Untick it if you’d rather it answered fresh; a note above the ' +
+      'ask bar says when it is in play. It rides on the Chat row rather than the panel’s, ' +
+      'because that is whose reach it scopes: the researcher answering below, not the ' +
+      'lecturer above.',
   },
   {
     target: '[data-tour="source-scope"]',

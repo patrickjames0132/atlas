@@ -18,7 +18,6 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models.test import TestModel
 
 from atlas.agents import events
-from atlas.agents.models import LectureMode
 from atlas.agents.orchestrators import lecturer
 from atlas.agents.orchestrators.lecturer import main as lecturer_main
 from atlas.services.graph import Node
@@ -78,17 +77,28 @@ def test_beats_map_indices_to_node_ids():
     ]
 
 
-def test_beats_resolve_inline_ref_markers_for_clickable_citations():
-    # A beat's prose cites papers by [n]; those markers resolve to node ids
-    # (against the same numbered list) so the frontend can make them clickable —
-    # independent of the structured `nodes` highlight set.
+def test_a_beat_lights_up_every_paper_it_cites_not_just_its_structured_picks():
+    """The prompt asks for 1-4 papers in `nodes` — the beat's focus — but a beat
+    over a broad scope routinely cites a dozen more inline. Those were silently
+    unlit: a reader clicked a beat naming sixteen papers and watched three of
+    them glow, with the footer saying "3 papers". `node_ids` is now the union,
+    the model's own picks first (the emphasis) then anything else cited, in
+    first-mention order."""
     model = beats_model(
         [{"heading": "Roots", "text": "Building on [3], later [2] followed.", "nodes": [3]}]
     )
     with lecturer.agent.override(model=model):
         out = list(lecturer.lecture(SEED, NODES))
-    assert out[0].node_ids == ["seed01"]  # the structured highlight set
-    assert out[0].graph_refs == {"3": "seed01", "2": "node02"}  # every inline [n] used
+    assert out[0].node_ids == ["seed01", "node02"]  # [3] picked, [2] cited
+    # graph_refs still carries the marker map, for clickable citations.
+    assert out[0].graph_refs == {"3": "seed01", "2": "node02"}
+
+
+def test_a_cited_paper_is_not_listed_twice_when_the_model_also_picked_it():
+    model = beats_model([{"heading": "Roots", "text": "Per [2].", "nodes": [2, 2]}])
+    with lecturer.agent.override(model=model):
+        out = list(lecturer.lecture(SEED, NODES))
+    assert out[0].node_ids == ["node02"]
 
 
 def test_blank_text_beats_are_dropped():
@@ -119,13 +129,13 @@ def record_model(seen: dict) -> FunctionModel:
     return FunctionModel(stream_function=record)
 
 
-def test_history_mode_prompt_by_default():
+def test_the_ordinary_lecture_prompt_defaults_to_a_summary():
     seen: dict = {}
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
             list(lecturer.lecture(SEED, NODES))
     prompt = seen["request"].parts[-1].content
-    assert prompt.startswith("Mode: HOW WE GOT HERE")
+    assert prompt.startswith("Summarize the papers on your numbered list")
     assert "SEED paper: Playing Atari with Deep RL" in prompt
     assert "TARGET paper" not in prompt
     assert "[2] (1992, 100 citations; reference) Q-learning" in prompt
@@ -133,7 +143,7 @@ def test_history_mode_prompt_by_default():
     assert "# Numbered papers" in seen["request"].instructions
 
 
-def test_directional_prompt_bands_by_era_and_states_the_span(monkeypatch):
+def test_a_history_framed_prompt_bands_by_era_and_states_the_span(monkeypatch):
     """History/evolution/frontier render the numbered list banded by era and
     spell out the concrete year span — the full-span guardrail's prompt half.
     The orchestrator hands nodes oldest-first, so headers read top-to-bottom."""
@@ -148,21 +158,21 @@ def test_directional_prompt_bands_by_era_and_states_the_span(monkeypatch):
     seen: dict = {}
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
-            list(lecturer.lecture(ARXIV_SEED, nodes, mode=LectureMode.HISTORY))
+            list(lecturer.lecture(ARXIV_SEED, nodes, framing="history"))
     prompt = seen["request"].parts[-1].content
     assert "banded by era" in prompt
     assert "--- 1990" in prompt  # the first era header
     assert "The numbered list spans 1990–2015" in prompt
 
 
-def test_bridge_mode_names_the_target():
+def test_a_bridge_lecture_names_the_target():
     seen: dict = {}
     target = make_node("node04", "Attention Is All You Need", year=2017)
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
-            list(lecturer.lecture(SEED, NODES, mode=LectureMode.BRIDGE, target=target))
+            list(lecturer.lecture(SEED, NODES, target=target))
     prompt = seen["request"].parts[-1].content
-    assert prompt.startswith("Mode: BRIDGE")
+    assert prompt.startswith("Build a conceptual bridge")
     assert "TARGET paper: Attention Is All You Need" in prompt
 
 
@@ -210,20 +220,20 @@ def _ground(monkeypatch, figures=FIGS, passages=(), fulltext=FULLTEXT):
     return seen
 
 
-def test_intuition_prompt_reads_the_seed_and_lists_figures_and_passages(monkeypatch):
+def test_a_solo_scope_reads_the_seed_and_lists_figures_and_passages(monkeypatch):
     passages = [{"source_title": "Sutton & Barto", "page": 131, "text": "Q-learning is..."}]
     seen_ground = _ground(monkeypatch, passages=passages)
     seen: dict = {}
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
-            list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
+            list(lecturer.lecture(ARXIV_SEED, [ARXIV_SEED]))
     prompt = seen["request"].parts[-1].content
-    assert prompt.startswith("Mode: INTUITION OF THIS PAPER")
+    assert prompt.startswith("Teach the SUBJECT paper itself")
     # The seed's full text — read and taught in chapters, math kept as LaTeX.
-    assert "Full text of the SEED paper" in prompt
+    assert "Full text of the SUBJECT paper" in prompt
     assert "$\\mathcal{L}(\\theta)$" in prompt
     # The seed's own figures, numbered for the beat's `figure` field...
-    assert "Figures of the SEED paper" in prompt
+    assert "Figures of the SUBJECT paper" in prompt
     assert "1. The DQN architecture" in prompt and "2. Training curves" in prompt
     # ...and the library passages, attributed.
     assert "[Sutton & Barto, p.131] Q-learning is..." in prompt
@@ -234,7 +244,7 @@ def test_intuition_prompt_reads_the_seed_and_lists_figures_and_passages(monkeypa
     assert seen_ground["query"] == "Playing Atari with Deep RL"
 
 
-def test_intuition_beats_carry_the_attached_seed_figure(monkeypatch):
+def test_a_solo_lecture_beats_carry_the_attached_seed_figure(monkeypatch):
     _ground(monkeypatch)
     model = beats_model(
         [
@@ -244,7 +254,7 @@ def test_intuition_beats_carry_the_attached_seed_figure(monkeypatch):
         ]
     )
     with lecturer.agent.override(model=model):
-        out = list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
+        out = list(lecturer.lecture(ARXIV_SEED, [ARXIV_SEED]))
     assert out[0].figure == events.BeatFigure(
         image="/api/figure_proxy?src=https%3A%2F%2Far5iv.org%2Ffig1.png",
         caption="The DQN architecture",
@@ -269,7 +279,7 @@ def test_story_modes_pool_the_landmark_papers_figures(monkeypatch):
     monkeypatch.setattr(
         lecturer_main.retrieval, "search",
         lambda query, top_k=None, source_ids=None: pytest.fail(
-            "the library must not be searched outside intuition mode"
+            "the library must not be searched outside a solo lecture"
         ),
     )
     ancestors = [
@@ -284,7 +294,7 @@ def test_story_modes_pool_the_landmark_papers_figures(monkeypatch):
         with pytest.raises(RuntimeError):
             list(lecturer.lecture(ARXIV_SEED, [ARXIV_SEED, plain, *ancestors]))  # history
     prompt = seen["request"].parts[-1].content
-    assert "Figures from the story's papers" in prompt
+    assert "Figures from the papers" in prompt
     # The seed leads, then the 4 most-cited arXiv papers.
     assert calls == ["1312.5602", "906.00006", "905.00005", "904.00004", "903.00003"]
     # Entries carry their source paper, 3 figures per paper (5 x 3 = 15).
@@ -317,19 +327,19 @@ def test_bridge_mode_fetches_no_grounding(monkeypatch):
     monkeypatch.setattr(
         lecturer_main.retrieval, "search",
         lambda query, top_k=None, source_ids=None: pytest.fail(
-            "the library must not be searched outside intuition mode"
+            "the library must not be searched outside a solo lecture"
         ),
     )
     seen: dict = {}
     target = make_node("node04", "Attention Is All You Need", year=2017)
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
-            list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.BRIDGE, target=target))
+            list(lecturer.lecture(ARXIV_SEED, NODES, target=target))
     prompt = seen["request"].parts[-1].content
     assert "Figures" not in prompt and "library" not in prompt
 
 
-def test_intuition_grounding_failures_never_block_the_lecture(monkeypatch):
+def test_solo_grounding_failures_never_block_the_lecture(monkeypatch):
     def explode(*args, **kwargs):
         raise RuntimeError("ar5iv down")
 
@@ -338,49 +348,84 @@ def test_intuition_grounding_failures_never_block_the_lecture(monkeypatch):
     monkeypatch.setattr(lecturer_main.fulltext_mod, "get_fulltext", explode)
     model = beats_model([{"heading": "H", "text": "Still lectures.", "nodes": [1]}])
     with lecturer.agent.override(model=model):
-        out = list(lecturer.lecture(ARXIV_SEED, NODES, mode=LectureMode.INTUITION))
+        out = list(lecturer.lecture(ARXIV_SEED, [ARXIV_SEED]))
     assert [beat.text for beat in out] == ["Still lectures."]
     assert out[0].figure is None
 
 
-def test_frontier_intent_is_thematic_and_forward():
-    """The frontier lecture is a THEMATIC survey (grouped into current threads),
-    but still oriented forward in time, and — like the other many-paper modes —
-    carries the full-span guardrail."""
-    from atlas.agents.orchestrators.lecturer.config import MODE_INTENTS
+def test_the_two_framings_differ_on_ordering_not_on_which_papers():
+    """Framing is the reader's one remaining choice about a lecture, and it must
+    be about *how* to tell the scoped papers — both intents take their subject
+    from the same numbered list. Summary orders by idea and says so; history
+    orders by time and carries the full-span guardrail."""
+    from atlas.agents.orchestrators.lecturer.config import HISTORY_INTENT, SUMMARY_INTENT
 
-    frontier = MODE_INTENTS[LectureMode.FRONTIER]
-    assert "threads" in frontier  # thematic
-    assert "Move forward in time" in frontier  # oriented forward
-    assert "reach both ends" in frontier  # the _SPAN_NUDGE is appended
+    for intent in (SUMMARY_INTENT, HISTORY_INTENT):
+        assert "papers on your numbered list" in intent  # the scope is the subject
+    assert "key themes" in SUMMARY_INTENT
+    assert "Do NOT tell this as a chronological story" in SUMMARY_INTENT
+    assert "reach both ends" not in SUMMARY_INTENT  # no span guardrail without a timeline
+    assert "chronologically" in HISTORY_INTENT
+    assert "reach both ends" in HISTORY_INTENT  # the _SPAN_NUDGE is appended
 
 
-def test_frontier_prompt_is_era_banded_like_the_other_arcs(monkeypatch):
-    """FRONTIER shares the chronological scaffolding — its numbered list is
-    era-banded with a concrete span line — so the thematic survey still reads
-    forward in time."""
-    monkeypatch.setattr(
-        lecturer_main.figures_mod, "get_figures", lambda arxiv_id: {"figures": []}
-    )
-    nodes = [
+def test_the_system_prompt_forbids_narrating_the_graph_itself():
+    """The beat that prompted this: "Notice the gap in the timeline: after [1],
+    the graph jumps straight to 2023-2026..." — a beat about the *view* rather
+    than the papers. The reader chose what is in front of the model, so gaps in
+    it are their own doing and need no explaining back to them."""
+    from atlas.agents.orchestrators.lecturer.config import SYSTEM_PROMPT
+
+    assert "Narrate the papers, never the graph" in SYSTEM_PROMPT
+    assert "gaps or jumps in its years" in SYSTEM_PROMPT
+
+
+def test_a_history_framed_scope_is_era_banded_whatever_the_relations_are():
+    """The chronological scaffolding — era-banded list plus a concrete span
+    line — keyed off the *mode* until v7.17.0, and keys off the reader's
+    framing now. A mixed bag of references and citers gets it just as a
+    single-relation set did."""
+    monkeypatch_free_nodes = [
         SEED,  # no arXiv id → no figure fetch
-        make_node("late-a", "Recent A", year=2021, rels=["latest"]),
-        make_node("late-b", "Recent B", year=2025, rels=["latest"]),
+        make_node("cite-a", "Recent A", year=2021, rels=["citation"]),
+        make_node("ref-b", "Old B", year=1998, rels=["reference"]),
     ]
     seen: dict = {}
     with lecturer.agent.override(model=record_model(seen)):
         with pytest.raises(RuntimeError):
-            list(lecturer.lecture(SEED, nodes, mode=LectureMode.FRONTIER))
+            list(lecturer.lecture(SEED, monkeypatch_free_nodes, framing="history"))
     prompt = seen["request"].parts[-1].content
-    assert prompt.startswith("Mode: THE CURRENT FRONTIER")
+    assert prompt.startswith("Tell the story of the papers")
     assert "banded by era" in prompt
-    assert "The numbered list spans" in prompt
+    assert "The numbered list spans 1998–2021" in prompt
 
 
-def test_every_lecture_mode_has_an_intent():
-    """The prompt does ``MODE_INTENTS[mode]`` with no fallback, so a mode
-    missing its intent paragraph is a KeyError at lecture time. Guard it: every
-    LectureMode must have an entry (catches a new mode added without a prompt)."""
-    from atlas.agents.orchestrators.lecturer.config import MODE_INTENTS
+def test_a_summary_framed_scope_is_never_era_banded():
+    """The other half of the timeline-beat fix. Handing a summary an era-banded
+    list and a "reach both ends of 1998-2021" line is what invited beats about
+    the timeline; a summary orders its beats by idea, so it gets the plain
+    numbered list and no span line."""
+    nodes = [
+        SEED,
+        make_node("cite-a", "Recent A", year=2021, rels=["citation"]),
+        make_node("ref-b", "Old B", year=1998, rels=["reference"]),
+    ]
+    seen: dict = {}
+    with lecturer.agent.override(model=record_model(seen)):
+        with pytest.raises(RuntimeError):
+            list(lecturer.lecture(SEED, nodes))
+    prompt = seen["request"].parts[-1].content
+    assert "banded by era" not in prompt
+    assert "The numbered list spans" not in prompt
 
-    assert set(MODE_INTENTS) == set(LectureMode)
+
+def test_a_solo_scope_is_not_era_banded():
+    """One paper has no timeline to band, so the solo lecture gets the plain
+    numbered list — the same shape the retired INTUITION mode had."""
+    seen: dict = {}
+    with lecturer.agent.override(model=record_model(seen)):
+        with pytest.raises(RuntimeError):
+            list(lecturer.lecture(SEED, [SEED]))
+    prompt = seen["request"].parts[-1].content
+    assert prompt.startswith("Teach the SUBJECT paper itself")
+    assert "banded by era" not in prompt

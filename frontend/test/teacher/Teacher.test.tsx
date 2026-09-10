@@ -4,8 +4,8 @@
  *
  * Description:
  * The docked panel's sections — v7.10.0's split of one shared scroll into a
- * folding Lectures section and a folding Chat section. What's pinned here: the
- * lecture grid starts folded behind its caret while the conversation starts
+ * folding Lecture section and a folding Chat section. What's pinned here: the
+ * lecture control starts folded behind its caret while the conversation starts
  * open, the tour unfolds both via `stagedOpen`, and the scope pickers sit on
  * the Chat row (whose reach they actually scope) rather than in the panel
  * header. With no graph there are no sections at all, and the source picker
@@ -61,7 +61,7 @@ vi.mock('../../src/store', () => ({
 vi.mock('../../src/teacher/useConversation', () => ({
   useConversation: () => ({
     hasGraph,
-    loadingModes: [],
+    lecturing: false,
     asking: false,
     error: null,
     activeBeat: null,
@@ -74,8 +74,10 @@ vi.mock('../../src/teacher/useConversation', () => ({
     provider: 's2',
     toggleLecture: () => {},
     ask: () => {},
+    retryAnswer: () => {},
     stopAsk: () => {},
-    clear: () => {},
+    clearLecture: () => {},
+    clearChat: () => {},
   }),
 }))
 
@@ -97,21 +99,51 @@ afterEach(() => {
 })
 
 describe('the docked assistant panel', () => {
-  it('starts with the lectures folded away, and opens them on the caret', () => {
+  it('starts with the lecture folded away, and opens it on the caret', () => {
     render(<Teacher onClose={() => {}} />)
 
     // Hidden, so out of the accessibility tree entirely.
-    expect(screen.queryByRole('button', { name: 'How we got here' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Play the lecture' })).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: /Lectures/ }))
-    expect(screen.getByRole('button', { name: 'How we got here' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'The current frontier' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^Lecture/ }))
+    expect(screen.getByRole('button', { name: 'Play the lecture' })).toBeTruthy()
   })
 
-  it('unfolds the lectures when the tour stages the panel open', () => {
+  it('offers ONE lecture control, not a mode per story', () => {
+    // The v7.17.0 shape. The four mode buttons are gone; what a lecture covers
+    // is the reader's on-screen scope, not a button they pick.
     render(<Teacher onClose={() => {}} stagedOpen />)
-    // No click needed — the tour's "Four lectures" step must land on something.
-    expect(screen.getByRole('button', { name: 'How we got here' })).toBeTruthy()
+    for (const retired of [
+      'How we got here',
+      "This paper's intuition",
+      "What's evolved since",
+      'The current frontier',
+    ]) {
+      expect(screen.queryByRole('button', { name: retired })).toBeNull()
+    }
+    expect(screen.getByRole('button', { name: 'Play the lecture' })).toBeTruthy()
+  })
+
+  it('offers the two framings, defaulting to Summary', () => {
+    // The reader's one remaining choice about a lecture: the scope says which
+    // papers, framing says how to tell them. Summary leads because a
+    // chronological arc is a strong claim about an arbitrary selection — and
+    // forcing one is what produced beats about the timeline itself.
+    render(<Teacher onClose={() => {}} stagedOpen />)
+    const summary = screen.getByRole('button', { name: 'Summary' })
+    const history = screen.getByRole('button', { name: 'History' })
+    expect(summary.getAttribute('aria-pressed')).toBe('true')
+    expect(history.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(history)
+    expect(screen.getByRole('button', { name: 'History' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    )
+  })
+
+  it('unfolds the lecture when the tour stages the panel open', () => {
+    render(<Teacher onClose={() => {}} stagedOpen />)
+    // No click needed — the tour's lecture step must land on something.
+    expect(screen.getByRole('button', { name: 'Play the lecture' })).toBeTruthy()
   })
 
   it('opens with the conversation showing, and folds it on the caret', () => {
@@ -166,6 +198,6 @@ describe('the landing assistant', () => {
     hasGraph = false
     const { container } = render(<Teacher landing />)
     expect(container.querySelector('.panel-section')).toBeNull()
-    expect(screen.queryByRole('button', { name: /Lectures/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Lecture/ })).toBeNull()
   })
 })
