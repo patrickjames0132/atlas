@@ -285,6 +285,39 @@ def test_a_broken_cache_read_does_not_break_the_search(client, monkeypatch):
 # --- /api/mentions — the composer's `@` typeahead -------------------------------
 
 
+def mention_frames(response) -> list[tuple[str, dict]]:
+    """Parse a streamed mention response into (event, data) pairs.
+
+    Args:
+        response: The Flask test response.
+
+    Returns:
+        The frames in order.
+    """
+    parsed = []
+    for chunk in response.data.decode().strip().split("\n\n"):
+        event_line, data_line = chunk.split("\n")
+        parsed.append(
+            (event_line.removeprefix("event: "), json.loads(data_line.removeprefix("data: ")))
+        )
+    return parsed
+
+
+def mention_papers(response) -> list[dict]:
+    """The papers from a streamed mention response's result frame.
+
+    Args:
+        response: The Flask test response.
+
+    Returns:
+        The result frame's papers.
+    """
+    for event, data in mention_frames(response):
+        if event == "result":
+            return data["papers"]
+    raise AssertionError("the stream ended without a result frame")
+
+
 def test_a_short_mention_query_does_no_lookup_at_all(client, monkeypatch):
     """One or two characters match almost everything, so the list would be
     noise and the live search would be spent on it. Nothing is called."""
@@ -296,7 +329,7 @@ def test_a_short_mention_query_does_no_lookup_at_all(client, monkeypatch):
         search_routes.traversal, "search",
         lambda *args, **kwargs: pytest.fail("no live search for a 2-character mention"),
     )
-    assert client.get("/api/mentions?q=dq").get_json() == {"papers": [], "partial": False}
+    assert mention_papers(client.get("/api/mentions?q=dq")) == []
     # And the free pass refuses it too, so the composer's every-keystroke call
     # doesn't scan the cache for a query that matches almost everything.
     assert client.get("/api/mentions?q=dq&source=local").get_json() == {
@@ -325,12 +358,82 @@ def test_a_local_only_mention_lookup_never_touches_the_provider(client, monkeypa
     assert body["partial"] is True
 
 
-def test_the_full_mention_lookup_says_it_is_not_partial(client, monkeypatch):
+def test_the_full_mention_lookup_names_each_phase_as_it_starts(client, monkeypatch):
+    """Three phases of visibly different cost — a cache scan, a network round
+    trip, a model call — and the reader is watching a dropdown while they run.
+    A single blocking response could only say "Searching…" for all three."""
     monkeypatch.setattr(
         search_routes.search_service, "local_search", lambda *args, **kwargs: []
     )
     monkeypatch.setattr(search_routes.traversal, "search", lambda *args, **kwargs: [])
-    assert client.get("/api/mentions?q=dqn").get_json()["partial"] is False
+    monkeypatch.setattr(
+        search_routes.search_service, "paper_by_name", lambda name, provider="s2": None
+    )
+    frames = mention_frames(client.get("/api/mentions?q=dqn"))
+    assert [event for event, _ in frames] == ["step", "step", "step", "result"]
+    assert [data["label"] for event, data in frames if event == "step"] == [
+        "Looking in your library",
+        "Searching Semantic Scholar",
+        "Working out which paper \u201cdqn\u201d is",
+    ]
+
+
+def test_the_provider_is_named_in_the_step_label(client, monkeypatch):
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(search_routes.traversal, "search", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        search_routes.search_service, "paper_by_name", lambda name, provider="s2": None
+    )
+    labels = [
+        data["label"]
+        for event, data in mention_frames(client.get("/api/mentions?q=dqn&provider=openalex"))
+        if event == "step"
+    ]
+    assert "Searching OpenAlex" in labels
+
+
+def test_the_resolve_step_is_announced_BEFORE_it_runs(client, monkeypatch):
+    """A step that appears on completion reports what already happened. This is
+    the slowest phase, so the frame has to precede the call."""
+    order: list[str] = []
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(search_routes.traversal, "search", lambda *args, **kwargs: [])
+
+    def slow_resolve(name, provider="s2"):
+        order.append("resolve ran")
+        return None
+
+    monkeypatch.setattr(search_routes.search_service, "paper_by_name", slow_resolve)
+    stream = search_routes._mention_stream("dqn", "s2")
+    for frame in stream:
+        if "Working out" in frame:
+            order.append("step emitted")
+    assert order == ["step emitted", "resolve ran"]
+
+
+def test_no_resolve_step_when_a_title_already_matches(client, monkeypatch):
+    """The label must not claim work that was skipped."""
+    monkeypatch.setattr(
+        search_routes.search_service, "local_search", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(
+        search_routes.traversal, "search",
+        lambda query, limit, provider="s2": [
+            {"node": {"id": "S1", "title": "Attention Is All You Need"}}
+        ],
+    )
+    labels = [
+        data["label"]
+        for event, data in mention_frames(
+            client.get("/api/mentions?q=attention+is+all+you+need")
+        )
+        if event == "step"
+    ]
+    assert not any("Working out" in label for label in labels)
 
 
 def test_the_full_mention_lookup_reranks_across_both_sources(client, monkeypatch):
@@ -349,7 +452,7 @@ def test_the_full_mention_lookup_reranks_across_both_sources(client, monkeypatch
             {"node": {"id": "S1", "title": "DQN", "citation_count": 10}}
         ],
     )
-    papers = client.get("/api/mentions?q=dqn").get_json()["papers"]
+    papers = mention_papers(client.get("/api/mentions?q=dqn"))
     assert [paper["title"] for paper in papers] == [
         "DQN",
         "A survey mentioning DQN in passing",
@@ -376,7 +479,7 @@ def test_mentions_put_cached_papers_first_then_live_ones(client, monkeypatch):
                       "citation_count": 50}}
         ],
     )
-    papers = client.get("/api/mentions?q=dqn").get_json()["papers"]
+    papers = mention_papers(client.get("/api/mentions?q=dqn"))
     assert [paper["title"] for paper in papers] == ["Playing Atari", "Rainbow"]
     # The row shows the venue, which the ordinary search list has no need for.
     assert papers[0]["venue"] == "NeurIPS"
@@ -396,7 +499,7 @@ def test_a_dead_provider_degrades_to_the_cached_mentions(client, monkeypatch):
     )
     response = client.get("/api/mentions?q=dqn")
     assert response.status_code == 200
-    assert [paper["title"] for paper in response.get_json()["papers"]] == ["Playing Atari"]
+    assert [paper["title"] for paper in mention_papers(response)] == ["Playing Atari"]
 
 
 def test_the_year_filter_deliberately_does_not_bind_a_mention(client, monkeypatch):
@@ -416,7 +519,9 @@ def test_the_year_filter_deliberately_does_not_bind_a_mention(client, monkeypatc
 
     monkeypatch.setattr(search_routes.search_service, "local_search", record_local)
     monkeypatch.setattr(search_routes.traversal, "search", record_live)
-    client.get("/api/mentions?q=attention&year_from=2020&fields=Computer+Science")
+    # Consumed, not just requested: the full pass is a generator, so nothing
+    # runs until the body is read.
+    mention_papers(client.get("/api/mentions?q=attention&year_from=2020&fields=Computer+Science"))
     # Neither bound is forwarded — the query args are simply not read.
     assert seen["local"] == {} and seen["live"] == {}
 
@@ -448,7 +553,7 @@ def test_a_nickname_resolves_to_the_top_of_the_mention_list(client, monkeypatch)
             "citation_count": 13985,
         },
     )
-    papers = client.get("/api/mentions?q=dqn").get_json()["papers"]
+    papers = mention_papers(client.get("/api/mentions?q=dqn"))
     # Prepended, not re-ranked in: an identity match on what was typed
     # outranks any word overlap, however well-cited.
     assert papers[0]["title"] == "Playing Atari with Deep Reinforcement Learning"
@@ -472,8 +577,7 @@ def test_the_nickname_resolve_is_skipped_when_a_title_already_matches_exactly(
         search_routes.search_service, "paper_by_name",
         lambda name, provider="s2": pytest.fail("no model call when the title already matches"),
     )
-    body = client.get("/api/mentions?q=attention+is+all+you+need")
-    assert body.status_code == 200
+    assert mention_papers(client.get("/api/mentions?q=attention+is+all+you+need"))
 
 
 def test_the_nickname_resolve_is_NOT_gated_on_a_mere_contains_match(client, monkeypatch):
@@ -496,7 +600,7 @@ def test_the_nickname_resolve_is_NOT_gated_on_a_mere_contains_match(client, monk
         return None
 
     monkeypatch.setattr(search_routes.search_service, "paper_by_name", record)
-    client.get("/api/mentions?q=dqn")
+    mention_papers(client.get("/api/mentions?q=dqn"))
     assert called == ["dqn"]  # the contains-match did NOT suppress it
 
 

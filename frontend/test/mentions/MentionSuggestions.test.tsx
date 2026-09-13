@@ -118,4 +118,65 @@ describe('MentionSuggestions', () => {
     )
     expect(screen.getByText('Searching…')).toBeTruthy()
   })
+
+  it('shows the phase the server named, in place of a generic spinner text', () => {
+    render(
+      <MentionSuggestions
+        papers={PAPERS}
+        highlighted={0}
+        loading
+        step="Working out which paper “dqn” is"
+        onPick={() => {}}
+        onHighlight={() => {}}
+      />,
+    )
+    expect(screen.getByText('Working out which paper “dqn” is')).toBeTruthy()
+    expect(screen.queryByText('Searching…')).toBeNull()
+  })
+
+  it('shows the phase even with results already up', () => {
+    // The provisional cached list lands first, so the reader needs to be able
+    // to tell that more is still coming — and which phase is taking the time.
+    render(
+      <MentionSuggestions
+        papers={PAPERS}
+        highlighted={0}
+        loading
+        step="Searching Semantic Scholar"
+        onPick={() => {}}
+        onHighlight={() => {}}
+      />,
+    )
+    expect(screen.getByText('Searching Semantic Scholar')).toBeTruthy()
+    expect(screen.getByText('Playing Atari with Deep RL')).toBeTruthy()
+  })
+
+  it('falls back to a generic line before the first phase arrives', () => {
+    render(
+      <MentionSuggestions
+        papers={[]}
+        highlighted={0}
+        loading
+        onPick={() => {}}
+        onHighlight={() => {}}
+      />,
+    )
+    expect(screen.getByText('Searching…')).toBeTruthy()
+  })
+
+  it('announces the phase politely, without stealing focus from the textarea', () => {
+    const { container } = render(
+      <MentionSuggestions
+        papers={[]}
+        highlighted={0}
+        loading
+        step="Looking in your library"
+        onPick={() => {}}
+        onHighlight={() => {}}
+      />,
+    )
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      'Looking in your library',
+    )
+  })
 })

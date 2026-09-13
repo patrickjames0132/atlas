@@ -318,6 +318,51 @@
 
 ### Search & seeding
 
+- [x] **Stream the `@` lookup's real steps as a live line in the dropdown** *(v7.19.0)* —
+      while the full pass worked, the panel said only *"Searching…"*. The ask
+      (from the developer, 2026-09-09, with the ChatGPT "Searching
+      www.bls.gov" line as the reference) was to name what is actually
+      happening, the way that line does.
+
+      **The framing needed correcting first, or the labels would have lied.**
+      The scout is *not* what runs here — it runs after you send a bare
+      unresolved `@phrase`, and that path already streams trace chips into the
+      transcript. The dropdown's real steps are three: scanning the reader's
+      cached snapshots, the day-cached provider search, and — only when no
+      candidate's title equals what was typed — the nickname resolve, which is
+      a model call plus a `match_title` verification. The third is the slowest
+      and the only one worth watching, and it was exactly the one the frontend
+      could not see, because it happened inside the full request.
+
+      **So the full pass now streams**, in the shape `/api/search` next door
+      already had: `GET /api/mentions` returns SSE with a `step` frame per
+      phase and a `result` frame at the end (`routes/search.py::_mention_stream`),
+      while `source=local` stays a plain JSON GET — it is instant, and
+      debouncing or framing it would only make the free half feel slower.
+      `useMentionSuggestions` reads the stream through the existing `readSSE`
+      and holds the latest label in one `step` state; `api/mentions.ts` splits
+      into `fetchCachedMentions` (JSON) and `streamMentions` (SSE with
+      `onStep`/`onResult`). The frontend could have faked the first two labels
+      from which request was in flight, but not the third, so a half-measure
+      would have omitted the interesting one.
+
+      Two details the labels turn on. The phase names are **prose the server
+      writes**, not provider ids leaking out — `_PROVIDER_NAMES` maps `s2` to
+      "Semantic Scholar" so the line reads like a sentence, and the two
+      happening to agree elsewhere is a coincidence, not a contract. And the
+      nickname step is announced **before** the call, not after: a step frame
+      that arrives on completion reports what has already finished, which is
+      the one thing a progress line must not do.
+
+      **A live line, not accumulating collapsibles**, despite the ask's
+      wording: the reference screenshot is itself one self-replacing line, the
+      panel is small and opens upward, and a lookup that finishes in under two
+      seconds turns a step history into noise. Each label supersedes the last
+      in a `.mention-step` row with `aria-live="polite"`, so a screen reader
+      hears the phases without the list being re-announced. Collapsible step
+      *history* belongs to the scout run after send, where it already exists as
+      trace chips. *(From the developer, 2026-09-09.)*
+
 - [x] **`@` a paper in the chat bar, instead of arming a search mode** *(v7.18.0)* — the
       direct-search toggle (`search/SearchControls.tsx:186`, "Find papers")
       was a *mode* you set before typing: armed, the next message goes to the

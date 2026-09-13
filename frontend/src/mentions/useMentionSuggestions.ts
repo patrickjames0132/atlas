@@ -23,12 +23,18 @@
  * across both sources. One thing it must not do is move the row under the
  * reader's cursor: see `highlightedId`.
  *
+ * The full pass streams its phases, and `step` holds the latest — the dropdown
+ * shows one live line naming what it is waiting on ("Searching Semantic
+ * Scholar", "Working out which paper “dqn” is") rather than "Searching…" for
+ * all three. Each label supersedes the last: a phase history would be noise
+ * for a lookup this short.
+ *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchMentions } from '../api'
+import { fetchCachedMentions, streamMentions } from '../api'
 import type { MentionPaper, Provider } from '../api'
 import { MENTION_MIN_CHARS, activeMention } from './parse'
 import type { ActiveMention } from './parse'
@@ -49,6 +55,9 @@ export function useMentionSuggestions(provider: Provider) {
   const [active, setActive] = useState<ActiveMention | null>(null)
   const [papers, setPapers] = useState<MentionPaper[]>([])
   const [loading, setLoading] = useState(false)
+  // The phase the full pass is in, in the server's own reader-facing words.
+  // Null when nothing is running or the result has landed.
+  const [step, setStep] = useState<string | null>(null)
   // The paper the keyboard is on, tracked by **id rather than index** — the
   // list is re-ranked under it when the full results land, and an index would
   // then point at a different paper than the one the reader was looking at.
@@ -87,6 +96,7 @@ export function useMentionSuggestions(provider: Provider) {
     setActive(null)
     setPapers([])
     setLoading(false)
+    setStep(null)
     setHighlightedId(null)
     settled.current = null
     localCtrl.current?.abort()
@@ -109,10 +119,14 @@ export function useMentionSuggestions(provider: Provider) {
   // delaying it would only make the dropdown feel slower than it is.
   useEffect(() => {
     if (!query) return
+    // A new query: the previous one's phase label must not sit over it. Done
+    // here rather than in `onInput`, which is a stable callback and would
+    // read a stale `active` to compare against.
+    setStep(null)
     localCtrl.current?.abort()
     const ctrl = new AbortController()
     localCtrl.current = ctrl
-    void fetchMentions(query, provider, true, ctrl.signal).then((result) => {
+    void fetchCachedMentions(query, provider, ctrl.signal).then((result) => {
       if (ctrl.signal.aborted || settled.current === query) return
       setPapers(result.papers)
     })
@@ -126,11 +140,18 @@ export function useMentionSuggestions(provider: Provider) {
       fullCtrl.current?.abort()
       const ctrl = new AbortController()
       fullCtrl.current = ctrl
-      void fetchMentions(query, provider, false, ctrl.signal).then((result) => {
-        if (ctrl.signal.aborted) return
-        settled.current = query
-        setPapers(result.papers)
-        setLoading(false)
+      void streamMentions(query, provider, {
+        signal: ctrl.signal,
+        onStep: (label) => {
+          if (!ctrl.signal.aborted) setStep(label)
+        },
+        onResult: (found) => {
+          if (ctrl.signal.aborted) return
+          settled.current = query
+          setPapers(found)
+          setStep(null)
+          setLoading(false)
+        },
       })
     }, DEBOUNCE_MS)
     return () => {
@@ -172,6 +193,8 @@ export function useMentionSuggestions(provider: Provider) {
     open: active !== null && (papers.length > 0 || loading),
     papers,
     loading,
+    /** What the full pass is doing right now, or null. */
+    step,
     highlighted,
     /** The row Enter would accept, or null. */
     choice: papers[highlighted] ?? null,
