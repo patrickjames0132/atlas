@@ -442,37 +442,6 @@ than deleted so the plan doesn't get re-proposed.
       text. *(From the developer, 2026-09-08; scope narrowed by what shipped
       in v7.17.0.)*
 
-- [ ] **Stream the `@` lookup's real steps as a live line in the dropdown** —
-      while the full pass works, the panel says only *"Searching…"*. The ask
-      (from the developer, 2026-09-09, with the ChatGPT "Searching
-      www.bls.gov" line as the reference) is to name what is actually
-      happening, the way that line does.
-
-      **Correct the framing first, or the labels will lie.** The scout is
-      *not* what runs here — it runs after you send a bare unresolved
-      `@phrase`, and that path already streams trace chips into the
-      transcript. The dropdown's real steps are three: scanning the reader's
-      cached snapshots, the day-cached provider search, and — only when no
-      candidate's title equals what was typed — the nickname resolve, which is
-      a model call plus a `match_title` verification. The third is the slowest
-      and the only one worth watching, which is exactly the one the frontend
-      cannot see today, because it happens inside the full request.
-
-      **So this needs the full pass to stream**, which is the shape
-      `/api/search` next door already has: convert `GET /api/mentions` (the
-      full pass only — `source=local` stays a plain GET, it is instant) to SSE
-      with a `step` frame per phase and a `result` frame at the end, and have
-      `useMentionSuggestions` read it through the existing `readSSE`. The
-      frontend can fake the first two labels from which request is in flight,
-      but not the third, so a half-measure would omit the interesting one.
-
-      **A live line, not accumulating collapsibles**, despite the ask's
-      wording: the reference screenshot is itself one self-replacing line, the
-      panel is small and opens upward, and a lookup that finishes in under two
-      seconds turns a step history into noise. Collapsible step *history*
-      belongs to the scout run after send, where it already exists as trace
-      chips. *(From the developer, 2026-09-09.)*
-
 
 ### Citations & graph data
 

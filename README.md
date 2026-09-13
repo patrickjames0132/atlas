@@ -175,8 +175,11 @@ The Vite dev server proxies `/api/*` to Flask.
    The suggestions arrive in two passes: your **cached papers appear as you
    type** (a local scan — free, offline, no wait), then a real search fills the
    list out when you pause, re-ranked so the paper whose title most nearly *is*
-   what you typed leads. So a paper you have never opened is still nameable,
-   and one you have seen shows up instantly. (There was a **🔍 Find papers** toggle for this until
+   what you typed leads. While that second pass runs, the panel says which
+   phase it is on — *"Searching Semantic Scholar"*, *"Working out which paper
+   'dqn' is"* — rather than a bare spinner. So a paper you have never opened
+   is still nameable, and one you have seen shows up instantly. (There was a
+   **🔍 Find papers** toggle for this until
    v7.18.0. It made the same words mean different things depending on a
    button's state, and it couldn't express "answer from *this* paper" at all.)
    A search streams: cached papers appear immediately (⚡ **opens instantly**

@@ -30,6 +30,31 @@ const paidCalls = () => calls.filter((url) => !url.includes('source=local'))
 const freeCalls = () => calls.filter((url) => url.includes('source=local'))
 
 /**
+ * A fake `Response` carrying an SSE body, for the streamed full pass.
+ *
+ * @param frames The `[event, data]` pairs to emit, in order.
+ * @returns Something `readSSE` can consume.
+ */
+function sseResponse(frames: [string, unknown][]): unknown {
+  const body = frames
+    .map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    .join('')
+  const bytes = new TextEncoder().encode(body)
+  let sent = false
+  return {
+    ok: true,
+    body: {
+      getReader: () => ({
+        read: () =>
+          sent
+            ? Promise.resolve({ value: undefined, done: true })
+            : ((sent = true), Promise.resolve({ value: bytes, done: false })),
+      }),
+    },
+  }
+}
+
+/**
  * Let the fetch promise chain settle. `fetchMentions` awaits the response and
  * then its `.json()`, so one microtask tick is not enough.
  *
@@ -48,10 +73,13 @@ beforeEach(() => {
     'fetch',
     vi.fn((url: string) => {
       calls.push(url)
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ papers: [{ id: 'p1', arxiv_id: null, title: 'Found' }] }),
-      })
+      const found = [{ id: 'p1', arxiv_id: null, title: 'Found' }]
+      return url.includes('source=local')
+        ? Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ papers: found, partial: true }),
+          })
+        : Promise.resolve(sseResponse([['result', { papers: found }]]))
     }),
   )
 })
@@ -132,19 +160,19 @@ describe('useMentionSuggestions', () => {
   })
 
   it('wraps the keyboard selection at both ends', async () => {
+    const two = [
+      { id: 'a', arxiv_id: null, title: 'A' },
+      { id: 'b', arxiv_id: null, title: 'B' },
+    ]
     vi.stubGlobal(
       'fetch',
-      vi.fn(() =>
-        Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              papers: [
-                { id: 'a', arxiv_id: null, title: 'A' },
-                { id: 'b', arxiv_id: null, title: 'B' },
-              ],
-            }),
-        }),
+      vi.fn((url: string) =>
+        url.includes('source=local')
+          ? Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ papers: two, partial: true }),
+            })
+          : Promise.resolve(sseResponse([['result', { papers: two }]])),
       ),
     )
     const { result } = renderHook(() => useMentionSuggestions('s2'))
@@ -169,24 +197,34 @@ describe('useMentionSuggestions', () => {
       'fetch',
       vi.fn((url: string) => {
         callCount += 1
-        const local = url.includes('source=local')
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              // Cache pass: A then B. Full pass: the order flips.
-              papers: local
-                ? [
-                    { id: 'a', arxiv_id: null, title: 'A' },
-                    { id: 'b', arxiv_id: null, title: 'B' },
-                  ]
-                : [
-                    { id: 'b', arxiv_id: null, title: 'B' },
-                    { id: 'a', arxiv_id: null, title: 'A' },
-                  ],
-              partial: local,
-            }),
-        })
+        // Cache pass (plain JSON): A then B. Full pass (streamed): flipped.
+        if (url.includes('source=local')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                papers: [
+                  { id: 'a', arxiv_id: null, title: 'A' },
+                  { id: 'b', arxiv_id: null, title: 'B' },
+                ],
+                partial: true,
+              }),
+          })
+        }
+        return Promise.resolve(
+          sseResponse([
+            ['step', { label: 'Searching Semantic Scholar' }],
+            [
+              'result',
+              {
+                papers: [
+                  { id: 'b', arxiv_id: null, title: 'B' },
+                  { id: 'a', arxiv_id: null, title: 'A' },
+                ],
+              },
+            ],
+          ]),
+        )
       }),
     )
     const { result } = renderHook(() => useMentionSuggestions('s2'))
@@ -210,17 +248,19 @@ describe('useMentionSuggestions', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
-        const local = url.includes('source=local')
-        return Promise.resolve({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              papers: local
-                ? [{ id: 'gone', arxiv_id: null, title: 'Cached only' }]
-                : [{ id: 'kept', arxiv_id: null, title: 'Ranked' }],
-              partial: local,
-            }),
-        })
+        if (url.includes('source=local')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                papers: [{ id: 'gone', arxiv_id: null, title: 'Cached only' }],
+                partial: true,
+              }),
+          })
+        }
+        return Promise.resolve(
+          sseResponse([['result', { papers: [{ id: 'kept', arxiv_id: null, title: 'Ranked' }] }]]),
+        )
       }),
     )
     const { result } = renderHook(() => useMentionSuggestions('s2'))
@@ -233,5 +273,84 @@ describe('useMentionSuggestions', () => {
     // The tracked paper is not in the new list; Enter must still be safe.
     expect(result.current.highlighted).toBe(0)
     expect(result.current.choice?.title).toBe('Ranked')
+  })
+
+  it('surfaces each phase the server names, latest only', async () => {
+    // One live line, not a phase history: a lookup that finishes in a second
+    // or two turns an accumulating list of steps into noise.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('source=local')
+          ? Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ papers: [], partial: true }),
+            })
+          : Promise.resolve(
+              sseResponse([
+                ['step', { label: 'Looking in your library' }],
+                ['step', { label: 'Searching Semantic Scholar' }],
+                ['step', { label: 'Working out which paper “dqn” is' }],
+                ['result', { papers: [{ id: 'p1', arxiv_id: null, title: 'Playing Atari' }] }],
+              ]),
+            ),
+      ),
+    )
+    const { result } = renderHook(() => useMentionSuggestions('s2'))
+    act(() => result.current.onInput('@dqn', 4))
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve()
+    })
+    // The result landed, so the line clears — it reports work in progress,
+    // and there is none left.
+    expect(result.current.step).toBeNull()
+    expect(result.current.papers.map((paper) => paper.title)).toEqual(['Playing Atari'])
+  })
+
+  it('clears the phase line when the query changes', async () => {
+    // The previous query's label must never sit over a new query's lookup.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('source=local')
+          ? Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ papers: [], partial: true }),
+            })
+          : Promise.resolve(sseResponse([['step', { label: 'Searching Semantic Scholar' }]])),
+      ),
+    )
+    const { result } = renderHook(() => useMentionSuggestions('s2'))
+    act(() => result.current.onInput('@dqn', 4))
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve()
+    })
+    expect(result.current.step).toBe('Searching Semantic Scholar')
+    act(() => result.current.onInput('@resnet', 7))
+    expect(result.current.step).toBeNull()
+  })
+
+  it('clears the phase line on reset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('source=local')
+          ? Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ papers: [], partial: true }),
+            })
+          : Promise.resolve(sseResponse([['step', { label: 'Searching Semantic Scholar' }]])),
+      ),
+    )
+    const { result } = renderHook(() => useMentionSuggestions('s2'))
+    act(() => result.current.onInput('@dqn', 4))
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      for (let tick = 0; tick < 5; tick += 1) await Promise.resolve()
+    })
+    act(() => result.current.reset())
+    expect(result.current.step).toBeNull()
   })
 })

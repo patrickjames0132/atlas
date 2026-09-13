@@ -26,6 +26,9 @@ export interface MentionSuggestionsProps {
   highlighted: number
   /** A lookup is in flight; the list may be stale or empty. */
   loading: boolean
+  /** What the lookup is doing right now, in the server's own words, or null.
+   *  One line that replaces itself, not a phase history. */
+  step?: string | null
   /** Accept a row (click). */
   onPick: (paper: MentionPaper) => void
   /** Move the keyboard selection onto a row (hover), so mouse and keyboard
@@ -54,6 +57,7 @@ export default function MentionSuggestions({
   papers,
   highlighted,
   loading,
+  step,
   onPick,
   onHighlight,
 }: MentionSuggestionsProps) {
@@ -63,7 +67,18 @@ export default function MentionSuggestions({
         All paper results
         {loading && <span className="spin mention-spin" role="status" aria-label="Searching" />}
       </div>
-      {papers.length === 0 && loading && <div className="mention-empty">Searching…</div>}
+      {/* The live phase line: what the lookup is waiting on, named by the
+          server. It shows whether or not results are up yet, because the
+          provisional cached list lands first and the reader should still be
+          able to tell that more is coming — and which of the three phases
+          (cache, provider, nickname resolve) is taking the time. `aria-live`
+          so the change is announced without stealing focus from the textarea
+          they are still typing in. */}
+      {(step || (papers.length === 0 && loading)) && (
+        <div className="mention-step" aria-live="polite">
+          {step ?? 'Searching…'}
+        </div>
+      )}
       {papers.map((paper, index) => (
         <button
           key={paper.id}

@@ -896,6 +896,7 @@ export default function Teacher({
               papers={mentions.papers}
               highlighted={mentions.highlighted}
               loading={mentions.loading}
+              step={mentions.step}
               onPick={pickMention}
               onHighlight={mentions.setHighlighted}
             />

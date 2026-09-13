@@ -283,6 +283,12 @@ _MENTION_MIN_CHARS = 3
 #: How many suggestions a mention dropdown shows.
 _MENTION_LIMIT = 8
 
+#: Each provider in reader-facing words, for the mention stream's step labels.
+#: Named here rather than reused from the frontend's `PROVIDER_LABEL` because a
+#: step label is prose the server writes; the two happening to agree is a
+#: coincidence worth keeping, not a coupling worth building.
+_PROVIDER_NAMES: dict[str, str] = {"s2": "Semantic Scholar", "openalex": "OpenAlex"}
+
 
 @bp.get("/api/mentions")
 def api_mentions() -> ResponseReturnValue:
@@ -290,7 +296,7 @@ def api_mentions() -> ResponseReturnValue:
 
     A **plain, cheap lookup**, not an agent — the deliberate opposite of
     ``/api/search`` next door. It runs on every few keystrokes, so it must not
-    write prose, pick its own queries, or cost a model call.
+    write prose or pick its own queries.
 
     **Two sources, and ``source`` decides whether to wait for the slow one.**
 
@@ -302,67 +308,91 @@ def api_mentions() -> ResponseReturnValue:
        the same prefix typed twice is one request. It is also the only reason a
        paper the reader has never opened is mentionable at all.
 
-    ``source=local`` returns only the first, which is the point of splitting
-    them: the composer fires that one with **no debounce at all** and paints
-    suggestions while the reader is still typing, then asks for the full list
-    once they pause. Serving both from one blocking call — as this did when it
-    shipped — meant the free half bought nothing, because the response still
-    waited on the provider.
+    ``source=local`` returns only the first, as a **plain JSON response**, and
+    that is the point of splitting them: the composer fires it with no debounce
+    at all and paints suggestions while the reader is still typing. Serving
+    both from one blocking call — as this did when it shipped — meant the free
+    half bought nothing, because the response still waited on the provider.
 
-    The full response is **re-ranked as a whole** by
-    :func:`search_service.rank_mentions`, so an exact live title match leads a
-    barely-relevant cached one. The local-only response keeps
-    ``local_search``'s own ranking; it has one source to order.
-
-    A provider failure degrades to the local hits rather than erroring. A
-    typeahead that returns an error is worse than one that returns less: the
-    reader is mid-sentence, and the fallback for a name we cannot resolve is
-    already there — send the message and the scout searches properly.
-
-    **The year/field filters deliberately do NOT bind here**, unlike every
-    other paper search in the app. Those filters narrow a *search* for papers
-    the reader hasn't named; a mention names one. Filtering to 2020+ and then
-    failing to resolve ``@attention is all you need`` (2017) would be
-    maddening, and it is the same reading the paper scout's ``match_title``
-    already takes — an exact resolution is "the paper the query means".
+    The **full pass streams** (see :func:`_mention_stream`), because it has
+    three phases of visibly different cost and the reader deserves to know
+    which one they are waiting on.
 
     Query args:
         q: The partial title typed after ``@``. Shorter than
             ``_MENTION_MIN_CHARS`` returns no candidates.
         provider: ``s2`` or ``openalex`` (defaults to the configured provider).
         source: ``local`` for the cache-only answer (no provider call, no
-            wait); anything else, including absent, for the full list.
+            wait, plain JSON); anything else, including absent, for the
+            streamed full list.
 
     Returns:
-        ``{"papers": [...], "partial": bool}`` — at most ``_MENTION_LIMIT``
-        rows, each carrying what a suggestion row shows (title, authors,
-        venue, year) plus the ids the composer needs to attach the paper.
-        ``partial`` is True on a local-only answer, so the composer knows this
-        list is provisional and a fuller one is still coming.
+        For ``source=local``, ``{"papers": [...], "partial": true}`` — rows
+        carrying what a suggestion shows (title, authors, venue, year) plus the
+        ids the composer needs. ``partial`` tells the composer this list is
+        provisional, so a cache miss isn't read as "no such paper". Otherwise
+        an SSE stream of ``step`` frames and one ``result`` frame.
     """
     query = (request.args.get("q") or "").strip()
     provider: Provider = resolve_provider(request.args.get("provider"))
     local_only = request.args.get("source") == "local"
-    if len(query) < _MENTION_MIN_CHARS:
-        return jsonify({"papers": [], "partial": False})
 
-    local = search_service.local_search(query, limit=_MENTION_LIMIT, provider=provider)
     if local_only:
+        if len(query) < _MENTION_MIN_CHARS:
+            return jsonify({"papers": [], "partial": False})
         # Cache only: whatever is on hand, in local_search's own ranking, with
         # no provider call to wait on.
+        local = search_service.local_search(query, limit=_MENTION_LIMIT, provider=provider)
         trimmed = search_service.mention_hits(local[:_MENTION_LIMIT])
         return jsonify({"papers": trimmed, "partial": True})
 
+    return sse_response(_mention_stream(query, provider))
+
+
+def _mention_stream(query: str, provider: Provider) -> Iterator[str]:
+    """The full `@`-mention pass, as the frames it produces.
+
+    Streamed rather than returned because its three phases cost visibly
+    different amounts and the reader is watching a dropdown while they run: the
+    cache scan is instant, the provider search is a network round trip, and the
+    nickname resolve is a model call plus a verification. A single blocking
+    response could only say "Searching…" for all three, which is the same
+    complaint that got the trace chips added to ``/api/search``.
+
+    Each ``step`` frame carries the label in reader-facing words, and each one
+    **supersedes the last** — a phase history would be noise for a lookup that
+    finishes in a second or two, and the dropdown renders one live line.
+
+    Args:
+        query: The partial title typed after ``@``.
+        provider: The active backend.
+
+    Yields:
+        ``step`` frames as each phase starts, then one ``result`` frame
+        carrying ``{papers}``. Errors are not a frame type here: every phase
+        degrades to fewer papers rather than failing, so the stream always ends
+        with a result.
+    """
+    if len(query) < _MENTION_MIN_CHARS:
+        yield sse("result", {"papers": []})
+        return
+
+    yield sse("step", {"label": "Looking in your library"})
+    local = search_service.local_search(query, limit=_MENTION_LIMIT, provider=provider)
+
+    yield sse("step", {"label": f"Searching {_PROVIDER_NAMES[provider]}"})
     try:
         live = [hit["node"] for hit in traversal.search(query, _MENTION_LIMIT, provider=provider)]
     except Exception:
         log.warning("mention lookup: live search failed for %r", query, exc_info=True)
         live = []
+
     # Cached hits are passed first so a relevance tie resolves to the paper
     # already on hand, then the whole set is ranked on how well it answers
     # what was typed.
     merged = search_service.merge_mentions(local, live, _MENTION_LIMIT)
     ranked = search_service.rank_mentions(merged, query)
+
     # The only place a model touches this path: a nickname whose paper shares
     # no word with it. Skipped when a candidate's title already IS what was
     # typed — the one case world knowledge cannot improve on. Deliberately not
@@ -371,12 +401,16 @@ def api_mentions() -> ResponseReturnValue:
     # found something" is not the same as "found the right thing"
     # (see `naming.has_exact_title_match`).
     if not search_service.has_exact_title_match(ranked, query):
+        # Announced before it runs, not after: this is the slowest phase, and
+        # a step that appears on completion reports what already happened.
+        yield sse("step", {"label": f"Working out which paper “{query}” is"})
         named = search_service.paper_by_name(query, provider)
         if named:
             # Prepended, not re-ranked in: this is an identity match on what
             # the reader typed, which outranks any word overlap.
             ranked = search_service.merge_mentions([named], ranked, _MENTION_LIMIT)
-    return jsonify({"papers": search_service.mention_hits(ranked), "partial": False})
+
+    yield sse("result", {"papers": search_service.mention_hits(ranked)})
 
 
 @bp.get("/api/taxonomy/<provider>")

@@ -94,7 +94,7 @@ Design decisions worth knowing:
 | Endpoint | Job |
 | --- | --- |
 | `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | paper search (SSE): the paper scout, run alone |
-| `GET /api/mentions?q=&provider=&source=` | the composer's `@` typeahead: a plain, cheap paper lookup. `source=local` is the cache-only answer the composer fires per keystroke; the full one adds a day-cached provider search, re-ranks both by relevance, and (when no title matches exactly) resolves a nickname through one cached model call |
+| `GET /api/mentions?q=&provider=&source=` | the composer's `@` typeahead. `source=local` is the cache-only answer (plain JSON) the composer fires per keystroke; the full one **streams** (`step` frames then `result`), adding a day-cached provider search, a relevance re-rank across both, and — when no title matches exactly — a nickname resolve through one cached model call |
 | `GET /api/taxonomy/<provider>` | a provider's field vocabulary (`s2` / `openalex`) |
 
 Design decisions worth knowing:

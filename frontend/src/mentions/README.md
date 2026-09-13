@@ -85,6 +85,23 @@ question or losing the paper.
   way worth recording: the free half bought nothing, because the response still
   waited on the provider. Local-*first* ordering was real; local-first *timing*
   was not.
+- **The full pass streams its phases, and the dropdown shows the latest as one
+  live line.** Three phases of visibly different cost run inside it — a cache
+  scan, a network round trip, and (for a nickname) a model call plus a
+  verification — and a blocking response could only say "Searching…" for all
+  three. Each `step` frame carries the label in the *server's* words, because
+  the frontend cannot see the phase that matters: the resolve happens inside
+  the request, so faking labels from which fetch is in flight would name the
+  two cheap phases and omit the slow one. The resolve's step is emitted
+  **before** the call, since a step that appears on completion reports what
+  already happened.
+
+  One line that replaces itself, not an accumulating history — despite the ask
+  being phrased as "collapsable steps". The reference it came with (ChatGPT's
+  *"Searching www.bls.gov"*) is itself one self-replacing line, the panel is
+  small and opens upward, and a lookup that finishes in a second or two turns a
+  step history into noise. Collapsible step history belongs to the scout run
+  after send, where it already exists as trace chips.
 
   A provider failure degrades to the cached hits: a reader mid-sentence is
   better served by a short list than by an error.
@@ -159,4 +176,8 @@ Escape stays shut until the query changes) because that is the half that could
 quietly become expensive — and the two re-rank tests, which are the ones that
 matter most: the keyboard stays on the same paper when the list reorders, and
 falls back to the top when its paper is gone. `MentionSuggestions.test.tsx` covers the row layout, the sparse
-record with no byline, and pointer-down picking.
+record with no byline, pointer-down picking, and the phase line (including
+that it shows *alongside* results, since the provisional list lands first).
+On the backend, `test_search.py` pins the frame order, the provider's name in
+its label, that the resolve step precedes the resolve, and that no resolve step
+is claimed when the resolve was skipped.
