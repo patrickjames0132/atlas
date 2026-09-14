@@ -288,26 +288,41 @@ than deleted so the plan doesn't get re-proposed.
       agent. Mechanically this is a third stage in front of the two in
       `orchestrators/router/`, checked before either.
 
-      **Beats collapse behind a caret, per turn.** Twelve beats are fine as the
-      newest thing on screen and unusable as the third lecture you have
-      scrolled past — and the section being deleted is the thing that could
-      fold them away today. So each lecture turn carries its own caret. (Open
-      question worth deciding while building, not now: whether a turn collapses
-      itself once another arrives.)
+      **Beats collapse behind a caret, per turn — and fold themselves when the
+      next lecture arrives.** Twelve beats are fine as the newest thing on
+      screen and unusable as the third lecture you have scrolled past, and the
+      section being deleted is the thing that could fold them away today. So
+      each lecture turn carries its own caret, open on arrival and collapsing
+      once another lands (the developer's call, 2026-09-13): the transcript
+      stays navigable by default, and a reader who wants two lectures side by
+      side re-opens the one they want rather than scrolling past every lecture
+      they have ever asked for.
 
-      **And a lecture turn needs a provenance line naming its graph.** A
-      researcher answer already accounts for itself underneath —
-      `ChatMsg.provenance`, rendered under the prose — but a lecture turn has
-      none, and the field it most needs is one `ProvenanceEvent` does not
-      carry for anybody: **which graph**. `ProvenanceEvent` is all effort
-      counts (`searches`, `passages`, `cited_papers`), and since v7.10.0 a
-      graph load keeps the conversation — so one transcript can hold turns
-      grounded in two different graphs with nothing on them saying which. That
-      is tolerable for an answer and wrong for a lecture, whose entire content
-      *is* the graph it narrated. The seed carries the human label already
-      (`GraphResponse.seed.title`), alongside how many papers were in scope.
-      Worth fixing for the researcher's line in the same change, since the two
-      lines should read alike.
+      **And a turn should name the graph it came from.** Since v7.10.0 a graph
+      load keeps the conversation, so one transcript can hold turns grounded in
+      two different graphs — and a lecture is the sharpest case, because its
+      entire content *is* the graph it narrated.
+
+      **Be clear about what is already handled, or this gets rebuilt
+      needlessly.** Cross-graph turns do not break: an answer's bubble re-lights
+      its whole grounding set and stops being a control when none of those
+      papers are still loaded (`Teacher.tsx:577-586` — *"a clickable bubble
+      that highlights nothing is the same dead pointer its `[n]` chips grey out
+      for. Partial overlap still counts"*), inline `[n]` chips grey out against
+      the live `onGraphIds` set, and `BeatList` already takes that set, so a
+      chat lecture turn degrades correctly with no work at all.
+
+      What is missing is the **naming**, not the clicking. Today's behaviour is
+      purely a negative signal — *this points nowhere any more* — with no
+      positive one, so a turn you scroll back to after switching graphs goes
+      quietly inert and never says why. A provenance line fixes exactly that,
+      and the label already exists: `GraphResponse.seed.title`, alongside how
+      many papers were in scope. `ChatMsg.provenance` is the place it goes,
+      except that `ProvenanceEvent` is all effort counts (`searches`,
+      `passages`, `cited_papers`) and carries no graph identity for **either**
+      agent — a lecture turn has no provenance at all today, and the
+      researcher's line has no graph in it. Both halves, one line, reading
+      alike.
 
       **Saving: the beats persist with the exploration** (the developer's call,
       2026-09-13) — they are already on the turn, so this falls out of
