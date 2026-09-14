@@ -278,6 +278,18 @@ The Vite dev server proxies `/api/*` to Flask.
      you scroll, and each reports its own work with a spinner. They were one
      surface with two views until v7.10.0, which meant asking a question tucked
      away the lecture you were reading — now the two simply coexist.
+     **You don't have to press the button.** Ask for a lecture in the chat —
+     *"lecture me on these"*, *"summarize these papers for me"*, *"what's the
+     story here?"* — and the lecturer answers there, beats and all, over the
+     same scope the button would have used (the last of those arrives framed as
+     history, because that is what it asked for). The composer works out which
+     assistant you meant: the phrasings that name a lecture outright are matched
+     outright, and anything less obvious is settled by a quick classifier —
+     *"summarize this"* is a question about the paper you have open, *"summarize
+     these papers"* is a lecture, and no pattern tells those apart. Every routed
+     turn says which one answered and offers the other in a click, so a wrong
+     guess costs one line rather than a re-typed question; a lecture you started
+     with the button says nothing, because nothing was guessed.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search the
      literature / search the web / search your sources / show a figure). It

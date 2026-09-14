@@ -266,38 +266,43 @@ Thin wrappers over `services/sources`. Points worth knowing:
   `upload.save()` (on Windows an open handle holds an exclusive lock),
   removal in a `finally`.
 
-## `agents.py` — the teacher's SSE endpoints
+## `agents.py` — the teacher's endpoints
 
-| Endpoint | Intent | Job |
-| --- | --- | --- |
-| `POST /api/lecture` | `lecture` | streamed lecture over the visible graph |
-| `POST /api/ask` | `research` | agentic Q&A over the graph |
-| `POST /api/ask_sources` | `research` | chat with no graph open (library + search) |
+| Endpoint | Job |
+| --- | --- |
+| `POST /api/route` | which assistant a typed message wants (**JSON, not SSE**) |
+| `POST /api/lecture` | streamed lecture over the reader's scoped graph |
+| `POST /api/ask` | agentic Q&A over the graph |
+| `POST /api/ask_sources` | chat with no graph open (library + search) |
 
 (The route face of the `agents` package — a deliberate name-cousin,
-different full paths.) Each endpoint validates, builds typed inputs, and
-hands off to `orchestrator.run(intent, ...)`; one `_relay` generator
-serializes the typed event stream as SSE.
+different full paths.) Each streaming endpoint validates, builds typed
+inputs, and hands off to the agent that serves it — directly, since v7.0.0
+deleted the `orchestrator.run(intent, ...)` funnel they all used to pass
+through; one `_relay` generator serializes the typed event stream as SSE.
 
 Design decisions worth knowing:
 
-- **`/api/lecture` sends the graph's `edges`, not just its nodes** (v7.7.0) —
-  the only thing that can answer "is this paper a neighbour *of the seed*",
-  which a node's `rels` tags structurally cannot (they say what a relation is,
-  never what it is *to*). `_edges` parses them tolerantly on purpose:
-  react-force-graph **replaces a link's `source`/`target` strings with the
-  node objects themselves**, in place, so `{"source": {...node...}}` is the
-  normal shape off a live canvas and both forms must resolve to an id. A
-  payload that yields no edges is not an error — the lecturer falls back to
-  tag scoping. See `agents/orchestrators/lecturer/README.md` and
-  `docs/bugs.md`.
+- **`/api/route` is the one endpoint here that doesn't stream**, because it
+  produces a *decision* rather than an answer: the client uses it to pick
+  between `/api/lecture` and `/api/ask`, then streams from the one it picked.
+  Two round trips on purpose — folding the choice into one streaming endpoint
+  would mean a second implementation of both workflows' event relays, to save
+  a few milliseconds on localhost.
+
+  It **always returns 200**. A blank message, a missing key, a dead model and
+  an unparseable classification all come back as the researcher, because this
+  sits in front of every message the reader sends: failing it would break
+  asking questions in order to protect a routing nicety. See
+  `agents/orchestrators/router/README.md` for the cost model behind that
+  asymmetry.
 - **One serialization rule replaces six tuple matches.** Frame name = the
   event's `type` tag, payload = `model_dump(exclude={"type"})`. That
   reproduces the old wire shapes for `token`/`beat`/`cited`/`trace`/`done`
   exactly, with the two documented renames (`nodes` → `discovery`,
   error `{"error"}` → `{"message"}`); `discard` is gone (nothing to disavow
   — the researcher's pre-answer narration is never streamed).
-- **The typed-node boundary.** `orchestrator.run` takes `Node` models; the
+- **The typed-node boundary.** The agents take `Node` models; the
   frontend sends dicts that the force-graph renderer has mutated with
   simulation fields (`x`, `vy`, `index`, ...). `_node` picks exactly the
   model's fields out of each dict — strict about the core shape (missing

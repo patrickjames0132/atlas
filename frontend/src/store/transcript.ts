@@ -601,6 +601,50 @@ const transcriptSlice = createSlice({
       prepare: keyed<Record<string, SourceRef>>(),
     },
     /**
+     * One beat of a lecture the reader asked for *in words*, landing on the
+     * in-flight chat turn rather than in the panel's lecture slot.
+     *
+     * The slot holds one lecture per exploration, which is right for the
+     * button (pressing it twice means "show me the lecture", not "make
+     * another") and wrong for a message: two typed requests are two replies,
+     * and overwriting the first would delete an answer the reader can still
+     * scroll to. So `beatAdded` and this one are deliberately separate
+     * reducers writing to different places, not one with a flag.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the beat, and the conversation in `meta`.
+     */
+    chatBeatAdded: {
+      reducer(state, action: PayloadAction<Beat, string, Keyed>) {
+        const conversation = target(state, action.meta.key)
+        if (!conversation) return
+        const msg = lastMsg(conversation)
+        if (msg) (msg.beats ??= []).push(action.payload)
+      },
+      prepare: keyed<Beat>(),
+    },
+    /**
+     * Record which assistant the router chose for the in-flight turn, so the
+     * transcript can say so and offer the other one.
+     *
+     * Dispatched only when a *model* made the choice. A route the reader made
+     * themselves — the Lecture button, a correction — leaves this unset, which
+     * is what keeps the "answered as a lecture / answer instead?" line off
+     * turns where there was never a decision to second-guess.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the chosen target, and the conversation in `meta`.
+     */
+    turnRouted: {
+      reducer(state, action: PayloadAction<'lecture' | 'answer', string, Keyed>) {
+        const conversation = target(state, action.meta.key)
+        if (!conversation) return
+        const msg = lastMsg(conversation)
+        if (msg) msg.routedTo = action.payload
+      },
+      prepare: keyed<'lecture' | 'answer'>(),
+    },
+    /**
      * What actually grounded the finished answer — searched or not, what came
      * back, what it ended up citing. Observed server-side, so it lands with
      * the other end-of-answer fields.
@@ -721,6 +765,8 @@ export const {
   citedSet,
   graphRefsSet,
   sourceRefsSet,
+  chatBeatAdded,
+  turnRouted,
   provenanceSet,
   paperRefsSet,
   chatCleared,

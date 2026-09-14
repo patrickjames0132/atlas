@@ -8,6 +8,7 @@ orchestrators/
   researcher/     — agentic Q&A, with or without a graph
   lecturer/       — the streaming lecture over the visible graph
   summarizer/     — one-shot paper TL;DRs
+  router/         — which of the two a typed message wants
 ```
 
 (`query_analyst/` sat here until v7.6.0 — a one-shot seed-search query
@@ -33,7 +34,7 @@ frontend chip that builds a graph from it. That invariant holds exactly as
 long as one agent assigns the indices — which is why `find_papers` receives
 raw provider nodes from the paper scout and numbers them itself.
 
-## The router that isn't here
+## The router, and the one that isn't
 
 There used to be an `orchestrator/` in this folder: one `run(intent, ...)`
 entry point that every route funnelled through, dispatching on an `Intent`
@@ -59,6 +60,17 @@ neither belonged to it:
   consequence: a lecture's numbered list is chronological, so `[1]` is the
   oldest paper.)
 
+**`router/` (v7.20.0) is the model half finally being wanted** — and it is a
+different shape on purpose. The deleted orchestrator was a funnel every route
+passed through, threading an enum between callers that already knew their
+own workflow. This one is a **classifier with one caller**: the chat composer,
+holding a sentence a person typed, for which working out what the sentence
+*is* is the entire job. `/api/lecture` and `/api/ask` are still called
+directly by everything that already knows — the Lecture button, an
+`@`-mention seed, a reader correcting a route — so nothing pays for a decision
+it doesn't need. See [`router/README.md`](router/README.md) for the two-stage
+design and why every failure answers the question.
+
 ## What moved here, and what it cost
 
 All five packages moved from `agents/` in v7.0.0 with **no behavior change**
@@ -74,4 +86,7 @@ Each package has its own tests under
 `test/atlas/agents/orchestrators/<name>/`, mirroring the source tree. The
 researcher's are where the two-tier contract is actually pinned — it stubs
 the workers rather than the provider calls beneath them, so the assertions
-are about the seam that exists rather than the plumbing behind it.
+are about the seam that exists rather than the plumbing behind it. The router's most
+valuable tests are its *negative* ones: the phrasings its no-model fast path
+must **not** claim, since being narrower than it could be is the whole
+justification for having one.

@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LECTURE_TITLE, streamAsk, streamAskSources, streamLecture } from '../api'
+import { LECTURE_TITLE, routeMessage, streamAsk, streamAskSources, streamLecture } from '../api'
 import type {
   Beat,
   GraphNode,
@@ -35,6 +35,7 @@ import {
   answerFailed,
   backgroundDiscovery,
   beatAdded,
+  chatBeatAdded,
   chatCleared,
   citedSet,
   figureAdded,
@@ -54,6 +55,7 @@ import {
   tracesSettled,
   tokenAppended,
   traceAdded,
+  turnRouted,
   turnStarted,
 } from '../store/transcript'
 import {
@@ -205,6 +207,12 @@ export function useConversation() {
   // global. At most one of the two is non-null.
   const [activeBeat, setActiveBeat] = useState<number | null>(null)
   const [activeChat, setActiveChat] = useState<number | null>(null)
+  // Which beat of which *chat* turn is lit — a lecture asked for in words
+  // lives on its turn, and several turns can hold one, so this addresses a
+  // beat by turn rather than by index alone. The panel's own lecture keeps
+  // `activeBeat`, whose single index is right for a single lecture. At most
+  // one of the four selections here is non-null.
+  const [activeChatBeat, setActiveChatBeat] = useState<{ turn: number; beat: number } | null>(null)
   // The node currently spotlit by a clicked inline `[n]` — click the same one
   // again to clear it (like re-clicking an active beat).
   const [activeRef, setActiveRef] = useState<string | null>(null)
@@ -222,6 +230,11 @@ export function useConversation() {
   // other running alongside it.
   const lectureCtrl = useRef<AbortController | null>(null)
   const askCtrl = useRef<AbortController | null>(null)
+  // The in-flight message classification (see `send`). Its own controller
+  // rather than `askCtrl`'s, because it runs *before* the turn exists: a
+  // second message must abort the first's route without also aborting an
+  // answer that is legitimately still streaming into the transcript.
+  const routeCtrl = useRef<AbortController | null>(null)
   // Whether the lecture is on screen, mirrored into a ref so a streaming
   // lecture's onBeat can tell if it should drive the live highlight (a hidden
   // one stays quiet).
@@ -280,6 +293,7 @@ export function useConversation() {
     if (highlightIds.size === 0) {
       setActiveBeat(null)
       setActiveChat(null)
+      setActiveChatBeat(null)
       setActiveRef(null)
     }
   }, [highlightIds])
@@ -296,12 +310,28 @@ export function useConversation() {
     [activeBeat, highlight],
   )
 
+  /** Click a beat inside a chat turn: light its papers, click again to clear.
+   *  Addressed by turn AND beat, since a conversation may hold several
+   *  lectures and index alone would light the wrong one. */
+  const onChatBeatClick = useCallback(
+    (turn: number, index: number, beat: Beat) => {
+      const off = activeChatBeat?.turn === turn && activeChatBeat.beat === index
+      setActiveChatBeat(off ? null : { turn, beat: index })
+      setActiveBeat(null)
+      setActiveChat(null)
+      setActiveRef(null)
+      highlight(off ? [] : beat.node_ids)
+    },
+    [activeChatBeat, highlight],
+  )
+
   /** Click an answer: re-light the papers it was grounded in. */
   const onChatClick = useCallback(
     (index: number, cited: string[]) => {
       const off = activeChat === index
       setActiveChat(off ? null : index)
       setActiveBeat(null)
+      setActiveChatBeat(null)
       setActiveRef(null)
       highlight(off ? [] : cited)
     },
@@ -316,6 +346,7 @@ export function useConversation() {
       const off = activeRef === nodeId
       setActiveBeat(null)
       setActiveChat(null)
+      setActiveChatBeat(null)
       setActiveRef(off ? null : nodeId)
       highlight(off ? [] : [nodeId])
     },
@@ -343,6 +374,13 @@ export function useConversation() {
    * aborted, and clears `asking` in `finally`), so this only has to fire it. */
   const stopAsk = useCallback(() => {
     askCtrl.current?.abort()
+    // A message stopped while it is still being *routed* has no turn yet, so
+    // there is nothing for `askCtrl` to abort — Stop has to reach the classify
+    // too, or the reader's stop is silently ignored and an answer they
+    // cancelled starts streaming a moment later.
+    routeCtrl.current?.abort()
+    routeCtrl.current = null
+    setAsking(false)
   }, [])
 
   /** Clear the shown lecture: stop it if it's still loading, drop its cache,
@@ -400,6 +438,7 @@ export function useConversation() {
       dispatch(lectureStarted(key)) // empties the slot and shows the lecture
       setActiveBeat(null)
       setActiveChat(null)
+      setActiveChatBeat(null)
       setActiveRef(null)
       setError(null)
       highlight([])
@@ -480,6 +519,7 @@ export function useConversation() {
         dispatch(lectureHidden())
         setActiveBeat(null)
         setActiveChat(null)
+        setActiveChatBeat(null)
         setActiveRef(null)
         highlight([])
         return
@@ -490,6 +530,7 @@ export function useConversation() {
         dispatch(lectureShownAgain())
         setActiveBeat(null)
         setActiveChat(null)
+        setActiveChatBeat(null)
         setActiveRef(null)
         highlight([])
         return
@@ -518,6 +559,7 @@ export function useConversation() {
       highlight([])
       setActiveBeat(null)
       setActiveChat(null)
+      setActiveChatBeat(null)
       setActiveRef(null)
       // A shown lecture STAYS shown. It used to be hidden here, because the
       // lecture and the chat shared one scroll and would otherwise stack on
@@ -628,6 +670,7 @@ export function useConversation() {
                 highlight(ids)
                 // Mark this answer active, like a beat lights up on arrival.
                 setActiveBeat(null)
+                setActiveChatBeat(null)
                 setActiveChat(askIdxRef.current)
               },
               onError: (message) => {
@@ -700,6 +743,180 @@ export function useConversation() {
   )
 
   /**
+   * Deliver a lecture as the answer to a typed message.
+   *
+   * The same backend stream the Lecture button uses, landing somewhere else:
+   * beats go onto the chat turn (`chatBeatAdded`) instead of into the panel's
+   * lecture slot. That is the whole difference, and it is the right one — a
+   * lecture *asked for in words* is a reply to a message, so it belongs in the
+   * conversation where the reader can scroll back to it, ask a follow-up
+   * underneath it, and keep the one before it.
+   *
+   * It runs on `askCtrl`, not `lectureCtrl`, for the same reason: this is a
+   * chat turn. Stop stops it, the next message supersedes it, and the panel's
+   * own lecture — which may be streaming at the same time — is untouched.
+   *
+   * @param question The message as typed, which becomes the user turn.
+   * @param framing  How to tell it, from the router (or the reader's
+   *                 correction).
+   * @param routed   Whether a model chose this destination. True marks the
+   *                 turn so the transcript can offer the researcher instead;
+   *                 false is a choice the reader made themselves, which needs
+   *                 no second-guessing.
+   */
+  const lectureInChat = useCallback(
+    async (question: string, framing: LectureFraming, routed: boolean) => {
+      if (!seedNode) return
+      askCtrl.current?.abort()
+      const ctrl = new AbortController()
+      askCtrl.current = ctrl
+      setError(null)
+      setAsking(true)
+      highlight([])
+      setActiveBeat(null)
+      setActiveChat(null)
+      setActiveChatBeat(null)
+      setActiveRef(null)
+      const key = activeKeyRef.current
+      const isActive = () => activeKeyRef.current === key
+      const turnIdx = chatLength + 1 // the assistant turn about to be added
+      const streamId = `ask:${nextStreamId()}`
+      dispatch(streamStarted(streamId, key))
+      dispatch(turnStarted(question, key))
+      if (routed) dispatch(turnRouted('lecture', key))
+      let failure = 'This lecture stopped before it finished.'
+      let beatCount = 0
+      try {
+        await streamLecture(
+          // Same scope as the button's lecture: strictly what the reader can
+          // see. The router decided which *agent* answers, not which papers —
+          // rescoping a lecture because it was asked for in words would make
+          // the same request mean two things.
+          { seed: seedNode, nodes: lectureNodes, framing },
+          {
+            signal: ctrl.signal,
+            onSourceRefs: (refs) => dispatch(sourceRefsSet(refs, key)),
+            onBeat: (beat) => {
+              dispatch(chatBeatAdded(beat, key))
+              // Light each beat as it lands, the way the panel's lecture does
+              // — but only while this exploration is the one on screen.
+              if (isActive()) {
+                setActiveChatBeat({ turn: turnIdx, beat: beatCount })
+                highlight(beat.node_ids)
+              }
+              beatCount += 1
+            },
+            onError: (message) => {
+              failure = message
+              if (isActive()) setError(message)
+            },
+          },
+        )
+      } catch (error) {
+        if (!ctrl.signal.aborted) {
+          failure = error instanceof Error ? error.message : String(error)
+          if (isActive()) setError(failure)
+        }
+      } finally {
+        const superseded = askCtrl.current !== ctrl
+        if (!superseded) askCtrl.current = null
+        dispatch(streamEnded(streamId, key))
+        // A lecture that produced no beats has failed as far as the reader is
+        // concerned, however it ended — and the turn has to say so itself,
+        // because `error` does not survive a reload. A superseded one is
+        // excluded: sending another message aborts this on purpose.
+        if (beatCount === 0 && !superseded) dispatch(answerFailed(failure, key))
+        if (!superseded) setAsking(false)
+      }
+    },
+    [seedNode, lectureNodes, chatLength, dispatch, highlight, nextStreamId],
+  )
+
+  /**
+   * Send a typed message to whichever assistant it wants.
+   *
+   * The one branch in the composer's decision tree that cannot be taken on
+   * plain facts. Everything above it — a pasted id, a bare `@`-mention, an
+   * unresolved `@phrase` — is decided by a regex or by what the reader picked
+   * from a dropdown; this one asks a model, because the difference between
+   * "teach me these papers" and "which of these used dropout" lives in the
+   * words and nowhere else.
+   *
+   * **The classify is skipped whenever a lecture is impossible**: no graph, or
+   * nothing visible to lecture about. That is not an optimization, it is the
+   * routing rule — there is no second destination to choose, so paying for a
+   * choice would be spending the reader's latency on a foregone conclusion.
+   *
+   * @param question  The message as typed.
+   * @param sourceIds Library scope, passed through to {@link ask}.
+   * @param useLecture Whether the played lecture grounds an answer.
+   * @param filters   Search filters, passed through to {@link ask}.
+   * @param mentioned Papers `@`-mentioned in the message.
+   */
+  const send = useCallback(
+    async (
+      question: string,
+      sourceIds: string[] | undefined,
+      useLecture: boolean,
+      filters?: SearchOptions,
+      mentioned?: MentionPaper[],
+    ) => {
+      const routable = !!seedNode && lectureNodes.length > 0
+      if (!routable) {
+        void ask(question, sourceIds, useLecture, filters, undefined, mentioned)
+        return
+      }
+      // The button reacts to the send immediately rather than after the
+      // classify: a bar that looks idle for half a second invites a second
+      // press, which would abort the first message's own route.
+      setAsking(true)
+      routeCtrl.current?.abort()
+      const ctrl = new AbortController()
+      routeCtrl.current = ctrl
+      const decision = await routeMessage(question, ctrl.signal)
+      if (ctrl.signal.aborted) return // superseded; the new send owns `asking`
+      routeCtrl.current = null
+      if (decision.target === 'lecture') {
+        void lectureInChat(question, decision.framing, true)
+        return
+      }
+      void ask(question, sourceIds, useLecture, filters, undefined, mentioned)
+    },
+    [seedNode, lectureNodes, ask, lectureInChat],
+  )
+
+  /**
+   * Send a turn's question to the *other* assistant — the reader correcting a
+   * route.
+   *
+   * This is what makes model routing affordable. A misroute is not a wrong
+   * answer to be spotted and worked around, it is one click: the transcript
+   * says which assistant answered and offers the other, and taking the offer
+   * re-asks the same question there. The corrected turn is *appended* rather
+   * than replacing the original — the reader may well want both, and a
+   * transcript that rewrites itself is worse than one that grows.
+   *
+   * @param index The assistant turn whose route is being corrected.
+   */
+  const reroute = useCallback(
+    (index: number) => {
+      const conversation = selectConversation(store.getState())
+      const answer = conversation.chat[index]
+      const question = conversation.chat[index - 1]
+      if (!answer || !question || question.role !== 'user') return
+      // The correction is the reader's own decision, so `routed` is false:
+      // the new turn carries no offer to route it back again, which would be
+      // an invitation to ping-pong between two answers they already have.
+      if (answer.routedTo === 'lecture') {
+        void ask(question.text, undefined, true, undefined, undefined, undefined)
+      } else {
+        void lectureInChat(question.text, 'summary', false)
+      }
+    },
+    [ask, lectureInChat, store],
+  )
+
+  /**
    * Ask a failed question again, picking up where it left off.
    *
    * The exchange that failed is removed first, so the transcript ends with one
@@ -746,6 +963,10 @@ export function useConversation() {
     provider,
     toggleLecture,
     ask,
+    send,
+    reroute,
+    activeChatBeat,
+    onChatBeatClick,
     retryAnswer,
     stopAsk,
     clearLecture,
