@@ -243,6 +243,85 @@ than deleted so the plan doesn't get re-proposed.
 
 ### Teacher & agent reach
 
+- [ ] **One chat interface: retire the Lecture UI and invoke it as a command** —
+      the philosophy is that everything the assistant does should be reachable
+      from the one bar you type into. v7.20.0 got the lecturer *into* the chat;
+      this takes the parallel interface back out. **Delete the Lecture
+      section** — its intro paragraph, the `Summary`/`History` framing pair,
+      the play/show/hide button and the beat list under it — and invoke a
+      lecture by typing **`/lecture summary`** or **`/lecture history`**
+      instead. *(From the developer, 2026-09-13.)*
+
+      **The prize is not the button, it is the state machine behind it.** The
+      panel keeps one singular lecture *outside* the conversation —
+      `conversation.lecture`, `lectureShown`, `toggleLecture`'s three-way
+      play/show/hide, `clearLecture`, `LECTURE_TITLE` as a pseudo-source — and
+      every piece of that exists only because a lecture had nowhere in the
+      transcript to live. It does now (`ChatMsg.beats`). **The 🎓 lecture scope
+      picker goes with it**, which is the best part: that control asks "may the
+      researcher use the played lecture as context", a question that only
+      arises while the lecture sits outside the conversation. Once a lecture is
+      a turn, it is history like any other turn and the researcher already has
+      it — so `lectureInScope`, `lectureScope`, the `lectures` ScopePicker and
+      the 🎓 half of the "Answers also draw on…" note all delete.
+
+      **`/` with a typeahead, not a bare prefix.** A command syntax nobody is
+      shown is a hidden feature; `/` works in Claude Code (and Slack, Discord,
+      Notion) because typing it pops a menu that teaches itself. Build it on
+      the `mentions/` machinery, which is already exactly this shape — parse
+      the active token at the caret, rank candidates, hold a keyboard
+      selection, insert on Enter — minus the network half: the command list is
+      static and local, so no debounce, no abort, no provider. `@` is already
+      the composer's other prefix, so `/` reads as its sibling where `!` would
+      be a third unrelated convention. The deleted intro paragraph's teaching
+      job moves into the menu (a one-line description per command, `summary`
+      and `history` as visible arguments) and the tour's lecture step. Use
+      **`history`**, the value `POST /api/lecture` already takes, not
+      "historical".
+
+      **Commands go in front of the v7.20.0 router, not instead of it.** A
+      command is exact, free and instant — the deterministic fast path
+      promoted to first-class, and the reader states the framing rather than
+      having a classifier infer it at ~780ms. But the router is what serves
+      the reader who types *"summarize these papers for me"* and never finds
+      the menu, and it already reports what it guessed and offers the other
+      agent. Mechanically this is a third stage in front of the two in
+      `orchestrators/router/`, checked before either.
+
+      **Beats collapse behind a caret, per turn.** Twelve beats are fine as the
+      newest thing on screen and unusable as the third lecture you have
+      scrolled past — and the section being deleted is the thing that could
+      fold them away today. So each lecture turn carries its own caret. (Open
+      question worth deciding while building, not now: whether a turn collapses
+      itself once another arrives.)
+
+      **And a lecture turn needs a provenance line naming its graph.** A
+      researcher answer already accounts for itself underneath —
+      `ChatMsg.provenance`, rendered under the prose — but a lecture turn has
+      none, and the field it most needs is one `ProvenanceEvent` does not
+      carry for anybody: **which graph**. `ProvenanceEvent` is all effort
+      counts (`searches`, `passages`, `cited_papers`), and since v7.10.0 a
+      graph load keeps the conversation — so one transcript can hold turns
+      grounded in two different graphs with nothing on them saying which. That
+      is tolerable for an answer and wrong for a lecture, whose entire content
+      *is* the graph it narrated. The seed carries the human label already
+      (`GraphResponse.seed.title`), alongside how many papers were in scope.
+      Worth fixing for the researcher's line in the same change, since the two
+      lines should read alike.
+
+      **Saving: the beats persist with the exploration** (the developer's call,
+      2026-09-13) — they are already on the turn, so this falls out of
+      v7.20.0's shape rather than needing new storage. What does need doing is
+      the other direction: a **pre-v7.21.0 save holds a singular `lecture`**
+      with no slot to restore into. Fold it into the transcript as a lecture
+      turn on restore rather than dropping it — same class of migration as the
+      pre-v7.17.0 `latest`-tag fold (see [docs/history.md](docs/history.md)).
+
+      **Help surfaces to update in the same change** (per CLAUDE.md): the
+      tour's lecture step (`tour/steps.ts`) — it currently walks to a grid that
+      will not exist — the composer's placeholder, and the command menu's own
+      descriptions, which become the primary place a reader learns lectures
+      exist at all.
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
       [docs/history.md](docs/history.md)). Citations now *resolve*: the model
@@ -366,20 +445,6 @@ than deleted so the plan doesn't get re-proposed.
       discipline the Feynman ticket calls for. Also worth checking whether the
       honest-failure trace chip fires here, or whether it fails silently; the
       latter would be its own bug. *(From the `todos.md` inbox, 2026-08-09.)*
-- [ ] **Should display filters scope the agents? Researcher yes, lecturer maybe
-      not** — today filtering the graph (relation chips, year / citation sliders)
-      narrows what **both** the researcher and the lecturer are grounded in:
-      grounding is `(selected ∩ visible) ∪ discoveries` (v4.13.0), both
-      `streamAsk` and `streamLecture` send `nodes: groundingNodes`, and the v4.9.0
-      caption tells the user "filtering the graph scopes the lecture."
-      Reconsider whether that's right **per agent**. A **researcher** answering a
-      question probably *should* respect the visible/filtered set — the user
-      narrowed the map on purpose. But a **lecture** is a complete story over its
-      relation (`_story_nodes`); hiding a few nodes to declutter the *view*
-      shouldn't silently drop them from the *narration*. Likely split: the
-      lecturer narrates its full relation regardless of display filters, while the
-      researcher stays scoped to what's shown. *(From the `todos.md` inbox,
-      2026-07-13.)*
 - [ ] **A precise "overlapping references/citations" skill for the researcher** —
       asking which references or citations the seed paper SHARES with an
       expanded paper kind-of works today, but the answer comes from the model
