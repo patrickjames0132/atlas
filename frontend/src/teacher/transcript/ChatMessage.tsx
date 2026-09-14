@@ -7,17 +7,23 @@
  * and the cited-papers footer. Clickable when the answer carries citations —
  * clicking re-lights the papers it was grounded in.
  *
+ * Since v7.20.0 a turn's answer may be a **lecture** rather than prose — the
+ * router sent the message to the lecturer — in which case the same `BeatList`
+ * the panel's lecture section uses renders here instead, under a line naming
+ * which assistant answered and offering the other.
+ *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useEffect, useRef, useState } from 'react'
-import type { AnswerFigure, ChatMsg, Provider, TraceEvent } from '../../api'
+import type { AnswerFigure, Beat, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import HopDots from '../HopDots'
 import { splitAnswer } from '../figures/split'
 import AnswerMarkdown from './AnswerMarkdown'
+import BeatList from './BeatList'
 import { provenanceLine } from './provenance'
 
 /**
@@ -201,6 +207,9 @@ export default function ChatMessage({
   onPaperSeed,
   provider,
   onEnlarge,
+  activeBeat,
+  onBeatClick,
+  onReroute,
 }: {
   message: ChatMsg
   /** This answer's cited papers are currently lit on the graph. */
@@ -222,8 +231,16 @@ export default function ChatMessage({
   /** The selected backend, so a citation from the other one says so. */
   provider?: Provider
   onEnlarge: (figure: AnswerFigure) => void
+  /** Which of this turn's beats is lit, when its answer is a lecture. */
+  activeBeat?: number | null
+  /** Light one of this turn's beats (undefined = beats render unclickable). */
+  onBeatClick?: (index: number, beat: Beat) => void
+  /** Send this turn's question to the other assistant — only wired when a
+   *  model chose this one, so a reader's own choice carries no offer. */
+  onReroute?: () => void
 }) {
   const clickable = !!onActivate
+  const beats = message.beats ?? []
   return (
     <div
       className={`chat ${message.role}${clickable ? ' clickable' : ''}${active ? ' active' : ''}`}
@@ -265,6 +282,51 @@ export default function ChatMessage({
           )}
         </div>
       )}
+      {message.routedTo && (
+        // Which assistant answered, and the offer of the other. This line is
+        // what makes routing by model acceptable at all: a misroute costs one
+        // click rather than a wrong answer the reader has to notice and work
+        // around. It is absent when the reader chose the destination
+        // themselves, because there is then nothing to second-guess.
+        <div className="chat-routed">
+          <span>
+            {message.routedTo === 'lecture' ? 'Answered as a lecture' : 'Answered as a question'}
+          </span>
+          {onReroute && (
+            <button
+              type="button"
+              className="chat-reroute"
+              onClick={(event) => {
+                event.stopPropagation()
+                onReroute()
+              }}
+              title={
+                message.routedTo === 'lecture'
+                  ? 'Ask this as a question instead'
+                  : 'Ask for a lecture on this instead'
+              }
+            >
+              {message.routedTo === 'lecture' ? 'Answer it instead' : 'Lecture on it instead'}
+            </button>
+          )}
+        </div>
+      )}
+      {beats.length > 0 && (
+        // A lecture delivered as this answer. The panel's own lecture section
+        // renders beats with this very component, so the two cannot drift —
+        // a beat behaves the same wherever it is read.
+        <div className="chat-beats" onClick={(event) => event.stopPropagation()}>
+          <BeatList
+            beats={beats}
+            activeBeat={activeBeat ?? null}
+            sourceRefs={message.sourceRefs}
+            onBeatClick={(index, beat) => onBeatClick?.(index, beat)}
+            onRefClick={onRefClick}
+            onGraphIds={onGraphIds}
+            onEnlarge={onEnlarge}
+          />
+        </div>
+      )}
       {(() => {
         if (!message.text) {
           // Waiting on the first token, with nothing else yet to show. The
@@ -275,7 +337,8 @@ export default function ChatMessage({
             streaming &&
             !message.failed &&
             !message.trace?.length &&
-            !message.retrieve ? (
+            !message.retrieve &&
+            beats.length === 0 ? (
             <HopDots label="Thinking" />
           ) : (
             ''

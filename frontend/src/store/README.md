@@ -112,6 +112,16 @@ store/
   lecture field the save carries, because renaming the field would have left
   every existing save's sources unreadable. Saves predating structured library
   citations have none; those markers degrade to raw text on restore.
+
+  **A lecture asked for in words lives somewhere else entirely** (v7.20.0):
+  its beats go on the chat turn (`chatBeatAdded` → `ChatMsg.beats`), not in
+  this slot, and the turn records which assistant the router picked
+  (`turnRouted` → `ChatMsg.routedTo`) so the transcript can offer the other.
+  Two reducers writing to two places rather than one with a flag, because the
+  slot's *replace* semantics are right for a button and wrong for a message:
+  pressing Lecture twice means "show me the lecture", while sending a second
+  lecture request is a second reply the reader can scroll back to. Beats on a
+  turn reuse the turn's own `sourceRefs`, which chat messages already carry.
 - **Two grounding scopes, differing on one question** (`scopedNodes` +
   `selectGroundingNodes` / `selectLectureNodes`): may a paper the reader cannot
   currently see be in scope? Both are the visible nodes, narrowed to

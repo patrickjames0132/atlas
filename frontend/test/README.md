@@ -6,6 +6,9 @@ a test lives in the folder matching the module under test.
 
 ```
 test/
+  api/
+    agents.test.ts            — `routeMessage` never rejects: it fronts every
+                                message, so a dead backend routes to `answer`
   detail/
     DetailPanel.test.tsx      — the joint loading gate: one skeleton set, one
                                 reveal, once every fetch has answered
@@ -37,7 +40,8 @@ test/
                                 -file switch
   store/
     library.test.ts           — one shared copy of the uploaded sources
-    transcript.test.ts        — the per-mode lecture cache's show/hide/drop
+    transcript.test.ts        — the exploration lecture's show/hide/drop, and a
+                                routed lecture landing on its own chat turn
     workspace.test.ts         — hand-picked selection + grounding scope
   teacher/
     Teacher.test.tsx          — the panel's folding sections: the defaults,
@@ -48,6 +52,8 @@ test/
                                 only when `open`; trigger and ✕ report via
                                 `onOpenChange`)
     figures/split.test.ts     — the <<FIG n>> interleaver's edge cases
+    transcript/ChatMessage.test.tsx — a turn the router placed: beats where the
+                                prose goes, and the one-click correction
     transcript/remarkCite.test.ts — [n] markers → citeref nodes, on mdast
     transcript/AnswerMarkdown.test.tsx — clickable `[n]` chips, end to end
     transcript/provenance.test.ts — the grounding line's honest cases

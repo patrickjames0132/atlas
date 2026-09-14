@@ -3,6 +3,7 @@
 Description:
 AI-teacher routes: one endpoint per agent, each streaming typed events.
 
+POST /api/route        -> which assistant a typed message wants (JSON, not SSE)
 POST /api/lecture      -> streamed AI lecture over the visible graph
 POST /api/ask          -> the research agent, streamed over the visible graph
 POST /api/ask_sources  -> streamed chat with no graph open (library + search)
@@ -33,7 +34,7 @@ from pydantic import ValidationError
 
 from ..agents import events, streams
 from ..agents.models import PlayedBeat, PlayedLecture
-from ..agents.orchestrators import lecturer, researcher
+from ..agents.orchestrators import lecturer, researcher, router
 from ..config import config
 from ..services import search as search_service
 from ..services.graph import Node, Provider, resolve_provider
@@ -235,6 +236,34 @@ def _relay(
         keep = config.server.history_turns * 2
         if len(convo) > keep:
             del convo[:-keep]
+
+
+@bp.post("/api/route")
+def api_route() -> ResponseReturnValue:
+    """Say which assistant a typed message wants, before anything is streamed.
+
+    The one endpoint here that is **not** SSE, because it produces a decision
+    rather than an answer: the client uses it to pick between
+    ``/api/lecture`` and ``/api/ask`` and then streams from the one it picked.
+    Two round trips rather than one, deliberately — folding the choice into a
+    single streaming endpoint would mean a second implementation of both
+    workflows' event relays, to save a few milliseconds on localhost.
+
+    Body:
+        ``{message: str}`` — the message as typed, mentions and all.
+
+    Returns:
+        ``{target: 'lecture'|'answer', framing: 'summary'|'history'}``, always
+        HTTP 200. A blank message, a missing key, a dead model and an
+        unparseable classification all come back as the researcher (see
+        ``router.route``): this endpoint sits in front of every message the
+        reader sends, so failing it would break asking questions in order to
+        protect a routing nicety.
+    """
+    payload = request.get_json(silent=True) or {}
+    message = payload.get("message")
+    decision = router.route(message if isinstance(message, str) else "")
+    return jsonify(decision.model_dump())
 
 
 @bp.post("/api/lecture")

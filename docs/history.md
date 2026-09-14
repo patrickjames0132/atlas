@@ -688,6 +688,93 @@
 
 ### AI teacher & lectures
 
+- [x] **The chat bar decides what a message is** *(v7.20.0)* — the ask was for
+      the composer to reach both assistants: *"should we remove the lecture
+      buttons and integrate everything into one chat? The lecture agent can
+      still exist of course, but perhaps we just invoke it in the main chat by
+      leveraging the orchestration agent that reads the user's prompt and
+      figures out if it's a lecture request or general question. A prompt like
+      'Summarize xyz' or 'Lecture me about...' would invoke the lecture agent
+      and render the beats in the chat."* *(From Patrick, 2026-09-08; scope
+      narrowed by what shipped in v7.17.0, which deleted the four-button mode
+      grid the ticket was written to remove and left strictly the routing —
+      plus one thing it created: the composer has to infer **framing**, summary
+      vs history, where the button row has the reader state it.)*
+
+      **This is the router coming back, and it is a different component than
+      the one v7.0.0 deleted.** That router was an `Intent` enum round-trip
+      between a route and the function next to it, dispatching two known
+      intents to two agents, and it died because it "never grew the model half
+      it was designed around" (see `agents/orchestrators/README.md`, *"The
+      router that isn't here"*). This is that model half, finally wanted — so
+      it rebuilt as **an agent that classifies**, with one caller and a typed
+      decision, not as a funnel every route passes through.
+
+      **Two stages, and the cheap one runs first.** `OBVIOUS_LECTURE` is a
+      deliberately narrow regex over phrasings that *name* a lecture outright
+      ("lecture me on…", "give me a lecture on…", "lecture:") — free, instant,
+      and the same short-circuit `ID_RE` already does for a pasted id. It is
+      narrow on purpose: the negative tests are the valuable half, pinning the
+      phrasings it must **not** claim (`summarize this`, `walk me through
+      attention`, `teach me about transformers`, `what did the lecture say
+      about ResNet?`). Everything else goes to the model, which earns the call
+      on exactly the distinction no pattern gets right: *"summarize this"* is a
+      question about the open paper, *"summarize these papers for me"* is a
+      lecture, and *"what's the story here?"* is a lecture framed as **history**.
+
+      **And the classify is skipped whenever a lecture is impossible** — no
+      graph, or nothing visible to lecture about. Not an optimization: there is
+      no second destination to choose, so paying for the choice would spend the
+      reader's latency on a foregone conclusion.
+
+      **The measured cost, which was worse than estimated.** The proposal said
+      "a few hundred milliseconds"; fourteen real phrasings on
+      `claude-haiku-4-5` measured **580–1040ms, median ~780ms**. A few percent
+      of a researcher turn, but paid on every question the fast path doesn't
+      catch. Three things make it affordable, and all three are load-bearing:
+      the skip above, `Stop` reaching the in-flight classify through its own
+      `routeCtrl` (a message stopped while still being routed has no turn yet,
+      so aborting the stream is not enough), and the correction below.
+
+      **The route is visible and correctable, per the ticket's own condition.**
+      Every routed turn carries a quiet line — *"Answered as a lecture"* —
+      and an offer of the other assistant: *"Answer it instead"*. Taking it
+      re-asks the same question there and **appends**, rather than replacing:
+      the reader may want both, and a transcript that rewrites itself is worse
+      than one that grows. The corrected turn carries no offer back, which
+      would be an invitation to ping-pong between two answers already on
+      screen. A lecture from the **button** carries no line at all — there was
+      no guess to undo.
+
+      **Where a chat lecture renders was the one real design fork.** The cheap
+      answer was to route into the panel's existing single lecture slot, which
+      would have made routing a remote control for a visible button. Instead
+      beats land **on the turn** (`ChatMsg.beats`, with `routedTo`), so several
+      typed lectures coexist in one conversation, each keeps its own beats and
+      its own clickable grounding, and the button's lecture is untouched by one
+      streaming beside it. `chatBeatAdded`/`turnRouted` take a conversation key
+      like every other transcript action, so a stream writes into the
+      exploration that started it.
+
+      **Two smaller decisions worth keeping.** `POST /api/route` is plain
+      JSON, not SSE — it is a *decision*, and two round trips (route, then the
+      existing stream) beat a combined endpoint that would need a second
+      implementation of both workflows' event relays. And the router has **no
+      Agent Settings row**: it imports the summarizer's `AGENT_ID`, the fourth
+      micro-agent to run on the crew's cheapest model, so nothing had to change
+      in `config.json` or its template — and nothing to sync between machines.
+      Its `MessageRoute` also deliberately has no `confident` field, unlike
+      `PaperName`: there is no throw-it-away branch, because answering *is* the
+      fallback. The prompt states the asymmetry outright — a question misrouted
+      to the lecturer costs a minute of irrelevant narration, a lecture
+      misrouted to the researcher costs one short answer — and `route()` never
+      raises and never returns None.
+
+      Help surfaces moved with it (per CLAUDE.md): the tour's lecture step now
+      says you can just ask, its ask step teaches the one-click correction, and
+      the placeholder reads *"Ask about these papers, or for a lecture… or @ a
+      paper"*.
+
 - [x] **The assistant panel becomes folding sections** *(v7.10.0)* — the
       ticket was narrow: *"the lecture-mode buttons sit permanently expanded
       above the chat, taking prime vertical space next to the thing the reader

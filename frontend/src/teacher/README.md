@@ -27,8 +27,10 @@ teacher/
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
   transcript/        ← sub-package: rendering the conversation
-    BeatList.tsx     — lecture beats (click to light their papers)
-    ChatMessage.tsx  — one turn: retrieval line, trace chips, prose+figures
+    BeatList.tsx     — lecture beats (click to light their papers), rendered
+                       both in the Lecture section and inside a chat turn
+    ChatMessage.tsx  — one turn: retrieval line, trace chips, prose+figures,
+                       or a routed lecture's beats + the route line
     AnswerMarkdown.tsx — Markdown + KaTeX + [n]-citation rendering
     remarkCite.ts    — the remark plugin behind the citation chips
   teacher.css
@@ -46,8 +48,10 @@ structure rule's nesting case (the `graph/hooks` precedent).
   plumbing and the Atlas-side duplicate are gone.
 - **Panel-local, on purpose:** the input box, the `asking` and `lecturing`
   flags, the
-  stream error, activeBeat/activeChat (which entry is lit is panel UI —
-  only the resulting ids are global), the scope pickers' exclusion sets
+  stream error, activeBeat/activeChat/activeChatBeat (which entry is lit is
+  panel UI — only the resulting ids are global; the third addresses a beat by
+  *turn* as well as index, since a conversation can hold several routed
+  lectures while the Lecture section holds one), the scope pickers' exclusion sets
   (`excludedSources` — exclusion-tracked so a new source is in scope by
   default; the lecture's is the plain `lectureInScope` flag) plus which
   picker's popover is open
@@ -174,10 +178,44 @@ structure rule's nesting case (the `graph/hooks` precedent).
   hides it (`lectureHidden`, beats kept) and pressing it while hidden reveals
   what is there — live if still streaming, instant if done
   (`lectureShownAgain`). Note what a second press is *not*: a re-ask over a
-  changed scope. That is `clearLecture` then press again, and it is worth
-  revisiting once lectures are asked for in words (the chat-routing ticket),
-  where "lecture me on these five instead" is a new request rather than a
-  second press of the same control.
+  changed scope. That is `clearLecture` then press again — and it stayed that
+  way when lectures became askable in words (v7.20.0), because the two are
+  genuinely different requests. A button press means "show me the lecture"; a
+  *message* is a reply the reader can scroll back to, so "lecture me on these
+  five instead" appends a turn rather than overwriting the slot. That is the
+  whole reason routed beats live on the turn (`chatBeatAdded`) and not here.
+- **The composer routes, and says so** (v7.20.0 — `send` / `reroute` in
+  `useConversation`). One bar, four destinations. Three are still decided on
+  plain facts before any model is involved — a pasted arXiv id (`ID_RE`), a
+  mention the reader picked from the dropdown, an unresolved `@phrase` — and
+  those stay free and exact. Only the fourth asks `POST /api/route`, because
+  "teach me these papers" and "which of these used dropout" differ in their
+  words and nowhere else.
+
+  Three things make paying for that acceptable, and all three are load-bearing:
+
+  - **The classify is skipped whenever a lecture is impossible** — no graph, or
+    nothing visible to lecture about. Not an optimization: with one destination
+    there is no choice to buy.
+  - **Every routed turn says which assistant answered and offers the other**
+    (`routedTo` on the turn, `.chat-routed` + `reroute`). A misroute costs one
+    click, not a wrong answer the reader has to notice. The offer is absent
+    when the reader chose the destination themselves — the button, or a
+    correction they already made — since there is then nothing to second-guess,
+    and a correction deliberately carries none so the two answers can't
+    ping-pong.
+  - **Stop reaches the classify** (`routeCtrl`, aborted by `stopAsk`). A
+    message stopped while it is still being routed has no turn yet, so
+    `askCtrl` has nothing to abort — without its own controller the reader's
+    Stop is silently ignored and the answer they cancelled starts a moment
+    later.
+
+  A routed lecture streams on **`askCtrl`**, not `lectureCtrl`: it is a chat
+  turn, so the next message supersedes it and the Lecture section's own
+  lecture — which may be streaming at the same time — is untouched. Its scope
+  is the same `selectLectureNodes` the button uses; the router decided which
+  *agent* answers, not which papers, and rescoping because a lecture was asked
+  for in words would make one request mean two things.
 - **The lecture streams on its own controller** (`lectureCtrl`, with
   `lecturing` driving the button's hopping dots); the chat has its own. So a
   lecture keeps generating in the background when you hide it or ask a

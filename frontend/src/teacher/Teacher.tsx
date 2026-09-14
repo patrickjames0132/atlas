@@ -175,14 +175,17 @@ export default function Teacher({
     error,
     activeBeat,
     activeChat,
+    activeChatBeat,
     onBeatClick,
+    onChatBeatClick,
     onChatClick,
     onRefClick,
     onGraphIds,
     onPaperSeed,
     provider,
     toggleLecture,
-    ask,
+    send,
+    reroute,
     retryAnswer,
     stopAsk,
     clearLecture,
@@ -287,11 +290,13 @@ export default function Teacher({
   const lectureScope = lecturePlayed && lectureInScope
   const lectureItems = lecturePlayed ? [{ id: 'lecture', title: LECTURE_TITLE }] : []
 
-  // One bar, three destinations — and which one runs is decided HERE, before
-  // any model is involved, rather than by asking an agent to classify the
-  // input. A pasted id is exact, so it needs nothing but a regex; direct
-  // search is deterministic apart from the queries the scout writes; only the
-  // third is open-ended.
+  // One bar, four destinations. The first three are decided HERE on plain
+  // facts — a pasted id is exact, a picked mention is a paper the reader
+  // already chose, an unresolved `@phrase` is a search — so they cost nothing
+  // and cannot be wrong. Only the fourth asks a model, because "teach me
+  // these papers" and "which of these used dropout" differ in their words and
+  // nowhere else; `send` owns that, and the turn it produces says which
+  // assistant it picked so the reader can take the other in one click.
   const submitQuestion = () => {
     const question = input.trim()
     if (!question || asking || searching) return
@@ -308,11 +313,10 @@ export default function Teacher({
       onPaperSeed(question)
       return
     }
-    // What the words turn out to be. One bar, three destinations, and which
-    // one runs is STILL decided here on plain facts rather than by asking an
-    // agent to classify the input — `readMessage` is a substring check and a
-    // startsWith. What changed in v7.18.0 is that the reader says which they
-    // meant, with `@`, instead of arming a mode beforehand.
+    // What the words turn out to be. `readMessage` is a substring check and a
+    // startsWith — the three branches below stay free and exact. What changed
+    // in v7.18.0 is that the reader says which of them they meant, with `@`,
+    // instead of arming a mode beforehand.
     const intent = readMessage(question, resolvedMentions.current)
     resolvedMentions.current = new Map()
     if (intent.kind === 'seed') {
@@ -328,7 +332,9 @@ export default function Teacher({
       void runSearch(intent.query)
       return
     }
-    ask(question, scopeArg, lectureScope, searchOptions, undefined, intent.mentioned)
+    // Anything else: a message whose destination is genuinely unknown. `send`
+    // classifies it and streams from the lecturer or the researcher.
+    void send(question, scopeArg, lectureScope, searchOptions, intent.mentioned)
   }
 
   const onAsk = (event: FormEvent) => {
@@ -480,9 +486,11 @@ export default function Teacher({
   // The placeholder is where `@` is taught, because it is the only help
   // surface a reader is already looking at when they would need it. Every
   // variant names it: the gesture is the same with a graph, without one, and
-  // with a library.
+  // with a library. The graph variant also teaches the lecture, and only that
+  // one does — a lecture needs papers on screen to be about, so offering it
+  // with no graph would advertise something the bar cannot do.
   const askPlaceholder = hasGraph
-    ? 'Ask about the papers on screen… or @ a paper'
+    ? 'Ask about these papers, or for a lecture… or @ a paper'
     : libraryItems.length > 0
       ? 'Ask your books, PDFs, or the literature… or @ a paper'
       : 'Ask a research question… or @ a paper'
@@ -592,6 +600,19 @@ export default function Teacher({
         onPaperSeed={onPaperSeed}
         provider={provider}
         onEnlarge={setLightbox}
+        // A lecture answered in the chat: this turn's beats, lit one at a
+        // time. `activeChatBeat` addresses a beat by turn as well as index,
+        // since a conversation can hold more than one lecture.
+        activeBeat={activeChatBeat?.turn === index ? activeChatBeat.beat : null}
+        onBeatClick={
+          message.beats?.length
+            ? (beatIndex, beat) => onChatBeatClick(index, beatIndex, beat)
+            : undefined
+        }
+        // Only offered on a turn a *model* routed, and only while nothing
+        // else is running — a reroute sends a new message, and two at once
+        // would abort each other.
+        onReroute={message.routedTo && !asking && !searching ? () => reroute(index) : undefined}
       />
     )
   })

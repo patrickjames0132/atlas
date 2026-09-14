@@ -308,7 +308,8 @@ export const GRAPH_TOUR: TourStep[] = [
       'themes, “History” walks them oldest to newest. Papers light up on the map as their ' +
       'part of the story arrives, and the lecture reads here in its own section while the ' +
       'conversation below keeps its own. It folds away behind the “Lecture” caret by ' +
-      'default, so the chat gets the room.',
+      'default, so the chat gets the room. You can also just ask — “lecture me on these” ' +
+      'in the chat below delivers one as a reply, right there in the conversation.',
   },
   {
     target: '[data-tour="lecture-scope"]',
@@ -344,6 +345,10 @@ export const GRAPH_TOUR: TourStep[] = [
       'any. It reads them in full, hops the graph, searches the literature and your ' +
       'uploaded library, then answers with numbered citations (click one to light up ' +
       'the paper behind it). New papers it finds join the map with dashed rings. ' +
+      'Ask to be taught rather than answered — “lecture me on these”, “what’s the story ' +
+      'here” — and the lecturer takes the message instead, its beats landing as the reply. ' +
+      'Every turn says which of the two answered and offers the other in a click, so a ' +
+      'wrong guess costs nothing. ' +
       'Press Enter to send; ⇧ Shift+Enter starts a new line for longer questions.',
   },
 ]

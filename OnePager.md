@@ -390,58 +390,6 @@ than deleted so the plan doesn't get re-proposed.
       rather than model recall. Probably wants the result grounded as
       highlightable node lists too. *(From the `todos.md` inbox, 2026-07-18.)*
 
-- [ ] **Let the chat bar decide what a message is — route lectures from the
-      composer** — today a lecture is reachable only by pressing the Lecture
-      button, while everything typed goes to the researcher. The ask is for
-      *"Lecture me about the attention papers"* or *"Summarize this"* to reach
-      the lecturer through the same bar as any other message — beats still
-      rendering as beats in the transcript.
-
-      **Half of this ticket already shipped, in v7.17.0** (see
-      [docs/history.md](docs/history.md)), which changes what is left. The
-      four-button mode grid it was written to delete is gone: a lecture now
-      narrates whatever the reader has scoped, so there is one button and no
-      mode to classify. What remains is strictly the *routing* — recognising
-      that a typed message is a lecture request at all — plus one thing
-      v7.17.0 created rather than removed: the composer would need to infer
-      **`framing`** (summary vs history) from the words, where the button row
-      has the reader state it. "Summarize xyz" and "walk me through xyz" are
-      the easy cases; most phrasings are not.
-
-      **This is the router coming back, and it should be honest about that.**
-      `agents/orchestrators/` had exactly this component — one
-      `run(intent, ...)` every route funnelled through — and it was **deleted
-      in v7.0.0** because it dispatched two known intents to two agents and
-      "never grew the model half it was designed around" (see that package's
-      README, *"The router that isn't here"*). This ticket is the model half
-      finally being wanted. Rebuild it as an **agent that classifies**, not as
-      an `Intent` enum round-trip between a route and the function next to it,
-      or v7.0.0 repeats itself.
-
-      **What made it non-trivial was that the lecturer's argument wasn't a
-      question but a mode plus a scope — and that half is now settled.**
-      `POST /api/lecture` no longer takes a mode: it takes the scoped nodes,
-      an optional bridge target, and the framing. So the classifier's output
-      is smaller than this ticket first assumed — pick the agent, and for a
-      lecture pick a framing — but it is still not a boolean.
-
-      **The cost to weigh honestly:** the current dispatch is deliberate.
-      `Teacher.tsx:286` documents it — *"which one runs is decided HERE,
-      before any model is involved, rather than by asking an agent to classify
-      the input"* — and it is free, instant and never wrong. Routing through a
-      model buys discoverability (four buttons most turns never press, per the
-      same file's fold comment) and pays a classification call plus a new
-      failure mode: a misrouted lecture is a slow, expensive wrong answer.
-      Worth building a **visible, correctable** route (the transcript says
-      which agent it picked and offers the other) rather than a silent one.
-      Keep a deterministic fast path for the unambiguous cases the way `ID_RE`
-      already short-circuits a pasted id.
-
-      **Help surfaces to update in the same change** (per CLAUDE.md): the
-      tour's lecture step (`tour/steps.ts`) and the composer's placeholder
-      text. *(From the developer, 2026-09-08; scope narrowed by what shipped
-      in v7.17.0.)*
-
 
 ### Citations & graph data
 

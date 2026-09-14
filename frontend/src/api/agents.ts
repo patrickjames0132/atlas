@@ -93,6 +93,51 @@ export interface Discovery {
   edges: GraphEdge[]
 }
 
+/**
+ * Which assistant a typed message wants — the answer from {@link routeMessage}.
+ *
+ * `framing` is only meaningful when `target` is `'lecture'`; on an answer the
+ * backend returns `'summary'` as a filler rather than making the field
+ * optional, so the caller never has to check two things to read one.
+ */
+export interface MessageRoute {
+  target: 'lecture' | 'answer'
+  framing: LectureFraming
+}
+
+/**
+ * Ask the backend which assistant a typed message wants.
+ *
+ * Plain JSON, not SSE: this produces a *decision*, and the caller then streams
+ * from whichever endpoint it names. Two round trips, deliberately — see
+ * `POST /api/route`.
+ *
+ * **Never rejects.** A dead model, a network failure and an unroutable message
+ * all come back as `answer`, because this call sits in front of every message
+ * the reader sends: failing it would break asking questions in order to
+ * protect a routing nicety. The backend takes the same position; this is the
+ * client half, covering the case where the request never arrives.
+ *
+ * @param message The message as typed — untrimmed, mentions and all. The fast
+ *                path anchors on how it opens.
+ * @param signal  Abort signal, so a superseded message stops classifying.
+ * @returns The route, falling back to `answer` on any failure.
+ */
+export async function routeMessage(message: string, signal?: AbortSignal): Promise<MessageRoute> {
+  try {
+    const res = await fetch('/api/route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+      signal,
+    })
+    if (!res.ok) return { target: 'answer', framing: 'summary' }
+    return (await res.json()) as MessageRoute
+  } catch {
+    return { target: 'answer', framing: 'summary' }
+  }
+}
+
 /** Callbacks for {@link streamLecture}. Optional ones may be omitted. */
 export interface LectureHandlers {
   /** A new beat arrived — append it to the lecture panel. */

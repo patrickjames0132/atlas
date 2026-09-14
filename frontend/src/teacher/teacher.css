@@ -911,6 +911,43 @@
   color: var(--accent);
 }
 
+/* --- A turn the router placed: which assistant answered, and the offer of
+   the other. Quiet by design — it is an account of what happened, not a
+   control the reader should feel they have to use. --- */
+.chat-routed {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.chat-reroute {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.chat-reroute:hover {
+  color: var(--accent, #58a6ff);
+  text-decoration-color: currentColor;
+}
+
+/* Beats rendered as a turn's answer. The panel's lecture section gives them a
+   10px tail; inside a chat bubble the bubble's own padding is the tail, so it
+   would read as a gap before the grounding line. */
+.chat-beats .beats {
+  margin-bottom: 0;
+}
+
 /* --- Markdown-rendered answer prose (assistant turns). react-markdown emits
    real block elements, so this surface drops the .chat `pre-wrap` (which would
    add blank gaps between them) and styles the structure tightly for a narrow

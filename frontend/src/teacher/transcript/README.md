@@ -8,7 +8,8 @@ top-level components.
 ```
 transcript/
   BeatList.tsx       — lecture beats (click to light their papers)
-  ChatMessage.tsx    — one turn: retrieval line, trace chips, prose+figures
+  ChatMessage.tsx    — one turn: retrieval line, trace chips, prose+figures,
+                       or a routed lecture's beats + the route line
   AnswerMarkdown.tsx — Markdown + KaTeX + citation rendering for answers
   remarkCite.ts      — the remark plugin that turns [n]/[Sn] markers into chips
   provenance.ts      — the counts under an answer -> the one grounding line
@@ -21,6 +22,13 @@ transcript/
   Click a beat to light its papers on the graph; click the active one again
   to clear. Which beat is lit is panel-local UI state — only the resulting
   highlight ids are global (the store's highlight slice).
+
+  **Rendered in two places since v7.20.0**: the Lecture section, and inside a
+  `ChatMessage` whose answer is a lecture the router placed. Deliberately the
+  same component in both — a beat has to behave the same wherever it is read,
+  and a second renderer would drift. What differs is only the address of the
+  lit beat: the section's single lecture needs an index, a conversation
+  holding several needs turn + index (`activeChatBeat`).
 - **`ChatMessage`** — one turn end-to-end: the library-retrieval summary
   (graph-free mode), the researcher's live trace chips (reads / expansions
   / searches — a failed search explains *why* in plain words:
@@ -28,6 +36,18 @@ transcript/
   interleaved with its `<<FIG n>>` figures (via `../figures/split`), and
   the cited-papers footer — clickable to re-light the answer's whole
   grounding set.
+
+  A turn whose answer is a **lecture** (`message.beats`, v7.20.0) renders a
+  `BeatList` where the prose would be, under a `.chat-routed` line naming the
+  assistant that answered and offering the other. Three details are easy to
+  get wrong here and are pinned by tests: beats must suppress the "Thinking"
+  dots (a lecture turn's `text` stays empty, which is exactly what the dots
+  key off, so without this every lecture streams under a placeholder that
+  never resolves); the beat click and the reroute button both
+  `stopPropagation`, since the bubble's own handler would otherwise replace a
+  beat's highlight with the turn's whole grounding set; and the route line
+  appears whenever `routedTo` is set even when the offer itself is withheld —
+  the turn still has to account for what happened to it.
 - **`AnswerMarkdown`** — the researcher replies in Markdown
   with `$…$` math and inline citations; this renders all three for
   real: remark-gfm for structure, remark-math + rehype-katex for math (the
@@ -133,5 +153,8 @@ callbacks dispatch into the store's highlight slice. `AnswerMarkdown` and
 
 ## How it's verified
 
-`tsc --noEmit` strict + oxlint; beats lighting as they stream, trace chips,
-and clickable `[n]` citations are standing browser-milestone items.
+`tsc --noEmit` strict + oxlint, plus `test/teacher/transcript/` — where
+`ChatMessage.test.tsx` covers the routed turn, and most of its weight is on
+the *correction affordance*, since one-click correction is what makes routing
+by model affordable in the first place. Beats lighting as they stream, trace
+chips, and clickable `[n]` citations are standing browser-milestone items.

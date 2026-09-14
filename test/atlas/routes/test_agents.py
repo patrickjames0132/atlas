@@ -371,3 +371,48 @@ def test_client_history_is_capped_by_the_configured_budget():
     assert len(resumed) == keep
     # The most RECENT turns survive — the ones nearest the question being retried.
     assert resumed[-1]["content"] == f"turn {keep + 19}"
+
+
+class TestRouteEndpoint:
+    """``POST /api/route``: the one non-streaming endpoint here.
+
+    It sits in front of every message the reader sends, so what these pin is
+    mostly that it cannot fail: a bad body, a dead model or a nonsense payload
+    all have to come back as a usable decision, because 500-ing here would
+    break asking questions in order to protect a routing nicety.
+    """
+
+    def test_it_returns_the_routers_decision_as_json(self, client, monkeypatch):
+        from atlas.agents.orchestrators import router
+
+        monkeypatch.setattr(
+            router, "route", lambda message: router.MessageRoute(target="lecture", framing="history")
+        )
+        response = client.post("/api/route", json={"message": "lecture me on these"})
+        assert response.status_code == 200
+        assert response.get_json() == {"target": "lecture", "framing": "history"}
+
+    def test_the_message_reaches_the_router_verbatim(self, client, monkeypatch):
+        from atlas.agents.orchestrators import router
+
+        seen: list[str] = []
+
+        def capture(message):
+            seen.append(message)
+            return router.ANSWER
+
+        monkeypatch.setattr(router, "route", capture)
+        client.post("/api/route", json={"message": "  @DQN what is this?  "})
+        # Untrimmed: `@` mentions and leading space are the router's to read,
+        # and the fast path anchors on the start of the message.
+        assert seen == ["  @DQN what is this?  "]
+
+    @pytest.mark.parametrize(
+        "body", [{}, {"message": None}, {"message": 42}, {"message": ["a list"]}, None]
+    )
+    def test_a_malformed_body_answers_instead_of_400ing(self, client, body):
+        # No model is reachable in tests, so this also covers the dead-model
+        # path: either way the reader gets a route they can act on.
+        response = client.post("/api/route", json=body)
+        assert response.status_code == 200
+        assert response.get_json() == {"target": "answer", "framing": "summary"}

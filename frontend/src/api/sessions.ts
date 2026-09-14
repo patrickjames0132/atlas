@@ -61,6 +61,26 @@ export interface ChatMsg {
    * from before v6.7.0.
    */
   paperRefs?: Record<string, PaperRef>
+  /**
+   * This answer IS a lecture — its beats, in order, rendered where the prose
+   * would be. Set when the router sent a typed message to the lecturer
+   * (v7.20.0); absent on every researcher turn and every turn saved before it.
+   *
+   * Beats live on the turn rather than in the panel's own `lecture` slot
+   * because a lecture *asked for in words* is a reply to a message, and the
+   * slot holds exactly one per exploration. Two typed lecture requests are two
+   * answers a reader can scroll between; two presses of the Lecture button
+   * are still one lecture, and that path is untouched.
+   */
+  beats?: Beat[]
+  /**
+   * Which assistant the router picked for this turn, when a router picked at
+   * all. Persisted, because the transcript's offer of the *other* one has to
+   * survive a reload — a misroute is most annoying on the answer you come
+   * back to. Absent on turns whose destination was never in doubt (the
+   * Lecture button, a correction the reader made themselves).
+   */
+  routedTo?: 'lecture' | 'answer'
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
   /**

@@ -8,7 +8,8 @@ shapes, and SSE frames; components above it deal in types.
 ```
 api/
   sse.ts       — the shared text/event-stream reader (internal plumbing)
-  agents.ts    — streaming lecture / Q&A / library chat  (routes/agents.py)
+  agents.ts    — streaming lecture / Q&A / library chat, plus `routeMessage`
+                 (routes/agents.py)
   search.ts    — direct search (SSE), field vocabulary (routes/search.py)
   graph.ts     — graph, paper detail, figures, code links, category tags (routes/graph.py)
   sessions.ts  — saved workspaces                          (routes/sessions.py)
@@ -84,7 +85,12 @@ api/
   stream: `trace` frames as the scout works, then one `result`); `getFields`
   fills the filter picker once, lazily.
 - **`teacher/Teacher.tsx`** — the three `agents.ts` streams; `Discovery`
-  payloads flow up to the graph via `useDiscovery`.
+  payloads flow up to the graph via `useDiscovery`. Also `routeMessage`, the
+  one non-streaming call here — it returns a *decision* (which assistant a
+  typed message wants) and the composer then streams from the endpoint it
+  names. It is the only client function that **cannot reject**: it sits in
+  front of every message the reader sends, so a network failure comes back as
+  `answer` rather than breaking the ask.
 - **`detail/DetailPanel.tsx`** — `fetchPaperDetail`, `fetchFigures`,
   `fetchCodeLinks`, `fetchCategories` on node click (lazy, degradable).
 - **`library/Sources.tsx`** — `sources.ts` CRUD; **`shell/useSessions.ts`** —
