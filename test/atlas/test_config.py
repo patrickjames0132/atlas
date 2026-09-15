@@ -42,7 +42,7 @@ def test_example_config_is_valid():
 def test_db_paths_follow_data_dir(tmp_path, monkeypatch):
     """All three databases live under data_dir — one override moves them all."""
     monkeypatch.setattr(config.storage, "data_dir", tmp_path)
-    assert config.storage.digest_db == tmp_path / "digest.db"
+    assert config.storage.cache_db == tmp_path / "cache.db"
     assert config.storage.sources_db == tmp_path / "sources.db"
     assert config.storage.sessions_db == tmp_path / "sessions.db"
 

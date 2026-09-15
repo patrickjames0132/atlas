@@ -98,9 +98,9 @@ class StorageConfig(ConfigModel):
     # tests do) relocates all storage at once.
 
     @property
-    def digest_db(self) -> Path:
+    def cache_db(self) -> Path:
         """The ephemeral cache: graph snapshots, figures, code links."""
-        return self.data_dir / "digest.db"
+        return self.data_dir / "cache.db"
 
     @property
     def sources_db(self) -> Path:
@@ -737,7 +737,7 @@ class PdfConfig(ConfigModel):
         "provider timeouts."
     )
     cache_files: PositiveInt = Field(
-        description="Maximum PDFs kept in the on-disk cache (data_dir/oa_pdfs); "
+        description="Maximum PDFs kept in the on-disk cache (data_dir/pdf_cache); "
         "the least-recently-used files beyond it are pruned after each download. "
         "At ~2 MB per typical paper, 200 files ≈ 400 MB."
     )

@@ -9,7 +9,7 @@ once and mines it with pymupdf.
 
 ```
 resolve.py — where the paper's OA PDF lives (arXiv → primed URL → provider), cached
-fetch.py   — the download + on-disk cache (data_dir/oa_pdfs, LRU-pruned)
+fetch.py   — the download + on-disk cache (data_dir/pdf_cache, LRU-pruned)
 text.py    — readable body text from the file (the ar5iv fulltext's PDF twin)
 floats.py  — caption-anchored float mining: figures, tables, algorithms
 mine.py    — the cached high-level API the app calls; token → URL registry
@@ -152,7 +152,9 @@ never join the union.
   PDF is mined. The browser never supplies a URL, so the route can't be used
   as an open proxy (the same SSRF posture as the ar5iv figure proxy).
 * **Everything is cached, misses included.** The file on disk
-  (`oa_pdfs/`, LRU beyond `config.pdf.cache_files`), the mined text/floats
+  (`pdf_cache/` — `oa_pdfs/` until v7.22.1, renamed because "oa" read as
+  OpenAlex when it meant open-access; LRU beyond `config.pdf.cache_files`),
+  the mined text/floats
   and the resolver's answers in the SQLite cache for a month (published PDFs
   are immutable) — including "no PDF"/"nothing mined", so a barren paper
   isn't re-mined on every panel open. Transient provider failures are the

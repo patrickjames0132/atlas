@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS cache (
 
 def _connect() -> utils.ConnectionContext:
     """Open a connection to the cache table (data dir + schema ensured)."""
-    return utils.connect(config.storage.digest_db, _SCHEMA)
+    return utils.connect(config.storage.cache_db, _SCHEMA)
 
 
 def get(key: str, max_age: float | None = None) -> Any | None:

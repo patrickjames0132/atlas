@@ -19,7 +19,7 @@ Notebook code cells are parsed individually and reported ruff-style
 (``cell N`` = Nth code cell, 1-based); a cell that doesn't parse as plain
 Python (e.g. IPython magics) is skipped — ruff's own rules still cover it.
 
-Usage: ``python bin/check_identifiers.py FILE [FILE ...]`` (pre-commit passes
+Usage: ``python check_identifiers.py FILE [FILE ...]`` (pre-commit passes
 the staged files). Exits 1 if any violation is found.
 
 Authors:

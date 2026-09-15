@@ -4290,6 +4290,36 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Infrastructure, quality & tooling
 
+- [x] **Rename `digest.db` → `cache.db`** *(v7.22.1)* — the ephemeral graph-snapshot store
+      is still named `digest.db`, a leftover from the retired daily-digest era;
+      it's really the 1-day graph/artifact **cache** now. Rename the file (and
+      the `storage.data_dir`-relative path + any `config`/docstring references,
+      e.g. `storage/sessions.py`'s note contrasting it with `sessions.db`) so the
+      name matches what it holds. A cosmetic rename — old `digest.db` files can be
+      left to age out or deleted, since it's a regenerable cache. *(From the
+      `todos.md` inbox, 2026-07-11.)* Shipped: `StorageConfig.digest_db` →
+      `cache_db`, the file is `cache.db`; every docstring/README/CLAUDE.md
+      mention followed. Old `digest.db` files can just be deleted.
+- [x] **Rename the `data/oa_pdfs/` PDF cache — "oa" reads as OpenAlex, means
+      open-access** *(v7.22.1)* — `services/pdf/fetch.py` caches downloaded PDFs under
+      `data_dir/oa_pdfs` (hash-named, LRU-pruned beyond `config.pdf.cache_files`).
+      The `oa_` prefix is meant as *open-access* but reads as *OpenAlex*, which
+      misleads — the cache is provider-agnostic (any paper's open-access PDF,
+      mined for figures/full text). Rename to something unambiguous (`pdfs/`,
+      `pdf_cache/`), updating `fetch.py` and the `services/pdf/README.md`
+      references; old `oa_pdfs/` dirs can age out (it's a regenerable cache).
+      *(From the `todos.md` inbox, 2026-07-20.)* Shipped: now
+      `data_dir/pdf_cache/`, with the reason kept in `services/pdf/README.md` so
+      the name doesn't drift back.
+- [x] **Move `check_identifiers.py` out of `bin/` to the project root** *(v7.22.1)* — the
+      no-single-letter-identifiers AST hook lives in `bin/check_identifiers.py`,
+      but it's repo-level tooling like `noxfile.py`, which sits at the root; move
+      it alongside. Updates the `.pre-commit-config.yaml` `entry`
+      (`uv run --no-sync python bin/check_identifiers.py`) and the two CLAUDE.md
+      references. *(From the `todos.md` inbox, 2026-07-20.)* Shipped: moved to
+      the root beside `noxfile.py`; the pre-commit `entry`, the script's usage
+      docstring, CLAUDE.md and `frontend/src/README.md` all point at the new
+      path.
 - [x] **PyMuPDF is an optional extra — the one AGPL dependency is out of the
       default install** *(v7.15.0)* — a license audit of the installed tree
       (2026-08-09) came back clean everywhere except one: `pymupdf` is **"Dual

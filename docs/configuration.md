@@ -279,7 +279,7 @@ are not — is written up in [pdf-mining.md](pdf-mining.md).
   a few MB; the cap is about a mislabeled/hostile URL, not typical papers.
 - **`timeout: 60`** — PDFs are much bigger than the JSON the provider
   timeouts were sized for, so downloads get their own, longer clock.
-- **`cache_files: 200`** — the on-disk PDF cache (`data_dir/oa_pdfs`,
+- **`cache_files: 200`** — the on-disk PDF cache (`data_dir/pdf_cache`,
   LRU-pruned). At ~2 MB per typical paper that's ~400 MB worst case;
   mined text/floats stay in the SQLite cache for a month either way, so an
   evicted PDF only costs a re-download when its figures are next *rendered*.

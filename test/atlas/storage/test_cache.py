@@ -19,7 +19,7 @@ from atlas.storage import cache
 
 def _backdate(key: str, seconds_ago: float) -> None:
     """Rewrite a cached entry's created_at directly, bypassing cache.set()."""
-    conn = sqlite3.connect(config.storage.digest_db)
+    conn = sqlite3.connect(config.storage.cache_db)
     conn.execute("UPDATE cache SET created_at = ? WHERE key = ?", (time.time() - seconds_ago, key))
     conn.commit()
     conn.close()
@@ -55,7 +55,7 @@ def test_get_with_no_max_age_never_expires():
 
 def test_corrupt_json_blob_is_treated_as_a_miss():
     cache.set("k", "placeholder")
-    conn = sqlite3.connect(config.storage.digest_db)
+    conn = sqlite3.connect(config.storage.cache_db)
     conn.execute("UPDATE cache SET value = 'not json' WHERE key = ?", ("k",))
     conn.commit()
     conn.close()
