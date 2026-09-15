@@ -24,7 +24,6 @@ import reducer, {
   providerSet,
   selectGroundingNodes,
   selectLectureNodes,
-  selectSatelliteCount,
   restoreSession,
   visibleNodesSet,
   workspaceCleared,
@@ -227,7 +226,7 @@ describe('selection lifecycle', () => {
 
 describe('restoring a save from before the graphRefs rename', () => {
   /** A legacy save: `[n]` maps under the old bare `refs` key, on both a chat
-   *  turn and a cached lecture beat. */
+   *  turn and a per-mode cached lecture beat. */
   const LEGACY_SAVE = {
     data: {
       seed: { id: 'seed', arxiv_id: null, title: 'Seed' },
@@ -255,8 +254,62 @@ describe('restoring a save from before the graphRefs rename', () => {
     const { transcript } = action.payload as { transcript: TranscriptState }
 
     expect(transcript.chat[1].graphRefs).toEqual({ '1': 'node-attention' })
-    expect(transcript.lecture?.[0].graph_refs).toEqual({ '2': 'node-rnn' })
+    // The save's lecture is folded in as the last turn (there is no slot any
+    // more), and its beat's map has to survive that fold — the backfill is
+    // the whole reason the beat's citations still work.
+    expect(transcript.chat[2].beats?.[0].graph_refs).toEqual({ '2': 'node-rnn' })
     getSession.mockRestore()
+  })
+
+  /** Restore a save body and hand back the transcript it produced. */
+  async function restored(data: Record<string, unknown>) {
+    const api = await import('../../src/api')
+    const getSession = vi.spyOn(api, 'getSession').mockResolvedValue({ data } as never)
+    const action = await restoreSession('saved-x')(vi.fn(), vi.fn(), undefined)
+    getSession.mockRestore()
+    return (action.payload as { transcript: TranscriptState }).transcript
+  }
+
+  const BEAT = { heading: 'Roots', text: 'It began with recurrence.', node_ids: [] }
+
+  it('folds a v7.17.0-era slot lecture in as the last turn', async () => {
+    // The destination slot is gone, so a restore that did not fold would
+    // silently discard the reader's lecture.
+    const transcript = await restored({
+      chat: [{ role: 'user', text: 'hi' }],
+      lecture: [BEAT],
+      lectureSources: { S1: { id: 'src1', title: 'Sutton & Barto' } },
+    })
+    expect(transcript.chat).toHaveLength(2)
+    const turn = transcript.chat[1]
+    expect(turn.role).toBe('assistant')
+    expect(turn.beats?.map((beat) => beat.heading)).toEqual(['Roots'])
+    // The `[Sn]` index rides on the turn, where ChatMessage already reads it.
+    expect(turn.sourceRefs).toEqual({ S1: { id: 'src1', title: 'Sutton & Barto' } })
+    // No invented question, and no reroute offer: the reader never typed
+    // anything and no model guessed anything.
+    expect(turn.routedTo).toBeUndefined()
+  })
+
+  it('picks the mode that was on screen out of a v6-era cache', async () => {
+    const transcript = await restored({
+      chat: [],
+      lectures: { history: [BEAT], frontier: [{ ...BEAT, heading: 'Frontier' }] },
+      activeMode: 'frontier',
+      lectureSources: { frontier: { S1: { id: 'src1', title: 'Book' } } },
+    })
+    expect(transcript.chat[0].beats?.map((beat) => beat.heading)).toEqual(['Frontier'])
+    expect(transcript.chat[0].sourceRefs).toEqual({ S1: { id: 'src1', title: 'Book' } })
+  })
+
+  it('falls back to an ancient flat beats array', async () => {
+    const transcript = await restored({ chat: [], beats: [BEAT] })
+    expect(transcript.chat[0].beats?.map((beat) => beat.heading)).toEqual(['Roots'])
+  })
+
+  it('adds no turn when the save holds no lecture at all', async () => {
+    const transcript = await restored({ chat: [{ role: 'user', text: 'hi' }] })
+    expect(transcript.chat).toHaveLength(1)
   })
 
   it('leaves a current save untouched', async () => {
@@ -274,48 +327,6 @@ describe('restoring a save from before the graphRefs rename', () => {
 
     expect(transcript.chat[0].graphRefs).toEqual({ '1': 'node-new' })
     getSession.mockRestore()
-  })
-})
-
-describe('selectSatelliteCount', () => {
-  const seed = { id: 'seed01', title: 'Seed', is_seed: true }
-  const edge = (source: string, target: string) => ({ source, target, type: 'reference' as const })
-
-  /** A workspace state with a graph, its edges, and everything visible. */
-  const stateWith = (
-    nodes: { id: string; is_seed?: boolean }[],
-    edges: ReturnType<typeof edge>[],
-  ) =>
-    ({
-      workspace: {
-        ...reducer(undefined, { type: '@@init' }),
-        graph: { seed, nodes, edges, counts: {} },
-        visibleNodeIds: nodes.map((node) => node.id),
-      },
-    }) as never
-
-  it('counts papers joined to no edge of the seed — the ones no lecture narrates', () => {
-    // ref01 is the seed's reference; ref01-ref hangs off ref01, so it is on the
-    // graph but outside the seed's own neighbourhood.
-    const state = stateWith(
-      [seed, { id: 'ref01' }, { id: 'ref01-ref' }],
-      [edge('seed01', 'ref01'), edge('ref01', 'ref01-ref')],
-    )
-    expect(selectSatelliteCount(state)).toBe(1)
-  })
-
-  it('is zero on an unexpanded graph, so the note stays hidden', () => {
-    const state = stateWith([seed, { id: 'ref01' }], [edge('seed01', 'ref01')])
-    expect(selectSatelliteCount(state)).toBe(0)
-  })
-
-  it('checks both endpoints — a citer points AT the seed', () => {
-    const state = stateWith([seed, { id: 'cite01' }], [edge('cite01', 'seed01')])
-    expect(selectSatelliteCount(state)).toBe(0)
-  })
-
-  it('never counts the seed itself', () => {
-    expect(selectSatelliteCount(stateWith([seed], []))).toBe(0)
   })
 })
 
@@ -458,7 +469,7 @@ describe('restoring the three exploration shapes', () => {
  */
 function keyedTranscript(conversation: Record<string, unknown>): TranscriptState {
   return {
-    byKey: { only: { lecture: null, lectureSources: {}, lectureShown: false, ...conversation } },
+    byKey: { only: { chat: [], running: [], ...conversation } },
     activeKey: 'only',
   } as unknown as TranscriptState
 }

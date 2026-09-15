@@ -40,29 +40,37 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    │  ├─ legend                    graph/controls/Legend.tsx
    │  ├─ detail panel (on select)  detail/DetailPanel.tsx
    │  └─ figure lightbox           figures/Lightbox.tsx
-   └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked;
-      │                             docked it stacks two folding sections
-      ├─ Lecture section           the framing choice + button + the lecture
-      │  └─ lecture beats          teacher/transcript/BeatList.tsx
-      ├─ Chat section              the conversation
-      │  ├─ scope pickers          teacher/ScopePicker.tsx (🎓 + 📚, on the
-      │  │                          Chat row — they scope the researcher)
-      │  ├─ filters                search/SearchControls.tsx (▽ — year slider,
-      │  │                          field picker; same row, same ask it binds.
-      │  │                          The 🔍 "Find papers" toggle beside it went
-      │  │                          in v7.18.0 — see `mentions/`)
-      │  └─ chat turns             teacher/transcript/ChatMessage.tsx
-      │     └─ inline figures      teacher/figures/FigCard.tsx
-      ├─ ask bar                    the question and nothing else (v7.11.0)
+   └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked,
+      │                             and since v7.21.0 the SAME shape either
+      │                             way. Two folding sections (Lecture above
+      │                             Chat) from v7.10.0 until `/lecture`
+      │                             replaced the button and left a caret whose
+      │                             only job was hiding the panel's contents
+      ├─ chat turns                teacher/transcript/ChatMessage.tsx
+      │  ├─ lecture beats          teacher/transcript/BeatList.tsx (a turn
+      │  │                          whose answer IS a lecture, behind its own
+      │  │                          caret — newest open, older ones folded)
+      │  └─ inline figures         teacher/figures/FigCard.tsx
+      ├─ ask bar                    the question, and the one control that
+      │  │                          binds it most directly
       │  ├─ @ suggestions          mentions/MentionSuggestions.tsx — opens
-      │  │                          UPWARD out of the bar; the one thing
-      │  │                          anchored to it, because it belongs to the
-      │  │                          text being typed rather than to a control
-      │  └─ tool row               with no graph there is no Chat row, so the
-      │                             controls above sit as chips directly under
-      │                             the bar (`.ask-tools`)
-      ├─ "working" dots            teacher/HopDots.tsx (lecture button, send
-      │                             control, and a bubble awaiting its first token)
+      │  │                          UPWARD out of the bar; anchored to it,
+      │  │                          because it belongs to the text being typed
+      │  │                          rather than to a control
+      │  ├─ / command menu          commands/CommandMenu.tsx — the same slot
+      │  │                          and the same gesture with a different
+      │  │                          prefix, so only one of the two is ever
+      │  │                          open (a command is anchored to the start
+      │  │                          of the message, a mention is not)
+      │  └─ filters                search/SearchControls.tsx (▽ — year slider,
+      │                             field picker). Moved OUT of the pill in
+      │                             v7.11.0 with three others and back in on
+      │                             2026-09-14, once the other three were gone
+      ├─ tool row                   teacher/ScopePicker.tsx (📚 source scope)
+      │                             as a chip under the bar (`.ask-tools`) —
+      │                             one home now, not one per panel shape
+      ├─ "working" dots            teacher/HopDots.tsx (the send control, and
+      │                             a bubble awaiting its first token)
       └─ figure lightbox           figures/Lightbox.tsx (same instance type as above,
                                     but GraphExplorer and Teacher each own their own)
 ```
@@ -78,7 +86,8 @@ surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
 `mentions/` (the chat bar's `@` paper lookup — its grammar, typeahead and
-dropdown), `search/useDirectSearch.ts`, `shell/useSessions.ts`,
+dropdown), `commands/` (its `/` command grammar and menu — static and local,
+so no network half at all), `search/useDirectSearch.ts`, `shell/useSessions.ts`,
 `detail/useSelection.ts`, `teacher/useConversation.ts` (each feature's
 state/logic hooks).
 

@@ -196,32 +196,53 @@ function withBeatGraphRefs(beat: Beat): Beat {
 const LEGACY_MODE_ORDER = ['history', 'intuition', 'evolution', 'frontier', 'bridge'] as const
 
 /**
- * Pick the one lecture to restore out of a save's lecture state, whatever era
- * the save is from.
+ * Fold a save's lecture into the transcript as a turn, whatever era the save
+ * is from.
  *
- * Three shapes exist. A **current** save carries a single `lecture` array. A
- * **v6-era** save carries a per-mode cache (`lectures`) and the mode that was
- * on screen (`activeMode`) — up to four lectures where this build has room
- * for one, so the shown one wins, falling back to the first played mode in
+ * **Why this is a fold and not a load.** Every save written before v7.21.0
+ * holds its lecture in a slot *beside* the conversation, because that is where
+ * a lecture lived when a button produced it. There is no slot any more — a
+ * lecture is a turn — so a restore either converts the old shape or silently
+ * throws the reader's lecture away. It converts.
+ *
+ * Three source shapes exist. A **v7.17.0-era** save carries a single `lecture`
+ * array. A **v6-era** save carries a per-mode cache (`lectures`) plus the mode
+ * that was on screen (`activeMode`) — up to four lectures where one turn is
+ * wanted, so the shown one wins, falling back to the first played mode in
  * `LEGACY_MODE_ORDER`. An **ancient** save carries a flat `beats` array from
- * before per-mode caching existed. Dropping the extras is the honest trade:
- * they narrate a scope the reader no longer has, and the alternative is
- * inventing a mode picker for saves alone.
+ * before per-mode caching existed. Dropping a v6 save's extra modes is the
+ * honest trade: they narrate a scope the reader no longer has, and the
+ * alternative is restoring four lectures nobody asked for.
+ *
+ * The turn has **no preceding user turn**, deliberately. A button lecture was
+ * never asked for in words, and inventing a `/lecture summary` the reader never
+ * typed would put words in their mouth — and claim a framing the save does not
+ * record. It also carries no `routedTo`, so the transcript offers no reroute:
+ * there was no guess to undo.
  *
  * @param data    The saved session payload.
  * @param migrate The per-beat transform to apply (graph-ref backfill).
- * @returns The beats to restore and the library index that goes with them.
+ * @returns The turn to append, or null when the save holds no lecture.
  */
-function restoredLecture(
-  data: SessionData,
-  migrate: (beat: Beat) => Beat,
-): { lecture: Beat[] | null; lectureSources: Record<string, SourceRef> } {
+function restoredLectureTurn(data: SessionData, migrate: (beat: Beat) => Beat): ChatMsg | null {
+  /**
+   * The turn a set of beats and their `[Sn]` index become.
+   *
+   * @param beats      The saved lecture's beats, in order.
+   * @param sourceRefs Its `[Sn]` marker index, empty when the save has none.
+   * @returns The assistant turn to append.
+   */
+  const turn = (beats: Beat[], sourceRefs: Record<string, SourceRef>): ChatMsg => ({
+    role: 'assistant',
+    // Empty because a lecture's prose lives in its beats. `ChatMessage`
+    // renders the beat list where an answer's text would go.
+    text: '',
+    beats: beats.map(migrate),
+    sourceRefs,
+  })
   if (data.lecture?.length) {
-    // Current shape: `lectureSources` is the marker index itself.
-    return {
-      lecture: data.lecture.map(migrate),
-      lectureSources: (data.lectureSources ?? {}) as Record<string, SourceRef>,
-    }
+    // v7.17.0 shape: `lectureSources` is the marker index itself.
+    return turn(data.lecture, (data.lectureSources ?? {}) as Record<string, SourceRef>)
   }
   const cache = data.lectures ?? {}
   const played = LEGACY_MODE_ORDER.filter((mode) => cache[mode]?.length)
@@ -230,16 +251,12 @@ function restoredLecture(
     // v6-era shape: `lectureSources` is keyed by mode, so index into it with
     // the mode whose lecture we just chose.
     const byMode = (data.lectureSources ?? {}) as Partial<Record<string, Record<string, SourceRef>>>
-    return {
-      lecture: (cache[mode] ?? []).map(migrate),
-      lectureSources: byMode[mode] ?? {},
-    }
+    return turn(cache[mode] ?? [], byMode[mode] ?? {})
   }
-  // Ancient: a flat, un-attributed beats array.
-  return {
-    lecture: data.beats?.length ? data.beats.map(migrate) : null,
-    lectureSources: {},
-  }
+  // Ancient: a flat, un-attributed beats array. Saves from before structured
+  // library citations carry no source maps at all; their beats' `[Sn]` markers
+  // (if any) degrade to raw text, as designed.
+  return data.beats?.length ? turn(data.beats, {}) : null
 }
 
 /**
@@ -301,7 +318,7 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     }
   }
 
-  const restored = restoredLecture(data, withBeatGraphRefs)
+  const lectureTurn = restoredLectureTurn(data, withBeatGraphRefs)
 
   return {
     conversationKey,
@@ -322,14 +339,12 @@ export const restoreSession = createAsyncThunk('workspace/restoreSession', async
     // (Old saves may carry a hist_trace field from the retired lecture
     // backfill — ignored; lectures no longer expand the graph.)
     transcript: {
-      chat: (data.chat ?? []).map(withGraphRefs),
-      // One lecture, whatever era the save is from (see `restoredLecture`).
-      // Saves from before structured library citations carry no source maps;
-      // their beats' [Sn] markers (if any) degrade to raw text, as designed.
-      ...restored,
-      // Shown if there is one: a restore that hid it would leave the reader
-      // looking at an empty panel with no hint a lecture is there.
-      lectureShown: restored.lecture !== null,
+      // A pre-v7.21.0 save's lecture is appended as the last turn (see
+      // `restoredLectureTurn`). Last rather than first because the save does
+      // not record *when* it was played, and the slot's `lectureShown` was
+      // true — it was the thing the reader had on screen, so the end of the
+      // transcript is the least wrong place for it.
+      chat: [...(data.chat ?? []).map(withGraphRefs), ...(lectureTurn ? [lectureTurn] : [])],
     },
   }
 })
@@ -440,11 +455,11 @@ export function buildSaveBody(
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
     discovered_nodes: workspace.discoveredNodes.map((node) => cleanNode(node as VNode)),
     discovered_edges: workspace.discoveredEdges,
+    // Lectures ride along inside the turns that hold them. The `lecture` /
+    // `lectureSources` slot fields, and the older `lectures` per-mode cache
+    // and `activeMode`, are **read on restore and never written** since
+    // v7.21.0 — see `restoredLectureTurn`.
     chat: settleInFlight(conversation?.chat ?? []),
-    // One lecture per exploration since v7.17.0; the legacy `lectures`
-    // per-mode cache and `activeMode` are read on restore but never written.
-    lecture: conversation?.lecture ?? undefined,
-    lectureSources: conversation?.lectureSources ?? {},
   }
 }
 
@@ -834,36 +849,6 @@ export const selectGraphEdges = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredEdges,
   (graph, discovered) => [...(graph?.edges ?? []), ...discovered],
-)
-
-/**
- * How many papers a lecture will leave out because they hang off *another*
- * paper rather than the seed.
- *
- * The same predicate the backend scopes by (`_story_nodes` → `_seed_neighbors`),
- * computed here so the panel can say so instead of leaving a reader wondering
- * why the papers they just expanded went unmentioned. Both sides ask one
- * question — is this joined to the seed by an edge? — so the sentence and the
- * lecture can't disagree.
- *
- * Counted over the GROUNDING nodes, not the whole graph: a satellite the
- * reader has already filtered out isn't being left out of anything, so
- * mentioning it would be noise.
- */
-export const selectSatelliteCount = createSelector(
-  selectGroundingNodes,
-  selectGraphEdges,
-  selectSeedNode,
-  (nodes, edges, seed) => {
-    if (!seed) return 0
-    const adjacent = new Set<string>()
-    for (const edge of edges) {
-      if (edge.source === seed.id) adjacent.add(edge.target)
-      else if (edge.target === seed.id) adjacent.add(edge.source)
-    }
-    return nodes.filter((node) => !node.is_seed && node.id !== seed.id && !adjacent.has(node.id))
-      .length
-  },
 )
 
 export const selectHasDiscovered = createSelector(

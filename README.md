@@ -243,9 +243,11 @@ The Vite dev server proxies `/api/*` to Flask.
    have it ship everything it can and size the bands yourself, and each filter
    chip gains a **count slider** to trim how many of that relation you see.
 4. **Learn** (the 🎓 Assistant panel):
-   - **Lecture** — a narrated tour of the papers **you have on screen**, oldest
-     first, over the graph as you built it (lectures never expand it — only the
-     research agent does). **What it covers is your choice, not a menu's:**
+   - **Lecture** (`/lecture`) — a narrated tour of the papers **you have on
+     screen**, oldest first, over the graph as you built it (lectures never
+     expand it — only the research agent does). Type `/` in the chat bar and a
+     menu opens on it; there was a Lecture button in the panel until v7.21.0.
+     **What it covers is your choice, not a menu's:**
      filter to the references and you get the story of how the field arrived
      here; keep only recent work and you get the current frontier; alt-drag a
      cluster and it narrates those; scope it to a single paper and it teaches
@@ -260,36 +262,36 @@ The Vite dev server proxies `/api/*` to Flask.
      narrow what is on screen. And the lecture takes that literally — it will
      not narrate a paper the assistant found earlier if your filters are
      currently hiding it.
-     **One choice the scope can't make for you, so you make it:** `Summary`
-     groups the scoped papers into their key themes, `History` tells them as a
-     chronological arc. Summary is the default — a chronological arc is a
-     strong claim to make about an arbitrary selection.
+     **One choice the scope can't make for you, so the command's second word
+     makes it:** `/lecture summary` groups the scoped papers into their key
+     themes, `/lecture history` tells them as a chronological arc. A bare
+     `/lecture` means summary — a chronological arc is a strong claim to make
+     about an arbitrary selection.
      The lecture is nudged to span the whole publication history it is given —
      both ends, not just the oldest, most-cited papers. Length is tunable
      (`min_beats`/`max_beats` in the lecturer's config `extras`, default 7–12).
-     Beats light up their papers and carry the papers' **real figures**
-     inline — click to enlarge. The button is a **show/hide toggle** over the
-     lecture you played, and it keeps generating in the background if you hide
-     it or ask a question. Docked beside a graph the panel is a stack of **two
-     folding sections** — **Lecture** (the button and the beats) and **Chat**
-     (the conversation, its caret row carrying the 🎓 lecture and 📚 source
-     scopes, which bind the researcher answering there). Lecture starts folded so
-     the canvas and the conversation get the room; both headers pin to the top as
-     you scroll, and each reports its own work with a spinner. They were one
-     surface with two views until v7.10.0, which meant asking a question tucked
-     away the lecture you were reading — now the two simply coexist.
-     **You don't have to press the button.** Ask for a lecture in the chat —
-     *"lecture me on these"*, *"summarize these papers for me"*, *"what's the
-     story here?"* — and the lecturer answers there, beats and all, over the
-     same scope the button would have used (the last of those arrives framed as
-     history, because that is what it asked for). The composer works out which
-     assistant you meant: the phrasings that name a lecture outright are matched
-     outright, and anything less obvious is settled by a quick classifier —
-     *"summarize this"* is a question about the paper you have open, *"summarize
-     these papers"* is a lecture, and no pattern tells those apart. Every routed
-     turn says which one answered and offers the other in a click, so a wrong
-     guess costs one line rather than a re-typed question; a lecture you started
-     with the button says nothing, because nothing was guessed.
+     **The lecture arrives as a reply in the conversation**, beats and all,
+     behind its own caret — open when it lands, folding itself when the next
+     lecture arrives, so a conversation with four lectures in it stays
+     readable. Beats light up their papers and carry the papers' **real
+     figures** inline — click to enlarge.
+     So the docked panel is one thing: the conversation, with the 📚 source
+     scope and ▽ filters on its caret row. It was a stack of two folding
+     sections from v7.10.0, a **Lecture** section above a **Chat** one, which
+     was itself a fix for an older shape where the two took turns and asking a
+     question tucked away the lecture you were reading.
+     **You don't have to know the command.** Ask in words — *"lecture me on
+     these"*, *"summarize these papers for me"*, *"what's the story here?"* —
+     and the lecturer answers just the same (the last of those arrives framed
+     as history, because that is what it asked for). The composer works out
+     which assistant you meant: phrasings that name a lecture outright are
+     matched outright, and anything less obvious is settled by a quick
+     classifier — *"summarize this"* is a question about the paper you have
+     open, *"summarize these papers"* is a lecture, and no pattern tells those
+     apart. Every turn it guessed on says which assistant answered and offers
+     the other in a click, so a wrong guess costs one line rather than a
+     re-typed question; a `/lecture` you typed yourself says nothing, because
+     nothing was guessed.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search the
      literature / search the web / search your sources / show a figure). It
@@ -311,7 +313,16 @@ The Vite dev server proxies `/api/*` to Flask.
      Underneath each answer, a line says what actually grounded it — which of
      your sources, which papers, how much of the web — computed from what the
      agent did, not from what it claims. When nothing grounded it, it says that too: Atlas grounds
-     answers in real material, and is honest when it can't.
+     answers in real material, and is honest when it can't. A lecture gets the
+     same line, saying how many papers it narrated.
+     **And a turn tells you which graph it came from, once that stops being
+     obvious.** The conversation survives a graph load — seed something new and
+     your questions come with you — so a transcript can hold turns about
+     several different graphs at once. Those older turns quietly go inert:
+     their citations grey out, because the papers they point at are no longer
+     loaded. So any turn answered over a graph other than the one you are
+     looking at says *"From the “…” graph"* at the top, which is the difference
+     between a dead link and an answer that explains itself.
    - **No graph open? Then the assistant *is* the page.** Atlas opens on a
      centred chat bar — no graph and no uploaded library required — and the
      same agent answers seedless, searching your library through its tools

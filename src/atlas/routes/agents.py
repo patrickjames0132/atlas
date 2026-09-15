@@ -33,7 +33,6 @@ from flask.typing import ResponseReturnValue
 from pydantic import ValidationError
 
 from ..agents import events, streams
-from ..agents.models import PlayedBeat, PlayedLecture
 from ..agents.orchestrators import lecturer, researcher, router
 from ..config import config
 from ..services import search as search_service
@@ -126,43 +125,6 @@ def _opt_source_ids(payload: dict) -> list[str] | None:
     if not isinstance(raw, list):
         return None
     return [source_id for source_id in raw if isinstance(source_id, str) and source_id]
-
-
-def _opt_lectures(payload: dict) -> list[PlayedLecture] | None:
-    """Parse the optional already-played ``lectures`` from a request body.
-
-    Tolerant like the node parsing: the frontend sends
-    ``[{title, beats: [{heading, text}]}]`` from its transcript cache, and this
-    picks exactly those fields, skipping any entry missing a title or with no
-    usable beats. A malformed ``lectures`` value (or none) yields ``None`` — the
-    researcher simply runs without the extra context.
-
-    Args:
-        payload: The parsed JSON body.
-
-    Returns:
-        The played lectures to hand the researcher, or ``None`` when the key is
-        absent, malformed, or empty after cleaning.
-    """
-    raw = payload.get("lectures")
-    if not isinstance(raw, list):
-        return None
-    lectures: list[PlayedLecture] = []
-    for entry in raw:
-        if not isinstance(entry, dict):
-            continue
-        title = entry.get("title")
-        raw_beats = entry.get("beats")
-        if not isinstance(title, str) or not title or not isinstance(raw_beats, list):
-            continue
-        beats = [
-            PlayedBeat(heading=str(beat.get("heading") or ""), text=str(beat.get("text") or ""))
-            for beat in raw_beats
-            if isinstance(beat, dict) and (beat.get("text") or beat.get("heading"))
-        ]
-        if beats:
-            lectures.append(PlayedLecture(title=title, beats=beats))
-    return lectures or None
 
 
 def _node(raw: dict) -> Node:
@@ -359,14 +321,17 @@ def api_ask() -> ResponseReturnValue:
 
     Body:
         ``{question, session_id, seed, nodes, provider?, source_ids?,
-        lectures?, history?}`` — ``provider`` (``s2``/``openalex``) matches the
-        graph's backend so the researcher's expand/search/hydrate use it;
+        history?}`` — ``provider`` (``s2``/``openalex``) matches the graph's
+        backend so the researcher's expand/search/hydrate use it;
         ``source_ids`` scopes the library search to a subset of uploaded
-        sources; ``lectures`` are the lectures already played this session
-        (``[{title, beats: [{heading, text}]}]``), folded in as context the
-        answer may build on. ``history`` is the client's own copy of the
-        conversation, used **only** when this process holds none for the
-        session — see ``_resumed_history``.
+        sources. ``history`` is the client's own copy of the conversation,
+        used **only** when this process holds none for the session — see
+        ``_resumed_history``.
+
+        A ``lectures`` field used to ride along here, carrying every lecture
+        the reader had played so the researcher could build on it. It went in
+        v7.21.0 with the frontend's lecture slot: a lecture is a chat turn
+        now, so it reaches the agent through ``history`` like any other turn.
 
     Returns:
         An SSE stream: ``trace`` frames (tool steps), ``discovery`` frames
@@ -389,7 +354,6 @@ def api_ask() -> ResponseReturnValue:
         return jsonify({"error": "seed/nodes are malformed"}), 400
     session_id = payload.get("session_id") or ""
     source_ids = _opt_source_ids(payload)
-    lectures = _opt_lectures(payload)
     provider = resolve_provider(payload.get("provider"))
     history = _resumed_history(payload, _QA_SESSIONS.get(session_id, []) if session_id else [])
 
@@ -402,7 +366,6 @@ def api_ask() -> ResponseReturnValue:
                     nodes=nodes,
                     history=history,
                     source_ids=source_ids,
-                    lectures=lectures,
                     provider=provider,
                     **_opt_filters(payload, provider),
                 )

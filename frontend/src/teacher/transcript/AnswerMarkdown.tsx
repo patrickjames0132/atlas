@@ -69,9 +69,13 @@ function SpotlightGlyph() {
  * (⁂, ⌗) render inconsistently across fonts. `currentColor` so it inherits
  * the chip's own colour through hover and focus.
  *
+ * Exported because a second surface makes the same claim: the line under a
+ * turn naming the graph it came from, which re-opens that graph when clicked.
+ * One motif for "this builds a map", wherever the click appears.
+ *
  * @returns The inline glyph.
  */
-function GraphGlyph() {
+export function GraphGlyph() {
   return (
     <svg className="cite-ref-glyph" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
       <line x1="2.5" y1="9" x2="6" y2="3.5" stroke="currentColor" strokeWidth="1" />

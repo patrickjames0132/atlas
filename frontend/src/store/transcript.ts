@@ -2,8 +2,8 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The transcript slice: the reader's conversations — chat turns and lecture
- * beats — **several at once**, keyed by exploration.
+ * The transcript slice: the reader's conversations — their turns, lectures
+ * included — **several at once**, keyed by exploration.
  *
  * This slice is why the old `onStateChange`/`teacherStateRef` plumbing died:
  * the transcript used to live in Teacher.tsx with a live duplicate hoisted
@@ -22,7 +22,7 @@
  * optional key as its *second* argument, carried in `meta.key`; omitted, it
  * targets whichever conversation is active. That default is deliberate — the
  * many dispatches that are plainly about what the reader is looking at
- * (clicking a lecture mode, clearing the chat) stay unchanged and unkeyed,
+ * (clearing the chat, spotlighting a citation) stay unchanged and unkeyed,
  * while the streaming paths capture their key once at stream start and pass it
  * every time. Only code that can outlive the switch has to think about it.
  *
@@ -44,33 +44,23 @@ import type {
   SourceRef,
   TraceEvent,
 } from '../api'
-import { loadGraph, restoreSession, workspaceCleared } from './workspace'
+import { restoreSession, workspaceCleared } from './workspace'
 
 /** One exploration's conversation. */
 export interface Conversation {
-  chat: ChatMsg[]
   /**
-   * This exploration's lecture, once played — its beats in order, or null if
-   * none has been played (or the last one was dropped).
+   * Every turn, lectures included.
    *
-   * This was a per-mode cache (`Partial<Record<LectureMode, Beat[]>>`) until
-   * v7.17.0: four independent slots, one per mode button, so switching
-   * between the four stories was instant after the first play of each. With
-   * one lecture whose subject is the reader's scope there is nothing to cache
-   * *between* — the scope has usually changed by the time they ask again, so
-   * a second lecture is a different lecture, not a revisit.
+   * There used to be a `lecture` slot beside this — one lecture per
+   * exploration, plus `lectureSources` for its `[Sn]` markers and
+   * `lectureShown` for whether it was on screen — because a lecture came from
+   * a button rather than from a message and so had nowhere in the
+   * conversation to live. Since v7.21.0 a lecture *is* a turn (`ChatMsg.beats`),
+   * which is what let the slot and the whole show/hide/clear machine around it
+   * go. One consequence worth knowing: several lectures can now coexist here,
+   * where the slot could only ever hold the latest.
    */
-  lecture: Beat[] | null
-  /**
-   * The library index for the `[Sn]` markers the lecture's beats cite — one
-   * map for the lecture, not per beat, because every beat cites the same
-   * retrieved sources. Empty unless the lecture was a solo one (the scope was
-   * the seed alone), which is the only shape that retrieves.
-   */
-  lectureSources: Record<string, SourceRef>
-  /** Whether the played lecture is showing on screen. Kept separate from
-   *  `lecture` so hiding it doesn't throw the beats away. */
-  lectureShown: boolean
+  chat: ChatMsg[]
   /**
    * Ids of the streams still running in this conversation.
    *
@@ -103,14 +93,11 @@ export interface TranscriptState {
 /**
  * A fresh, empty conversation.
  *
- * @returns A conversation with no chat, no lecture and nothing running.
+ * @returns A conversation with no turns and nothing running.
  */
 export function emptyConversation(): Conversation {
   return {
     chat: [],
-    lecture: null,
-    lectureSources: {},
-    lectureShown: false,
     running: [],
     pendingDiscoveries: { nodes: [], edges: [] },
   }
@@ -129,14 +116,6 @@ const initialState: TranscriptState = {
   byKey: { [FIRST_KEY]: emptyConversation() },
   activeKey: FIRST_KEY,
 }
-
-/** A stable empty source map, so `selectVisibleSourceRefs` never returns a
- *  fresh object (which would churn selector-driven re-renders). */
-const NO_SOURCE_REFS: Record<string, SourceRef> = {}
-
-/** A stable empty-beats reference, so `selectVisibleBeats` never returns a
- *  fresh array (which would churn selector-driven re-renders). */
-const NO_BEATS: Beat[] = []
 
 /** A stable empty conversation, for selectors reading a key that has gone. */
 const NO_CONVERSATION: Conversation = emptyConversation()
@@ -349,99 +328,6 @@ const transcriptSlice = createSlice({
       prepare: keyed<number>(),
     },
     /**
-     * A lecture starts streaming: show it and reset the slot to empty, ready
-     * for the beats to stream in. The chat is left untouched.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the conversation in `meta`.
-     */
-    lectureStarted: {
-      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
-        const conversation = target(state, action.meta.key)
-        if (!conversation) return
-        conversation.lectureShown = true
-        conversation.lecture = []
-        conversation.lectureSources = {}
-      },
-      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
-    },
-    /**
-     * The library index for the lecture's `[Sn]` markers, which arrives before
-     * its first beat.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the map, and the conversation in `meta`.
-     */
-    lectureSourcesSet: {
-      reducer(state, action: PayloadAction<Record<string, SourceRef>, string, Keyed>) {
-        const conversation = target(state, action.meta.key)
-        if (conversation) conversation.lectureSources = action.payload
-      },
-      prepare: keyed<Record<string, SourceRef>>(),
-    },
-    /**
-     * One finished lecture beat arrives from the stream. The conversation is
-     * addressed explicitly (via `meta`, like every other action here) so a
-     * lecture streaming for an exploration the reader has navigated away from
-     * still lands in the right transcript.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the beat, and the conversation in `meta`.
-     */
-    beatAdded: {
-      reducer(state, action: PayloadAction<Beat, string, Keyed>) {
-        const conversation = target(state, action.meta.key)
-        if (!conversation) return
-        ;(conversation.lecture ??= []).push(action.payload)
-      },
-      prepare: keyed<Beat>(),
-    },
-    /**
-     * Show the already-played lecture again without re-fetching it.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the conversation in `meta`.
-     */
-    lectureShownAgain: {
-      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
-        const conversation = target(state, action.meta.key)
-        if (conversation) conversation.lectureShown = true
-      },
-      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
-    },
-    /**
-     * Hide the lecture while keeping its beats, so showing it again is
-     * instant.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the conversation in `meta`.
-     */
-    lectureHidden: {
-      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
-        const conversation = target(state, action.meta.key)
-        if (conversation) conversation.lectureShown = false
-      },
-      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
-    },
-    /**
-     * Drop the cached beats (a stream that was aborted or errored before
-     * finishing, so the next ask regenerates rather than reloading a partial
-     * lecture) and hide it.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the conversation in `meta`.
-     */
-    lectureDropped: {
-      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
-        const conversation = target(state, action.meta.key)
-        if (!conversation) return
-        conversation.lecture = null
-        conversation.lectureSources = {}
-        conversation.lectureShown = false
-      },
-      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
-    },
-    /**
      * A question begins: the user turn plus the empty assistant turn the
      * answer streams into.
      *
@@ -601,15 +487,14 @@ const transcriptSlice = createSlice({
       prepare: keyed<Record<string, SourceRef>>(),
     },
     /**
-     * One beat of a lecture the reader asked for *in words*, landing on the
-     * in-flight chat turn rather than in the panel's lecture slot.
+     * One beat of a lecture, landing on the in-flight chat turn.
      *
-     * The slot holds one lecture per exploration, which is right for the
-     * button (pressing it twice means "show me the lecture", not "make
-     * another") and wrong for a message: two typed requests are two replies,
-     * and overwriting the first would delete an answer the reader can still
-     * scroll to. So `beatAdded` and this one are deliberately separate
-     * reducers writing to different places, not one with a flag.
+     * Beats used to have a second home: a `lecture` slot on the conversation,
+     * written by the Lecture button, holding exactly one lecture. This reducer
+     * arrived in v7.20.0 for lectures asked for *in words*, and in v7.21.0 it
+     * became the only path — two typed requests are two replies, and a slot
+     * that holds one would have deleted an answer the reader can still scroll
+     * to.
      *
      * @param state  The slice state (mutated via immer).
      * @param action Carries the beat, and the conversation in `meta`.
@@ -624,13 +509,34 @@ const transcriptSlice = createSlice({
       prepare: keyed<Beat>(),
     },
     /**
+     * Record which graph the in-flight turn is being answered over.
+     *
+     * Dispatched at turn start by every path that has a graph, so the turn
+     * carries its own answer to "what was this about?" once the reader has
+     * moved on to another graph. See `ChatMsg.graph` for why the transcript
+     * needs that at all.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the graph's identity, and the conversation in
+     *     `meta`.
+     */
+    turnGraphSet: {
+      reducer(state, action: PayloadAction<NonNullable<ChatMsg['graph']>, string, Keyed>) {
+        const conversation = target(state, action.meta.key)
+        if (!conversation) return
+        const msg = lastMsg(conversation)
+        if (msg) msg.graph = action.payload
+      },
+      prepare: keyed<NonNullable<ChatMsg['graph']>>(),
+    },
+    /**
      * Record which assistant the router chose for the in-flight turn, so the
      * transcript can say so and offer the other one.
      *
      * Dispatched only when a *model* made the choice. A route the reader made
-     * themselves — the Lecture button, a correction — leaves this unset, which
-     * is what keeps the "answered as a lecture / answer instead?" line off
-     * turns where there was never a decision to second-guess.
+     * themselves — a `/lecture` command, a correction — leaves this unset,
+     * which is what keeps the "answered as a lecture / answer instead?" line
+     * off turns where there was never a decision to second-guess.
      *
      * @param state  The slice state (mutated via immer).
      * @param action Carries the chosen target, and the conversation in `meta`.
@@ -679,9 +585,8 @@ const transcriptSlice = createSlice({
       prepare: keyed<Record<string, PaperRef>>(),
     },
     /**
-     * Clear only the Q&A chat, leaving every cached lecture untouched — the
-     * Clear button's behavior when no lecture is selected. (A selected lecture
-     * is cleared on its own via `lectureDropped`.)
+     * Clear the conversation — every turn, lectures included, since a lecture
+     * is a turn.
      *
      * @param state  The slice state (mutated via immer).
      * @param action Carries the conversation in `meta`.
@@ -696,31 +601,21 @@ const transcriptSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // A new graph keeps your conversation and drops the lecture. The two
-      // halves of this slice belong to different owners: the chat is the
-      // user's — they asked those questions, and nothing about loading another
-      // graph says they're finished with the answers, so clearing it is theirs
-      // to do (the Clear button, or Home). A lecture belongs to the *graph*: a
-      // lecture narrates the neighborhood you built, and its beats point at
+      // Loading a graph used to drop the exploration's lecture, on the
+      // reasoning that a lecture belongs to the *graph* — its beats point at
       // that graph's nodes, so carrying one onto a different graph would
-      // narrate papers that aren't there.
+      // narrate papers that aren't there. That case is **gone in v7.21.0**,
+      // and deliberately: a lecture is a turn now, and the chat has always
+      // survived a graph load because those are the reader's own questions.
+      // Deleting half a transcript on a graph load would be a conversation
+      // rewriting itself.
       //
-      // This is only safe because citations degrade — an `[n]` whose paper
-      // isn't on the graph any more renders greyed and inert rather than
-      // silently highlighting nothing (see `teacher/transcript/README.md`).
-      // Before that, a surviving transcript meant a screenful of dead
-      // pointers, which is why this used to reset wholesale.
-      //
-      // Scoped to the ACTIVE conversation: loading a graph is something the
-      // reader did here, and it says nothing about an exploration still
-      // running in the background.
-      .addCase(loadGraph.fulfilled, (state) => {
-        const conversation = state.byKey[state.activeKey]
-        if (!conversation) return
-        conversation.lecture = null
-        conversation.lectureSources = {}
-        conversation.lectureShown = false
-      })
+      // Safe for the same reason the chat always was — citations degrade. An
+      // `[n]` whose paper isn't on the graph renders greyed and inert rather
+      // than silently highlighting nothing, a bubble stops being clickable
+      // when none of its papers are loaded, and beats go through the same
+      // `onGraphIds` check. What that does *not* do is say which graph a now-
+      // inert turn came from, which is what the turn's provenance line is for.
       // ✎ New Exploration: a brand-new conversation, with the old one left
       // exactly as it was — it may still be streaming, and it is still listed
       // in the rail.
@@ -750,12 +645,6 @@ export const {
   streamStarted,
   streamEnded,
   backgroundDiscovery,
-  lectureStarted,
-  lectureSourcesSet,
-  beatAdded,
-  lectureShownAgain,
-  lectureHidden,
-  lectureDropped,
   turnStarted,
   tokenAppended,
   answerSet,
@@ -766,6 +655,7 @@ export const {
   graphRefsSet,
   sourceRefsSet,
   chatBeatAdded,
+  turnGraphSet,
   turnRouted,
   provenanceSet,
   paperRefsSet,
@@ -803,30 +693,3 @@ export const selectRunningKeys = (state: { transcript: TranscriptState }): strin
   Object.entries(state.transcript.byKey)
     .filter(([, conversation]) => conversation.running.length > 0)
     .map(([key]) => key)
-
-/**
- * The beats of the lecture while it is showing, or a stable empty array when
- * it is hidden or was never played — what the panel renders.
- *
- * @param state The root state.
- * @returns The visible lecture's beats.
- */
-export const selectVisibleBeats = (state: { transcript: TranscriptState }): Beat[] => {
-  const { lectureShown, lecture } = selectConversation(state)
-  return (lectureShown && lecture) || NO_BEATS
-}
-
-/**
- * The library index for the lecture's `[Sn]` markers while it is showing, or a
- * stable empty map when it is hidden, was never played, or cited no library
- * passage.
- *
- * @param state The root state.
- * @returns The visible lecture's `[Sn]` index → source map.
- */
-export const selectVisibleSourceRefs = (state: {
-  transcript: TranscriptState
-}): Record<string, SourceRef> => {
-  const conversation = selectConversation(state)
-  return conversation.lectureShown ? conversation.lectureSources : NO_SOURCE_REFS
-}

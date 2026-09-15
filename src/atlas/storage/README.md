@@ -33,7 +33,7 @@ list backed by it would work all afternoon and then quietly empty overnight.
   links — five very different features sharing one table.
 - **`sessions.py`** — the durable **exploration** store, in its own
   `sessions.db`. One table, `saved_sessions`: most of the payload is an
-  opaque JSON blob (`data` — the conversation, the lectures, and a
+  opaque JSON blob (`data` — the conversation, lectures included, and a
   *reference* to the graph that was open), but a few fields (`name`,
   `seed_id`, `seed_title`, `n_nodes`) are lifted into real columns so the
   rail's list view can render without deserializing every blob.

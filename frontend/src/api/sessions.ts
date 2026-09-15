@@ -63,22 +63,60 @@ export interface ChatMsg {
   paperRefs?: Record<string, PaperRef>
   /**
    * This answer IS a lecture — its beats, in order, rendered where the prose
-   * would be. Set when the router sent a typed message to the lecturer
-   * (v7.20.0); absent on every researcher turn and every turn saved before it.
+   * would be (behind the turn's own caret). Absent on every researcher turn
+   * and on turns saved before v7.20.0.
    *
-   * Beats live on the turn rather than in the panel's own `lecture` slot
-   * because a lecture *asked for in words* is a reply to a message, and the
-   * slot holds exactly one per exploration. Two typed lecture requests are two
-   * answers a reader can scroll between; two presses of the Lecture button
-   * are still one lecture, and that path is untouched.
+   * Beats live on the turn because a lecture is a *reply*: it belongs in the
+   * conversation, where the reader can scroll back to it, ask a follow-up
+   * underneath it, and keep the one before it. They lived in a `lecture` slot
+   * on the conversation until v7.21.0 — one per exploration, written by a
+   * button — which is why a save from that era carries one and
+   * `restoredLectureTurn` folds it in here.
    */
   beats?: Beat[]
+  /**
+   * The graph this turn was answered over — the seed that anchored it and how
+   * many papers were in scope when it ran.
+   *
+   * Recorded because **a conversation outlives the graph it was written
+   * against**: since v7.10.0 loading a graph keeps the transcript, so one
+   * conversation can hold turns grounded in several different graphs. The app
+   * already degrades correctly there — an `[n]` whose paper is no longer
+   * loaded greys out, and a bubble stops being clickable when none of its
+   * papers are — but that is a purely negative signal. It says *this points
+   * nowhere any more* and never *this was about the DQN graph*, so a turn a
+   * reader scrolls back to goes quietly inert without explaining itself.
+   * This is the positive half.
+   *
+   * Frontend-authored, hence camelCase, and deliberately **not** part of
+   * `provenance`: that is the backend's record of what it observed itself
+   * doing, and which graph was on screen is not something the agent knows.
+   *
+   * Absent on turns saved before v7.21.0, and on the graph-free library chat
+   * — where there is no graph to name.
+   */
+  graph?: {
+    seedId: string
+    seedTitle: string
+    /** Papers in scope for this turn: the grounding set for an answer, the
+     *  narrated set for a lecture. The two differ (see `selectLectureNodes`),
+     *  so each turn stores its own rather than the graph's node count. */
+    nodes: number
+    /**
+     * The backend `seedId` belongs to. Stored because the line this feeds is
+     * **clickable** — it re-opens that graph — and a node id means nothing
+     * outside its own provider's id space, so seeding with whichever provider
+     * happens to be selected now would resolve to nothing. Absent on the
+     * first turns stamped before this was added.
+     */
+    provider?: Provider
+  }
   /**
    * Which assistant the router picked for this turn, when a router picked at
    * all. Persisted, because the transcript's offer of the *other* one has to
    * survive a reload — a misroute is most annoying on the answer you come
-   * back to. Absent on turns whose destination was never in doubt (the
-   * Lecture button, a correction the reader made themselves).
+   * back to. Absent on turns whose destination was never in doubt (a
+   * `/lecture` command, a correction the reader made themselves).
    */
   routedTo?: 'lecture' | 'answer'
   /** The agent steps that produced this answer (assistant turns only). */
@@ -161,27 +199,34 @@ export interface SessionData {
   /** Papers the agent found mid-conversation — stored, never rebuildable. */
   discovered_nodes?: GraphNode[]
   discovered_edges?: GraphEdge[]
+  /** Every turn, lectures included — a lecture's beats ride on the turn that
+   *  holds them (`ChatMsg.beats`). */
   chat: ChatMsg[]
-  /** The exploration's lecture as it stood when saved (v7.17.0 onward). */
+  /**
+   * Legacy (v7.17.0–v7.20.0): the exploration's one lecture, held in a slot
+   * beside the conversation because a button rather than a message produced
+   * it. **Read on restore, never written** since v7.21.0 — `restoredLectureTurn`
+   * folds it into `chat` as a turn, so a save from that era keeps its lecture.
+   */
   lecture?: Beat[]
   /**
-   * The library index for the `[Sn]` markers the lecture's beats cite. Absent
-   * on saves predating structured library citations — those beats' markers
-   * (if any) degrade to raw text on restore.
+   * The library index for the `[Sn]` markers a slot lecture's beats cite.
+   * Absent on saves predating structured library citations — those beats'
+   * markers (if any) degrade to raw text on restore.
    *
    * **Two shapes live under this one key.** A v6-era save wrote a map of
    * *mode* → marker index, alongside the per-mode `lectures` cache below; a
-   * current save writes the marker index directly. Which one a given save
+   * v7.17.0-era save writes the marker index directly. Which one a given save
    * holds is told by whether `lecture` or `lectures` is present, so
-   * `restoredLecture` narrows it there rather than guessing per read. The
+   * `restoredLectureTurn` narrows it there rather than guessing per read. The
    * union is deliberate: renaming the field for the new shape would have left
    * every existing save's sources unreadable.
    */
   lectureSources?: Record<string, SourceRef> | Partial<Record<string, Record<string, SourceRef>>>
   /**
    * Legacy (v6-era): the per-mode lecture cache, from when four mode buttons
-   * each had their own lecture. A restore picks ONE out of it — see
-   * `restoredLecture` — because this build has room for one.
+   * each had their own lecture. A restore folds ONE of them into the
+   * transcript — see `restoredLectureTurn`.
    */
   lectures?: Partial<Record<string, Beat[]>>
   /** Legacy (v6-era): which cached lecture was on screen when saved. */

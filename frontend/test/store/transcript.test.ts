@@ -2,11 +2,14 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The transcript slice's lecture-caching reducers: playing a mode caches its
- * beats (tagged by mode, so parallel background streams fill the right slot),
- * switching modes keeps every cache slot, and show/hide/drop move the visible
- * mode without losing (or, for a drop, deliberately losing) beats. Clearing the
- * chat leaves the lectures alone.
+ * The transcript slice: turns landing in the right conversation while several
+ * stream at once, lectures riding on the turns that hold them, and what
+ * survives a graph load.
+ *
+ * The `lecture` slot's own reducers used to be tested here at length —
+ * start/beat/show/hide/drop over one cached lecture per exploration. They are
+ * all gone in v7.21.0: a lecture is a turn, so `chatBeatAdded` is the only
+ * path and there is no show/hide state to pin.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -17,14 +20,7 @@ import type { Beat } from '../../src/api'
 import workspaceReducer, { workspaceCleared } from '../../src/store/workspace'
 import reducer, {
   answerFailed,
-  beatAdded,
   chatBeatAdded,
-  chatCleared,
-  lectureDropped,
-  lectureHidden,
-  lectureShownAgain,
-  lectureSourcesSet,
-  lectureStarted,
   backgroundDiscovery,
   conversationDropped,
   failedTurnDropped,
@@ -37,8 +33,6 @@ import reducer, {
   traceAdded,
   tracesSettled,
   turnRouted,
-  selectVisibleBeats,
-  selectVisibleSourceRefs,
   tokenAppended,
   turnStarted,
 } from '../../src/store/transcript'
@@ -86,90 +80,6 @@ function play(...actions: Parameters<typeof reducer>[1][]): TranscriptState {
   )
 }
 
-describe('the exploration lecture', () => {
-  it('stores a played lecture and shows it', () => {
-    const beat = makeBeat({ heading: 'One' })
-    const state = play(lectureStarted(), beatAdded(beat))
-    expect(active(state).lectureShown).toBe(true)
-    expect(active(state).lecture).toEqual([beat])
-    expect(selectVisibleBeats({ transcript: state })).toEqual([beat])
-  })
-
-  it('starting a lecture empties the previous one rather than appending', () => {
-    // The v7.17.0 shape in one test. There is one slot, so a second lecture
-    // REPLACES the first — where the four per-mode slots used to coexist, a
-    // second lecture over a different scope is a different lecture, not an
-    // addition to the last.
-    const first = makeBeat({ heading: 'First' })
-    const second = makeBeat({ heading: 'Second' })
-    const state = play(lectureStarted(), beatAdded(first), lectureStarted(), beatAdded(second))
-    expect(active(state).lecture).toEqual([second])
-  })
-
-  it('starting a lecture clears the previous one’s library index', () => {
-    // Sources arrive before the first beat, so a stale map left in place would
-    // resolve the new lecture's [Sn] markers against the old lecture's books.
-    const refs = { S1: { id: 'src1', title: 'Sutton & Barto' } }
-    const state = play(
-      lectureStarted(),
-      lectureSourcesSet(refs),
-      beatAdded(makeBeat()),
-      lectureStarted(),
-    )
-    expect(active(state).lectureSources).toEqual({})
-  })
-
-  it('re-shows the played lecture without replaying its beats', () => {
-    const beat = makeBeat({ heading: 'H' })
-    let state = play(lectureStarted(), beatAdded(beat))
-    state = reducer(state, lectureHidden())
-    state = reducer(state, lectureShownAgain())
-    expect(active(state).lectureShown).toBe(true)
-    expect(selectVisibleBeats({ transcript: state })).toEqual([beat])
-    expect(active(state).lecture).toEqual([beat])
-  })
-
-  it('hides the lecture but keeps its beats', () => {
-    const beat = makeBeat()
-    let state = play(lectureStarted(), beatAdded(beat))
-    state = reducer(state, lectureHidden())
-    expect(active(state).lectureShown).toBe(false)
-    expect(selectVisibleBeats({ transcript: state })).toEqual([])
-    // Still there — a later lectureShownAgain reveals it.
-    expect(active(state).lecture).toEqual([beat])
-  })
-
-  it('drops a partial lecture and hides it', () => {
-    const beat = makeBeat()
-    let state = play(lectureStarted(), beatAdded(beat))
-    state = reducer(state, lectureDropped())
-    expect(active(state).lectureShown).toBe(false)
-    expect(active(state).lecture).toBeNull()
-    expect(active(state).lectureSources).toEqual({})
-  })
-
-  it('clearing the chat leaves the lecture intact', () => {
-    const state = play(
-      turnStarted('a question'),
-      lectureStarted(),
-      beatAdded(makeBeat()),
-      lectureHidden(),
-      chatCleared(),
-    )
-    expect(active(state).chat).toEqual([])
-    expect(active(state).lecture).toHaveLength(1)
-    expect(active(state).lectureShown).toBe(false)
-  })
-
-  it('the library index only resolves while the lecture is shown', () => {
-    const refs = { S1: { id: 'src1', title: 'Sutton & Barto' } }
-    let state = play(lectureStarted(), lectureSourcesSet(refs), beatAdded(makeBeat()))
-    expect(selectVisibleSourceRefs({ transcript: state })).toEqual(refs)
-    state = reducer(state, lectureHidden())
-    expect(selectVisibleSourceRefs({ transcript: state })).toEqual({})
-  })
-})
-
 /** A `loadGraph.fulfilled` action, as the store would dispatch it. */
 function graphLoadedAction() {
   return {
@@ -199,19 +109,21 @@ describe('transcript survival across a graph load', () => {
     expect(active(state).chat[0].text).toBe('What is new in quantum computing?')
   })
 
-  it('drops the lecture, which belongs to the graph that is going away', () => {
-    // A lecture narrates the neighborhood you built and its beats point at
-    // that graph's nodes — carrying one onto a different graph would narrate
-    // papers that aren't there.
+  it('keeps a lecture too, now that a lecture is a turn', () => {
+    // This **reverses** the pre-v7.21.0 behaviour, and deliberately. A lecture
+    // in its own slot was dropped here, on the reasoning that it belonged to
+    // the graph whose nodes its beats point at. A lecture in the transcript is
+    // one of the reader's turns, and the transcript has always survived a
+    // graph load — deleting half of it would be the conversation rewriting
+    // itself. The beats degrade instead: their `[n]` chips grey out against
+    // the new graph's ids, exactly as an answer's do.
     const state = play(
-      lectureStarted(),
-      beatAdded(makeBeat()),
-      turnStarted('And what about DQN?'),
+      turnStarted('lecture me on these'),
+      chatBeatAdded(makeBeat({ heading: 'Roots' })),
       graphLoaded(),
     )
-    expect(active(state).lecture).toBeNull()
-    expect(active(state).lectureShown).toBe(false)
     expect(active(state).chat).toHaveLength(2)
+    expect(active(state).chat[1].beats?.map((beat) => beat.heading)).toEqual(['Roots'])
   })
 })
 
@@ -357,17 +269,14 @@ describe('a run that dies mid-step', () => {
   })
 })
 
-describe('a lecture asked for in words', () => {
-  it('lands on the chat turn, not in the exploration lecture slot', () => {
-    // The two are separate reducers on purpose. The slot holds ONE lecture per
-    // exploration, which is right for a button ("show me the lecture") and
-    // wrong for a message, where a second request is a second reply.
+describe('a lecture in the transcript', () => {
+  it('lands on the assistant turn that is answering', () => {
     const state = play(
       turnStarted('lecture me on these'),
       chatBeatAdded(makeBeat({ heading: 'A' })),
     )
     const conversation = active(state)
-    expect(conversation.lecture).toBeNull()
+    expect(conversation.chat[1].role).toBe('assistant')
     expect(conversation.chat[1].beats?.map((beat) => beat.heading)).toEqual(['A'])
   })
 
@@ -389,8 +298,8 @@ describe('a lecture asked for in words', () => {
   })
 
   it('leaves routedTo unset when nothing routed the turn', () => {
-    // The Lecture button, or a reader correcting a route: no decision was made
-    // on their behalf, so the transcript must not offer to undo one.
+    // A `/lecture` command, or a reader correcting a route: no decision was
+    // made on their behalf, so the transcript must not offer to undo one.
     const state = play(turnStarted('what is attention?'))
     expect(active(state).chat[1].routedTo).toBeUndefined()
   })

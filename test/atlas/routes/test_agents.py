@@ -206,43 +206,28 @@ def test_an_empty_scope_survives_the_wire_as_an_empty_list(client, monkeypatch):
     assert seen["kwargs"]["source_ids"] == []  # NOT None — that would search everything
 
 
-def test_ask_parses_played_lectures_into_typed_context(client, monkeypatch):
+def test_ask_ignores_a_legacy_lectures_field(client, monkeypatch):
+    """A stale bundle's ``lectures`` must be ignored, not rejected.
+
+    The field carried every played lecture into the researcher's prompt until
+    v7.21.0, when lectures became chat turns. A browser holding the old bundle
+    still sends it, so the route has to accept the body and answer normally
+    rather than 400 or hand the agent a kwarg it no longer takes.
+    """
     seen = {}
 
     def fake_run(**kwargs):
         seen["kwargs"] = kwargs
-        yield events.Token(text="Building on the lecture.")
+        yield events.Token(text="Answered anyway.")
         yield events.Cited(node_ids=["seed01"])
 
     patch_agents(monkeypatch, fake_run)
     body = {
         "question": "why?", "session_id": "sess-lec", "seed": SEED, "nodes": NODES,
-        "lectures": [
-            # Full beat baggage (node_ids/figure) is tolerated — only title +
-            # heading/text are picked out.
-            {"title": "How we got here",
-             "beats": [{"heading": "Roots", "text": "It began with recurrence.",
-                        "node_ids": ["node02"], "figure": None}]},
-            {"title": "", "beats": []},  # malformed -> skipped
-        ],
+        "lectures": [{"title": "How we got here", "beats": [{"heading": "Roots", "text": "..."}]}],
     }
-    client.post("/api/ask", json=body).data
-    lectures = seen["kwargs"]["lectures"]
-    assert [lecture.title for lecture in lectures] == ["How we got here"]
-    assert lectures[0].beats[0].text == "It began with recurrence."
-
-
-def test_ask_without_lectures_passes_none(client, monkeypatch):
-    seen = {}
-
-    def fake_run(**kwargs):
-        seen["kwargs"] = kwargs
-
-    patch_agents(monkeypatch, fake_run)
-    client.post(
-        "/api/ask", json={"question": "q", "session_id": "s", "seed": SEED, "nodes": NODES}
-    ).data
-    assert seen["kwargs"]["lectures"] is None
+    assert client.post("/api/ask", json=body).status_code == 200
+    assert "lectures" not in seen["kwargs"]
 
 
 def test_failed_answers_do_not_poison_history(client, monkeypatch):

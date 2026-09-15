@@ -109,7 +109,6 @@ export function useAutosave({ sessionId, onSaved }: AutosaveOptions): {
   const activeKey = useAppSelector((state) => state.transcript.activeKey)
   const conversation = useAppSelector(selectConversation)
   const chat = conversation.chat
-  const lecture = conversation.lecture
   // Which conversations still have a stream running. A background one that
   // has just gone quiet has finished an answer nobody is looking at, and that
   // answer has to reach disk — see the settle effect below.
@@ -217,8 +216,6 @@ export function useAutosave({ sessionId, onSaved }: AutosaveOptions): {
             name,
             id: targetId ?? undefined,
             chat: settleInFlight(turns),
-            lecture: target.lecture ?? undefined,
-            lectureSources: target.lectureSources,
           }
       // Deleting an exploration removes its conversation; a save queued
       // before that must not go out, or the upsert would **recreate the row
@@ -312,7 +309,7 @@ export function useAutosave({ sessionId, onSaved }: AutosaveOptions): {
     // changes `save`'s identity every render, which restarts the timer every
     // render and means the debounce never fires at all. The caller memoizes
     // it; see the interface docs.
-  }, [chat, graph, seedRef, discoveredNodes, layout, lecture, save])
+  }, [chat, graph, seedRef, discoveredNodes, layout, save])
 
   // A deleted exploration must be forgotten here too. The book holds its row
   // id, and a save that still had one would re-POST it — and `save_session`

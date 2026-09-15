@@ -4,30 +4,35 @@
  * Description:
  * A generic scope picker: a checkbox-per-item popover where ALL checked reads
  * as "no scope" (everything) and NONE checked as "nothing" — the same
- * None/[] semantics the callers carry. Used for two scopes in the assistant
- * panel: which uploaded **sources** the assistant may search, and which
- * already-played **lectures** the researcher folds into its context. The copy
- * (icon, noun, hints) comes in via `labels`; the item shape is just
- * `{id, title}`, so both scopes fit.
+ * None/[] semantics the callers carry. The copy (icon, noun, hints) comes in
+ * via `labels`; the item shape is just `{id, title}`.
  *
- * The popover's open state is CONTROLLED (`open`/`onOpenChange`) so the
- * parent can keep the two pickers mutually exclusive — with it component-local
- * both popovers could be open at once and overlapped illegibly. Closes via
- * the ✕ in the popover header or by re-clicking the trigger.
+ * **One caller as of v7.21.0**: which uploaded **sources** the assistant may
+ * search. It served a second scope — the 🎓 picker deciding whether a played
+ * lecture was fed to the researcher — until lectures became chat turns and
+ * there was nothing left to opt out of. It stays parameterised rather than
+ * being folded back into the composer: the generic shape costs nothing, and
+ * the next scope (an agent's reach, a filter set) arrives configured.
+ *
+ * That history explains the CONTROLLED open state (`open`/`onOpenChange`),
+ * which would otherwise look like ceremony: with two pickers side by side and
+ * the state component-local, both popovers could be open at once and
+ * overlapped illegibly, so the parent arbitrates. Closes via the ✕ in the
+ * popover header or by re-clicking the trigger.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-/** One selectable item — a source or a lecture, reduced to what the picker shows. */
+/** One selectable item, reduced to what the picker shows. */
 export interface ScopeItem {
   id: string
   title: string
 }
 
-/** The picker's display copy, so one component serves sources and lectures. */
+/** The picker's display copy, so the component is not tied to one scope. */
 export interface ScopeLabels {
-  /** Leading emoji on the trigger button (`📚` sources, `🎓` lectures). */
+  /** Leading emoji on the trigger button (`📚` for sources). */
   icon: string
   /** Singular noun for the count/empty label ("source" → "All sources"). */
   unit: string
@@ -55,10 +60,9 @@ export interface ScopeLabels {
  * @param onToggle Flip one item's checked state.
  * @param onSelectAll Check every item.
  * @param onDeselectAll Uncheck every item.
- * @param labels The display copy (icon, noun, heading, hints) — what makes one
- *               component serve both the sources and lectures scopes.
- * @param dataTour Optional `data-tour` anchor for the guided tour, so its
- *                 steps can tell the two picker instances apart.
+ * @param labels The display copy (icon, noun, heading, hints) — what keeps
+ *               the component independent of the scope it is showing.
+ * @param dataTour Optional `data-tour` anchor for the guided tour.
  * @returns The collapsible checkbox list.
  */
 export default function ScopePicker({
