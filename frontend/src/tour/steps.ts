@@ -14,7 +14,7 @@
  * `Atlas.tsx` picks the list (and the seen-flag) by whether a graph is up.
  * Within a list, steps whose control isn't on screen skip themselves (the
  * year/citation sliders only render when the graph spans a range, the detail
- * panel needs a selected paper, the lecture grid needs the assistant open),
+ * panel needs a selected paper, the ask bar needs the assistant open),
  * so each list describes its phase's *maximal* tour.
  *
  * Authors:
@@ -124,20 +124,23 @@ export const HOME_TOUR: TourStep[] = [
  * (re-sequenced with Patrick, v5.22.0): the top-left controls panel walked
  * top-to-bottom through its last row ("Open a paper"), then the
  * bottom-right find control, then the detail panel (a whole-panel overview
- * stop, then its sections), then the teacher — the lecture grid first, then
- * the two scope pickers (lectures, then library sources) on the Chat row
- * beneath it, then the ask bar. That sequence flipped in v7.10.0, when the
- * panel became stacked sections and the pickers moved down onto the section
- * whose reach they actually scope; the walk still follows the eye down the
- * panel. (Find used to open the tour — a leftover from its top-right era;
- * starting on a tiny corner button read as a diagonal jump.)
+ * stop, then its sections), then the teacher — the source scope under the ask
+ * bar, then the bar itself, which carries two stops: what the researcher does
+ * with a question, and how `/lecture` reaches the other assistant. The walk
+ * follows the eye down the panel and ends where the reader types.
+ *
+ * It used to open on a lecture grid at the top of the panel. That grid became
+ * one button in v7.17.0, was folded behind a caret in v7.10.0, and became a
+ * command in v7.21.0 — which also deleted the panel's folding sections
+ * entirely, so every teacher stop now hangs off the composer.
+ * (Find used to open the tour — a leftover from its top-right era; starting on
+ * a tiny corner button read as a diagonal jump.)
  * The steps inside the controls panel stage `'controls'` so a
  * collapsed panel expands under the walk; the year/citation stops carry their
  * own target as `presentIf` — an existence check, which the collapsed panel's
  * `hidden` (still-in-DOM) body passes whenever the graph's data earns those
- * sliders at all. `'assistant'` does the same job for the teacher: it opens
- * the panel AND unfolds both of its sections, since the lecture one starts
- * folded and either can be folded away by the reader.
+ * sliders at all. `'assistant'` does a narrower job for the teacher: it opens
+ * the panel, and that is all it has to do now that nothing in there folds.
  */
 export const GRAPH_TOUR: TourStep[] = [
   {
@@ -294,36 +297,6 @@ export const GRAPH_TOUR: TourStep[] = [
       'into its answers.',
   },
   {
-    target: '[data-tour="lectures"]',
-    stage: 'assistant',
-    presentIf: '[data-tour="assistant-btn"]',
-    title: 'The lecture',
-    body:
-      'Press it and the assistant narrates the papers you have on screen — so you decide ' +
-      'what the lecture is about. Filter to the references and you get the story of how the ' +
-      'field arrived here; keep only recent work and you get the current frontier; alt-drag ' +
-      'a cluster and it narrates just those. Scope it to a single paper — any paper — and it ' +
-      'teaches that one, chapter by chapter. The one thing your selection can’t say is how ' +
-      'to tell it, so that’s the choice above: “Summary” groups the papers into their key ' +
-      'themes, “History” walks them oldest to newest. Papers light up on the map as their ' +
-      'part of the story arrives, and the lecture reads here in its own section while the ' +
-      'conversation below keeps its own. It folds away behind the “Lecture” caret by ' +
-      'default, so the chat gets the room. You can also just ask — “lecture me on these” ' +
-      'in the chat below delivers one as a reply, right there in the conversation.',
-  },
-  {
-    target: '[data-tour="lecture-scope"]',
-    stage: 'assistant',
-    presentIf: '[data-tour="lecture-scope"]',
-    title: 'Whether the lecture feeds the answers',
-    body:
-      'The lecture you’ve played — the researcher builds on what it already said instead ' +
-      'of re-deriving it. Untick it if you’d rather it answered fresh; a note above the ' +
-      'ask bar says when it is in play. It rides on the Chat row rather than the panel’s, ' +
-      'because that is whose reach it scopes: the researcher answering below, not the ' +
-      'lecturer above.',
-  },
-  {
     target: '[data-tour="source-scope"]',
     stage: 'assistant',
     presentIf: '[data-tour="source-scope"]',
@@ -338,17 +311,33 @@ export const GRAPH_TOUR: TourStep[] = [
     target: '[data-tour="ask"]',
     stage: 'assistant',
     presentIf: '[data-tour="assistant-btn"]',
-    title: 'Ask the researcher',
+    title: 'One bar, two assistants',
     body:
-      'Ask anything about what’s on screen. Like the lectures, the agent grounds in ' +
-      'the papers you’ve selected — or in every visible paper when you haven’t picked ' +
-      'any. It reads them in full, hops the graph, searches the literature and your ' +
-      'uploaded library, then answers with numbered citations (click one to light up ' +
-      'the paper behind it). New papers it finds join the map with dashed rings. ' +
-      'Ask to be taught rather than answered — “lecture me on these”, “what’s the story ' +
-      'here” — and the lecturer takes the message instead, its beats landing as the reply. ' +
-      'Every turn says which of the two answered and offers the other in a click, so a ' +
-      'wrong guess costs nothing. ' +
+      'Ask anything about what’s on screen. The agent grounds in the papers you’ve ' +
+      'selected — or in every visible paper when you haven’t picked any. It reads them ' +
+      'in full, hops the graph, searches the literature and your uploaded library, then ' +
+      'answers with numbered citations (click one to light up the paper behind it). New ' +
+      'papers it finds join the map with dashed rings. ' +
       'Press Enter to send; ⇧ Shift+Enter starts a new line for longer questions.',
+  },
+  {
+    target: '[data-tour="ask"]',
+    stage: 'assistant',
+    presentIf: '[data-tour="assistant-btn"]',
+    title: 'Ask to be taught, not answered',
+    body:
+      'Type “/” in the same bar and pick “/lecture”, and the other assistant narrates ' +
+      'the papers you have on screen — so you decide what the lecture is about. Filter ' +
+      'to the references and you get the story of how the field arrived here; keep only ' +
+      'recent work and you get the current frontier; alt-drag a cluster and it narrates ' +
+      'just those. Scope it to a single paper — any paper — and it teaches that one, ' +
+      'chapter by chapter. The one thing your selection can’t say is how to tell it, so ' +
+      'that is the second half of the command: “/lecture summary” groups the papers into ' +
+      'their key themes, “/lecture history” walks them oldest to newest. Papers light up ' +
+      'on the map as each part of the story arrives, and the beats read as the reply, in ' +
+      'the conversation with everything else. ' +
+      'You can also just say it — “lecture me on these”, “what’s the story here” — and ' +
+      'the lecturer takes the message. Every turn it guessed on says which assistant ' +
+      'answered and offers the other in a click, so a wrong guess costs nothing.',
   },
 ]

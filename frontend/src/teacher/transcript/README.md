@@ -1,18 +1,20 @@
 # `src/teacher/transcript`
 
-Rendering the assistant's conversation: lecture beats and chat turns, with
-Markdown + math + clickable citations. A single-parent cluster nested per
-the hybrid structure rule — only `teacher/Teacher.tsx` renders the two
-top-level components.
+Rendering the assistant's conversation: chat turns, the lecture beats some of
+them hold, Markdown + math + clickable citations. A single-parent cluster
+nested per the hybrid structure rule — only `teacher/Teacher.tsx` renders
+`ChatMessage`, and only `ChatMessage` renders `BeatList` (it had a second
+caller until v7.21.0 — the panel's Lecture section).
 
 ```
 transcript/
   BeatList.tsx       — lecture beats (click to light their papers)
   ChatMessage.tsx    — one turn: retrieval line, trace chips, prose+figures,
-                       or a routed lecture's beats + the route line
+                       or a lecture's beats + the route line
   AnswerMarkdown.tsx — Markdown + KaTeX + citation rendering for answers
   remarkCite.ts      — the remark plugin that turns [n]/[Sn] markers into chips
   provenance.ts      — the counts under an answer -> the one grounding line
+                       (a lecture's comes from its scope instead — see below)
 ```
 
 ## The pieces
@@ -23,12 +25,14 @@ transcript/
   to clear. Which beat is lit is panel-local UI state — only the resulting
   highlight ids are global (the store's highlight slice).
 
-  **Rendered in two places since v7.20.0**: the Lecture section, and inside a
-  `ChatMessage` whose answer is a lecture the router placed. Deliberately the
-  same component in both — a beat has to behave the same wherever it is read,
-  and a second renderer would drift. What differs is only the address of the
-  lit beat: the section's single lecture needs an index, a conversation
-  holding several needs turn + index (`activeChatBeat`).
+  **Rendered in exactly one place since v7.21.0**: inside a `ChatMessage`
+  whose answer is a lecture. It had a second home — the panel's Lecture
+  section — from v7.20.0, when a routed lecture first landed on a turn, until
+  the section was deleted. Worth knowing because of what the two homes left
+  behind: a lit beat is addressed by **turn + index** (`activeChatBeat`), not
+  by index alone, since a conversation can hold several lectures and an index
+  would light a beat of the wrong one. The section's single lecture was the
+  case an index sufficed for.
 - **`ChatMessage`** — one turn end-to-end: the library-retrieval summary
   (graph-free mode), the researcher's live trace chips (reads / expansions
   / searches — a failed search explains *why* in plain words:
@@ -37,17 +41,48 @@ transcript/
   the cited-papers footer — clickable to re-light the answer's whole
   grounding set.
 
-  A turn whose answer is a **lecture** (`message.beats`, v7.20.0) renders a
-  `BeatList` where the prose would be, under a `.chat-routed` line naming the
-  assistant that answered and offering the other. Three details are easy to
-  get wrong here and are pinned by tests: beats must suppress the "Thinking"
-  dots (a lecture turn's `text` stays empty, which is exactly what the dots
-  key off, so without this every lecture streams under a placeholder that
-  never resolves); the beat click and the reroute button both
-  `stopPropagation`, since the bubble's own handler would otherwise replace a
-  beat's highlight with the turn's whole grounding set; and the route line
-  appears whenever `routedTo` is set even when the offer itself is withheld —
-  the turn still has to account for what happened to it.
+  A turn whose answer is a **lecture** (`message.beats`) renders a
+  `BeatList` where the prose would be, behind its own **caret**
+  (`.beats-toggle`, naming the beat count), and under a `.chat-routed` line
+  naming the assistant that answered and offering the other when a model chose
+  it. Details that are easy to get wrong and are pinned by tests: beats must
+  suppress the "Thinking" dots (a lecture turn's `text` stays empty, which is
+  exactly what the dots key off, so without this every lecture streams under a
+  placeholder that never resolves); the beat click, the caret and the reroute
+  button all `stopPropagation`, since the bubble's own handler would otherwise
+  replace a beat's highlight with the turn's whole grounding set; the route
+  line appears whenever `routedTo` is set even when the offer itself is
+  withheld — the turn still has to account for what happened to it; and
+  `beatsOpen` **defaults to open**, so a caller that forgets to manage it shows
+  the lecture rather than silently hiding it. Folded beats are `hidden`, not
+  unmounted, so their figures stay loaded and unfolding is instant.
+
+  **Which turn is open is the caller's call, not this component's** — the rule
+  is "the newest lecture, until the reader says otherwise", and that is a fact
+  about the whole conversation. `Teacher.tsx` derives it and holds the reader's
+  overrides; see its README.
+
+- **A turn says which graph it came from, but only when that matters.**
+  `message.graph` (the seed's id and title plus the papers in scope) is stamped
+  on every turn at turn start, and `.chat-graph` renders *"From the “…” graph"*
+  **only when `currentSeedId` differs from it**. That condition is the whole
+  design. The app already degrades correctly when a conversation outlives its
+  graph — stale `[n]` chips grey out, the bubble stops being clickable — but
+  every one of those signals is negative: they say *this points nowhere any
+  more* and never *this was about the Attention graph*. The line is the
+  positive half, and it appears exactly where a reader would otherwise be
+  confused. When the graph matches, they are looking at it, and a line
+  repeating its title under every turn is noise.
+
+  It sits **above** the content rather than in the footer: a reader scrolling
+  back needs it before they wonder why clicking a citation does nothing.
+
+- **A lecture gets its own grounding line.** An answer's footer comes from
+  `provenance`, which counts what the backend watched itself do — and a lecture
+  makes no tool calls, so it has none and used to carry no footer at all. Its
+  line comes from `message.graph.nodes` instead: *"narrated 14 papers"*, in the
+  same `.chat-cited` class, because what a lecture covered is the honest
+  equivalent of what an answer cited and the two should read alike.
 - **`AnswerMarkdown`** — the researcher replies in Markdown
   with `$…$` math and inline citations; this renders all three for
   real: remark-gfm for structure, remark-math + rehype-katex for math (the

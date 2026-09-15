@@ -207,10 +207,14 @@ sidecar (see `config.py`).
 | `POST /api/sessions/title` | name an exploration after its conversation |
 
 Thin CRUD over `storage/sessions.py`. The blob (`{name, graph_ref, layout,
-discovered_nodes, discovered_edges, chat, lectures}`) is **frontend-owned
-and deliberately unvalidated** — the store treats it as opaque JSON, and
+discovered_nodes, discovered_edges, chat}`) is **frontend-owned and
+deliberately unvalidated** — the store treats it as opaque JSON, and
 validating its shape here would create a second place that has to track the
-frontend's format. (Old saves may carry the whole graph inline plus a
+frontend's format. That indifference is what makes the frontend's format free
+to change: `lecture`/`lectureSources` (and, earlier, a per-mode `lectures`
+cache) were written into this blob until v7.21.0 and are now read-only
+legacy, folded into `chat` on restore — and this route needed no edit for
+either change. (Old saves may also carry the whole graph inline plus a
 `hist_trace` field from the retired lecture backfill; the former is used on
 restore, the latter ignored.)
 

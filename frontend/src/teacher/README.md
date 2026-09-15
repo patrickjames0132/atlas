@@ -6,56 +6,55 @@ surface**, a centred chat that is the app's front door and needs neither a
 graph nor an uploaded library; with a graph it docks as a side panel beside
 the map. Its capability levels up separately — no graph → the researcher,
 seedless (the literature plus whatever sources you've uploaded); graph open →
-lecture buttons + agentic Q&A (the lecturer and researcher).
+the lecturer as well, reached by typing rather than by pressing anything.
 
 ```
 teacher/
-  Teacher.tsx        — the slim shell: title row, the two folding sections
-                       (Lecture / Q&A), ask form
-  useConversation.ts — the stream engine: runs the 3 streams, dispatches
+  Teacher.tsx        — the slim shell: title row, the conversation, ask form
+  useConversation.ts — the stream engine: runs the streams, dispatches
                        events into the store, owns panel run-state
-  HopDots.tsx        — the one "working on it" indicator, shared by a
-                       generating lecture button, the send/stop control, and
-                       an assistant bubble awaiting its first token
-  ScopePicker.tsx    — generic checkbox-scope popover: which sources the
-                       assistant searches AND which lectures it uses as context
-                       (open state controlled by Teacher — the two popovers
-                       are mutually exclusive; ✕ or the trigger closes). Its
+  HopDots.tsx        — the one "working on it" indicator, shared by the
+                       send/stop control and an assistant bubble awaiting
+                       its first token
+  ScopePicker.tsx    — generic checkbox-scope popover; one caller since
+                       v7.21.0 (which sources the assistant searches). Its
                        trigger renders icon + label as separate elements so a
                        narrow row can show the icon alone.
   figures/           ← sub-package: the inline-figure pipeline
     split.ts         — pairs <<FIG n>> markers with attached figures
     FigCard.tsx      — one figure card (click to enlarge)
   transcript/        ← sub-package: rendering the conversation
-    BeatList.tsx     — lecture beats (click to light their papers), rendered
-                       both in the Lecture section and inside a chat turn
+    BeatList.tsx     — lecture beats (click to light their papers)
     ChatMessage.tsx  — one turn: retrieval line, trace chips, prose+figures,
-                       or a routed lecture's beats + the route line
+                       or a lecture's beats + the route line
     AnswerMarkdown.tsx — Markdown + KaTeX + [n]-citation rendering
     remarkCite.ts    — the remark plugin behind the citation chips
   teacher.css
 ```
+
+The `/` command menu that starts a lecture is **not** in this package — see
+`src/commands/`. It belongs to the composer's grammar, beside `mentions/`,
+rather than to the panel that renders the result.
 
 Both sub-packages are clusters of single-parent components — the hybrid
 structure rule's nesting case (the `graph/hooks` precedent).
 
 ## The state split (the directive, applied to the hardest case)
 
-- **In the store:** the transcript (chat + the exploration's lecture — Save
+- **In the store:** the transcript (every turn, lectures included — Save
   needs it), the highlight ids (the canvas needs them), discoveries (the graph
   and Save need them). `useConversation` dispatches; nothing is reported
   upward through props anymore — the old `onStateChange`/`initial*` prop
   plumbing and the Atlas-side duplicate are gone.
-- **Panel-local, on purpose:** the input box, the `asking` and `lecturing`
-  flags, the
-  stream error, activeBeat/activeChat/activeChatBeat (which entry is lit is
-  panel UI — only the resulting ids are global; the third addresses a beat by
-  *turn* as well as index, since a conversation can hold several routed
-  lectures while the Lecture section holds one), the scope pickers' exclusion sets
+- **Panel-local, on purpose:** the input box, the `asking` flag, the
+  stream error, activeChat/activeChatBeat (which entry is lit is
+  panel UI — only the resulting ids are global; the second addresses a beat by
+  *turn* as well as index, since a conversation can hold several
+  lectures), the source picker's exclusion set
   (`excludedSources` — exclusion-tracked so a new source is in scope by
-  default; the lecture's is the plain `lectureInScope` flag) plus which
+  default) plus which
   picker's popover is open
-  (`openScope`, one shared slot so the two popovers can't overlap), the
+  (`openScope`, a shared slot from when two popovers could overlap), the
   lightbox, the abort/session refs, and whether the transcript is currently
   following its own bottom (a ref, not state — it changes on every scroll
   event and nothing renders from it). The **source list itself** is NOT
@@ -96,8 +95,7 @@ structure rule's nesting case (the `graph/hooks` precedent).
   (`selectGroundingNodes` = `(selected ∩ visible) ∪ discoveries`, deduped)
   from the store — so a hand-picked marquee selection on the canvas scopes
   both the lecture and the Q&A. The panel surfaces an active pick as a note
-  above the ask box (`N hand-picked papers`), mirroring the lecture-context
-  note.
+  above the ask box (`N hand-picked papers`).
 - **Session mechanics:** a client-generated `session_id` keys the backend's
   chat history; clearing the chat mints a new one, so a cleared conversation
   also detaches from server-side context. The panel remounts per workspace
@@ -122,75 +120,81 @@ structure rule's nesting case (the `graph/hooks` precedent).
   The two differ on exactly one thing — whether a discovery the filters exclude
   stays in scope — and the lecture's answer is no, because it promises to
   narrate the papers on screen. See `store/README.md`.
-- **A framing choice above the button** — `Summary | History`, panel-local
-  (`framing` in `Teacher.tsx`), sent per request. It sits *above* rather than
-  beside the button because it is a setting the press consumes, not a second
-  action: read the framing, then press. It **disables while a lecture is
-  shown**, since that lecture was told under the framing selected at the time
-  and a control drifting away from the beats on screen would describe the wrong
-  thing — clearing the lecture frees it. Summary is the default: a chronological
-  arc is a strong claim to make about an arbitrary selection, and forcing one
-  produced beats about the timeline instead of the papers (see the lecturer's
-  README).
-- **One Lecture button, tinted the seed's gold** (v7.17.0). Each of four
-  buttons used to be tinted its relation's node colour, because each mode
-  narrated one relation — the button visibly belonged to the nodes it lit up.
-  With one lecture whose subject is whatever the reader has scoped, there is no
-  single relation to match, so it wears the seed's colour: the one node every
-  lecture is anchored on. Its accessible name is "Play the lecture" rather than
-  "Lecture", because the section header above is already named that and two
-  controls sharing an accessible name inside one section is a screen-reader
-  coin toss.
-- **The panel is two folding sections** (v7.10.0 — `lecturesOpen` / `qaOpen`,
-  `.panel-section` + `.section-toggle` / `.section-body`). **Lecture** holds
-  the button, the intro, and the shown lecture's beats; **Chat** holds the
-  conversation. Each has a caret row that names it and folds it. Details that
-  make the fold safe: the states are **initial values only** (open one and it
-  stays open for the session); Lecture starts
-  **folded** because a control in the panel's prime vertical space is not
-  what most turns need, while Chat starts **open** because it is what the
-  composer writes into; the tour **stages both open** (`stagedOpen`, the same
-  contract `GraphControls` has), which is also how a first-time reader learns
-  the lectures exist; asking a question **unfolds Chat** (a turn landing in a
-  folded section reads as nothing happening); and while Lecture is folded, a
-  **generating lecture still reports itself** on its caret row with the shared
-  spinner, since its button's own dots are out of sight. Opening replays the
-  panel's one entrance (`rise` + `fade`, quicker); folding is instant, and
-  `prefers-reduced-motion` drops both.
-- **The section headers are pinned** (`position: sticky` on `.section-head`).
-  A long conversation used to bury its own header: folding the chat away, or
-  reaching its scope pickers, meant scrolling all the way back to the top
-  first (Patrick, 2026-08-16). A sticky box is confined to its own containing
-  block, so the two headers don't stack up — the Lecture one leaves with its
-  section and the Chat one takes the top from it — and the row is opaque
-  because turns now pass behind it.
-- **Each section reports its own work on its header**, with the app's shared
-  `.spin` rather than `HopDots`: the hopping dots are a *voice* ("an agent is
-  composing" — a lecture button, the send control, a bubble awaiting its first
-  token) and a header is a status line, the same distinction the trace chips
-  draw. Lecture shows it only while **folded**, since the button's own hopping
-  dots are the better readout when open. Chat shows it whenever the
-  agent is working, folded or not — with the header pinned, it is the only
-  thing still on screen while a reader scrolls back through history.
-- **Lecture buttons are cached toggles** (`toggleLecture` in `useConversation`):
-  the button is a show/hide switch over the exploration's lecture. First press
-  streams and stores it (`lectureStarted`/`beatAdded`); pressing it while shown
-  hides it (`lectureHidden`, beats kept) and pressing it while hidden reveals
-  what is there — live if still streaming, instant if done
-  (`lectureShownAgain`). Note what a second press is *not*: a re-ask over a
-  changed scope. That is `clearLecture` then press again — and it stayed that
-  way when lectures became askable in words (v7.20.0), because the two are
-  genuinely different requests. A button press means "show me the lecture"; a
-  *message* is a reply the reader can scroll back to, so "lecture me on these
-  five instead" appends a turn rather than overwriting the slot. That is the
-  whole reason routed beats live on the turn (`chatBeatAdded`) and not here.
+- **Framing is the command's second word**, `/lecture summary` or
+  `/lecture history`, sent per request — or inferred by the router when the
+  reader asks in words. Summary is the default a bare `/lecture` means: a
+  chronological arc is a strong claim to make about an arbitrary selection, and
+  forcing one produced beats about the timeline instead of the papers (see the
+  lecturer's README). It was a `Summary | History` button pair above the
+  Lecture button until v7.21.0, with a fiddly rule attached — disabled while a
+  lecture was on screen, because that lecture had been told under whatever
+  framing was selected at the time and a control drifting away from the beats
+  would describe the wrong thing. A command carries its framing *in the
+  request*, so there is no control left to drift.
+- **The panel has no sections, and the two shapes are now one shape.** It
+  stacked two folding sections from v7.10.0 to v7.21.0 — a **Lecture** section
+  above a **Chat** one, each behind its own caret — because it held two things
+  that had to be able to coexist. Deleting the lecture half left a lone "CHAT"
+  caret whose only job was folding away the whole point of a panel already
+  titled "AI Teacher & Discovery", with a ✕ beside it doing that job more
+  honestly (Patrick, 2026-09-14). So both went, and with them a chain of
+  things that only existed to serve them:
+
+  - `chatOpen` and the "asking unfolds it" dispatch;
+  - `stagedOpen`, the tour's prop for unfolding the Lecture section — the
+    `'assistant'` stage now only *opens the panel*, which is all there is to
+    do;
+  - the pinned `.section-head` (sticky, so a long conversation didn't bury its
+    own header — Patrick, 2026-08-16) and the **zero top padding** on
+    `.teacher-scroll` that pinning forced, since a sticky child sticks below
+    its container's padding. The scroller has its 12px back;
+  - the section header's `.spin` readout, which reported a working agent while
+    the section was folded;
+  - ~180 lines of CSS (see the note at `.teacher-scroll` in `teacher.css`).
+
+  The composer's own controls follow from the same change: with no row above
+  them, there is **one home** for each rather than two — see below.
+- **The newest lecture is open, the ones behind it are folded** — derived in
+  `Teacher.tsx`, with an override map (`openByReader`) holding only the turns
+  whose state the reader actually changed. Derived rather than stored per turn
+  because the rule is a fact about the *whole conversation*: as state it would
+  need an effect on every arriving lecture to fold the one before it. As a
+  derivation it falls out for free, and a lecture arriving while the reader is
+  reading an older one folds that older one without overwriting their choice
+  about it.
+
+  Twelve beats are fine as the newest thing on screen and unusable as the third
+  lecture scrolled past, and the Lecture section that could once fold them away
+  is gone — so the turn folds itself. The override map is keyed by turn index
+  like `activeChatBeat`, and indices move when a failed turn is dropped, so it
+  is cleared whenever the conversation is (`clearConversation`) rather than
+  tracked through every mutation: a stale entry costs one caret click, and
+  threading index arithmetic through the transcript would cost more.
+- **Every turn is stamped with the graph it was answered over** (`turnGraphSet`
+  in both `ask` and `lectureInChat`), and the panel passes the *current* seed
+  id down so a turn from another graph can say so. The two counts differ on
+  purpose: an answer stores `groundingNodes.length`, a lecture stores
+  `lectureNodes.length`, because those are genuinely different sets (see
+  `store/README.md`) and each turn should report the one it actually used.
+  Skipped graph-free — there is no graph to name.
+- **There is no lecture lifecycle any more** (v7.21.0), and that is the
+  largest thing this package lost. A lecture used to be a *slot*:
+  `conversation.lecture` plus `lectureShown`, written by a Lecture button that
+  was a three-way show/hide/generate toggle (`toggleLecture`), cleared by its
+  own section-level `clearLecture`, streamed on its own `lectureCtrl` so it
+  ran in parallel with the chat, and fed to the researcher through a 🎓
+  picker that asked whether it counted as context. Every piece of that existed
+  because a lecture came from a button and so had nowhere in the conversation
+  to live. It has one now (`ChatMsg.beats`), and the consequences all point the
+  same way: one controller, one clear, one code path, several lectures able to
+  coexist, and a lecture reaching the researcher as ordinary history.
 - **The composer routes, and says so** (v7.20.0 — `send` / `reroute` in
-  `useConversation`). One bar, four destinations. Three are still decided on
-  plain facts before any model is involved — a pasted arXiv id (`ID_RE`), a
-  mention the reader picked from the dropdown, an unresolved `@phrase` — and
-  those stay free and exact. Only the fourth asks `POST /api/route`, because
-  "teach me these papers" and "which of these used dropout" differ in their
-  words and nowhere else.
+  `useConversation`). One bar, five destinations. Four are decided on plain
+  facts before any model is involved — a `/command` (`readCommand`, see
+  `src/commands/`), a pasted arXiv id (`ID_RE`), a mention the reader picked
+  from the dropdown, an unresolved `@phrase` — and those stay free and exact.
+  Only the fifth asks `POST /api/route`, because "teach me these papers" and
+  "which of these used dropout" differ in their words and nowhere else.
 
   Three things make paying for that acceptable, and all three are load-bearing:
 
@@ -200,53 +204,42 @@ structure rule's nesting case (the `graph/hooks` precedent).
   - **Every routed turn says which assistant answered and offers the other**
     (`routedTo` on the turn, `.chat-routed` + `reroute`). A misroute costs one
     click, not a wrong answer the reader has to notice. The offer is absent
-    when the reader chose the destination themselves — the button, or a
-    correction they already made — since there is then nothing to second-guess,
-    and a correction deliberately carries none so the two answers can't
-    ping-pong.
+    when the reader chose the destination themselves — a `/lecture` command, or
+    a correction they already made — since there is then nothing to
+    second-guess, and a correction deliberately carries none so the two
+    answers can't ping-pong.
   - **Stop reaches the classify** (`routeCtrl`, aborted by `stopAsk`). A
     message stopped while it is still being routed has no turn yet, so
     `askCtrl` has nothing to abort — without its own controller the reader's
     Stop is silently ignored and the answer they cancelled starts a moment
     later.
 
-  A routed lecture streams on **`askCtrl`**, not `lectureCtrl`: it is a chat
-  turn, so the next message supersedes it and the Lecture section's own
-  lecture — which may be streaming at the same time — is untouched. Its scope
-  is the same `selectLectureNodes` the button uses; the router decided which
-  *agent* answers, not which papers, and rescoping because a lecture was asked
-  for in words would make one request mean two things.
-- **The lecture streams on its own controller** (`lectureCtrl`, with
-  `lecturing` driving the button's hopping dots); the chat has its own. So a
-  lecture keeps generating in the background when you hide it or ask a
-  question — neither interrupts the other. `onBeat` only drives the graph
-  highlight while the lecture is on screen (`shownRef`) and its exploration is
-  the one being read.
-- **The played lecture rides along on a Q&A** (`useConversation.ask`): every
-  `ask` packs it (trimmed to each beat's heading + text, titled via the shared
-  `LECTURE_TITLE`) into `streamAsk`'s `lectures`, so the researcher can build
-  on a story the student already watched instead of re-deriving it (and
-  re-paying the tokens). The backend budgets the block. A **🎓 scope picker**
-  (the same `ScopePicker` the sources use) says whether it is fed —
-  `lectureInScope` in `Teacher.tsx`, ticked by default, since a lecture the
-  reader just heard is context they expect an answer to build on. A quiet line
-  above the ask bar notes when it is in play.
-- **The lecture and the conversation no longer take turns** (v7.10.0). They
-  used to share one scroll, gated on which mode was shown: a shown lecture took
-  the panel over, and **asking a question hid the lecture** (`ask` dispatched
-  `lectureHidden`) so the two could never stack. Sections made that unnecessary
-  and then wrong — a reader deep in a lecture would ask a follow-up and watch
-  the beats they were reading vanish — so that dispatch is gone and a shown
-  lecture stays shown. `selectVisibleBeats` keys off `lectureShown`, which means
-  only whether the section shows it; the chat is always the full list. Both
-  remain a pure render choice over persistent state: the lecture and the chat
-  both live in the store.
-- **Two Clears, one per section** — `clearLecture` (stop it if loading,
-  `lectureDropped`, unlight the graph) sits on the Lecture caret row, and
-  `clearChat` (`chatCleared` + a fresh session id) is the bin in the composer,
-  which belongs to Chat. It was one contextual button until v7.10.0; with both
-  sections on screen at once, a single button could no longer say which of the
-  two it would wipe.
+  A lecture streams on the **same `askCtrl`** as an answer: both are replies to
+  a typed message, so the next message supersedes whichever was in flight.
+  Its scope is `selectLectureNodes` whether it was commanded or routed — the
+  router decides which *agent* answers, not which papers, and rescoping
+  because a lecture was asked for in words would make one request mean two
+  things.
+- **One Clear.** `clearConversation` (`chatCleared` + a fresh session id, plus
+  the fold overrides that addressed the turns being cleared) is the bin in
+  the composer. There were two from v7.10.0 to v7.21.0 — a `clearLecture` on
+  the Lecture caret row beside it — because with two sections on screen a
+  single button could not say which of the two it would wipe. With lectures in
+  the transcript there is one thing to clear.
+- **The composer holds the filters again** (Patrick, 2026-09-14). v7.11.0
+  moved three controls *out* of the pill on the reasoning that a pill holding
+  three controls and a textarea read as clutter — "the box you type in should
+  look like a box you type in" — and that reasoning still stands for the
+  📚 source scope, which sits as a chip in `.ask-tools` under the bar. But two
+  of those three controls are gone since (the 🔍 toggle, replaced by `@` in
+  v7.18.0; the 🎓 lecture scope, in v7.21.0), so ▽ Filters came back inside,
+  next to the question it binds most directly. In the bar it wears the clear
+  button's clothes rather than its own chip look — a 34px transparent circle —
+  because `.bar-toggle`'s `--bg` pill reads as a dark hole against the
+  composer's lighter surface, and because three controls in a row should look
+  like one set. Its popover anchors to the bar and spans it, which is the same
+  width the Chat row used to give it and the reason it is not anchored to the
+  little funnel itself.
 
 ## Who uses it, and how/why
 
@@ -262,36 +255,43 @@ Everything else flows through the store: highlights → the canvas, discoveries
 → the explorer's sim merge, transcript → Save.
 
 **Where the controls live, and why.** Each control sits on the thing it acts
-on. The panel's title row holds only the title and the ✕. The **🎓 and 📚
-scopes ride the Chat caret row** (v7.10.0): they bind the *researcher* — what
-it may read and search when it answers — not the lecturer above, and both a
-peer "Grounding" section and a slot in the panel header would imply they
-scope everything (Patrick's call, and the reason they landed here). The
-**🔍 direct-search toggle and the ▽ filters joined them there in v7.11.0**
-(the toggle then went in v7.18.0, replaced by typing `@` — see
-`../mentions/README.md`),
-for the same reason and out of the same place.
+on. The panel's title row holds only the title and the ✕.
 
-**The ask bar holds the question and nothing else** (v7.11.0). Those four
-controls all used to sit *inside* the pill, which is what made it read as
-clutter: the one thing you came here to use — a box to type in — looked like a
-toolbar with a text field wedged in it. So the pill was emptied. With **no
-graph** there are no sections to receive them, so the same single
-`sourcePicker` / `searchControls` elements render instead in a **chip row
-directly beneath the bar** (`.ask-tools`) — one of two places, never both.
-Beneath rather than above: you read the question first, then what bounds it,
-and the row is far enough from the text field to stop being chrome around it.
-The bar and that row are wrapped together in `.ask-dock`, which is what the
-landing surface's FLIP measures — the two drop from the optical centre to the
-bottom as one thing on the first question, and a row that snapped while the
-bar slid would read as two unrelated controls.
+The **📚 source scope** is a chip in `.ask-tools`, the row directly beneath
+the bar. It binds the *researcher* — what it may read and search when it
+answers — and both a peer "Grounding" section and a slot in the panel header
+would imply it scoped everything (Patrick's call). Beneath rather than above:
+you read the question first, then what bounds it, and the row is far enough
+from the text field to stop being chrome around it.
 
-On the Chat row every trigger is its icon alone (the popover shows the truth
-once open, an accent fill marks an armed toggle or a narrowed scope, and the
-tooltip spells it out); in the landing tool row there is width for the labels,
-which is where a first-time reader meets them. Popovers follow the room:
-**upward** from the tool row, which sits at the bottom of the page under the
-bar, and **downward** from the pinned Chat row.
+**▽ Filters is inside the bar** (Patrick, 2026-09-14) — see the bullet above
+for why it came back and how it is dressed for the pill.
+
+**The history of the pill is worth knowing before moving anything back into
+it.** Four controls sat inside it until v7.11.0 (📚 scope, 🔍 direct search,
+▽ filters, and the 🎓 lecture scope), which is what made it read as clutter:
+the one thing you came here to use — a box to type in — looked like a toolbar
+with a text field wedged in it. All four moved out, to one of two homes
+depending on the panel's shape: the Chat section's caret row with a graph open,
+`.ask-tools` without one. Since then the 🔍 toggle became `@` (v7.18.0, see
+`../mentions/README.md`), the 🎓 scope went with the lecture slot (v7.21.0),
+and the sections that provided the second home went too — leaving two
+controls, one home each.
+
+Every trigger is **its icon alone** when docked (the popover shows the truth
+once open, an accent fill marks a narrowed scope, and the tooltip spells it
+out); the landing tool row has width for labels, which is where a first-time
+reader meets them. In the bar the label is hidden at every width — a word in
+the pill is exactly the clutter v7.11.0 cleared out. Popovers open **upward**
+from both homes now: the bar and the row beneath it both sit at the bottom of
+the column, which is where the room is. The filter popover anchors to the bar
+and spans it rather than to the funnel that opens it, because a popover the
+width of a button has no room for a year slider.
+
+The bar and the tool row are wrapped together in `.ask-dock`, which is what
+the landing surface's FLIP measures — the two drop from the optical centre to
+the bottom as one thing on the first question, and a row that snapped while
+the bar slid would read as two unrelated controls.
 The 📚 picker appears at **one** source, not two (v7.2.0): the old `> 1` gate
 read a lone source as leaving no choice to make, but "use it / don't" is a
 choice, and hiding the control meant a reader with one uploaded book had no
@@ -354,8 +354,8 @@ One gesture, one rhythm, both defined in `teacher.css`.
   `getBoundingClientRect` forces layout, and this component re-renders on
   every streamed token.
 - **Two wait indicators, and the split is deliberate.** `HopDots` means *an
-  agent is composing* — the send button mid-answer, a generating lecture, a
-  bubble waiting on its first token. The shared `.spin` primitive
+  agent is composing* — the send button mid-answer, a bubble waiting on its
+  first token. The shared `.spin` primitive
   (`atlas.css`) means *a step is running*: a scout trace chip while its
   worker searches. They were briefly the same thing, and using the dots
   everywhere flattened the difference — a chip is an item in a list, not a
@@ -397,13 +397,20 @@ hides the symptom and silently clips those three.
 ## How it's verified
 
 `tsc --noEmit` strict + oxlint, plus `test/teacher/Teacher.test.tsx` — the
-lecture fold's default and its `stagedOpen` unfold, and which of the two homes
-each ask-binding control (📚 scope, ▽ filters) renders in
-for each shape — including that none of them is inside the bar. Browser-milestone items: a
-lecture lighting beats as they stream, a researcher answer with trace chips +
-an inline figure, the library chat with a scope subset, Clear detaching
-follow-up context, and a save→restore round trip rehydrating the whole
-conversation.
+conversation fold, which of the two homes each ask-binding control (📚 scope,
+▽ filters) renders in for each shape (including that none of them is inside
+the bar), a set of **negative** assertions pinning that no lecture UI came
+back (no Play button, no `Summary`/`History` pair, no framing group, no 🎓
+scope), and the derived fold rule — the newest lecture open, the ones behind
+it folded, and a reader's override on one turn leaving the others alone.
+`test/teacher/transcript/ChatMessage.test.tsx` covers the turn itself: the
+caret, the graph line's *conditional* appearance, and a lecture's own
+grounding line. Browser-milestone items: a lecture lighting beats as they
+stream, a
+researcher answer with trace chips + an inline figure, the library chat with a
+scope subset, Clear detaching follow-up context, and a save→restore round trip
+rehydrating the whole conversation — including a pre-v7.21.0 save's lecture
+arriving as a turn.
 
 
 ## The chat bar is the app's only text input (v7.6.0)
@@ -446,26 +453,25 @@ The filters ride on `ask` too, not just on a scout search — see
 modes.
 
 
-## The lecture intro says what a lecture will leave out (v7.7.0)
+## What the lecture intro used to say (v7.7.0–v7.21.0)
 
-`.lecture-intro` above the Lecture button carries a conditional sentence: when
-papers on the graph hang off *another* paper rather than the seed, it names how
-many.
+`.lecture-intro` above the Lecture button carried a conditional sentence: when
+papers on the graph hung off *another* paper rather than the seed, it named how
+many. The sentence was **inverted in v7.17.0** — it used to say no lecture
+covered them ("Re-seed on one to hear its story"), because each mode was
+scoped to the seed's own neighbours and a satellite fell outside every one of
+them; once a lecture narrated whatever was scoped, satellites WERE covered and
+the sentence said so ("That includes the 3 papers you expanded"). Same count,
+opposite claim, worth stating either way.
 
-**The sentence was inverted in v7.17.0, and that inversion is the point.** It
-used to say no lecture covered them ("Re-seed on one to hear its story"),
-because each mode was scoped to the seed's own neighbours and a satellite fell
-outside every one of them — silence there would have read as the lecture
-quietly skipping papers rather than as a stated boundary. A lecture now
-narrates whatever is scoped, so satellites ARE covered, and the sentence says
-so ("That includes the 3 papers you expanded"). Same count, opposite claim:
-worth stating either way, because a reader who has been expanding the graph
-needs to know which of the two they are getting.
+**The paragraph, the count and the selector behind it are all gone in
+v7.21.0**, with the section that held them. `selectSatelliteCount` asked *is
+this paper joined to the seed by an edge?* over the *grounding* nodes, so it
+tracked what a lecture would actually cover right now; with nothing rendering
+it, keeping it would have been a tested selector no caller reads.
 
-The count comes from `selectSatelliteCount`, which asks *is this joined to the
-seed by an edge?* rather than reusing the frontend's own `_origin` layout hint.
-It used to match the backend's scoping predicate exactly, which was the reason
-to prefer it; now that nothing on the backend scopes by relation, it is simply
-the honest reading of "hangs off another paper". It counts over the *grounding*
-nodes, so filtering a satellite off the canvas drops it from the count — the
-number tracks what the lecture will actually cover right now.
+Whether the panel should say this at all any more is a fair open question — a
+reader who has been expanding the graph still benefits from knowing satellites
+are included, and the command menu's one-line hint has no room for it. If it
+comes back it belongs wherever the reader is told what `/lecture` covers, and
+the selector is ten lines to re-derive from the seed's edges.

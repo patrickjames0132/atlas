@@ -3,9 +3,17 @@
  *
  * Description:
  * The lecture beats: click one to light its papers on the graph, click the
- * active one again to clear. A beat may carry a real paper figure (the
- * seed's own in intuition mode, a story paper's in history/evolution) —
- * rendered inline, click to enlarge.
+ * active one again to clear. A beat may carry a real paper figure — rendered
+ * inline, click to enlarge.
+ *
+ * **A beat is only a control while its papers are loaded.** A lecture lives in
+ * the transcript, the transcript outlives the graph it was told over, and so a
+ * beat is routinely read with none of its papers on screen. Clicking one then
+ * lights nothing, which is the same dead pointer the inline `[n]` chips grey
+ * out for and the same rule the answer bubble follows (`Teacher.tsx`, the
+ * `clickable` gate): at least one of the beat's papers has to be there.
+ * Partial overlap still counts — lighting the ones that *are* present is
+ * useful.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -51,44 +59,59 @@ export default function BeatList({
   onBeatClick: (index: number, beat: Beat) => void
   /** Spotlight one paper from a clicked inline `[n]` marker in a beat. */
   onRefClick?: (nodeId: string) => void
-  /** Paper ids still on the graph; a `[n]` outside it greys out. */
+  /** Paper ids still on the graph; a beat (and a `[n]`) outside it greys out.
+   *  Undefined means "don't check" — every beat stays a control, which is the
+   *  right way round for a caller that forgets to pass the set. */
   onGraphIds?: Set<string>
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   if (beats.length === 0) return null
   return (
     <ol className="beats">
-      {beats.map((beat, index) => (
-        <li
-          key={index}
-          className={`beat ${activeBeat === index ? 'active' : ''}`}
-          onClick={() => onBeatClick(index, beat)}
-        >
-          {beat.heading && (
-            <div className="beat-heading">
-              <MathText>{beat.heading}</MathText>
-            </div>
-          )}
-          <AnswerMarkdown
-            text={beat.text}
-            graphRefs={beat.graph_refs}
-            sourceRefs={sourceRefs}
-            onRefClick={onRefClick}
-            onGraphIds={onGraphIds}
-          />
-          {beat.figure && (
-            // Enlarging the figure must not toggle the beat's highlight.
-            <div onClick={(event) => event.stopPropagation()}>
-              <FigCard figure={asAnswerFigure(beat.figure)} onEnlarge={onEnlarge} />
-            </div>
-          )}
-          {beat.node_ids.length > 0 && (
-            <div className="beat-nodes">
-              {beat.node_ids.length} paper{beat.node_ids.length > 1 ? 's' : ''} ✦
-            </div>
-          )}
-        </li>
-      ))}
+      {beats.map((beat, index) => {
+        // Note this also covers a beat with **no** papers at all: there is
+        // nothing for it to light, so it stops pretending to be a button.
+        const lightable = !onGraphIds || beat.node_ids.some((nodeId) => onGraphIds.has(nodeId))
+        return (
+          <li
+            key={index}
+            className={`beat ${activeBeat === index ? 'active' : ''}${lightable ? '' : ' stale'}`}
+            onClick={lightable ? () => onBeatClick(index, beat) : undefined}
+            title={
+              lightable ? undefined : 'None of this beat’s papers are on the graph currently open'
+            }
+          >
+            {beat.heading && (
+              <div className="beat-heading">
+                <MathText>{beat.heading}</MathText>
+              </div>
+            )}
+            <AnswerMarkdown
+              text={beat.text}
+              graphRefs={beat.graph_refs}
+              sourceRefs={sourceRefs}
+              onRefClick={onRefClick}
+              onGraphIds={onGraphIds}
+            />
+            {beat.figure && (
+              // Enlarging the figure must not toggle the beat's highlight.
+              <div onClick={(event) => event.stopPropagation()}>
+                <FigCard figure={asAnswerFigure(beat.figure)} onEnlarge={onEnlarge} />
+              </div>
+            )}
+            {beat.node_ids.length > 0 && (
+              // The ✦ is the affordance, not the count — it marks "click to
+              // light these". A stale beat keeps the count (it really is about
+              // two papers) and drops the mark, the same way a stale `[n]` keeps
+              // its number and loses its chip.
+              <div className="beat-nodes">
+                {beat.node_ids.length} paper{beat.node_ids.length > 1 ? 's' : ''}
+                {lightable ? ' ✦' : ''}
+              </div>
+            )}
+          </li>
+        )
+      })}
     </ol>
   )
 }

@@ -1,0 +1,68 @@
+/* Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
+   Description: the `/`-command menu — the panel above the composer and its rows.
+   Deliberately the mention dropdown's twin: same placement, same radius, same
+   shadow, same single highlight state. The two are one gesture with different
+   prefixes, so they must not look like two different features. */
+
+.command-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.command-head {
+  padding: 2px 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.command-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+/* One highlight state for both mouse and keyboard — hover moves the keyboard
+   selection, so the two can never point at different rows. */
+.command-row.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.command-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+/* Monospace, because it is a token the reader types rather than a phrase they
+   read — the same signal the app gives a paper id. */
+.command-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-strong);
+}
+.command-hint {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.command-more {
+  flex: none;
+  font-size: 14px;
+  color: var(--muted);
+}

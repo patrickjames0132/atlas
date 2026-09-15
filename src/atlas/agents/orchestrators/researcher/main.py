@@ -42,7 +42,6 @@ from pydantic_ai.tools import RunContext, ToolDefinition
 from ....services.graph import Node, Provider
 from ....services.sources import store
 from ... import events, factory, prompts, streams
-from ...models import PlayedLecture
 from .config import AGENT_ID, BUDGETS, SKILLS, SYSTEM_PROMPT
 from .tools import (
     ResearcherDeps,
@@ -334,51 +333,11 @@ def _library_context(library: list[dict]) -> str:
     )
 
 
-# How much of the already-played lectures to fold into the prompt. Bounded so a
-# full set of four lectures (7–12 beats each) can't blow the context — the
-# earliest lectures fit whole, then the block is truncated once the budget runs
-# out. It's grounding the model MAY lean on, not a required read.
-_LECTURES_MAX_CHARS = 6000
-
-
-def _lectures_context(lectures: list[PlayedLecture]) -> str:
-    """The lectures already delivered this session, as a compact prompt block.
-
-    Each lecture becomes a titled list of its beats (``heading: text``), joined
-    under a header that tells the model to build on them rather than repeat
-    them. Bounded by ``_LECTURES_MAX_CHARS`` — lectures are added whole until the
-    budget runs out, then the overflowing one is truncated and the rest dropped
-    (the student saw the earliest-played first, so that ordering is preserved).
-
-    Args:
-        lectures: The played lectures, in the order they were delivered.
-
-    Returns:
-        The formatted block, or an empty string when there are no lectures.
-    """
-    blocks: list[str] = []
-    budget = _LECTURES_MAX_CHARS
-    for lecture in lectures:
-        lines = [f"## {lecture.title}"]
-        for beat in lecture.beats:
-            heading = beat.heading.strip()
-            text = beat.text.strip()
-            lines.append(f"- {heading}: {text}" if heading else f"- {text}")
-        block = "\n".join(lines)
-        if len(block) > budget:
-            blocks.append(block[:budget].rstrip() + " …")
-            break
-        blocks.append(block)
-        budget -= len(block)
-    return "\n\n".join(blocks)
-
-
 def _prompt(
     seed: Node | None,
     nodes: list[Node],
     library: list[dict],
     question: str,
-    lectures: list[PlayedLecture],
 ) -> str:
     """Assemble the question turn: grounding context + the question.
 
@@ -390,11 +349,16 @@ def _prompt(
         library: The user's source library (listed so the model can scope
             search_sources); empty when there is none.
         question: The user's question.
-        lectures: Lectures already delivered this session — folded in as extra
-            context the answer may build on; empty when none have played.
 
     Returns:
         The full user prompt.
+
+    Note:
+        A ``lectures`` argument used to fold every lecture the student had been
+        shown into this prompt as extra context, because a lecture lived
+        outside the conversation and the agent had no other way to see one.
+        Since v7.21.0 a lecture is a chat turn, so it arrives through
+        ``history`` like any other turn and nothing special is assembled here.
     """
     if seed is not None:
         context = (
@@ -420,12 +384,6 @@ def _prompt(
         )
     if library:
         context += "\n\n" + _library_context(library)
-    if lectures:
-        context += (
-            "\n\nLectures already delivered to the student this session — build on "
-            "them and refer back to them where relevant; don't re-derive or repeat "
-            "a lecture wholesale:\n" + _lectures_context(lectures)
-        )
     return f"{context}\n\nQuestion: {question}"
 
 
@@ -435,7 +393,6 @@ def answer(
     nodes: list[Node] | None = None,
     history: list[dict] | None = None,
     source_ids: list[str] | None = None,
-    lectures: list[PlayedLecture] | None = None,
     provider: Provider = "s2",
     year_from: int | None = None,
     year_to: int | None = None,
@@ -456,10 +413,6 @@ def answer(
         source_ids: User-selected library scope. ``None`` = no scope (the
             whole library); a present list pins context and every source
             search to exactly those; an empty list disables source search.
-        lectures: Lectures already delivered this session (from the frontend's
-            transcript cache) — folded into the prompt as context the answer
-            may build on, so it doesn't re-derive a lecture the student saw.
-            ``None``/empty when no lecture has played.
         provider: The graph's academic-data provider (``s2`` / ``openalex``) —
             expand_node, find_papers, and lazy detail hydration follow it, so
             the agent stays in the same backend (and id space) as the graph.
@@ -536,7 +489,7 @@ def answer(
     # backstop against pathological loops, and exceeding it is an error.
     stream = streams.drive(
         agent,
-        _prompt(seed, deps.nodes, library, question, lectures or []),
+        _prompt(seed, deps.nodes, library, question),
         deps=deps,
         model=factory.model_for(AGENT_ID),
         message_history=prompts.history(history),

@@ -1,13 +1,13 @@
-/* The unified assistant panel: lecture modes + beats, the Q&A / library chat
-   (with agent trace lines + retrieval summaries), and the ask bar. Docked beside
-   the graph so answers can light up its nodes; toggled from the header. */
+/* The unified assistant panel: one conversation — answers, and the lectures
+   that arrive as turns in it — with agent trace lines and retrieval
+   summaries, plus the ask bar. Docked beside the graph so answers can light up
+   its nodes; toggled from the header. */
 
 .teacher {
   /* The transcript accent — a soft periwinkle in the same blue family as the
      app's --accent, used to tint the beat / chat / trace surfaces below.
      `--lecture` is an "R, G, B" triple so those tints can vary the alpha with
-     rgba(). (The lecture *buttons* are coloured per-relation instead — see
-     `--c` on .teach-btn.) Retune here in one place. */
+     rgba(). Retune here in one place. */
   --lecture: 165, 180, 252;
   /* How hard the tints above bite. The alpha values were tuned against a dark
      page, where a 6–10% wash of a pale periwinkle still separates; on light
@@ -180,9 +180,12 @@
    them adjacent to what they modify — you read the question, then what it's
    bounded by — and hands the pill back to the question.
 
-   Only ever rendered with no graph: docked, these live on the Chat section's
-   row instead (see `.section-head-right` below), because a 340px panel has no
-   width for a row of chips either. */
+   **One home since v7.21.0.** They rode the Chat section's caret row with a
+   graph open and this row without one; deleting the sections left this row as
+   the only place, which is also the simpler claim — they bind the question, so
+   they belong under the question. Docked, they collapse to their icons
+   (`.scope-btn-label`, `.toggle-label`), because a 340px panel has no width
+   for a row of labelled chips. */
 .ask-tools {
   /* Both popovers anchor HERE now (the filter one spans left: 0 / right: 0
      against this row, the scope one hangs off its left edge) — the ask bar
@@ -400,327 +403,19 @@
   border-top: 1px solid var(--border);
   margin-top: 4px;
 }
-/* --- the panel's sections ----------------------------------------------
-   Beside a graph the panel stacks two: Lectures and Q&A, each folding behind
-   its own caret, each owning its own controls. They were one shared scroll
-   until v7.10.0, which meant the lecture and the conversation took turns
-   holding the panel — asking a question put away the beats you were reading.
-   Sections let both stay. A rule separates them; the first needs none, the
-   panel title's own border is right above it. */
-/* One rhythm, everywhere: 12px from a rule to the header below it, and 12px
-   from a header to its content — which is why the rule brings no spacing of
-   its own. The header's own symmetric padding provides all of it, so the gap
-   under the panel title (also a rule) matches the gap under this one. */
-.panel-section + .panel-section {
-  border-top: 1px solid var(--border);
-}
-/* The fold row: the toggle takes the width (so the whole row is the hit
-   target) and the section's own controls sit at its right end.
-
-   It is PINNED to the top of the scroller while its own section is in view.
-   A long conversation used to bury its own header — to fold the chat away, or
-   to reach its scope pickers, you first had to scroll all the way back up.
-   Sticky costs nothing and fixes exactly that. Two details it depends on: an
-   opaque background, since turns now pass *behind* it (including through the
-   scroller's own top padding, which `top: 0` covers); and the fact that a
-   sticky box is confined to its own containing block — so the Lectures header
-   leaves with its section rather than stacking up, and the Chat header takes
-   the top from it. */
-.section-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* Its own breathing room, since the scroller above gave up its top padding
-     for this row to pin flush — and the background paints all of it, so
-     nothing shows through behind a stuck header. Symmetric, because it is
-     also what separates one section from the next (see the rule above). */
-  padding: 12px 0;
-  background: var(--panel);
-}
-/* The landing surface has no sections, and its scroll box is the page — a
-   pinned row there would hang over the reading column for no reason. It also
-   keeps the top padding the docked scroller gives up. */
-.teacher.landing .section-head {
-  position: static;
-}
-.teacher.landing .teacher-scroll {
-  padding-top: 12px;
-}
-.section-head-right {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  gap: 4px;
-}
-/* Reads as a section heading you can press, not a button: only the caret and
-   the colour say it's live. */
-.section-toggle {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 2px 0;
-  border: none;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-align: left;
-  cursor: pointer;
-}
-.section-toggle:hover,
-.section-toggle:focus-visible {
-  color: var(--text-strong);
-}
-/* A generating lecture, reported on the folded section's own row. `.spin`
-   (atlas.css) rather than the panel's hopping dots — those are a voice, and a
-   section header is a status line — just scaled down to sit on it. */
-.section-spin {
-  flex-shrink: 0;
-  width: 11px;
-  height: 11px;
-  border-width: 1.5px;
-}
-/* A section's own destructive control (drop the shown lecture). Muted and
-   small — it must not compete with the section it sits on. */
-.section-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.section-clear:hover,
-.section-clear:focus-visible {
-  background: color-mix(in srgb, var(--text) 14%, transparent);
-  color: var(--text-strong);
-}
-.section-clear svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-/* In a section head the scope pickers are their icon alone, exactly as they
-   are in the composer: the popover states the truth the moment you open it,
-   the accent fill marks a narrowed scope, and the tooltip spells it out. Two
-   labelled pills would eat the row. */
-.section-head-right .scope-btn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 50%;
-  border-color: transparent;
-  background: transparent;
-  font-size: 14px;
-  line-height: 1;
-}
-.section-head-right .scope-btn-label {
-  display: none;
-}
-.section-head-right .scope-btn:hover,
-.section-head-right .scope-btn:focus-visible {
-  border-color: transparent;
-  background: var(--hover);
-  color: var(--text-strong);
-}
-.section-head-right .scope-btn.on {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-/* The two search toggles joined them here in v7.11.0, so they take the same
-   treatment — but stay flex rather than a fixed circle, because the filter one
-   grows a count badge beside its funnel and a grid would stack the two. A
-   min-width matches the circles when there is no badge. */
-.section-head-right .search-controls {
-  gap: 4px;
-}
-.section-head-right .bar-toggle {
-  justify-content: center;
-  gap: 3px;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 6px;
-  border-radius: 999px;
-  border-color: transparent;
-  background: transparent;
-  font-size: 13px;
-}
-.section-head-right .bar-toggle:hover,
-.section-head-right .bar-toggle:focus-visible {
-  border-color: transparent;
-  background: var(--hover);
-  color: var(--text-strong);
-}
-/* Armed / filtered reads as the same accent wash the narrowed scopes wear —
-   with the labels gone it is the only cue left, so it has to carry. */
-.section-head-right .bar-toggle.on {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent);
-}
-/* The filter popover anchors to the section head (sticky, so already a
-   containing block) and spans it — a popover the width of that little funnel
-   has no room for a year slider. Downward, because up is the pinned row and
-   the panel header above it. */
-.section-head .filter-pop {
-  top: calc(100% + 6px);
-  bottom: auto;
-}
-/* The caret turns to point down as the section opens — the one piece of
-   motion the fold needs, and short enough not to delay the reveal below.
-   Sized well above the row's small-caps label: it is the only glyph saying
-   "this opens", so it has to be seen before it can be read. */
-.section-caret {
-  display: inline-block;
-  width: 14px;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--accent);
-  transition: transform 0.18s var(--ease-rise);
-}
-.section-toggle.open .section-caret {
-  transform: rotate(90deg);
-}
-/* Opening plays the panel's one entrance — the same rise+fade every arriving
-   thing here uses, just quicker: this is a section unfolding, not a turn
-   arriving. `hidden` → shown restarts a CSS animation, which is exactly the
-   trigger wanted (and folding away stays instant — an exit animation would
-   only hold up the space it is giving back). */
-/* The head and its controls are one band; the content below reads as a
-   separate thing, not as the next line of the same row. The gap is the
-   header's own bottom padding — nothing extra here, so the same 12px shows up
-   above a header and below it. */
-.section-body {
-  animation:
-    rise 0.32s var(--ease-rise) both,
-    fade 0.32s var(--ease-fade) both;
-}
-/* A quiet intro above the lecture grid: what the buttons do (summarize node
-   types) and that each lecture's scope is exactly the papers on the graph. */
-.lecture-intro {
-  margin: 0 2px 10px;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-/* The framing choice — Summary | History — as a small segmented control above
-   the Lecture button. It sits ABOVE rather than beside it because it is a
-   setting the press consumes, not a second action: read the framing, then
-   press. Disabled while a lecture is shown, since it framed those beats. */
-.lecture-framing {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.framing-btn {
-  flex: 1;
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-}
-.framing-btn:hover:not(:disabled):not(.on) {
-  color: var(--text-strong);
-  border-color: var(--muted);
-}
-.framing-btn.on {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  color: var(--text-strong);
-  font-weight: 600;
-}
-.framing-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* The single Lecture button, full width of the section. This was a 2×2 grid of
-   four mode buttons until v7.17.0; with one lecture whose subject is the
-   reader's scope, there is one control. */
-.lecture-row {
-  display: flex;
-}
-/* Tinted with the seed's gold, passed in as `--c` (REL_COLOR in
-   graph/theme.ts). It used to take its relation's colour — each mode narrated
-   one relation and matched that filter chip — but a lecture now narrates
-   whatever is on screen, so it wears the seed's colour: the one node every
-   lecture is anchored on. color-mix keeps the single hex source of truth
-   while varying the alpha. */
-.teach-btn {
-  position: relative; /* anchors the .cached dot */
-  flex: 1;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--c) 40%, transparent);
-  background: color-mix(in srgb, var(--c) 8%, transparent);
-  color: var(--text-strong);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.2;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
-}
-/* Hover only lifts a non-selected button — the filled `.active` state must not
-   be washed out by hover (which otherwise wins on specificity). */
-.teach-btn:hover:not(:disabled):not(.active) {
-  background: color-mix(in srgb, var(--c) 16%, transparent);
-  border-color: color-mix(in srgb, var(--c) 60%, transparent);
-}
-/* The shown lecture — its button is filled, reading as pressed/selected. The
-   tint is bright, so text goes dark. */
-.teach-btn.active {
-  background: var(--c);
-  border-color: var(--c);
-  color: #0b1020;
-  font-weight: 600;
-}
-.teach-btn.active:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-/* A played-but-hidden lecture wears a small dot: "played — click to show." */
-.teach-btn.cached::after {
-  content: '';
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--c);
-}
-.teach-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
+/* --- the panel's sections, and why there are none -----------------------
+   It stacked two folding sections from v7.10.0 to v7.21.0 — Lecture above
+   Chat, each behind its own caret, each owning its own controls — because the
+   panel held two things that had to be able to coexist. `/lecture` replaced
+   the Lecture button, which left a lone "CHAT" caret folding away the only
+   thing in a panel already titled "AI Teacher & Discovery", so both sections
+   went. The styling they needed went with them: `.panel-section`,
+   `.section-head` and its sticky rules, `.section-toggle`, `.section-caret`,
+   `.section-body`, `.section-spin`, `.section-clear`, `.section-head-right`
+   and its two control variants, plus `.lecture-intro`, `.lecture-framing`,
+   `.framing-btn`, `.lecture-row` and `.teach-btn`. Two consequences show up
+   below: the scroller keeps its own top padding again (the sticky header used
+   to take it), and the filter popover has one anchor rather than two. */
 /* The "playing" indicator: three dots that hop in a cascade while a lecture
    streams — a little life on the button that's generating. currentColor picks
    up the filled button's white text. */
@@ -768,26 +463,21 @@
   }
   .teacher.landing.empty .landing-greeting,
   .teacher.landing.empty .ask-dock,
-  .section-body,
   .trace-line,
   .chat {
     animation: none;
-  }
-  /* The caret still turns — it is a state readout, not decoration — it just
-     turns at once. */
-  .section-caret {
-    transition: none;
   }
 }
 
 .teacher-scroll {
   flex: 1;
   overflow-y: auto;
-  /* NO top padding, and that is load-bearing: a sticky child sticks below
-     the scroll container's own padding, so 12px here left a band above the
-     pinned section header where turns scrolled past in the open (Patrick,
-     2026-08-16). The row's own padding replaces it, and travels with it. */
-  padding: 0 16px 12px;
+  /* Top padding is back. It was deliberately ZERO from 2026-08-16 to v7.21.0,
+     because a sticky child sticks below its scroll container's own padding —
+     12px here left a band above the pinned section header where turns
+     scrolled past in the open (Patrick). The header took the padding instead
+     and travelled with it. No sticky header, no conflict. */
+  padding: 12px 16px;
   /* Nothing the transcript holds may be wider than the panel. `overflow-y:
      auto` with a visible x-axis computes to `overflow-x: auto` — so this box
      IS a horizontal scroller, and anything unwrappable in it (a bare URL, a
@@ -834,21 +524,46 @@
   margin: 0 0 10px;
   padding: 0;
 }
+/* A beat card is `--chip`, not `--bg`, because of where it sits: a lecture
+   answered in the chat nests its beats inside an assistant bubble, which is
+   itself `--bg`. Painting the card the same colour as its container left the
+   two separated by nothing but a 1px `--border`, and on dark that is very
+   nearly invisible. `--chip` is the app's raised-small-surface token (the
+   composer and user bubbles use it), so the card now lifts off both surfaces
+   it can land on — the bubble in the chat, the panel in the lecture section. */
 .beat {
   padding: 10px 12px;
   margin-bottom: 8px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--chip);
   cursor: pointer;
   transition: border-color 0.15s;
 }
 .beat:hover {
   border-color: var(--muted);
 }
+/* A beat whose papers are not on the graph currently open. Not a control, so
+   it must not look like one: no pointer, no hover, and the whole card dimmed —
+   the same treatment `[n]` chips get when their paper is gone, applied to the
+   card that would have lit them. Dimming rather than restyling keeps it
+   legible: the narration is still worth reading, it just cannot point
+   anywhere. */
+.beat.stale {
+  cursor: default;
+  opacity: 0.62;
+}
+.beat.stale:hover {
+  border-color: var(--border);
+}
+/* The lecture hue mixed INTO the card rather than washed over it. The wash
+   alpha is tuned to sit on `--bg`, and over `--chip` it composites *darker*
+   than the resting card — which would make selecting a beat look like it
+   receded. Mixing keeps the selected beat the brightest thing in the list,
+   which is what the click is for. */
 .beat.active {
   border-color: var(--accent);
-  background: rgba(var(--lecture), var(--lecture-wash-strong));
+  background: color-mix(in srgb, rgb(var(--lecture)) 14%, var(--chip));
 }
 .beat-heading {
   font-size: 11px;
@@ -946,6 +661,79 @@
    would read as a gap before the grounding line. */
 .chat-beats .beats {
   margin-bottom: 0;
+}
+/* The lecture's own caret row. Quiet like `.chat-routed` — it is a handle and
+   a count, not a heading — and full-width so the whole row is the hit target
+   rather than the glyph alone. */
+.beats-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.beats-toggle:hover {
+  color: var(--text);
+}
+.beats-caret {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 0.15s;
+}
+.beats-toggle.open .beats-caret {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .beats-caret {
+    transition: none;
+  }
+}
+/* "From the “X” graph" — only on a turn answered over a graph other than the
+   one on screen. Quiet, single-line, and truncating: a paper title is long and
+   the panel is ~340px docked, so it ellipsises rather than wrapping to three
+   lines above every stale turn. */
+.chat-graph {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The line is a control — it re-opens the graph it names — so it wears the
+   same motif as a seeding citation chip. Reset to a text row first: a button
+   inherits none of the div's layout. */
+.chat-graph-btn {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.chat-graph-btn:hover {
+  color: var(--accent);
+}
+/* The title truncates, the glyph never does — so the affordance survives a
+   long paper name in a 340px panel. */
+.chat-graph-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-graph .cite-ref-glyph {
+  flex: none;
 }
 
 /* --- Markdown-rendered answer prose (assistant turns). react-markdown emits
@@ -1458,6 +1246,49 @@
   width: 19px;
   height: 19px;
   display: block;
+}
+
+/* ▽ Filters, inside the bar (v7.21.0). `.bar-toggle`'s own chip look — a
+   `--bg` pill with a border — was built for a row sitting on the panel, and
+   inside the composer's lighter `--composer-bg` it reads as a dark hole. So
+   in here it wears the same clothes as the clear button beside it: a 34px
+   transparent circle that fills on hover, which also makes the bar's three
+   controls one set rather than a chip and two circles. */
+.teacher-ask .bar-toggle {
+  flex-shrink: 0;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.teacher-ask .bar-toggle:hover,
+.teacher-ask .bar-toggle:focus-visible {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+  color: var(--text-strong);
+}
+/* Filters actually applied: the accent says so, and the count rides along
+   beside the funnel — the label is hidden in here at every width, since a word
+   in the pill is exactly the clutter v7.11.0 cleared out. */
+.teacher-ask .bar-toggle.on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+.teacher-ask .toggle-label {
+  display: none;
+}
+/* With a count showing it needs the width of two glyphs, so it stops being a
+   circle and becomes a pill — the same shape change the graph's own chips
+   make when they gain a number. */
+.teacher-ask .bar-toggle:has(.toggle-count) {
+  width: auto;
+  gap: 4px;
+  padding: 0 10px;
+  border-radius: 999px;
 }
 
 /* Mid-flight the button holds both faces: dots at rest, a stop square once

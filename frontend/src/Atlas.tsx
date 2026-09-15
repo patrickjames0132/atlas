@@ -194,11 +194,12 @@ export default function Atlas() {
   /** Stage what a tour step asks for: open the named drawer/panel; a step
    *  wanting nothing (undefined) puts the drawers away as the walk moves on.
    *  The assistant only ever opens — collapsing it mid-walk would hide the
-   *  graph tour's own lecture and ask stops. 'details' and 'controls' pass
-   *  through to GraphExplorer (via tourStage), which selects the seed when
-   *  nothing is / expands a collapsed controls panel; 'assistant' also
-   *  reaches Teacher (`stagedOpen`), which unfolds its lecture section so the
-   *  "Four lectures" step has something to point at. */
+   *  graph tour's own ask stops. 'details' and 'controls' pass through to
+   *  GraphExplorer (via tourStage), which selects the seed when nothing is /
+   *  expands a collapsed controls panel. 'assistant' used to reach Teacher
+   *  too, through a `stagedOpen` prop that unfolded its folded Lecture
+   *  section; the panel has no sections left to unfold (v7.21.0), so opening
+   *  it is the whole job. */
   const onTourStage = useCallback((stage?: string) => {
     setTourStage(stage)
     setView(stage === 'library' ? 'library' : 'workspace')
@@ -487,7 +488,6 @@ export default function Atlas() {
             key={epoch}
             landing={!graph}
             collapsed={!!graph && !assistantOpen}
-            stagedOpen={tourOpen && tourStage === 'assistant'}
             onClose={graph ? () => setAssistantOpen(false) : undefined}
           />
         </div>

@@ -46,18 +46,6 @@ export interface Beat {
 }
 
 /**
- * The lecture's display name, shown in the transcript's "Now playing" header
- * and sent to the researcher as a played lecture's title.
- *
- * There used to be a `LectureMode` union here and a title per mode — five
- * stories, four of them on their own button. v7.17.0 replaced them with one
- * lecture whose subject is whatever the reader has scoped on screen, so there
- * is one title left. It stays in this module rather than in a component so
- * the panel and the ask-payload builder can't drift on it.
- */
-export const LECTURE_TITLE = 'Lecture'
-
-/**
  * How the lecture frames whatever the reader has scoped: `summary` groups the
  * papers into their key themes, `history` tells them as a chronological arc.
  *
@@ -69,16 +57,6 @@ export const LECTURE_TITLE = 'Lecture'
  * selection.
  */
 export type LectureFraming = 'summary' | 'history'
-
-/**
- * A lecture already played this session, trimmed to what the researcher needs
- * as context (its title + each beat's heading/text) — sent on {@link streamAsk}
- * so a Q&A answer can build on the narrative instead of re-deriving it.
- */
-export interface PlayedLecture {
-  title: string
-  beats: { heading: string; text: string }[]
-}
 
 /**
  * New papers (+ the edges connecting them) the researcher pulled in via its
@@ -301,9 +279,14 @@ export interface AskHandlers {
  *                 scope), the graph's provider (so the researcher's expand/
  *                 search/hydrate use the same backend), optional source_ids
  *                 scoping the researcher's library search to a subset of
- *                 uploaded sources, optional lectures already played this
- *                 session (extra context the answer may build on), and an
- *                 optional history for a retry after a reload.
+ *                 uploaded sources, and an optional history for a retry after
+ *                 a reload.
+ *
+ *                 There used to be a `lectures` field here carrying every
+ *                 played lecture's beats as extra prompt context, because a
+ *                 lecture lived outside the conversation. Since v7.21.0 a
+ *                 lecture is a turn, so it reaches the agent as ordinary
+ *                 history and the field is gone.
  * @param handlers Event handlers; see {@link AskHandlers}.
  */
 /** One prior exchange, as the model expects to read it back. */
@@ -320,7 +303,6 @@ export async function streamAsk(
     nodes: GraphNode[]
     provider: Provider
     source_ids?: string[]
-    lectures?: PlayedLecture[]
     /**
      * The client's own copy of the conversation, sent only when retrying.
      * The server's per-session history is in memory and keyed by an id a

@@ -17,12 +17,13 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { PROVIDER_LABEL } from '../../api'
 import type { AnswerFigure, Beat, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import HopDots from '../HopDots'
 import { splitAnswer } from '../figures/split'
-import AnswerMarkdown from './AnswerMarkdown'
+import AnswerMarkdown, { GraphGlyph } from './AnswerMarkdown'
 import BeatList from './BeatList'
 import { provenanceLine } from './provenance'
 
@@ -210,6 +211,11 @@ export default function ChatMessage({
   activeBeat,
   onBeatClick,
   onReroute,
+  currentSeedId,
+  // Defaults open: a caller that forgets to manage this shows the lecture
+  // rather than silently hiding it, which is the right way round to fail.
+  beatsOpen = true,
+  onToggleBeats,
 }: {
   message: ChatMsg
   /** This answer's cited papers are currently lit on the graph. */
@@ -238,14 +244,65 @@ export default function ChatMessage({
   /** Send this turn's question to the other assistant — only wired when a
    *  model chose this one, so a reader's own choice carries no offer. */
   onReroute?: () => void
+  /** The seed of the graph currently on screen, so a turn from another one can
+   *  say which. Undefined graph-free, where nothing is on screen to differ. */
+  currentSeedId?: string
+  /** Whether this turn's beats are expanded. */
+  beatsOpen?: boolean
+  /** Fold or unfold this turn's beats (undefined = not a lecture turn). */
+  onToggleBeats?: () => void
 }) {
   const clickable = !!onActivate
   const beats = message.beats ?? []
+  // A turn answered over a *different* graph than the one on screen. Named
+  // only in that case, deliberately: when the graph matches, the reader is
+  // looking at it, and a line repeating its title under every turn is noise.
+  // What earns the line is the discrimination — this turn's citations have
+  // gone grey and it is the only thing that can say why.
+  const elsewhere = message.graph && currentSeedId && message.graph.seedId !== currentSeedId
   return (
     <div
       className={`chat ${message.role}${clickable ? ' clickable' : ''}${active ? ' active' : ''}`}
       onClick={onActivate}
     >
+      {elsewhere &&
+        message.graph &&
+        (() => {
+          // Above the content rather than in the footer: a reader scrolling
+          // back needs this *before* they wonder why clicking a citation does
+          // nothing, not after they have read the answer.
+          //
+          // And it is a **control**, not a caption. The turn has gone inert
+          // because its graph is not loaded; the useful thing to offer at that
+          // exact moment is the graph. Same claim and same motif as a seeding
+          // citation chip (`GraphGlyph`) — one gesture for "this builds a map".
+          const { seedId, seedTitle, provider: graphProvider } = message.graph
+          const label = `From the “${seedTitle}” graph`
+          if (!onPaperSeed) return <div className="chat-graph">{label}</div>
+          // A graph built on the other backend still re-opens — it just takes
+          // the workspace with it, since its ids resolve nowhere else. Said in
+          // the tooltip rather than letting the dropdown change unannounced,
+          // exactly as a cross-provider citation chip does.
+          const switching = graphProvider && graphProvider !== provider ? graphProvider : null
+          return (
+            <button
+              type="button"
+              className="chat-graph chat-graph-btn"
+              title={
+                switching
+                  ? `Re-open this graph, switching to ${PROVIDER_LABEL[switching]} — ${seedTitle}`
+                  : `Re-open this graph — ${seedTitle}`
+              }
+              onClick={(event) => {
+                event.stopPropagation() // don't also re-light the whole answer
+                onPaperSeed(seedId, graphProvider)
+              }}
+            >
+              <span className="chat-graph-label">{label}</span>
+              <GraphGlyph />
+            </button>
+          )
+        })()}
       {/* Library-chat retrieval summary (graph-free mode). */}
       {message.retrieve && (
         <div className="chat-trace">
@@ -312,19 +369,39 @@ export default function ChatMessage({
         </div>
       )}
       {beats.length > 0 && (
-        // A lecture delivered as this answer. The panel's own lecture section
-        // renders beats with this very component, so the two cannot drift —
-        // a beat behaves the same wherever it is read.
+        // A lecture delivered as this answer, behind its own caret. Twelve
+        // beats are fine as the newest thing on screen and unusable as the
+        // third lecture you have scrolled past — and the Lecture section that
+        // could once fold them away is gone (v7.21.0), so the turn folds
+        // itself. Which one is open is decided by the caller: the newest
+        // lecture, until the reader says otherwise.
         <div className="chat-beats" onClick={(event) => event.stopPropagation()}>
-          <BeatList
-            beats={beats}
-            activeBeat={activeBeat ?? null}
-            sourceRefs={message.sourceRefs}
-            onBeatClick={(index, beat) => onBeatClick?.(index, beat)}
-            onRefClick={onRefClick}
-            onGraphIds={onGraphIds}
-            onEnlarge={onEnlarge}
-          />
+          <button
+            type="button"
+            className={`beats-toggle${beatsOpen ? ' open' : ''}`}
+            onClick={onToggleBeats}
+            aria-expanded={!!beatsOpen}
+            title={beatsOpen ? 'Fold this lecture away' : 'Show this lecture'}
+          >
+            <span className="beats-caret" aria-hidden="true">
+              ▸
+            </span>
+            {beats.length} beat{beats.length > 1 ? 's' : ''}
+          </button>
+          {/* `hidden` rather than unmounted: a folded lecture keeps its beats'
+              figures loaded, so unfolding it is instant rather than a flash of
+              re-fetched images. */}
+          <div hidden={!beatsOpen}>
+            <BeatList
+              beats={beats}
+              activeBeat={activeBeat ?? null}
+              sourceRefs={message.sourceRefs}
+              onBeatClick={(index, beat) => onBeatClick?.(index, beat)}
+              onRefClick={onRefClick}
+              onGraphIds={onGraphIds}
+              onEnlarge={onEnlarge}
+            />
+          </div>
         </div>
       )}
       {(() => {
@@ -391,6 +468,16 @@ export default function ChatMessage({
         // but it counts what the answer actually cited (sources included) and
         // is honest when nothing grounded it. Old saves have no provenance —
         // fall back to the footer they were rendered with.
+        // A lecture has no `provenance` — the backend's record counts tool
+        // calls, and a lecture makes none. Its own grounding line comes from
+        // the scope it narrated, which is the honest equivalent: an answer
+        // says what it cited, a lecture says what it covered. The two use the
+        // same class so they read alike.
+        if (beats.length > 0) {
+          return message.graph ? (
+            <div className="chat-cited">narrated {message.graph.nodes} papers ✦</div>
+          ) : null
+        }
         if (!message.provenance) {
           return message.cited && message.cited.length > 0 ? (
             <div className="chat-cited">grounded in {message.cited.length} paper(s) ✦</div>

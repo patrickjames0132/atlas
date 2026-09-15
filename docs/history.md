@@ -688,6 +688,120 @@
 
 ### AI teacher & lectures
 
+- [x] **One chat interface: the Lecture UI is gone and a lecture is a command**
+      *(v7.21.0)* — the philosophy was Patrick's: everything the assistant does
+      should be reachable from the one bar you type into. *"Should we remove the
+      lecture buttons and integrate everything into one chat?… Or if there was
+      a better design, we could go with that instead."* v7.20.0 got the
+      lecturer *into* the chat; this took the parallel interface back out.
+      *(From Patrick, 2026-09-13.)*
+
+      **What the reader sees.** Type `/` and a menu opens on `/lecture`, with
+      `summary` and `history` as its second word. The lecture arrives as a reply
+      in the conversation, behind its own caret — open when it lands, folding
+      itself when the next one arrives. The panel is one thing now: the
+      conversation, with the 📚 source scope beneath the bar and ▽ filters back
+      inside it.
+
+      **`/` rather than `!`, and with a typeahead rather than bare syntax.**
+      Patrick proposed `!lecture summary`; `/` won because the composer already
+      owns `@` and every other app puts a command menu behind `/` (Claude Code,
+      Slack, Discord, Notion), so the two read as siblings where `!` would be a
+      third convention in one text box. The menu is not decoration: a command
+      syntax nobody is shown is a hidden feature, and with the Lecture section's
+      explanatory paragraph deleted, the menu's one-line hints are where a
+      reader now learns lectures exist at all. Built on `mentions/`'s shape
+      (parse the token at the caret, rank, hold a keyboard selection, insert on
+      Enter) minus the network half — the list is static, so no debounce, no
+      abort, no out-of-order results, and the selection is tracked by index
+      rather than by id.
+
+      **The prefix is safe because a command is anchored to the start of the
+      message.** An `@`-mention is a reference *inside* a sentence; a command is
+      what the message *is*. That one rule is why `2/3`, `9/13`, `p/q` and
+      `https://arxiv.org/abs/1706.03762` cannot open the menu, and the negative
+      tests pinning it are the valuable half of `commands/parse.test.ts`.
+      `readCommand` is strict for the same reason: the name must match exactly
+      and what follows must be empty or one of the command's own values, so
+      `/lecture on transformers` is *not* a command and falls through to the
+      v7.20.0 router, which reads it as words and sends it to the lecturer
+      anyway. Degrading beats the alternatives — silently dropping words the
+      reader typed, or inventing a topic argument the lecturer cannot honour
+      (it narrates the scoped graph, and a topic is not a scope).
+
+      **But the prize was the state machine, not the button.** A lecture used
+      to be a *slot*: `conversation.lecture` plus `lectureShown`, written by a
+      three-way show/hide/generate toggle (`toggleLecture`), cleared by its own
+      section-level `clearLecture`, streamed on its own `lectureCtrl` so it ran
+      in parallel with the chat, and fed to the researcher through a 🎓 picker
+      that asked whether it counted as context — which in turn needed a
+      `lectures` field on `POST /api/ask`, a `_lectures_context` prompt block
+      with its own char budget in the researcher, and `agents/models.py`
+      (`PlayedLecture`/`PlayedBeat`), a module that existed for nothing else.
+      **Every piece of that existed because a lecture came from a button and so
+      had nowhere in the conversation to live.** It has somewhere now
+      (`ChatMsg.beats`), and all of it is deleted: one controller, one clear,
+      one code path, and a lecture reaching the researcher as ordinary history.
+      Net **~900 lines removed**.
+
+      That also dissolved a filed ticket — "a lecture that grounded an answer
+      should say so in the provenance line", whose stated difficulty was that
+      every other count on that line is an *observed* tool call while lecture
+      context was *pushed* into the prompt and so uncountable. The awkwardness
+      was an artifact of the push, not of lectures.
+
+      **Two behaviours were deliberately reversed.** A graph load used to
+      **drop** the exploration's lecture, on the reasoning that a lecture
+      belongs to the graph whose nodes its beats point at; a lecture is a turn
+      now, and deleting half a transcript on a graph load would be the
+      conversation rewriting itself, so it stays. And the **panel's folding
+      sections went too** (Patrick, mid-branch): deleting the Lecture half left
+      a lone "CHAT" caret folding away the only thing in a panel already titled
+      "AI Teacher & Discovery", with a ✕ beside it doing that job more honestly.
+      With no row above them the ask-binding controls have one home each rather
+      than one per panel shape — and ▽ filters went back *inside* the pill
+      (Patrick's call), which v7.11.0 had emptied of four controls: two of those
+      four are gone since, so there was room for the one that binds the question
+      most directly.
+
+      **A turn now says which graph it came from, and that is a control.** Since
+      v7.10.0 a graph load keeps the conversation, so one transcript can hold
+      turns about several graphs. Everything already handled that *negatively* —
+      a stale `[n]` greys out, a bubble stops being clickable, and beat cards
+      joined them here (see [docs/bugs.md](bugs.md)) — but every one of those
+      signals says *this points nowhere any more* and never *this was about the
+      AlphaZero graph*. So `turnGraphSet` stamps each turn with its seed, its
+      paper count and its provider, and a turn from a graph other than the one
+      on screen renders *"From the “…” graph"* — wearing the same three-node
+      glyph a seeding citation chip wears, and re-opening that graph when
+      clicked. **Conditional on purpose:** when the graph matches, the reader is
+      looking at it and the line would be noise; what earns it is the
+      discrimination. The provider is stored because a node id means nothing
+      outside its own backend's id space, so the click had to carry one.
+      Lectures also gained the grounding line they never had — *"narrated 14
+      papers"* — because `provenance` counts tool calls and a lecture makes
+      none.
+
+      **Restore folds three eras of save into the transcript**
+      (`restoredLectureTurn`): a v7.17.0-era single `lecture`, a v6-era
+      per-mode `lectures` cache (picking the mode that was on screen), and an
+      ancient flat `beats` array. Folding rather than ignoring is the point —
+      the destination slot is gone, so a restore that did nothing would
+      silently discard the reader's lecture. The turn carries no invented
+      question: a button lecture was never asked for in words, and a fabricated
+      `/lecture summary` would claim a framing the save does not record.
+
+      **Also deleted, because the UI that read them went:**
+      `selectSatelliteCount` (which fed the intro paragraph's "that includes
+      the 3 papers you expanded" — its reasoning is kept in
+      `store/README.md`, since it applies again the moment anything wants to
+      say what a lecture leaves out) and ~180 lines of section/lecture CSS.
+      Help surfaces moved with all of it: the tour's lecture stop and 🎓-scope
+      stop are gone, the ask bar carries two stops instead (what the researcher
+      does, and how `/lecture` reaches the lecturer), and the placeholder now
+      names at most one prefix — a verb plus two prefixes read as a legend
+      rather than an invitation.
+
 - [x] **The chat bar decides what a message is** *(v7.20.0)* — the ask was for
       the composer to reach both assistants: *"should we remove the lecture
       buttons and integrate everything into one chat? The lecture agent can

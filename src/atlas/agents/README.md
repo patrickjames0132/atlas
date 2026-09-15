@@ -423,13 +423,23 @@ See its own README.
 The flagship. Reads, expands, and searches via tool use, then answers
 grounded in what it actually read.
 
-- **Input:** question, seed, visible nodes, conversation history, optional
+- **Input:** question, seed, visible nodes, conversation history, and optional
   library scope (`source_ids`: `None` = whole library, present list =
-  pinned to exactly those, empty list = source search disabled), and optional
-  **played lectures** (`lectures`: the `PlayedLecture` beats the lecturer already
-  delivered this session, from the frontend's transcript cache) — folded into the
-  prompt (budgeted by `_LECTURES_MAX_CHARS`) as context to build on, so a Q&A
-  answer doesn't re-derive a story the student just watched.
+  pinned to exactly those, empty list = source search disabled).
+
+  A `lectures` argument used to ride along, carrying every lecture the student
+  had been shown (`PlayedLecture` beats out of the frontend's transcript cache)
+  to be folded into the prompt under a budget, so an answer wouldn't re-derive
+  a story they had just watched. It went in **v7.21.0**, and with it
+  `agents/models.py` — the module existed only for that pair of types. The
+  reason is worth keeping: a lecture used to live *outside* the conversation,
+  in a slot the Lecture button wrote, so the only way the researcher could see
+  one was to be handed it. A lecture is a chat turn now, so it arrives through
+  `history` like every other turn and there is nothing special to assemble.
+  That also dissolved a filed ticket about giving lecture context its own
+  provenance count: the awkwardness it described — every other count on that
+  line is an *observed* tool call, while lecture context was *pushed* into the
+  prompt and so uncountable — was an artifact of the push, not of lectures.
 - **Tools** (its `tools.py`):
   - `read_paper` — summary (abstract + TL;DR, hydrated from S2 on demand)
     or full text via ar5iv; a full read also lists the paper's figures.

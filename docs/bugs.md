@@ -22,6 +22,56 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A lecture beat card was invisible against the bubble holding it
+
+*Found 2026-09-13 by Patrick, browser-testing the chat-only lecture — "can we
+make it so that clicking on the lecture beats is also greyed out... also the
+color of the beats so that it contrasts better against the background". Two
+separate faults in the same card, both created by the beat list gaining a
+second home.*
+
+- **Symptom.** In a lecture answered in the chat, the beat cards did not read
+  as cards at all — a faint 1px border on dark, with card and container the
+  same colour. And clicking one appeared to do nothing whenever the reader had
+  since loaded a different graph.
+- **Root cause.** Both faults are the same mistake: a component that had one
+  parent acquired a second, and two of its assumptions were about the parent.
+  - **The fill.** `.beat` was `background: var(--bg)` — correct in the Lecture
+    section, which sat on `--panel` and made the card a slightly-inset well.
+    A lecture answered in the chat nests its beats inside an assistant bubble,
+    and `.chat.assistant` is *also* `var(--bg)`. Card and container became
+    byte-identical `#0f1115`, separated by a `#262b36` border that is very
+    nearly invisible on dark.
+  - **The click.** `.beat`'s handler was unconditional, while everything else
+    in the transcript had already learned that a conversation outlives the
+    graph it was written against — inline `[n]` chips grey out against
+    `onGraphIds`, and the answer bubble stops being clickable when none of its
+    papers are loaded. The beat card was the one control that never got that
+    treatment, because until v7.20.0 a beat only ever appeared beside the
+    graph it was told over.
+  - **A third fault fell out of fixing the first.** `.beat.active` washed the
+    lecture hue over the card at 10% alpha, and that alpha is tuned to sit on
+    `--bg`. Composited over the lighter fill the fix introduced, the *selected*
+    beat came out **darker** than the resting card — so clicking a beat would
+    have looked like it receded.
+- **Fix.** `.beat` is `var(--chip)`, the app's raised-small-surface token (the
+  composer and the reader's own bubbles use it), so the card lifts off either
+  surface it can land on. `BeatList` computes `lightable` per beat — at least
+  one of `beat.node_ids` present in `onGraphIds`, the same predicate and the
+  same partial-overlap rule the bubble uses — and a stale beat drops its
+  handler, its pointer, its hover and the ✦ from its footer while keeping the
+  count and its full opacity-dimmed text. `.beat.active` mixes the hue *into*
+  `--chip` with `color-mix` rather than washing over it.
+- **Lesson / guard.** **A component's colours are a claim about its parent, and
+  giving it a second parent invalidates them.** Neither fault was a regression
+  in the usual sense — nothing about `.beat` changed when v7.20.0 let a lecture
+  land in a chat turn; the card was simply now somewhere its assumptions were
+  false. The same applies to any alpha-over-a-surface: `--lecture-wash-strong`
+  is not a colour, it is a colour *plus an assumption about what is behind it*.
+  Guarded by `ChatMessage.test.tsx`, which pins that a beat with no loaded
+  papers renders without its handler; the fill has no test (a colour token is
+  not behaviour) but carries the reasoning in `teacher.css`.
+
 ### A lecture beat lit three papers while naming sixteen
 
 *Found 2026-09-09 by Patrick, browser-testing the one-lecture rework — "the

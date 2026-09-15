@@ -50,25 +50,19 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent, KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import {
   DEFAULT_SEARCH_OPTIONS,
-  LECTURE_TITLE,
   type AnswerFigure,
   type LectureFraming,
   type MentionPaper,
   type SearchOptions,
 } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
-import { selectSatelliteCount } from '../store/workspace'
 import { loadLibrary, selectLibrary } from '../store/library'
-import {
-  selectConversation,
-  selectVisibleBeats,
-  selectVisibleSourceRefs,
-} from '../store/transcript'
-import { REL_COLOR } from '../graph/theme'
+import { selectSeedNode } from '../store/workspace'
+import { selectConversation } from '../store/transcript'
 import HopDots from './HopDots'
 import ScopePicker from './ScopePicker'
 import SearchControls from '../search/SearchControls'
@@ -77,8 +71,11 @@ import { ID_RE } from '../graph/model'
 import MentionSuggestions from '../mentions/MentionSuggestions'
 import { insertMention, readMessage } from '../mentions/parse'
 import { useMentionSuggestions } from '../mentions/useMentionSuggestions'
+import CommandMenu from '../commands/CommandMenu'
+import { COMMANDS, insertCommand, readCommand } from '../commands/parse'
+import type { CommandChoice } from '../commands/parse'
+import { useCommandMenu } from '../commands/useCommandMenu'
 import Lightbox from '../figures/Lightbox'
-import BeatList from './transcript/BeatList'
 import ChatMessage from './transcript/ChatMessage'
 import { useConversation } from './useConversation'
 import { useResizablePanel } from '../ui/useResizablePanel'
@@ -123,14 +120,13 @@ function prefersStill(): boolean {
 }
 
 /**
- * Render the assistant panel: lecture buttons, transcript, and the ask form.
+ * Render the assistant panel: the conversation and the ask form.
  *
  * @returns The docked, resizable assistant panel.
  */
 export default function Teacher({
   collapsed = false,
   landing = false,
-  stagedOpen = false,
   onClose,
 }: {
   /** Hidden (but kept mounted, so the conversation survives) when collapsed. */
@@ -144,70 +140,37 @@ export default function Teacher({
    * answer you were reading keeps its scroll position.
    */
   landing?: boolean
-  /**
-   * The guided tour has staged the assistant open, so expand the lecture
-   * section for the walk — its "Four lectures" step targets the grid, which
-   * is folded away by default. Mirrors GraphControls' prop of the same name,
-   * and like that one it only ever *opens*: a reader who folds the lectures
-   * back mid-tour keeps them folded.
-   */
-  stagedOpen?: boolean
   /** Collapse the panel (the header ✕). */
   onClose?: () => void
 }) {
   const chat = useAppSelector((state) => selectConversation(state).chat)
-  const beats = useAppSelector(selectVisibleBeats)
-  const lectureSourceRefs = useAppSelector(selectVisibleSourceRefs)
-  const lecture = useAppSelector((state) => selectConversation(state).lecture)
-  const lectureShown = useAppSelector((state) => selectConversation(state).lectureShown)
+  // The graph on screen, so a turn answered over a different one can say which.
+  const seedId = useAppSelector(selectSeedNode)?.id
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
   // to scope the teacher; 0 means it grounds in every visible paper.
   const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
-  // Papers on the graph that hang off another paper rather than the seed.
-  // They used to be the ones no lecture would narrate; since v7.17.0 a
-  // lecture narrates whatever is scoped, satellites included — see the
-  // Lecture row's hint.
-  const satelliteCount = useAppSelector(selectSatelliteCount)
   const {
     hasGraph,
-    lecturing,
     asking,
     error,
-    activeBeat,
     activeChat,
     activeChatBeat,
-    onBeatClick,
     onChatBeatClick,
     onChatClick,
     onRefClick,
     onGraphIds,
     onPaperSeed,
     provider,
-    toggleLecture,
     send,
     reroute,
+    lectureInChat,
     retryAnswer,
     stopAsk,
-    clearLecture,
     clearChat,
   } = useConversation()
 
-  // Each section owns its own Clear now that both are on screen at once: the
-  // lecture's sits on the Lecture row, and this one — in the composer, which
-  // belongs to Q&A — wipes the conversation.
-
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  // The Lecture row, folded away behind its caret. INITIAL VALUE ONLY — once
-  // opened it stays open for the session. Folded is still the default: the
-  // four-button grid this replaced spent the panel's prime vertical space on
-  // buttons most turns never pressed, and one button is not a reason to spend
-  // it again. A first-time reader meets it through the tour, which stages
-  // this open.
-  const [lectureOpen, setLectureOpen] = useState(false)
-  // The conversation, on the other hand, starts open: it is what the composer
-  // below writes into, and a reader who folds it away has said so deliberately.
-  const [chatOpen, setChatOpen] = useState(true)
   // The uploaded library, powering the source-scope picker (shown whenever
   // there is anything to scope — see the render site for why one source
   // counts). Read LIVE from the library slice — the Sources drawer reloads
@@ -216,27 +179,25 @@ export default function Teacher({
   // reload).
   const dispatch = useAppDispatch()
   const { sources: libraryItems, loaded: libraryLoaded } = useAppSelector(selectLibrary)
-  // Sources the assistant may NOT search — tracked by EXCLUSION (mirroring
-  // excludedLectures below) so a source uploaded after the user last touched
-  // the picker is searchable by default. Checked = current sources minus
-  // these; a deleted source's lingering id here is inert.
+  // Sources the assistant may NOT search — tracked by EXCLUSION so a source
+  // uploaded after the user last touched the picker is searchable by default.
+  // Checked = current sources minus these; a deleted source's lingering id
+  // here is inert.
   const [excludedSources, setExcludedSources] = useState<string[]>([])
-  // Whether the researcher may use the played lecture as context. Ticked by
-  // default — a lecture the reader just heard is context they expect an answer
-  // to build on — and unticking it is how they ask without it.
-  const [lectureInScope, setLectureInScope] = useState(true)
-  // How the lecture frames whatever is scoped — the reader's one remaining
-  // choice about a lecture, since the scope already says which papers. Summary
-  // leads: a chronological arc is a strong claim to make about an arbitrary
-  // selection, and it was what produced beats *about the timeline* ("notice the
-  // gap after [1]") when every lecture was forced into one.
-  const [framing, setFraming] = useState<LectureFraming>('summary')
   // The papers picked from the `@` dropdown in the message being composed,
   // keyed by the text inserted for each. A ref rather than state because
   // nothing renders from it — it is read once, at send — and re-rendering the
   // composer on every pick would fight the textarea's own caret handling.
   const resolvedMentions = useRef<Map<string, MentionPaper>>(new Map())
   const mentions = useMentionSuggestions(provider)
+  // Which commands this composer offers. `/lecture` needs papers on screen to
+  // be about, so with no graph it is not merely hidden but **unrecognised** —
+  // the same list gates the menu and `readCommand`, so a command that cannot
+  // run is never suggested and never fires silently either. Memoised because
+  // it is the hook's dependency, and a fresh array each render would rebuild
+  // the matcher on every keystroke.
+  const commands = useMemo(() => (hasGraph ? COMMANDS : []), [hasGraph])
+  const menu = useCommandMenu(commands)
   // Which scope picker's popover is open — one shared slot, so opening either
   // picker closes the other (their popovers overlap when both are open).
   const [openScope, setOpenScope] = useState<'lectures' | 'sources' | 'filters' | null>(null)
@@ -266,15 +227,6 @@ export default function Teacher({
     if (!libraryLoaded) dispatch(loadLibrary())
   }, [libraryLoaded, dispatch])
 
-  // The tour walks to the Lecture row and to the Q&A row's scope pickers, so
-  // unfold both first — a spotlight on a hidden element has nothing to point at.
-  useEffect(() => {
-    if (stagedOpen) {
-      setLectureOpen(true)
-      setChatOpen(true)
-    }
-  }, [stagedOpen])
-
   // Checked = the assistant may search that source (everything not excluded).
   const scopeIds = libraryItems
     .filter((source) => !excludedSources.includes(source.id))
@@ -284,31 +236,37 @@ export default function Teacher({
   const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
   const scopeArg = scopeAll ? undefined : scopeIds
 
-  // Whether a lecture has been played at all — what the scope picker and the
-  // "Answers also draw on" note key off.
-  const lecturePlayed = (lecture?.length ?? 0) > 0
-  const lectureScope = lecturePlayed && lectureInScope
-  const lectureItems = lecturePlayed ? [{ id: 'lecture', title: LECTURE_TITLE }] : []
-
-  // One bar, four destinations. The first three are decided HERE on plain
-  // facts — a pasted id is exact, a picked mention is a paper the reader
-  // already chose, an unresolved `@phrase` is a search — so they cost nothing
-  // and cannot be wrong. Only the fourth asks a model, because "teach me
-  // these papers" and "which of these used dropout" differ in their words and
-  // nowhere else; `send` owns that, and the turn it produces says which
-  // assistant it picked so the reader can take the other in one click.
+  // One bar, five destinations. The first four are decided HERE on plain facts
+  // — a `/command` is what the reader literally asked for, a pasted id is
+  // exact, a picked mention is a paper they already chose, an unresolved
+  // `@phrase` is a search — so they cost nothing and cannot be wrong. Only the
+  // fifth asks a model, because "teach me these papers" and "which of these
+  // used dropout" differ in their words and nowhere else; `send` owns that,
+  // and the turn it produces says which assistant it picked so the reader can
+  // take the other in one click.
   const submitQuestion = () => {
     const question = input.trim()
     if (!question || asking || searching) return
     setInput('')
     mentions.reset()
-    // Whatever this turns into lands in the conversation, so make sure the
-    // reader can see it — asking into a folded section reads as nothing
-    // happening at all.
-    setChatOpen(true)
+    menu.reset()
+    // A `/command`: the reader named the destination themselves, so nothing
+    // has to be inferred and nothing can be misrouted. First in the tree
+    // because it is the only branch where the message is *entirely* an
+    // instruction — every other one reads words that might also be a question.
+    // `routed: false` follows from that: there was no guess to offer to undo.
+    const call = readCommand(question, commands)
+    if (call) {
+      // Mapped rather than cast: the registry's argument values happen to be
+      // the framings today, and a cast would let a future command's argument
+      // reach `streamLecture` as a framing it has never heard of.
+      const framing: LectureFraming = call.arg === 'history' ? 'history' : 'summary'
+      void lectureInChat(question, framing, false)
+      return
+    }
     // A pasted arXiv id/URL is a statement of intent, not a question: land on
-    // that exact paper. Still first, and still needing no lookup at all — the
-    // id IS the answer, where every branch below has to resolve something.
+    // that exact paper. Still needing no lookup at all — the id IS the answer,
+    // where every branch below has to resolve something.
     if (ID_RE.test(question)) {
       onPaperSeed(question)
       return
@@ -334,7 +292,7 @@ export default function Teacher({
     }
     // Anything else: a message whose destination is genuinely unknown. `send`
     // classifies it and streams from the lecturer or the researcher.
-    void send(question, scopeArg, lectureScope, searchOptions, intent.mentioned)
+    void send(question, scopeArg, searchOptions, intent.mentioned)
   }
 
   const onAsk = (event: FormEvent) => {
@@ -370,16 +328,71 @@ export default function Teacher({
   /**
    * Re-read the composer after any change that could move the caret.
    *
+   * Both typeaheads are fed from here, and they cannot both be open: a command
+   * is anchored to the start of the message and a mention opens at an `@` that
+   * starts a word, so at most one of them matches the caret's position. That
+   * makes this a single call rather than an either/or.
+   *
    * @param field The textarea, read for both its value and its caret.
    */
-  const syncMentions = (field: HTMLTextAreaElement) => {
-    mentions.onInput(field.value, field.selectionStart ?? field.value.length)
+  const syncComposer = (field: HTMLTextAreaElement) => {
+    const caret = field.selectionStart ?? field.value.length
+    mentions.onInput(field.value, caret)
+    menu.onInput(field.value, caret)
+  }
+
+  /**
+   * Accept a command row: splice its text in, and keep the menu open when the
+   * pick is only half the invocation.
+   *
+   * A command with arguments inserts `/name ` and then re-opens on those
+   * arguments, so picking `/lecture` walks the reader straight to Summary and
+   * History. That re-open happens through the ordinary input sync rather than
+   * any special case here — the text now ends in a space after a known
+   * command, which is exactly what `activeCommand` reads as the argument
+   * stage.
+   *
+   * @param choice The picked row.
+   */
+  const pickCommand = (choice: CommandChoice) => {
+    const field = inputRef.current
+    if (!field || !menu.active) return
+    const { text: next, caret } = insertCommand(input, menu.active, choice)
+    setInput(next)
+    if (!choice.continues) menu.reset()
+    // The caret has to be restored after React paints the new value, or the
+    // browser parks it at the end and the reader's next keystroke lands in the
+    // wrong place. Re-syncing here is what moves the menu on to the arguments.
+    requestAnimationFrame(() => {
+      field.focus()
+      field.setSelectionRange(caret, caret)
+      syncComposer(field)
+    })
   }
 
   const onInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // While the dropdown is open it owns the arrows, Enter, Tab and Escape —
-    // the keys a reader picking from a list expects to work. Everything else
-    // still reaches the textarea, so typing never stops.
+    // While either typeahead is open it owns the arrows, Enter, Tab and Escape
+    // — the keys a reader picking from a list expects to work. Everything else
+    // still reaches the textarea, so typing never stops. The command menu is
+    // asked first only for tidiness: the two can't both be open (see
+    // `syncComposer`).
+    if (menu.open) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        menu.move(event.key === 'ArrowDown' ? 1 : -1)
+        return
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && menu.choice) {
+        event.preventDefault()
+        pickCommand(menu.choice)
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        menu.dismiss()
+        return
+      }
+    }
     if (mentions.open) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
@@ -406,12 +419,22 @@ export default function Teacher({
   // Grow the textarea to fit its content (up to the CSS max-height, past which
   // it scrolls): reset to auto so it can shrink back, then match scrollHeight.
   // Runs on every input change, including the reset to '' after a submit.
-  // A collapsed panel is display:none, so a first mount there measures
-  // scrollHeight 0 — skip that, leaving height:auto (the CSS min-height floors
-  // it to one line) rather than pinning it to a clipped 0px until the next keystroke.
+  //
+  // **An empty composer is one line by construction, never by measurement.**
+  // The inline height is cleared and the effect returns, leaving the CSS
+  // `min-height` to floor it at exactly one line. Everything that can make
+  // `scrollHeight` lie about an empty field — measuring inside a
+  // `display:none` panel (it reports 0), measuring mid-layout, a stale inline
+  // height from a longer draft — then cannot make the bar open several lines
+  // tall with nothing in it, which is the one state a reader is guaranteed to
+  // see and the one where being wrong looks like a broken control.
   useEffect(() => {
     const field = inputRef.current
     if (!field) return
+    if (!input) {
+      field.style.height = ''
+      return
+    }
     field.style.height = 'auto'
     if (field.scrollHeight > 0) field.style.height = `${field.scrollHeight}px`
   }, [input])
@@ -440,7 +463,7 @@ export default function Teacher({
     // Instant, never smooth: a smooth scroll can't keep up with SSE frames, and
     // several in flight at once fight each other into a visible judder.
     box.scrollTop = box.scrollHeight
-  }, [chat, beats])
+  }, [chat])
 
   // The composer's drop, on the first question of a landing session. Empty, it
   // sits optically centred with the greeting; the moment a conversation starts
@@ -488,28 +511,34 @@ export default function Teacher({
   // variant names it: the gesture is the same with a graph, without one, and
   // with a library. The graph variant also teaches the lecture, and only that
   // one does — a lecture needs papers on screen to be about, so offering it
-  // with no graph would advertise something the bar cannot do.
-  const askPlaceholder = hasGraph
-    ? 'Ask about these papers, or for a lecture… or @ a paper'
-    : libraryItems.length > 0
-      ? 'Ask your books, PDFs, or the literature… or @ a paper'
-      : 'Ask a research question… or @ a paper'
-
-  // The one-line "Answers also draw on …" note above the ask bar: lectures and
-  // sources share it (space is tight), each part naming its picker's icon.
-  // Only what's actually in play appears — no lecture played and no sources
-  // scoped means no note.
+  // with no graph would advertise something the bar cannot do. It is also the
+  // only variant that names `/`, for exactly that reason: with no graph the
+  // command list is empty, so there is no menu to teach.
   //
-  // Graph mode only, both halves. There the two pickers are bare icons on the
-  // Chat row and this line is the only place their state is spelled out; with
-  // no graph the tool row under the bar wears its own labels ("2 sources"),
-  // so the note would be saying the same thing twice a centimetre apart.
+  // **It names at most one prefix.** All three used to end "…or @ a paper" as
+  // well, and with `/` added the graph variant was a verb and two prefixes in
+  // one line of grey text — it read as a legend, not an invitation. `@`
+  // teaches itself the moment it is typed (the dropdown opens on the third
+  // character), and the tour covers both; `/` is the one that needs saying
+  // here, because a menu nobody types `/` into is a hidden feature.
+  const askPlaceholder = hasGraph
+    ? 'Ask about these papers… / for a lecture'
+    : libraryItems.length > 0
+      ? 'Ask your books, PDFs, or the literature…'
+      : 'Ask a research question…'
+
+  // The one-line "Answers also draw on …" note above the ask bar, naming the
+  // 📚 picker's state. It had a second half until v7.21.0 — "the lecture
+  // (🎓)" — which went with that picker: a lecture is a turn now, so the
+  // conversation itself says what the answer can draw on.
+  //
+  // Graph mode only. There the picker is a bare icon on the Chat row and this
+  // line is the only place its state is spelled out; with no graph the tool
+  // row under the bar wears its own label ("2 sources"), so the note would be
+  // saying the same thing twice a centimetre apart.
   const askContextParts: string[] = []
-  if (hasGraph) {
-    if (lectureScope) askContextParts.push('the lecture (🎓)')
-    if (scopeIds.length > 0) {
-      askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
-    }
+  if (hasGraph && scopeIds.length > 0) {
+    askContextParts.push(`${scopeIds.length} source${scopeIds.length > 1 ? 's' : ''} (📚)`)
   }
 
   // Which sources the researcher may search. ONE picker, rendered in one of
@@ -570,6 +599,32 @@ export default function Teacher({
     />
   )
 
+  // Which lecture turn is expanded. **Derived, with an override** rather than
+  // stored per turn: the rule is "the newest lecture is open, the ones behind
+  // it are folded", which is a fact about the whole conversation and would
+  // need an effect per arriving lecture to maintain as state. So the default
+  // is computed here and `openByReader` holds only the turns whose state the
+  // reader has actually changed — nothing to keep in sync, and a lecture that
+  // arrives while they are reading an older one folds that older one without
+  // touching their choice about it.
+  //
+  // Keyed by turn index, like `activeChatBeat`. Indices move when a failed
+  // turn is dropped, so the map is cleared whenever the conversation is (see
+  // `clearConversation`) rather than tracked through every mutation — a stale
+  // entry would fold the wrong lecture, and the cost of being wrong here is a
+  // caret the reader clicks once.
+  const [openByReader, setFoldedByReader] = useState<Record<number, boolean>>({})
+  const newestLecture = chat.reduce(
+    (latest, message, index) => (message.beats?.length ? index : latest),
+    -1,
+  )
+
+  /** Clear the conversation, and the fold choices that addressed its turns. */
+  const clearConversation = () => {
+    setFoldedByReader({})
+    clearChat()
+  }
+
   // The conversation's turns, rendered identically wherever they land — in
   // the Q&A section beside a graph, or as the whole panel without one.
   const chatTurns = chat.map((message, index) => {
@@ -604,6 +659,17 @@ export default function Teacher({
         // time. `activeChatBeat` addresses a beat by turn as well as index,
         // since a conversation can hold more than one lecture.
         activeBeat={activeChatBeat?.turn === index ? activeChatBeat.beat : null}
+        currentSeedId={seedId}
+        beatsOpen={openByReader[index] ?? index === newestLecture}
+        onToggleBeats={
+          message.beats?.length
+            ? () =>
+                setFoldedByReader((folded) => ({
+                  ...folded,
+                  [index]: !(folded[index] ?? index === newestLecture),
+                }))
+            : undefined
+        }
         onBeatClick={
           message.beats?.length
             ? (beatIndex, beat) => onChatBeatClick(index, beatIndex, beat)
@@ -656,240 +722,32 @@ export default function Teacher({
         )}
       </div>
 
-      {/* One scroller, holding the panel's sections. Each section folds behind
-          its own caret, and both can be open at once — which is the whole
-          point of the split: the lecture you are reading and the question you
-          just asked no longer take turns owning this space. The follow-the-
-          bottom effect above watches this box, so a streaming answer still
-          keeps itself in view. */}
+      {/* One scroller, holding the conversation and nothing else.
+          It held **sections** from v7.10.0 to v7.21.0 — a Lecture section
+          above a Chat one, each behind its own caret — because the panel had
+          two things in it that had to be able to coexist. Deleting the lecture
+          half left one section, and a caret whose only job was folding away
+          the whole point of the panel: a "CHAT" header over the chat, in a
+          panel already titled "AI Teacher & Discovery", with a ✕ next to it
+          that does the same job more honestly. So the sections are gone and
+          the two shapes are now the same shape. The follow-the-bottom effect
+          above watches this box, so a streaming answer keeps itself in view. */}
       <div className="teacher-scroll" ref={scrollRef} onScroll={onTranscriptScroll}>
-        {hasGraph ? (
-          <>
-            <section className="panel-section">
-              <div className="section-head">
-                <button
-                  type="button"
-                  className={`section-toggle${lectureOpen ? ' open' : ''}`}
-                  onClick={() => setLectureOpen((open) => !open)}
-                  aria-expanded={lectureOpen}
-                  title={
-                    lectureOpen
-                      ? 'Fold the lecture away'
-                      : 'Play a lecture — a narrated tour of the papers you have on the graph'
-                  }
-                >
-                  <span className="section-caret" aria-hidden="true">
-                    ▸
-                  </span>
-                  <span className="section-name">Lecture</span>
-                  {/* Folded, this row is the only place a generating lecture
-                      can report itself — the button's dots are out of sight.
-                      The app's shared spinner rather than those dots: the dots
-                      are a *voice* ("an agent is composing" — the lecture
-                      button, the send control, a bubble awaiting its first
-                      token), and a section header is a status line. Same
-                      reasoning as the trace chips. */}
-                  {!lectureOpen && lecturing && (
-                    <span
-                      className="spin section-spin"
-                      role="status"
-                      aria-label="Loading lecture"
-                    />
-                  )}
-                </button>
-                {lectureShown && (
-                  <button
-                    type="button"
-                    className="section-clear"
-                    onClick={clearLecture}
-                    title="Clear the lecture"
-                    aria-label="Clear lecture"
-                  >
-                    <ClearGlyph />
-                  </button>
-                )}
-              </div>
-              <div className="section-body" hidden={!lectureOpen}>
-                <p className="lecture-intro">
-                  A lecture narrates <strong>the papers you have on screen</strong>, oldest first —
-                  so what it covers is yours to choose: filter the graph, alt-drag on the canvas to
-                  hand-pick a cluster, or narrow by year, and the lecture follows. Scope it to a
-                  single paper and it teaches that paper instead.
-                  {/* Said here rather than left for the reader to notice: an
-                      expanded paper's neighbours ARE narrated now (they are on
-                      screen), which is the opposite of the old behaviour, and
-                      worth stating because it changes what the reader should
-                      expect from a graph they have been expanding. */}
-                  {satelliteCount > 0 && (
-                    <>
-                      {' '}
-                      That includes the{' '}
-                      <strong>
-                        {satelliteCount} paper{satelliteCount > 1 ? 's' : ''} you expanded
-                      </strong>
-                      .
-                    </>
-                  )}
-                </p>
-                <div className="lecture-framing" role="group" aria-label="How to frame the lecture">
-                  {(
-                    [
-                      ['summary', 'Summary', 'Group the scoped papers into their key themes'],
-                      ['history', 'History', 'Tell the scoped papers as a chronological story'],
-                    ] as const
-                  ).map(([key, label, hint]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`framing-btn${framing === key ? ' on' : ''}`}
-                      aria-pressed={framing === key}
-                      // Disabled while a lecture is on screen: it framed the
-                      // beats you are reading, so letting the control drift
-                      // away from them would leave it describing the wrong
-                      // thing. Clear the lecture to pick the other framing.
-                      disabled={lectureShown || lecturing}
-                      onClick={() => setFraming(key)}
-                      title={hint}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div className="lecture-row" data-tour="lectures">
-                  {(() => {
-                    // The "click to show" state marks a played-but-hidden
-                    // lecture; a loading one shows its hopping dots instead.
-                    const played = !lecturing && lecturePlayed
-                    const stateHint = lecturing
-                      ? lectureShown
-                        ? 'click to hide (still loading)'
-                        : 'loading — click to show'
-                      : lectureShown
-                        ? 'click to hide'
-                        : played
-                          ? 'click to show'
-                          : 'click to play'
-                    return (
-                      <button
-                        className={`teach-btn${lectureShown ? ' active' : ''}${
-                          played && !lectureShown ? ' cached' : ''
-                        }`}
-                        style={{ '--c': REL_COLOR.seed } as CSSProperties}
-                        onClick={() => toggleLecture(framing)}
-                        aria-pressed={lectureShown}
-                        // Deliberately not just "Lecture": the section header
-                        // above is already named that, and two controls with
-                        // the same accessible name inside one section is a
-                        // screen-reader coin toss over which one plays it.
-                        aria-label="Play the lecture"
-                        title={`${LECTURE_TITLE} — ${stateHint}`}
-                      >
-                        {lecturing ? <HopDots label="Loading lecture" /> : 'Lecture'}
-                      </button>
-                    )
-                  })()}
-                </div>
-                {/* The lecture reads inside its own section, rather than taking
-                    over the panel's one scroll. */}
-                {lectureShown && (
-                  <>
-                    <BeatList
-                      beats={beats}
-                      sourceRefs={lectureSourceRefs}
-                      activeBeat={activeBeat}
-                      onBeatClick={onBeatClick}
-                      onRefClick={onRefClick}
-                      onGraphIds={onGraphIds}
-                      onEnlarge={setLightbox}
-                    />
-                    {beats.length === 0 && lecturing && (
-                      <div className="teacher-hint">Preparing the lecture…</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </section>
-
-            <section className="panel-section">
-              <div className="section-head">
-                <button
-                  type="button"
-                  className={`section-toggle${chatOpen ? ' open' : ''}`}
-                  onClick={() => setChatOpen((open) => !open)}
-                  aria-expanded={chatOpen}
-                  title={chatOpen ? 'Fold the conversation away' : 'Show the conversation'}
-                >
-                  <span className="section-caret" aria-hidden="true">
-                    ▸
-                  </span>
-                  <span className="section-name">Chat</span>
-                  {/* Unlike the lecture row's, this one shows whether the
-                      section is folded or not: the header is pinned, so while
-                      you scroll back through a long history it is the only
-                      thing still on screen that can tell you the agent is
-                      still writing. */}
-                  {(asking || searching) && (
-                    <span className="spin section-spin" role="status" aria-label="Answering" />
-                  )}
-                </button>
-                {/* Every control that binds the ask lives HERE, not in the
-                    panel header and no longer in the bar itself: the two
-                    scopes (🎓 lectures, 📚 sources) and the two search
-                    controls (🔍 direct search, ▽ filters). All four bind the
-                    researcher answering below, not the lecturer above, and
-                    docked there is no room for any of them in the pill. */}
-                <div className="section-head-right">
-                  {lecturePlayed && (
-                    <ScopePicker
-                      items={lectureItems}
-                      checkedIds={lectureInScope ? ['lecture'] : []}
-                      dataTour="lecture-scope"
-                      open={openScope === 'lectures'}
-                      onOpenChange={(nowOpen) => setOpenScope(nowOpen ? 'lectures' : null)}
-                      onToggle={() => setLectureInScope((inScope) => !inScope)}
-                      onSelectAll={() => setLectureInScope(true)}
-                      onDeselectAll={() => setLectureInScope(false)}
-                      labels={{
-                        icon: '🎓',
-                        unit: 'lecture',
-                        heading: 'Use as context',
-                        allHint: 'The played lecture is fed to the researcher.',
-                        someHint: 'The played lecture is fed to the researcher.',
-                        noneHint: 'The lecture is not fed to the researcher.',
-                        buttonTitle:
-                          'Choose whether the researcher uses the played lecture as context',
-                      }}
-                    />
-                  )}
-                  {sourcePicker}
-                  {searchControls}
-                </div>
-              </div>
-              <div className="section-body" hidden={!chatOpen}>
-                {chatTurns}
-                {chat.length === 0 && (
-                  <div className="teacher-hint">
-                    Ask a question about the papers on the graph — or play a lecture above.
-                  </div>
-                )}
-              </div>
-            </section>
-          </>
-        ) : (
-          // No graph: no sections to divide, so the conversation is the panel.
-          <>
-            {chatTurns}
-            {chat.length === 0 &&
-              (landing ? (
-                <h1 className="landing-greeting">What do you want to explore?</h1>
-              ) : (
-                <div className="teacher-hint">
-                  Ask a question and I’ll answer straight from your uploaded sources — books, PDFs,
-                  and pages — citing them by page. No graph needed.
-                </div>
-              ))}
-          </>
-        )}
+        {chatTurns}
+        {chat.length === 0 &&
+          (landing ? (
+            <h1 className="landing-greeting">What do you want to explore?</h1>
+          ) : hasGraph ? (
+            <div className="teacher-hint">
+              Ask a question about the papers on the graph — or type <code>/lecture</code> for a
+              narrated tour of them.
+            </div>
+          ) : (
+            <div className="teacher-hint">
+              Ask a question and I’ll answer straight from your uploaded sources — books, PDFs, and
+              pages — citing them by page. No graph needed.
+            </div>
+          ))}
         {(error || searchError) && <div className="teacher-error">{error ?? searchError}</div>}
       </div>
 
@@ -909,6 +767,22 @@ export default function Teacher({
           slid would read as two separate controls. */}
       <div className="ask-dock" ref={askRef}>
         <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
+          {/* The `/` menu, in the same slot as the `@` dropdown below and for
+              the same reason. Only one of the two can be open at a time, so
+              they never overlap. */}
+          {menu.open && (
+            <CommandMenu
+              choices={menu.choices}
+              highlighted={menu.highlighted}
+              heading={
+                menu.active?.stage === 'argument'
+                  ? `/${menu.active.command?.name ?? ''} — how to tell it`
+                  : 'Commands'
+              }
+              onPick={pickCommand}
+              onHighlight={menu.setHighlighted}
+            />
+          )}
           {/* The `@` dropdown, anchored to the bar (which is positioned) and
               opening upward — the composer sits at the bottom of the panel, so
               a list below it would open off-screen. */}
@@ -927,20 +801,33 @@ export default function Teacher({
             value={input}
             onChange={(event) => {
               setInput(event.target.value)
-              syncMentions(event.target)
+              syncComposer(event.target)
             }}
             // Clicking and arrowing move the caret without changing the text,
             // and a mention is defined relative to the caret — so the dropdown
             // has to re-read on both, or it goes on offering candidates for a
             // mention the reader has navigated out of.
-            onKeyUp={(event) => syncMentions(event.currentTarget)}
-            onClick={(event) => syncMentions(event.currentTarget)}
-            onBlur={mentions.reset}
+            onKeyUp={(event) => syncComposer(event.currentTarget)}
+            onClick={(event) => syncComposer(event.currentTarget)}
+            onBlur={() => {
+              mentions.reset()
+              menu.reset()
+            }}
             onKeyDown={onInputKeyDown}
             rows={1}
             placeholder={askPlaceholder}
             aria-label="Ask the assistant a question"
           />
+          {/* ▽ Filters, back inside the pill at Patrick's call (2026-09-14).
+              It was moved OUT in v7.11.0 along with two other controls, on the
+              reasoning that a pill holding three controls and a textarea read
+              as clutter — "the box you type in should look like a box you type
+              in". Two of those three are gone since (the 🔍 toggle to `@` in
+              v7.18.0, the 🎓 scope in v7.21.0), so what came back is one
+              button into a bar that has room for it, next to the question it
+              actually binds. Its popover anchors to the bar and spans it,
+              which is the same width the Chat row used to give it. */}
+          {searchControls}
           {/* Clear, inside the bar beside the send rather than floating above the
               transcript — same round shape and size, but muted rather than
               accent: it's the destructive one, and it shouldn't compete with the
@@ -951,7 +838,7 @@ export default function Teacher({
             <button
               type="button"
               className="ask-clear"
-              onClick={clearChat}
+              onClick={clearConversation}
               title="Clear the chat — start a fresh conversation"
               aria-label="Clear chat"
             >
@@ -985,16 +872,13 @@ export default function Teacher({
             )}
           </button>
         </form>
-        {/* No graph means no sections, so the controls that bind the ask have
-            nowhere above to live — they sit as a chip row directly beneath the
-            bar instead, near what they modify and out of it. Rendered only
-            here: with a graph they are up on the Chat row. */}
-        {!hasGraph && (
-          <div className="ask-tools">
-            {sourcePicker}
-            {searchControls}
-          </div>
-        )}
+        {/* The 📚 source scope, as a chip directly beneath the bar: near what
+            it modifies, and out of the pill. **One home since v7.21.0** — it
+            rode the Chat section's caret row with a graph open and this row
+            without one, and deleting the sections left this row as the only
+            place. Renders nothing when there is no library to scope, so an
+            empty row never shows. */}
+        <div className="ask-tools">{sourcePicker}</div>
       </div>
 
       {lightbox && <Lightbox figure={lightbox} onClose={() => setLightbox(null)} />}
