@@ -1,3 +1,4 @@
+import explorationsReducer from '../../src/store/explorations'
 // @vitest-environment jsdom
 /**
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
@@ -62,6 +63,7 @@ const transcript = () =>
 
 /** Each slice at rest, which is all these tests need behind the selectors. */
 const state = () => ({
+  explorations: explorationsReducer(undefined, { type: '@@test/init' }),
   workspace: workspaceReducer(undefined, { type: '@@test/init' }),
   transcript: transcript(),
   highlight: highlightReducer(undefined, { type: '@@test/init' }),

@@ -205,8 +205,13 @@ sidecar (see `config.py`).
 | `PATCH /api/sessions/<id>` | rename — `{renamed: bool}` |
 | `DELETE /api/sessions/<id>` | delete — `{deleted: bool}`, idempotent |
 | `POST /api/sessions/title` | name an exploration after its conversation |
+| `POST /api/sessions/summary` | summarize completed thread history |
 
-Thin CRUD over `storage/sessions.py`. The blob (`{name, graph_ref, layout,
+Thin CRUD over `storage/sessions.py`. New saves carry a versioned exploration
+container with ordered General/graph thread records; each child reuses the old
+session shape. Legacy payloads remain readable and are migrated client-side
+only when opened. The summary endpoint is separate from saving, uses the
+summarizer model, and bounds input by the configured history window. The blob (`{name, graph_ref, layout,
 discovered_nodes, discovered_edges, chat}`) is **frontend-owned and
 deliberately unvalidated** — the store treats it as opaque JSON, and
 validating its shape here would create a second place that has to track the
@@ -311,12 +316,12 @@ Design decisions worth knowing:
   simulation fields (`x`, `vy`, `index`, ...). `_node` picks exactly the
   model's fields out of each dict — strict about the core shape (missing
   fields → 400), tolerant about baggage.
-- **History lives here, not in the agents** (locked Phase 4 decision). Two
-  in-memory stores — graph chat and library chat, same `session_id` never
-  cross-contaminates — persisted **only on success** (a failed answer must
-  not poison the follow-up context), `<<FIG n>>` markers stripped (render
-  directives, not conversation content), trimmed to
-  `config.server.history_turns` pairs.
+- **History is client-owned.** Both research routes validate and cap the
+  completed transcript supplied with every request. Agents receive history;
+  neither they nor the routes store a competing copy. Lecture beats are
+  converted by the frontend before sending. `thread_context` carries a bounded
+  sibling index and explicitly mentioned histories, labelled as borrowed
+  background rather than current paper scope or instructions.
 - **Both research routes carry a `provider`.** `/api/ask` takes it from the
   graph it's grounded in; `/api/ask_sources` has no graph, so it takes the
   header dropdown's choice straight off the request. Leaving it off — as

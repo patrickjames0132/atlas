@@ -48,7 +48,6 @@ export default function BeatList({
   sourceRefs,
   onBeatClick,
   onRefClick,
-  onGraphIds,
   onEnlarge,
 }: {
   beats: Beat[]
@@ -62,7 +61,6 @@ export default function BeatList({
   /** Paper ids still on the graph; a beat (and a `[n]`) outside it greys out.
    *  Undefined means "don't check" — every beat stays a control, which is the
    *  right way round for a caller that forgets to pass the set. */
-  onGraphIds?: Set<string>
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   if (beats.length === 0) return null
@@ -71,7 +69,7 @@ export default function BeatList({
       {beats.map((beat, index) => {
         // Note this also covers a beat with **no** papers at all: there is
         // nothing for it to light, so it stops pretending to be a button.
-        const lightable = !onGraphIds || beat.node_ids.some((nodeId) => onGraphIds.has(nodeId))
+        const lightable = beat.node_ids.length > 0
         return (
           <li
             key={index}
@@ -91,7 +89,6 @@ export default function BeatList({
               graphRefs={beat.graph_refs}
               sourceRefs={sourceRefs}
               onRefClick={onRefClick}
-              onGraphIds={onGraphIds}
             />
             {beat.figure && (
               // Enlarging the figure must not toggle the beat's highlight.

@@ -33,9 +33,6 @@ import { PROVIDER_LABEL } from '../../api'
 import { prepareMath } from '../../notation/prepareMath'
 import { remarkCite } from './remarkCite'
 
-const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
-const REHYPE_PLUGINS = [rehypeKatex]
-
 /**
  * One node, lit — the companion to `GraphGlyph`, marking the chips that
  * spotlight a paper already on the canvas. Deliberately the *same* motif with
@@ -69,13 +66,9 @@ function SpotlightGlyph() {
  * (⁂, ⌗) render inconsistently across fonts. `currentColor` so it inherits
  * the chip's own colour through hover and focus.
  *
- * Exported because a second surface makes the same claim: the line under a
- * turn naming the graph it came from, which re-opens that graph when clicked.
- * One motif for "this builds a map", wherever the click appears.
- *
  * @returns The inline glyph.
  */
-export function GraphGlyph() {
+function GraphGlyph() {
   return (
     <svg className="cite-ref-glyph" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
       <line x1="2.5" y1="9" x2="6" y2="3.5" stroke="currentColor" strokeWidth="1" />
@@ -86,6 +79,9 @@ export function GraphGlyph() {
     </svg>
   )
 }
+
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkCite]
+const REHYPE_PLUGINS = [rehypeKatex]
 
 /**
  * Render an answer's Markdown + math + clickable `[n]` citations.
@@ -98,7 +94,6 @@ export default function AnswerMarkdown({
   sourceRefs,
   paperRefs,
   onRefClick,
-  onGraphIds,
   onPaperSeed,
   provider,
 }: {
@@ -111,19 +106,11 @@ export default function AnswerMarkdown({
   /** `[Sn]` index → library source, for rendering a marker as its real title
    *  (undefined on old saves, or when the turn cited no library passage). */
   sourceRefs?: Record<string, SourceRef>
-  /** Spotlight one paper on the graph (undefined = markers render inert). */
+  /** Highlight a cited paper on the current graph. */
   onRefClick?: (nodeId: string) => void
-  /** Every paper id the workspace currently holds. A `[n]` resolving to an id
-   *  outside it renders greyed and inert — see the stale branch below.
-   *  Undefined skips the check entirely (nothing to check against). */
-  onGraphIds?: Set<string>
-  /** Build a graph seeded on a cited paper — the graph-free counterpart of
-   *  `onRefClick`, which needs a graph to point at. Undefined falls back to
-   *  linking out to the paper's own page. */
+  /** Open a paper-search reference directly in its graph thread. */
   onPaperSeed?: (nodeId: string, refProvider?: Provider) => void
-  /** The backend currently selected. Only used to warn, in the tooltip, when a
-   *  citation was minted by the *other* one — mapping it moves the workspace
-   *  there, and a reader deserves to know that before clicking. */
+  /** Current backend, used to explain a citation's source in its tooltip. */
   provider?: Provider
 }) {
   const components = useMemo<Components>(
@@ -138,25 +125,13 @@ export default function AnswerMarkdown({
       // index resolves to a node; otherwise it degrades to the bare `[n]` text.
       citeref: ({ index, children }: { index?: string; children?: ReactNode }) => {
         const nodeId = index && graphRefs ? graphRefs[index] : undefined
-        // Cited a paper that isn't on the graph any more. Only reachable since
-        // a chat-seeded jump started carrying the conversation across a graph
-        // change: the marker resolved fine when it was written, and the paper
-        // it names is real, but clicking would now highlight nothing. Render
-        // it as quiet, inert text that says so rather than a live-looking
-        // control that no-ops.
-        if (nodeId && onGraphIds && !onGraphIds.has(nodeId)) {
-          return (
-            <span className="cite-ref cite-ref-stale" title="Not on the graph currently open">
-              {children}
-            </span>
-          )
-        }
+        // A paper's identity is valid independently of which graph is loaded.
         if (nodeId && onRefClick) {
           return (
             <button
               type="button"
               className="cite-ref cite-ref-spot"
-              title="Show this paper on the graph"
+              title="Highlight this paper on the graph"
               onClick={(event) => {
                 event.stopPropagation() // don't also trigger the whole-answer re-light
                 onRefClick(nodeId)
@@ -167,21 +142,11 @@ export default function AnswerMarkdown({
             </button>
           )
         }
-        // No graph to point at, but the server resolved the marker to a real
-        // paper — so the click *maps* it. The chip stays the bare `[n]` the
-        // prose was written around (a full title inline derailed the sentence,
-        // twice over when two papers back a claim); the title moves to the
-        // tooltip, and the glyph marks this as the chip that builds a graph
-        // rather than lighting one up. That difference is worth signalling in
-        // shape and not only in colour: one is a reversible highlight, the
-        // other rebuilds the workspace, and a reader shouldn't discover which
-        // by clicking.
+        // Graphless answers carry a provider-aware paper reference.
         const paper = index && paperRefs ? paperRefs[index] : undefined
         if (!paper) return <>{children}</>
         if (onPaperSeed) {
-          // A citation minted by the other backend still maps — it just takes
-          // the workspace with it, since its id resolves nowhere else. Say so
-          // in the tooltip rather than letting the dropdown change under them.
+          // Graph identity includes the provider that supplied the citation.
           const elsewhere =
             paper.provider && provider && paper.provider !== provider ? paper.provider : null
           return (
@@ -190,8 +155,8 @@ export default function AnswerMarkdown({
               className="cite-ref cite-ref-seed"
               title={
                 elsewhere
-                  ? `Map this paper's citations, switching to ${PROVIDER_LABEL[elsewhere]} — ${paper.title}`
-                  : `Map this paper's citations — ${paper.title}`
+                  ? `Open graph thread using ${PROVIDER_LABEL[elsewhere]} — ${paper.title}`
+                  : `Open graph thread — ${paper.title}`
               }
               onClick={(event) => {
                 event.stopPropagation() // don't also trigger the whole-answer re-light
@@ -243,7 +208,7 @@ export default function AnswerMarkdown({
         )
       },
     }),
-    [graphRefs, sourceRefs, paperRefs, onRefClick, onGraphIds, onPaperSeed, provider],
+    [graphRefs, sourceRefs, paperRefs, onRefClick, onPaperSeed, provider],
   )
 
   // Dollars sorted out before remark-math ever sees them — money in prose is

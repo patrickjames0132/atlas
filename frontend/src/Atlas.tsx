@@ -11,8 +11,8 @@
  * assistant is the landing surface (a centred chat, the app's front door) and
  * the overlays get their own layer over the body; with a graph it's the
  * explorer, and the assistant docks beside it. The `Teacher` element stays at
- * one position in the tree across both, so that transition never remounts it
- * and the conversation survives — see its own docstring.
+ * one position in the tree across both. Thread navigation remounts the
+ * graph and chat with distinct keys; their durable state lives in the store.
  *
  * Everything cross-cutting lives in the store (see `store/README.md`):
  * the workspace (graph + discoveries + layout), the transcript, and the
@@ -23,30 +23,15 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getSettings } from './api'
 import { getBuildShape, sameBuild, useBuildShape } from './graph/buildShape'
 import { applyConfiguredDefault, setTheme, useTheme } from './ui/theme'
-import { useAppDispatch, useAppSelector, useAppStore } from './store'
-import {
-  errorSet,
-  loadGraph,
-  providerSet,
-  restoreSession,
-  switchProvider,
-  workspaceCleared,
-} from './store/workspace'
+import { useAppDispatch, useAppSelector } from './store'
+import { errorSet, loadGraph, providerSet, switchProvider } from './store/workspace'
 import SideBar from './shell/SideBar'
 import type { ShellView } from './shell/SideBar'
-import { useAutosave } from './shell/useAutosave'
-import {
-  conversationActivated,
-  conversationDropped,
-  newConversationKey,
-  pendingDiscoveriesDrained,
-  selectRunningKeys,
-} from './store/transcript'
-import { useSessions } from './shell/useSessions'
+import { useExplorations } from './shell/useExplorations'
 import './shell/shell.css'
 
 /** localStorage key remembering whether the left rail is expanded. */
@@ -66,11 +51,8 @@ import './atlas.css'
  */
 export default function Atlas() {
   const dispatch = useAppDispatch()
-  const store = useAppStore()
   // Which conversation is on screen, and which explorations still have a
   // stream running (the rail marks those as working).
-  const activeKey = useAppSelector((state) => state.transcript.activeKey)
-  const runningKeys = useAppSelector(selectRunningKeys)
   const { graph, epoch, loading, buildProgress, error, provider, seedRef } = useAppSelector(
     (state) => state.workspace,
   )
@@ -216,114 +198,13 @@ export default function Atlas() {
   // — not about the graph itself.
   const {
     sessions,
-    refresh: refreshSessions,
+    activeId: openSessionId,
+    open: openExploration,
+    create: goHome,
     rename: renameSessionRow,
     remove: removeSessionRow,
-  } = useSessions()
-  const [openSessionId, setOpenSessionId] = useState<string | null>(null)
-  // Which conversation key each saved row is showing this sitting. An
-  // exploration opened from disk gets a fresh key from the restore; returning
-  // to one already live here must reuse ITS key rather than re-reading the
-  // server, or a background answer written since would be thrown away.
-  const keyByRow = useRef(new Map<string, string>())
-
-  /** Adopt the row a save just created, and remember whose conversation it is. */
-  const onAutosaved = useCallback(
-    (id: string, _name: string, conversationKey: string, background: boolean) => {
-      // Recorded for EVERY save, not just the visible one. The row is often
-      // created by the save that leaves an exploration, and without the
-      // pairing that exploration could neither be shown as still working nor
-      // re-opened from memory — it would be re-read from disk, discarding
-      // whatever its stream wrote after the reader walked away.
-      keyByRow.current.set(id, conversationKey)
-      // A background exploration's first save must list it without stealing
-      // the reader's place.
-      if (!background) setOpenSessionId(id)
-      void refreshSessions()
-    },
-    [refreshSessions],
-  )
-  // Stable by construction — `useAutosave` feeds this to a debounced effect's
-  // dependency list, and a fresh identity each render would restart the timer
-  // forever.
-  const { flush: flushSave, adopt: adoptExploration } = useAutosave({
-    sessionId: openSessionId,
-    onSaved: onAutosaved,
-  })
-
-  /**
-   * Open a saved exploration.
-   *
-   * **The id moves only once the conversation has.** `restoreSession` is
-   * async, so setting `openSessionId` up front left a window where the
-   * autosave's id pointed at the exploration being opened while the store
-   * still held the one being left — and any save landing in that window (the
-   * debounce, or the retry queued behind an in-flight write) copied the old
-   * conversation into the new row. Two explorations, one history.
-   *
-   * **A conversation still live in this sitting is re-shown, not re-read.**
-   * Its chat is whatever its stream has written since the reader left, which
-   * is ahead of the copy on disk; going back to the server would silently
-   * discard the answer that finished while they were away.
-   */
-  const openExploration = useCallback(
-    async (id: string) => {
-      // The one being left still has unwritten changes in the debounce.
-      flushSave()
-      setView('workspace')
-      const liveKey = keyByRow.current.get(id)
-      if (liveKey && store.getState().transcript.byKey[liveKey]) {
-        dispatch(conversationActivated(liveKey))
-        dispatch(pendingDiscoveriesDrained(liveKey))
-        setOpenSessionId(id)
-        return
-      }
-      try {
-        const restored = await dispatch(restoreSession(id)).unwrap()
-        keyByRow.current.set(id, restored.conversationKey)
-        // Continue this exploration rather than forking a new one — and keep
-        // the name it already has, rather than letting the titler rewrite it.
-        adoptExploration(restored.conversationKey, id, restored.name)
-      } catch {
-        // The restore reducer surfaces the error; staying on the current
-        // exploration (and its id) is the safe outcome.
-        return
-      }
-      setOpenSessionId(id)
-    },
-    [adoptExploration, dispatch, flushSave, store],
-  )
-
-  /**
-   * New Exploration: a fresh conversation and an empty workspace.
-   *
-   * **Flush before clearing**, because the last couple of seconds of the
-   * exploration being left are still sitting in the debounce — dropping them
-   * would be the exact loss the autosave exists to end. What is *not* done
-   * any more is stopping it: a conversation left behind keeps streaming into
-   * its own key and saves itself when it settles.
-   */
-  const goHome = useCallback(() => {
-    flushSave()
-    const conversationKey = newConversationKey()
-    if (openSessionId) keyByRow.current.set(openSessionId, activeKey)
-    dispatch(workspaceCleared({ conversationKey }))
-    setAssistantOpen(true)
-    setView('workspace')
-    setOpenSessionId(null)
-  }, [activeKey, dispatch, flushSave, openSessionId])
-
-  // The rows whose exploration still has a stream running, so the rail can
-  // say so. Mapped from conversation keys through the same row→key table the
-  // switcher uses; the active exploration is included, because an answer
-  // running in front of you is still an answer running.
-  const workingSessionIds = useMemo(() => {
-    const running = new Set(runningKeys)
-    const ids: string[] = []
-    for (const [rowId, key] of keyByRow.current) if (running.has(key)) ids.push(rowId)
-    if (openSessionId && running.has(activeKey)) ids.push(openSessionId)
-    return ids
-  }, [runningKeys, openSessionId, activeKey])
+    working: workingSessionIds,
+  } = useExplorations()
 
   // The floating layer over whichever surface is up — search hits, the build
   // progress, the error. Built once here rather than inline so the graph and
@@ -410,34 +291,7 @@ export default function Atlas() {
           void openExploration(id)
         }}
         onRenameSession={(id, name) => void renameSessionRow(id, name)}
-        onDeleteSession={(id) => {
-          void removeSessionRow(id)
-          // **The conversation goes too.** Removing only the row left a
-          // still-running exploration saving in the background, and
-          // `save_session` upserts — so its next write brought the row it had
-          // just deleted straight back from the dead. Dropping it from the
-          // store is what makes the rest of the machinery agree the
-          // exploration is gone: the autosave prunes its bookkeeping, and the
-          // stream's remaining writes land nowhere instead of on whatever is
-          // now on screen.
-          //
-          // (The stream itself cannot be aborted from here — its controller
-          // belongs to the panel instance that started it, which is gone once
-          // the reader has moved on. It runs to completion server-side and its
-          // result is discarded, which is wasteful but harmless.)
-          const key = keyByRow.current.get(id)
-          if (key) {
-            dispatch(conversationDropped(key))
-            keyByRow.current.delete(id)
-          }
-          // Deleting the exploration you are LOOKING at leaves you nowhere, so
-          // it lands you on a fresh one rather than on the husk of the thing
-          // you just deleted.
-          if (id === openSessionId) {
-            dispatch(workspaceCleared({ conversationKey: newConversationKey() }))
-            setOpenSessionId(null)
-          }
-        }}
+        onDeleteSession={(id) => void removeSessionRow(id)}
         onOpenSettings={() => setShowSettings(true)}
         onStartTour={() => setTourOpen(true)}
         theme={theme}
@@ -474,18 +328,17 @@ export default function Atlas() {
           {/* The overlays belong to whichever surface is up: over the canvas in
               graph mode, over the landing chat before one exists. */}
           {graph ? (
-            <GraphExplorer tourStage={tourOpen ? tourStage : undefined}>{overlays}</GraphExplorer>
+            <GraphExplorer key={`graph:${epoch}`} tourStage={tourOpen ? tourStage : undefined}>
+              {overlays}
+            </GraphExplorer>
           ) : (
             <div className="landing-overlays">{overlays}</div>
           )}
 
-          {/* One instance, two shapes. Kept at a single position in the tree so
-            entering graph mode collapses the landing chat into the side panel
-            without remounting it — the conversation, its scroll position and
-            its run state all survive the transition (see store/README.md on
-            why a remount would undo exactly that). */}
+          {/* Graph and chat have distinct sibling keys. Both remount on thread
+              navigation while their durable state stays with the thread. */}
           <Teacher
-            key={epoch}
+            key={`teacher:${epoch}`}
             landing={!graph}
             collapsed={!!graph && !assistantOpen}
             onClose={graph ? () => setAssistantOpen(false) : undefined}

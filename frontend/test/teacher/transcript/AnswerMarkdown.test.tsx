@@ -12,7 +12,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import AnswerMarkdown from '../../../src/teacher/transcript/AnswerMarkdown'
 
 // Test globals are off, so RTL's auto-cleanup isn't registered — unmount
@@ -186,7 +186,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     expect(screen.queryByText(/Playing Atari with Deep RL/)).toBeNull()
   })
 
-  it('greys out a citation whose paper is not on the graph on screen', () => {
+  it('routes graph-paper citations to their highlight callback', () => {
     // Reachable only because a chat-seeded jump carries the conversation
     // across a graph change: the marker resolved when it was written, but
     // clicking would now highlight nothing.
@@ -196,10 +196,10 @@ describe('AnswerMarkdown paper citations with no graph', () => {
         text="As shown in [1]."
         graphRefs={{ '1': 'node-atari' }}
         onRefClick={onRefClick}
-        onGraphIds={new Set(['node-something-else'])}
       />,
     )
-    expect(screen.queryByRole('button')).toBeNull()
+    fireEvent.click(screen.getByRole('button'))
+    expect(onRefClick).toHaveBeenCalledWith('node-atari')
     expect(screen.getByText(/\[1\]/)).toBeTruthy()
   })
 
@@ -210,20 +210,19 @@ describe('AnswerMarkdown paper citations with no graph', () => {
         text="As shown in [1]."
         graphRefs={{ '1': 'node-atari' }}
         onRefClick={onRefClick}
-        onGraphIds={new Set(['node-atari'])}
       />,
     )
     screen.getByRole('button', { name: '[1]' }).click()
     expect(onRefClick).toHaveBeenCalledWith('node-atari')
   })
 
-  it('marks a seeding chip apart from a spotlight chip in shape, not only colour', () => {
+  it('distinguishes graph-opening and spotlight glyphs', () => {
     // The two chips do different things — one highlights, one rebuilds the
     // workspace — so the difference must survive a colour-blind reader.
     const { container: seeding } = render(
       <AnswerMarkdown text="As shown in [1]." paperRefs={PAPER_REFS} onPaperSeed={vi.fn()} />,
     )
-    expect(seeding.querySelector('.cite-ref-seed svg')).toBeTruthy()
+    expect(seeding.querySelectorAll('.cite-ref-seed svg line')).toHaveLength(2)
     cleanup()
     const { container: spotlight } = render(
       <AnswerMarkdown
@@ -234,7 +233,7 @@ describe('AnswerMarkdown paper citations with no graph', () => {
     )
     // The spotlight chip carries its own glyph — same family, different shape.
     expect(spotlight.querySelector('.cite-ref-seed')).toBeNull()
-    expect(spotlight.querySelector('.cite-ref-spot svg')).toBeTruthy()
+    expect(spotlight.querySelectorAll('.cite-ref-spot svg circle')).toHaveLength(2)
   })
 })
 

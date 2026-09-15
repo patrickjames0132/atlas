@@ -24,9 +24,10 @@ import highlight from './highlight'
 import library from './library'
 import transcript from './transcript'
 import workspace from './workspace'
+import explorations from './explorations'
 
 export const store = configureStore({
-  reducer: { workspace, transcript, highlight, library },
+  reducer: { workspace, transcript, highlight, library, explorations },
 })
 
 export type RootState = ReturnType<typeof store.getState>

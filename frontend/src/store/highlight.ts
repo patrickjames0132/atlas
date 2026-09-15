@@ -13,6 +13,7 @@
 
 import { createSelector, createSlice } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit'
+import { explorationOpened, threadActivated } from './explorations'
 import { loadGraph, restoreSession, workspaceCleared } from './workspace'
 
 export interface HighlightState {
@@ -32,6 +33,8 @@ const highlightSlice = createSlice({
   extraReducers: (builder) => {
     // A new/restored graph starts unlit.
     builder
+      .addCase(explorationOpened, () => initialState)
+      .addCase(threadActivated, () => initialState)
       .addCase(loadGraph.fulfilled, () => initialState)
       .addCase(restoreSession.fulfilled, () => initialState)
       .addCase(workspaceCleared, () => initialState)

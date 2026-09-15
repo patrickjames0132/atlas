@@ -158,3 +158,24 @@ def api_sessions_title() -> ResponseReturnValue:
     if not isinstance(turns, list) or any(not isinstance(turn, str) for turn in turns):
         return jsonify({"error": "turns must be a list of strings"}), 400
     return jsonify({"title": summarizer.title_for_conversation(turns)})
+
+
+@bp.post("/api/sessions/summary")
+def api_thread_summary() -> ResponseReturnValue:
+    """Summarize completed thread turns within the configured history budget.
+
+    Returns:
+        JSON summary, or null when no model is available.
+    """
+    from ..agents.orchestrators.summarizer.main import summary_for_thread
+    from ..config import config
+
+    payload = request.get_json(silent=True) or {}
+    turns = payload.get("turns")
+    previous = payload.get("previous", "")
+    if not isinstance(turns, list) or any(not isinstance(turn, str) for turn in turns):
+        return jsonify({"error": "turns must be strings"}), 400
+    if not isinstance(previous, str):
+        return jsonify({"error": "previous must be a string"}), 400
+    limit = config.server.history_turns * 2
+    return jsonify({"summary": summary_for_thread(previous, turns[-limit:] if limit else [])})

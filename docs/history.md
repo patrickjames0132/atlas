@@ -688,6 +688,48 @@
 
 ### AI teacher & lectures
 
+- [x] **Lecture turns never reach the researcher as history** *(v7.22.0)* — v7.21.0
+      dropped the `lectures` wire field on the grounds that a lecture is a chat
+      turn now and *"reaches the agent as ordinary history like any other
+      turn"* (`useConversation.ts:444-450`, `routes/agents.py:330-334`). It
+      doesn't. Three things line up to make the comment false:
+
+      - `/api/lecture` calls `_relay(...)` with **no `store`**
+        (`routes/agents.py:268`), so a lecture is never written to
+        `_QA_SESSIONS`.
+      - An ordinary `ask()` sends **`history: undefined`**
+        (`useConversation.ts:701,718`); only `retryAnswer` sends the client
+        transcript, and `_resumed_history` uses it *only when the server has
+        nothing* (`routes/agents.py:300`).
+      - Even the client path would drop lectures: `chatBeatAdded` pushes onto
+        `msg.beats` and leaves `text` empty (`store/transcript.ts:507`), and
+        the history builder filters on `turn.text.trim()`
+        (`useConversation.ts:777`).
+
+      So a reader who asks for a lecture and then *"why did they abandon
+      that approach?"* gets an answer from a researcher that never saw the
+      lecture — the exact regression the old `lectures` field existed to
+      prevent. A second smell in the same place: `_QA_SESSIONS` vs
+      `_SOURCES_SESSIONS` (`routes/agents.py:54-55`) split history **by
+      endpoint**, so a graph-free turn and a graph turn under the same session
+      id can't see each other either.
+
+      **Fix — make the client own history.** The transcript is already the
+      persisted truth (it survives a reload; the in-memory server dicts
+      don't), and `_resumed_history` already validates and caps a client copy.
+      So: always send `history`, built by one `toHistoryTurn(msg)` that joins
+      beat prose for lecture turns, skips `unfinished` turns and strips
+      `<<FIG n>>` markers the way `_relay` does today; then delete both server
+      dicts and the "server copy wins" branch. The module docstring's *locked
+      decision* — agents receive history, they never store it — is honoured
+      better by this than by route-level dicts. Test it with a lecture turn
+      followed by a question and assert the lecture prose is in what
+      `researcher.answer` receives. Patch-sized, and a prerequisite for the
+      *Threads* ticket (Larger phases), where history = the thread's chat.
+      *(Found in the 2026-09-14 design pass; Codex flagged it, verified
+      against the code the same day.)*
+
+
 - [x] **One chat interface: the Lecture UI is gone and a lecture is a command**
       *(v7.21.0)* — the philosophy was Patrick's: everything the assistant does
       should be reachable from the one bar you type into. *"Should we remove the
@@ -888,6 +930,10 @@
       says you can just ask, its ask step teaches the one-click correction, and
       the placeholder reads *"Ask about these papers, or for a lecture… or @ a
       paper"*.
+
+**v7.22.0 follow-up:** the v7.10.0 policy of keeping a single conversation
+across graph loads is deliberately reversed by graph-owned threads. Continuity
+now lives in the parent exploration; switching graphs resumes its own transcript.
 
 - [x] **The assistant panel becomes folding sections** *(v7.10.0)* — the
       ticket was narrow: *"the lecture-mode buttons sit permanently expanded
@@ -2973,6 +3019,120 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### Saved sessions & workspaces
 
+- [x] **Threads — one thread, one graph** *(v7.22.0)* — the conversation model gets a
+      second level: an **exploration** holds **threads**, and a thread owns
+      exactly one graph (or none). This replaces the cross-graph band-aids
+      that v7.21.0 was still stacking up — the greyed `[n]` chips, the
+      bubble-that-stops-being-a-control, the provenance line that reloads a
+      graph *under* the conversation — with a structure where the problem
+      can't arise. *(Design pass with Codex and Claude, 2026-09-14; Patrick's
+      call. The summary below is what was settled and what wasn't.)*
+
+      **The problem.** Since v7.10.0 a graph load keeps the transcript, so one
+      conversation can hold turns grounded in several graphs. Every fix since
+      has been a *negative* signal — this chip points nowhere, this bubble
+      re-lights nothing — plus a click on the provenance line to swap the
+      graph back under an unrelated conversation. Patrick: *"this feels a bit
+      clunky."* It is: the interface treats the graph currently on screen as
+      the authority on whether an old answer is usable, when the answer's
+      validity never changed. And the softer fixes (a thread that *can* hold
+      several graphs, a graph open that *doesn't* create a thread) all
+      recreate the same problem one level down — Patrick spotted that, and it
+      is what makes the rule below hard rather than advisory.
+
+      **Decided.**
+
+      - **Exploration → General + graph threads.** Every exploration opens
+        with a graphless **General** thread (its name stays *General*):
+        paper searches and "what's new in quantum computing" live there.
+        *Explore* on a result spawns a graph thread. Graph threads are titled
+        by the seed's short title; exploration titles describe the goal and
+        keep today's first-request titling. Both renamable; no automatic
+        re-title prompts.
+      - **A thread owns its transcript and its graph state.** Opening another
+        graph switches to the thread that owns it, or creates one. Filtering,
+        selecting and expanding stay inside the thread — the graph only ever
+        *grows*, so every paper a turn cites is on that thread's graph by
+        construction. **Paper citations highlight the current graph**;
+        graph icons open or resume the paper's graph thread directly. No
+        intermediate paper-details modal. *(Patrick's browser-review correction,
+        2026-09-15: preserve the two existing citation actions and glyphs.)*
+
+      - **This reverses v7.10.0's keep-the-transcript decision**, on purpose.
+        Keeping the conversation across graph loads was right when there was
+        one conversation; the continuity it protected now lives in the
+        exploration. Record the reversal in `docs/history.md` next to the
+        original when this ships.
+      - **The band-aids are deleted, not polished.** `onGraphIds`
+        (`useConversation.ts:176`, fed by `selectWorkspaceNodeIds` — note it
+        checks *loaded* nodes, not filter visibility, so filters never greyed
+        anything), the `cite-ref` inert state, the whole-bubble control check
+        (`Teacher.tsx:641`), `BeatList`'s on-graph set, and the clickable
+        provenance line all go. The *"Make the provenance line a control"*
+        ticket (UI & rendering polish) is superseded — see the note on it.
+      - **The unit already exists.** Today's `SessionData`
+        (`frontend/src/api/sessions.ts:176` — one `seed`, one `graph_ref`,
+        one `nodes`/`edges`, one `chat`) *is* the thread record, near-verbatim.
+        The exploration is a new thin record: title, summary, ordered thread
+        ids. The transcript slice already keys conversations
+        (`store/transcript.ts` — a stream writes into the conversation that
+        started it whether or not it is on screen); that keying moves from
+        exploration to thread and the background-stream story carries over.
+      - **History is client-owned** — see the *"Lecture turns never reach
+        the researcher as history"* ticket (Teacher & agent reach). Do that
+        first; under threads, history = the thread's chat, full stop, and the
+        two server-side dicts have no place left to stand.
+      - **Cross-thread context is deliberate and bounded.** Two mechanisms:
+        (1) a **sibling index** in every thread's prompt — each other thread's
+        title plus a one-paragraph summary, regenerated when the thread's
+        `chat.length` has moved past a stored `summarizedThrough` at the
+        same "conversation has settled" moment the autosave already detects
+        (no timers); (2) **`@thread` mentions** in the composer, reusing
+        `mentions/` the way papers are mentioned, inlining that thread's
+        summary plus its last `history_turns` turns — the budget already in
+        `config.json`, reused rather than a new knob. A `read_thread` agent
+        tool is the later step if summaries prove too thin.
+      - **The composer names its subject** — *"Asking about PPO · 18 papers"*
+        — so the next message's thread is never ambiguous; a message always
+        goes to the active thread.
+
+      **Migration — old saves stay recoverable.** A pre-threads save becomes
+      one exploration. Its turns split into threads keyed by the assistant
+      turn's `ChatMsg.graph` stamp (`sessions.ts:98`, present since v7.21.0):
+      `seedId` + `provider ?? save.provider` (the stamp's `provider` is
+      optional on the first turns that carried it). A user turn travels with
+      the assistant turn that follows it, so pairs stay intact. Unstamped turns
+      (pre-v7.21.0) stay in the thread the save's own `seed` names — those
+      saves were overwhelmingly one graph — and get no stamp invented.
+      Migrate lazily on load and write back on the next save, the pattern the
+      legacy-save fields already follow, so opening an old exploration never
+      rewrites it by itself.
+
+      **Open.**
+
+      - **Thread navigation layout.** A rail beside the transcript? Tabs above
+        the composer? The exploration list in `shell/SideBar.tsx` already
+        reads like a chat history; threads either nest under it or live in
+        the assistant panel. This is the real design work left.
+      - **What "settled" means for the summary refresh** when a thread has a
+        stream running in the background — probably the same signal the
+        autosave waits on, but check that a lecture's beats count.
+      - **`@thread` mention rendering** in the sent message and in history —
+        the mentioned thread's turns need a visible source label in the prompt
+        (*"from the DQN thread:"*) so the model, and the reader looking at the
+        trace, can tell borrowed context from the thread's own.
+
+      **Shipped decisions.** Threads nest under exploration carets and reuse
+      the existing row typography, Rename/Delete menu and inline rename.
+      General is permanent. Summaries refresh after completed transcript changes
+      with no active stream; sibling context is labelled separately and bounded.
+      Paper citations retain highlighting, while graph icons open/resume a thread
+      directly. Autosaves serialize all threads and preserve background work;
+      a browser-close outbox recovers interrupted writes. Patrick approved the
+      browser-tested result on 2026-09-15.
+
+
+
 - [x] **Every exploration saves itself, and several can run at once**
       *(v7.16.0)* — the Save button is gone. Saving was a manual ＋ in the rail,
       and forgetting it lost the sitting on tab close; explorations now save
@@ -3071,6 +3231,37 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
       it still answers against the fully restored graph. Deliberately left as-is.)*
 
 ### UI & rendering polish
+
+- [x] **Make the provenance line a control, not a caption** *(v7.22.0)* — **superseded
+      2026-09-14 by *Threads — one thread, one graph* (Larger phases):**
+      under threads a turn's papers are always on its own graph, so the
+      line has nothing to re-open and the click below is deleted rather
+      than built. Kept until that ships so the reasoning isn't lost. —
+      The original ask: the quiet
+      summary under an answer ("grounded in 1 of your sources + 1 paper ✦",
+      `teacher/transcript/provenance.ts`) reads as a label, but it names the
+      one thing a reader most wants to act on. **Ask:** when the paper it
+      cites isn't on screen, the line becomes clickable and *seeds the graph*
+      on it — tinted like a seeding `[n]` chip and ending in the graph glyph
+      instead of the ✦. When the answer's papers **are** already on the graph,
+      it stays exactly as it is: current colour, current diamond, because the
+      whole-bubble click already re-lights them and a second affordance saying
+      the same thing is noise.
+
+      **What to settle first:** which paper it seeds when the answer cites
+      more than one. The line is a *count* ("+ 3 papers"), not a reference, so
+      there's no single target — options are seeding the first cited paper,
+      splitting the count into per-paper chips, or only offering the click in
+      the unambiguous one-paper case. The reuse is otherwise clean: the
+      chip's colour, glyph and seed handler all exist (`AnswerMarkdown`'s
+      `cite-ref-seed` + `GraphGlyph` + `onPaperSeed`), and the
+      already-on-the-graph test is the same `onGraphIds` set that greys stale
+      chips. Any provider stamp on the seeded id has to come along too — see
+      the graph-free provider ticket above. *(Patrick's ask, 2026-08-14.)*
+
+      **Closed as superseded in v7.22.0.** Thread ownership replaces this proposed control.
+
+
 
 - [x] **The ask bar holds the question and nothing else** *(v7.11.0)* — the
       composer had accumulated three controls *inside* the pill — the 📚

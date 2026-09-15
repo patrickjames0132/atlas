@@ -105,3 +105,20 @@ never enabled strict mode; this is the TS counterpart of the backend's
 strict mypy). No unit tests — this layer is thin I/O; the browser-test
 milestone at the end of Phase 6 exercises it end-to-end against the real
 backend.
+
+## Exploration threads and client history
+
+`sessions.ts` reuses `SessionData` for each thread and adds a versioned parent
+container. A save owns General plus graph threads, their active id and summaries.
+The API continues using `/api/sessions` CRUD; SQLite stores the container verbatim.
+The shell's ordered save queue handles browser-close recovery separately from
+server persistence. Graph references are rebuilt; agent discoveries are stored.
+
+Both researcher stream functions send completed `history` on every request and
+optional `thread_context` (sibling summaries plus explicitly attached histories).
+There is no server session id. Lecture beats are converted to ordinary prose by
+`teacher/history.ts`; aborted/failed exchanges never enter this history.
+
+`fetchPaperDetail` returns `PaperDetails`: bibliographic fields without graph
+roles (`rels` / `is_seed`). Canvas hydration overlays those fields onto its
+existing node, preserving its graph relationships.
