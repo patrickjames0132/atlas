@@ -22,6 +22,34 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### "OpenAlex requests are failing" — the seed was an S2 paperId (v7.22.2)
+
+- **Symptom.** Switching the provider dropdown from S2 to OpenAlex on a graph
+  seeded from a search pick failed the build every time; the log ended in
+  `urllib.error.HTTPError: HTTP Error 400: Bad Request` with OpenAlex frames
+  above it, so it read as OpenAlex being down.
+- **Root cause.** Two layers. `switchProvider` re-seeded with `seedRef`
+  verbatim, and after a search pick that is the picked node's own id — an S2
+  paperId (`2ee37960…`, 40 hex), which OpenAlex has no notion of. Then
+  `openalex.resolve_seed_work` took the hash for a bare arXiv id, missed the
+  arXiv-DOI path, and fell back to `arxiv.get_title(hash)` — and **arXiv's
+  export API answers a non-arXiv `id_list` with a 400**, not an empty feed. The
+  400 came from arXiv, not OpenAlex; the switch had never worked for
+  search-seeded graphs (the other direction did, by luck: OpenAlex node ids
+  are `DOI:`/`ARXIV:`, which S2 reads).
+- **Fix.** (1) `switchProvider` re-seeds by `graph.seed.arxiv_id` when the
+  seed has one — the one reference both providers read natively. (2)
+  `services/graph/build.py`'s `_traverse_openalex` recognises a bare S2
+  paperId and spends one `s2.get_paper` call turning it into the arXiv id +
+  title `openalex.resolve_work` reads (journal papers with no arXiv id). (3)
+  `resolve_seed_work` only tries the arXiv-title fallback for a ref
+  `arxiv.ID_RE` accepts in full; anything else is a clean `None`.
+- **Lesson / guard.** A "provider X is failing" symptom deserves a look at the
+  *request* before the provider: here the id grammar leaked across providers.
+  Guards: `test_openalex_build_translates_an_s2_paper_id_through_s2`,
+  `test_resolve_seed_work_never_asks_arxiv_about_a_non_arxiv_ref`, and the
+  `switchProvider` block in `frontend/test/store/workspace.test.ts`.
+
 ### Thread switches accumulated entire graph explorers (v7.22.0)
 
 - **Symptom.** Switching between General and graph threads left multiple explorer

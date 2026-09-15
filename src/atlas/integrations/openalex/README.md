@@ -128,7 +128,11 @@ Selecting OpenAlex makes it own the *entire* provider surface:
    S2-resolvable node ids an OpenAlex graph carries when the user re-seeds
    (`DOI:<doi>`, `ARXIV:<id>`, `W…`). It resolves via the free entity path for a
    `W…`/DOI, and via `resolve_work` (arXiv-DOI then title search) for an arXiv id,
-   requesting `DETAIL_SELECT` so the seed carries its abstract. Its **known
+   requesting `DETAIL_SELECT` so the seed carries its abstract. The last-resort
+   arXiv-title fallback only fires for a ref that `arxiv.ID_RE` accepts in full:
+   arXiv's export API answers anything else (an S2 paperId, say) with a 400,
+   not an empty feed, so a non-arXiv ref is a clean `None` instead — the
+   `services/graph` build translates S2 ids *before* calling in. Its **known
    limit**, no longer masked by the hybrid: a famous *published* paper resolves
    cheapest-first through the arXiv-minted DOI to its **preprint** record, which
    is lower-cited than the canonical version. A canonical-record heuristic is

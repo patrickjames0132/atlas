@@ -179,6 +179,40 @@ def test_build_graph_shape_openalex(fake_openalex):
     assert graph.citation_source is None  # not applicable to OpenAlex's sorted citers
 
 
+def test_openalex_build_translates_an_s2_paper_id_through_s2(fake_openalex, monkeypatch):
+    """Switching a graph seeded from an S2 search pick over to OpenAlex hands the
+    build a bare S2 paperId — meaningless to OpenAlex. One S2 lookup turns it
+    into the arXiv id + title ``resolve_work`` reads; ``resolve_seed_work`` (which
+    would have asked arXiv about the hash and got a 400) is never consulted."""
+    s2_paper_id = "2ee37960b8b4f18fdc8f9c7b8c3a7d5a6258f716"
+    seen = {}
+
+    def get_paper(lookup):
+        seen["s2_lookup"] = lookup
+        return make_node(s2_paper_id, arxiv_id="1706.03762", title="Attention Is All You Need")
+
+    def resolve_work(*, arxiv_id, title, select):
+        seen["resolve_work"] = (arxiv_id, title)
+        return {"id": "https://openalex.org/W99"}
+
+    monkeypatch.setattr(build.s2, "get_paper", get_paper)
+    monkeypatch.setattr(build.openalex, "resolve_work", resolve_work)
+
+    graph = build.build_graph(s2_paper_id, provider="openalex")
+    assert isinstance(graph, Graph)
+    assert seen["s2_lookup"] == s2_paper_id
+    assert seen["resolve_work"] == ("1706.03762", "Attention Is All You Need")
+    assert fake_openalex["resolve"] == 0
+
+
+def test_openalex_build_is_none_when_s2_knows_no_such_paper_id(fake_openalex, monkeypatch):
+    """An S2 paperId S2 itself can't hydrate is a clean miss ("No paper found"),
+    not an OpenAlex/arXiv request with a hash in it."""
+    monkeypatch.setattr(build.s2, "get_paper", lambda lookup: None)
+    assert build.build_graph("0" * 40, provider="openalex") is None
+    assert fake_openalex["resolve"] == 0
+
+
 def test_a_paper_thats_both_a_reference_and_a_citer_merges(fake_s2, monkeypatch):
     """A mutual citation — a paper the seed cites that also cites the seed —
     resolves into ONE node carrying both relations, with an edge each way."""

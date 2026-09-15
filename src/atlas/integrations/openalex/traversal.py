@@ -199,6 +199,10 @@ def resolve_seed_work(seed_ref: str) -> dict | None:
     # The arXiv-DOI missed (published paper's canonical record not aliased to it).
     # Fall back to the arXiv title → an OpenAlex title search finds the canonical
     # record. arXiv is the arXiv id's home, and openalex already depends on it.
+    # Only for something shaped like an arXiv id, though: arXiv's export API
+    # answers any other string (an S2 paperId, say) with a 400, not an empty feed.
+    if not arxiv.ID_RE.fullmatch(arxiv_id):
+        return None
     title = arxiv.get_title(arxiv_id)
     if title:
         return resolve_work(arxiv_id=None, title=title, select=nodes.DETAIL_SELECT)

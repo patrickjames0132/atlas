@@ -141,7 +141,13 @@ cache hit, a deliberate trade.
    - **OpenAlex**: `openalex.resolve_seed_work` accepts an arXiv id or a
      `DOI:`/`ARXIV:`/`W…` node id; references via `openalex.references`
      (`cited_by:`), citers via `openalex.citation_relations` (`cites:`), with the
-     adaptive `band_start` wired in.
+     adaptive `band_start` wired in. A bare **S2 paperId** (40 hex,
+     `_S2_PAPER_ID_RE`) is what arrives when a graph seeded from an S2 search
+     pick is switched to this provider; OpenAlex can't read one, so
+     `_traverse_openalex` first spends one `s2.get_paper` call turning it into
+     the arXiv id + title `openalex.resolve_work` does read (v7.22.2 — before
+     that the hash went to `resolve_seed_work`, whose arXiv-title fallback got
+     a 400 from arXiv's export API and the build died).
 
    This is the mechanism that lets you **re-seed on any node**, including a
    journal paper with no arXiv id, so exploration never dead-ends.
