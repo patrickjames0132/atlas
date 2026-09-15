@@ -31,10 +31,29 @@ corpus locally. The repo is named `atlas` on GitHub (renamed 2026-07-17 from
 
 ## Session start — bootstrap first
 
-**Before anything else, `git pull`.** Sessions may start on a stale checkout
+**Before anything else, sync `main`.** Sessions may start on a stale checkout
 (work happens from more than one machine), and running setup or the config
-drift check against yesterday's tree defeats the point — pull first so the
-steps below see the current `main`.
+drift check against yesterday's tree defeats the point — sync first so the
+steps below see the current `main`. Because of the worktree rule below, that
+is **not** a plain `git pull`:
+
+```
+git fetch origin main:main      # update the local main without checking it out
+git switch --detach main        # unless you're mid-feature on a branch already
+```
+
+**Worktrees: nobody owns `main`.** This repo is checked out as several git
+worktrees side by side (`atlas-claude`, `atlas-codex`, …) sharing one object
+store, one set of branches, one set of tags. Git allows a branch to be
+checked out in **at most one** worktree at a time, so if any worktree sits on
+`main`, every other one gets `fatal: 'main' is already used by worktree at …`
+the moment it tries to merge. The convention (settled 2026-09-15): **`main`
+is only ever checked out briefly, to merge or commit into, and released
+straight afterwards** with `git switch --detach main`. Between features a
+worktree rests on a detached HEAD at `main`'s tip, or on its feature branch —
+never on `main` itself. If a merge hits that `fatal:`, some worktree forgot
+to detach; fix it there (`git -C ../atlas-<other> switch --detach main`),
+don't work around it.
 
 **Then run the setup script**: `bin\setup.bat` on
 Windows, `bin/setup.sh` on macOS/Linux. It installs the toolchain pinned in
@@ -73,7 +92,9 @@ For each feature, follow this cycle:
    other machine, and says so. **Skip the branch for lightweight,
    doc-only changes** — updating READMEs, other markdown, `CLAUDE.md`,
    `OnePager.md`, or `docs/` (e.g. filing `todos.md`, moving a shipped item to
-   `docs/history.md`) — those commit straight to `main`.
+   `docs/history.md`) — those commit straight to `main`: `git switch main`,
+   commit, push, then `git switch --detach main` to release it again (see
+   "Worktrees" under "Session start").
 1. **Build** the feature. Run `npm run build --prefix frontend` to typecheck the
    frontend; verify backend changes with a quick script or the Flask test client.
    Run the whole quality gate — backend *and* frontend — with **`uv run nox`**
@@ -163,11 +184,14 @@ authoritative.
   Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
   ```
 - **Merge into `main`:** the approved work is built on a feature branch (see the
-  loop's step 0); merge it back into `main` before tagging so the tag lands on
-  `main`. Delete the feature branch once merged.
+  loop's step 0); `git switch main` and merge it (`--no-ff`) before tagging so
+  the tag lands on `main`.
 - **Tag in lockstep:** create an **annotated** tag `vX.Y.Z` matching the
   `pyproject.toml` version, on the merge commit.
 - **Push:** `git push origin main --follow-tags`.
+- **Release `main` and clean up:** `git switch --detach main` so no worktree
+  owns the branch (see "Worktrees" under "Session start"), then delete the
+  feature branch (`git branch -d feature/<short-name>`).
 
 The repo is **public** (`github.com/patrickjames0132/atlas`, MIT, created
 2026-06-28), default branch `main`. *(This line said "private" until
