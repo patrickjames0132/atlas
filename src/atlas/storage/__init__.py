@@ -4,7 +4,7 @@ Description:
 SQLite persistence.
 
 * ``cache``    — a thin TTL key/JSON-blob cache for dynamically-fetched
-  artifacts (graph snapshots, ar5iv text/figures), in ``digest.db``.
+  artifacts (graph snapshots, ar5iv text/figures), in ``cache.db``.
 * ``sessions`` — the durable saved-sessions store, in its own
   ``sessions.db`` since saved workspaces have their own lifecycle and are
   never TTL-evicted.

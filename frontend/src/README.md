@@ -99,7 +99,7 @@ by the end-of-phase browser milestone.
 One oxlint rule is worth calling out because it encodes a house convention
 rather than a correctness check: **`id-length`** (`min: 2`) is the frontend
 half of CLAUDE.md's no-single-letter-identifiers rule — the backend half is
-`bin/check_identifiers.py`. It runs over `src/` and `test/` alike. Two
+`check_identifiers.py`. It runs over `src/` and `test/` alike. Two
 deliberate settings:
 
 - **`properties: "never"`** — object-literal keys and member access are

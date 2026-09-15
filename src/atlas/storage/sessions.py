@@ -12,7 +12,7 @@ frontend re-POSTs the same row on settled events, debounced.
 The blob carries chat, lectures and a ``graph_ref`` (the seed reference,
 provider and layout needed to put the graph back) rather than the graph's
 nodes and edges. Reopening rebuilds it — instantly when the 1-day snapshot
-cache in digest.db is still warm, from the provider when it is not. That is
+cache in cache.db is still warm, from the provider when it is not. That is
 a deliberate trade Patrick made 2026-08-29: rows stay small and the chat
 history is the spine, at the cost of rate-limited calls on a cold reopen and
 a rebuilt graph that may differ from the one you left (citation data moves).

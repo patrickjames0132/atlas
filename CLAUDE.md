@@ -194,7 +194,7 @@ it does not wait on a PyPI release.)*
   of them once — keep it that way, don't reintroduce them. **Machine-enforced
   on both sides**, with `_` the one allowed single character (the pure-discard
   idiom) and property *access* out of scope on both:
-  - **Backend, since v5.3.0** — a pre-commit hook (`bin/check_identifiers.py`,
+  - **Backend, since v5.3.0** — a pre-commit hook (`check_identifiers.py`,
     an AST walker) fails the gate on any single-letter *binding* in `.py`
     files and `.ipynb` code cells alike.
   - **Frontend, since v6.9.0** — oxlint's **`id-length`** rule
@@ -245,7 +245,7 @@ it does not wait on a PyPI release.)*
   429s almost immediately unauthenticated — hydrate details through
   `POST /paper/batch` instead. Recommendations need `from=all-cs` (the default
   "recent" pool returns nothing for older seeds). Graph snapshots are cached in
-  `data/digest.db` (`cache` table, 1-day TTL). Encourage setting `S2_API_KEY`.
+  `data/cache.db` (`cache` table, 1-day TTL). Encourage setting `S2_API_KEY`.
 - **Run backend:** `uv run atlas serve` (Python 3.14 in `.venv`; the
   console script comes from the editable src-layout install — `cli.py`).
 - **Optional extras (v7.15.0).** `sources` (sentence-transformers + torch),
@@ -304,7 +304,7 @@ The five sessions:
   the signature, Returns where a value comes back — config in
   `[tool.pydoclint]`; its raises-checks are off because the house style
   documents *propagated* exceptions too) + the repo-local
-  **no-single-letter-identifiers** hook (`bin/check_identifiers.py` — see
+  **no-single-letter-identifiers** hook (`check_identifiers.py` — see
   "Code conventions" above; covers `.py` and `.ipynb`, ruff has no
   min-name-length rule) + the **frontend's format & lint** —
   prettier (config in `frontend/.prettierrc.json`, scoped to

@@ -4,7 +4,7 @@ Description:
 Download an open-access PDF into the on-disk cache, once.
 
 PDFs are orders of magnitude bigger than the JSON this app otherwise moves,
-so they get their own cache: real files under ``data_dir/oa_pdfs`` (not rows
+so they get their own cache: real files under ``data_dir/pdf_cache`` (not rows
 in the SQLite cache), named by a hash of their URL, pruned LRU beyond
 ``config.pdf.cache_files``. Everything downstream — text extraction, float
 mining, on-demand figure rendering — works from the cached file, so a paper's
@@ -41,10 +41,10 @@ def cache_dir() -> Path:
     """The directory holding cached OA PDFs (created on demand).
 
     Returns:
-        ``config.storage.data_dir / "oa_pdfs"`` — inside the gitignored data
+        ``config.storage.data_dir / "pdf_cache"`` — inside the gitignored data
         directory, so cached PDFs are never committed.
     """
-    directory = config.storage.data_dir / "oa_pdfs"
+    directory = config.storage.data_dir / "pdf_cache"
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 

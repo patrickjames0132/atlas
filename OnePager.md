@@ -1320,14 +1320,6 @@ than deleted so the plan doesn't get re-proposed.
       research-rule decision before rebuilding the pipeline plumbing. *(Found while
       renaming the budget vocabulary, 2026-07-16; re-scoped for the restart
       2026-07-22.)*
-- [ ] **Rename `digest.db` → `cache.db`** — the ephemeral graph-snapshot store
-      is still named `digest.db`, a leftover from the retired daily-digest era;
-      it's really the 1-day graph/artifact **cache** now. Rename the file (and
-      the `storage.data_dir`-relative path + any `config`/docstring references,
-      e.g. `storage/sessions.py`'s note contrasting it with `sessions.db`) so the
-      name matches what it holds. A cosmetic rename — old `digest.db` files can be
-      left to age out or deleted, since it's a regenerable cache. *(From the
-      `todos.md` inbox, 2026-07-11.)*
 - [ ] **Swap the hand-rolled `urllib` clients for `httpx`** — S2, arXiv
       (`client`/`fulltext`/`figures`), and OpenAlex all hand-roll stdlib
       `urllib` (manual `Request`/`urlencode`/`HTTPError` plumbing); only HF uses
@@ -1475,21 +1467,6 @@ than deleted so the plan doesn't get re-proposed.
       target has been chosen, and the service needs an `ANTHROPIC_API_KEY` and
       a writable `data/`, so it isn't a static host. *(From the `todos.md`
       inbox, 2026-07-20; narrowed 2026-08-09 when CI shipped.)*
-- [ ] **Rename the `data/oa_pdfs/` PDF cache — "oa" reads as OpenAlex, means
-      open-access** — `services/pdf/fetch.py` caches downloaded PDFs under
-      `data_dir/oa_pdfs` (hash-named, LRU-pruned beyond `config.pdf.cache_files`).
-      The `oa_` prefix is meant as *open-access* but reads as *OpenAlex*, which
-      misleads — the cache is provider-agnostic (any paper's open-access PDF,
-      mined for figures/full text). Rename to something unambiguous (`pdfs/`,
-      `pdf_cache/`), updating `fetch.py` and the `services/pdf/README.md`
-      references; old `oa_pdfs/` dirs can age out (it's a regenerable cache).
-      *(From the `todos.md` inbox, 2026-07-20.)*
-- [ ] **Move `check_identifiers.py` out of `bin/` to the project root** — the
-      no-single-letter-identifiers AST hook lives in `bin/check_identifiers.py`,
-      but it's repo-level tooling like `noxfile.py`, which sits at the root; move
-      it alongside. Updates the `.pre-commit-config.yaml` `entry`
-      (`uv run --no-sync python bin/check_identifiers.py`) and the two CLAUDE.md
-      references. *(From the `todos.md` inbox, 2026-07-20.)*
 
 ### Larger phases
 

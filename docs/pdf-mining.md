@@ -31,7 +31,7 @@ still exists.
 
 That asymmetry drives everything:
 
-- **The PDF (the source)** lives as a real file in `data/oa_pdfs/`, named by a
+- **The PDF (the source)** lives as a real file in `data/pdf_cache/`, named by a
   hash of its URL — the one store with a hard LRU cap
   (`config.pdf.cache_files`, pruned by mtime after every download, plus the
   `max_bytes` per-file cap). It is the only artifact we cannot cheaply
@@ -52,7 +52,7 @@ Three reasons, in descending weight:
 
 1. The cache table stores **JSON text** — binary PNGs would need base64
    (+33 %) or a new blob table.
-2. `digest.db` has **no eviction** — TTLs are checked at read time; rows are
+2. `cache.db` has **no eviction** — TTLs are checked at read time; rows are
    never deleted. The PDF directory is the store with an actual LRU cap.
    Caching PNGs in SQLite would move the *largest* artifacts out of the capped
    store into the uncapped one — the DB would only ever grow.

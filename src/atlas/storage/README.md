@@ -28,7 +28,9 @@ list backed by it would work all afternoon and then quietly empty overnight.
   contextmanager boilerplate that used to exist independently in both
   files — not underscore-prefixed itself, since it's shared across sibling
   modules within the package.
-- **`cache.py`** — a generic **key → JSON blob** TTL cache, in `digest.db`.
+- **`cache.py`** — a generic **key → JSON blob** TTL cache, in `cache.db`
+  (`digest.db` until v7.22.1 — a leftover of the daily-digest era; an old
+  file left behind is a regenerable cache and can simply be deleted).
   Backs graph snapshots, ar5iv full text/figures, and Hugging Face code
   links — five very different features sharing one table.
 - **`sessions.py`** — the durable **exploration** store, in its own

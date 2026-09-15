@@ -25,7 +25,7 @@ repos:
   # The CLAUDE.md naming convention, mechanized: no single-letter identifiers
   # (`_` as a pure discard excepted), in notebooks as well as modules — ruff
   # has no minimum-name-length rule (E741 only bans l/I/O), so this is a small
-  # AST walker of our own. See bin/check_identifiers.py's docstring.
+  # AST walker of our own. See check_identifiers.py's docstring.
   # This is the BACKEND half only; the frontend half is oxlint's `id-length`
   # rule in frontend/.oxlintrc.json (see the oxlint hook below).
   - repo: local
@@ -33,7 +33,7 @@ repos:
       - id: identifiers
         name: no single-letter identifiers
         language: system
-        entry: uv run --no-sync python bin/check_identifiers.py
+        entry: uv run --no-sync python check_identifiers.py
         types_or: [python, jupyter]
 
   # Docstring COMPLETENESS: every Args section matches the signature and a
