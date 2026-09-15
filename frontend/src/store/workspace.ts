@@ -273,6 +273,12 @@ export const activateThread = createAsyncThunk<
  * under it. The provider is an app-wide choice, but changing it re-seeds the
  * paper on screen so the switch is immediately visible.
  *
+ * The re-seed goes by the seed's arXiv id when it has one — the one reference
+ * both providers read natively. `seedRef` is whatever the current graph was
+ * requested by, which after a search pick is a raw node id of the provider
+ * being left (an S2 paperId, an OpenAlex `W…`); the backend translates those,
+ * but at the cost of a round-trip to the old provider.
+ *
  * @param provider The backend to switch to ('s2' / 'openalex').
  */
 export const switchProvider = createAsyncThunk<
@@ -280,9 +286,10 @@ export const switchProvider = createAsyncThunk<
   Provider,
   { state: { workspace: WorkspaceState } }
 >('workspace/switchProvider', (provider, { dispatch, getState }) => {
-  const { provider: current, seedRef } = getState().workspace
+  const { provider: current, seedRef, graph } = getState().workspace
   if (provider === current) return
-  if (seedRef) dispatch(loadGraph({ seed: seedRef, provider }))
+  const seed = graph?.seed.arxiv_id || seedRef
+  if (seed) dispatch(loadGraph({ seed, provider }))
   else dispatch(providerSet(provider))
 })
 

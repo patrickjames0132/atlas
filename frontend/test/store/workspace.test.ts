@@ -25,6 +25,7 @@ import reducer, {
   selectGroundingNodes,
   selectLectureNodes,
   restoreSession,
+  switchProvider,
   visibleNodesSet,
   workspaceCleared,
 } from '../../src/store/workspace'
@@ -211,6 +212,50 @@ describe('provider selection', () => {
       meta: { arg: { seed: 'a' } },
     })
     expect(state.provider).toBe('openalex')
+  })
+})
+
+describe('switchProvider', () => {
+  /**
+   * Drive the thunk against a canned slice and report what it re-seeded with.
+   * `loadGraph(...)` is itself a thunk, so the inner dispatch receives a
+   * function; running that against a spy yields its `pending` action, whose
+   * `meta.arg` is the `{ seed, provider }` the switch chose.
+   */
+  function reseedArg(workspace: WorkspaceState, provider: 's2' | 'openalex') {
+    const outer = vi.fn()
+    switchProvider(provider)(outer, () => ({ workspace }), undefined)
+    const inner = outer.mock.calls
+      .map((call) => call[0])
+      .find((action) => typeof action === 'function')
+    if (!inner) return null
+    const innerDispatch = vi.fn()
+    inner(innerDispatch, () => ({ workspace }), undefined)
+    const pending = innerDispatch.mock.calls[0]?.[0]
+    return pending?.type === loadGraph.pending.type ? pending.meta.arg : null
+  }
+
+  it('re-seeds by the arXiv id, which both backends read natively', () => {
+    // What a search pick leaves behind is the picked node's own id — an S2
+    // paperId here — which the other provider can't resolve on its own.
+    const s2PaperId = '2ee37960b8b4f18fdc8f9c7b8c3a7d5a6258f716'
+    const graph = makeGraph([makeNode(s2PaperId)])
+    graph.seed.arxiv_id = '1706.03762'
+    const state = { ...initial(), graph, provider: 's2' as const, seedRef: s2PaperId }
+    expect(reseedArg(state, 'openalex')).toEqual({ seed: '1706.03762', provider: 'openalex' })
+  })
+
+  it('falls back to the requested reference when the seed has no arXiv id', () => {
+    const s2PaperId = '2ee37960b8b4f18fdc8f9c7b8c3a7d5a6258f716'
+    const graph = makeGraph([makeNode(s2PaperId)])
+    const state = { ...initial(), graph, provider: 's2' as const, seedRef: s2PaperId }
+    // The backend translates a raw provider id; the frontend just passes it on.
+    expect(reseedArg(state, 'openalex')).toEqual({ seed: s2PaperId, provider: 'openalex' })
+  })
+
+  it('is a no-op on the current provider', () => {
+    const state = { ...initial(), provider: 's2' as const, seedRef: '1706.03762' }
+    expect(reseedArg(state, 's2')).toBeNull()
   })
 })
 

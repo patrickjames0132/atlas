@@ -468,6 +468,21 @@ def test_resolve_seed_work_none_when_arxiv_title_also_missing(monkeypatch):
     assert traversal.resolve_seed_work("1706.03762") is None
 
 
+def test_resolve_seed_work_never_asks_arxiv_about_a_non_arxiv_ref(monkeypatch):
+    """A ref that isn't arXiv-shaped (an S2 paperId leaking through) misses the
+    arXiv-DOI path and then stops: arXiv's export API answers a hash with a 400,
+    so the title fallback is reserved for ids arXiv could actually hold."""
+    monkeypatch.setattr(
+        client, "request",
+        lambda url: (_ for _ in ()).throw(client.OpenAlexError("nope", status=404)),
+    )
+    def get_title(arxiv_id):
+        raise AssertionError(f"arXiv asked about {arxiv_id!r}")
+
+    monkeypatch.setattr(traversal.arxiv, "get_title", get_title)
+    assert traversal.resolve_seed_work("2ee37960b8b4f18fdc8f9c7b8c3a7d5a6258f716") is None
+
+
 def test_resolve_seed_work_blank_is_none():
     assert traversal.resolve_seed_work("") is None
     assert traversal.resolve_seed_work("   ") is None

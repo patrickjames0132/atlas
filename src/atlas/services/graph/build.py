@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import re
 from typing import Callable, Literal
 
 from ...config import config
@@ -60,6 +61,10 @@ from ...integrations import semantic_scholar as s2
 from ...storage import cache
 from .model import Counts, Edge, Graph, Node, Seed
 from .shape import BuildShape
+
+# A bare Semantic Scholar paperId: a 40-hex SHA-1. Every S2 graph node carries
+# one as its ``id``; nothing else in the seed-reference grammar looks like it.
+_S2_PAPER_ID_RE = re.compile(r"[0-9a-f]{40}")
 
 log = logging.getLogger(__name__)
 
@@ -226,8 +231,10 @@ def _traverse_openalex(
     """Resolve the seed and its relations through OpenAlex.
 
     Args:
-        seed_ref: An arXiv id, or an S2-resolvable node id an OpenAlex graph
-            carries (``DOI:…`` / ``ARXIV:…`` / ``W…``) when the user re-seeds.
+        seed_ref: An arXiv id, an S2-resolvable node id an OpenAlex graph
+            carries (``DOI:…`` / ``ARXIV:…`` / ``W…``) when the user re-seeds,
+            or a bare S2 paperId — what the frontend holds when a graph built
+            on S2 is switched to this provider, and a seed OpenAlex can't read.
         report: The build-stage progress callback (``step`` 1-indexed, ``label``).
         shape: The per-request build shape, supplying the sizing rules and band
             dimensions this traversal injects (see :mod:`.shape`).
@@ -238,8 +245,22 @@ def _traverse_openalex(
 
     Raises:
         openalex.OpenAlexError: When an OpenAlex request fails after retries.
+        s2.S2Error: When the S2 paperId translation fails after retries.
     """
-    work = openalex.resolve_seed_work(seed_ref)
+    if _S2_PAPER_ID_RE.fullmatch(seed_ref):
+        # OpenAlex has no notion of an S2 paperId. One S2 batch call turns it
+        # into what the resolver does understand — the arXiv id when the paper
+        # has one, else its title for the search fallback.
+        s2_seed = s2.get_paper(seed_ref)
+        if not s2_seed:
+            return None
+        work = openalex.resolve_work(
+            arxiv_id=s2_seed.get("arxiv_id"),
+            title=s2_seed.get("title"),
+            select=openalex.DETAIL_SELECT,
+        )
+    else:
+        work = openalex.resolve_seed_work(seed_ref)
     if not work:
         return None
     seed_paper = openalex.node(work)

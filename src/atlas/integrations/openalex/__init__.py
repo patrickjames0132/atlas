@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from . import vocab
 from .client import OpenAlexError
-from .nodes import bare_openalex_id, node
+from .nodes import DETAIL_SELECT, bare_openalex_id, node
 from .search import search_papers
 from .traversal import (
     bare_work_id,
@@ -39,6 +39,7 @@ from .traversal import (
 )
 
 __all__ = [
+    "DETAIL_SELECT",
     "OpenAlexError",
     "bare_openalex_id",
     "bare_work_id",
