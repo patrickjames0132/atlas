@@ -22,6 +22,8 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
+import { threadEdited } from '../store/explorations'
+import { viewFiltersSet } from '../store/workspace'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { generateTldr } from '../api'
@@ -105,6 +107,8 @@ export default function GraphExplorer({
   const dispatch = useAppDispatch()
   const { graph, discoveredNodes, discoveredEdges, layout, loading, seedRef, provider } =
     useAppSelector(selectWorkspace)
+  const savedFilters = useAppSelector((state) => state.workspace.viewFilters)
+  const initialFilters = useRef(savedFilters)
   const highlightIds = useAppSelector(selectHighlightSet)
   const selectedIds = useAppSelector(selectNodeSelectionSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
@@ -128,7 +132,9 @@ export default function GraphExplorer({
   // user-sized — an adaptive build is already trimmed by the backend's own
   // rules, and stacking a second trim on top of it is the clutter the adaptive
   // sizing exists to avoid.
-  const [relCaps, setRelCaps] = useState<Record<string, number>>({})
+  const [relCaps, setRelCaps] = useState<Record<string, number>>(
+    initialFilters.current?.relCaps ?? {},
+  )
   const buildShape = useBuildShape()
   const capsActive = !buildShape.adaptive
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -205,14 +211,19 @@ export default function GraphExplorer({
   // pins reset themselves inside their own hooks.)
   useEffect(() => {
     if (!base) return
-    setEnabled(new Set(CHIP_TYPES))
-    setYearLo(base.minYear)
-    setYearHi(base.maxYear)
+    setEnabled(new Set(initialFilters.current?.enabled ?? CHIP_TYPES))
+    setYearLo(initialFilters.current?.yearLo ?? base.minYear)
+    setYearHi(initialFilters.current?.yearHi ?? base.maxYear)
     // A fresh graph shows every citation count; the user narrows from there.
-    setCiteLo(0)
-    setCiteHi(CITE_SLIDER_STEPS)
+    setCiteLo(initialFilters.current?.citeLo ?? 0)
+    setCiteHi(initialFilters.current?.citeHi ?? CITE_SLIDER_STEPS)
     setHoverId(null)
   }, [base])
+
+  useEffect(() => {
+    if (!base || yearHi === 0) return
+    dispatch(viewFiltersSet({ enabled: [...enabled], yearLo, yearHi, citeLo, citeHi, relCaps }))
+  }, [base, enabled, yearLo, yearHi, citeLo, citeHi, relCaps, dispatch])
 
   // Timeline layout physics (year-column pinning, collide force, year axis,
   // settle-freeze) — plus its keep-in-sync effects.
@@ -503,14 +514,18 @@ export default function GraphExplorer({
   )
 
   /** Toggle one relation type's visibility (the filter chips). */
-  const toggleType = useCallback((type: string) => {
-    setEnabled((prev) => {
-      const next = new Set(prev)
-      if (next.has(type)) next.delete(type)
-      else next.add(type)
-      return next
-    })
-  }, [])
+  const toggleType = useCallback(
+    (type: string) => {
+      dispatch(threadEdited())
+      setEnabled((prev) => {
+        const next = new Set(prev)
+        if (next.has(type)) next.delete(type)
+        else next.add(type)
+        return next
+      })
+    },
+    [dispatch],
+  )
 
   /**
    * Switch layout. The physics live in useTimeline; clearing pin state stays
@@ -520,6 +535,7 @@ export default function GraphExplorer({
    */
   const setLayoutMode = useCallback(
     (mode: 'force' | 'timeline') => {
+      dispatch(threadEdited())
       dispatch(layoutSet(mode))
       if (!base) return
       applyLayoutPhysics(mode)
@@ -559,7 +575,8 @@ export default function GraphExplorer({
             showRelCaps={capsActive}
             relCaps={relCaps}
             relTotals={relTotals}
-            onRelCap={(type, cap) =>
+            onRelCap={(type, cap) => {
+              dispatch(threadEdited())
               setRelCaps((prev) => {
                 const next = { ...prev }
                 // At full span the cap stops existing rather than being set to
@@ -569,19 +586,31 @@ export default function GraphExplorer({
                 else next[type] = cap
                 return next
               })
-            }
+            }}
             minYear={base!.minYear}
             maxYear={base!.maxYear}
             yearLo={yearLo}
             yearHi={yearHi}
-            onYearLo={setYearLo}
-            onYearHi={setYearHi}
+            onYearLo={(value) => {
+              dispatch(threadEdited())
+              setYearLo(value)
+            }}
+            onYearHi={(value) => {
+              dispatch(threadEdited())
+              setYearHi(value)
+            }}
             minCitations={base!.minCitations}
             maxCitations={base!.maxCitations}
             citeLo={citeLo}
             citeHi={citeHi}
-            onCiteLo={setCiteLo}
-            onCiteHi={setCiteHi}
+            onCiteLo={(value) => {
+              dispatch(threadEdited())
+              setCiteLo(value)
+            }}
+            onCiteHi={(value) => {
+              dispatch(threadEdited())
+              setCiteHi(value)
+            }}
             visibleCount={view.nodes.length}
             totalCount={base!.nodes.length}
             selectedCount={selectedIds.size}

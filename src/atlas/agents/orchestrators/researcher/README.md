@@ -268,3 +268,11 @@ discovered papers, cited = reads + named, the library-gated tool list
 steering, and the figure proxy/slot flow. Integration boundaries
 (`traversal`, `retrieval`, `figures`, `store.list_sources`) are
 monkeypatched at the tools/main module seams.
+
+## Thread context
+
+The caller supplies completed history for one thread. Optional `sibling_context`
+is separately labelled quoted background, with an instruction to attribute
+borrowed conclusions and not reuse its paper numbering as the active graph's
+numbering. The route bounds the sibling index and explicitly attached histories.
+Agents continue to receive context; they never store conversations.

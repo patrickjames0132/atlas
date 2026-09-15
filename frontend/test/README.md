@@ -95,3 +95,11 @@ near anchors), which the end-of-phase browser milestone exercises by hand;
 jsdom has no canvas. The streaming teacher pipeline (`useConversation`) is
 the next natural target: its SSE handlers can be driven with scripted
 events, the same idea as the backend's `fake_claude`.
+
+## Exploration-thread regressions
+
+`store/threads.test.ts` covers thread identities, navigation, migration and
+background ownership. `shell/useExplorations.test.ts` replaces the old single-chat
+autosave tests; `shell/saveQueue.test.ts` covers ordered teardown recovery and
+deletion. `teacher/useConversation.test.tsx` verifies a lecture followed by an
+ordinary question includes the lecture in client-owned researcher history.

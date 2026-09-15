@@ -415,3 +415,35 @@
     transition: none;
   }
 }
+
+.thread-list {
+  margin: 2px 10px 14px 22px;
+  border-left: 1px solid var(--border, #444);
+  padding-left: 8px;
+}
+.thread-list .rail-item {
+  margin: 0;
+}
+.rail-caret {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.rail-caret:hover {
+  background: var(--hover);
+  color: var(--text-strong);
+}
+.rail-caret svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}

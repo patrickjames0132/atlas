@@ -173,17 +173,16 @@ describe("a lecture turn's caret", () => {
 })
 
 describe('the graph a turn came from', () => {
-  it('names it once the reader is looking at a different graph', () => {
+  it('does not offer to replace the canvas under a historical turn', () => {
     render(
       <ChatMessage
         message={turn({ beats: [BEAT], graph: GRAPH })}
         active={false}
         streaming={false}
-        currentSeedId="seed-dqn"
         onEnlarge={() => {}}
       />,
     )
-    expect(screen.getByText(/From the “Attention Is All You Need” graph/)).toBeTruthy()
+    expect(screen.queryByText(/From the “Attention Is All You Need” graph/)).toBeNull()
   })
 
   it('says nothing while that graph is the one on screen', () => {
@@ -194,7 +193,6 @@ describe('the graph a turn came from', () => {
         message={turn({ beats: [BEAT], graph: GRAPH })}
         active={false}
         streaming={false}
-        currentSeedId="seed-attention"
         onEnlarge={() => {}}
       />,
     )
@@ -219,24 +217,22 @@ describe('the graph a turn came from', () => {
         message={turn({ beats: [BEAT] })}
         active={false}
         streaming={false}
-        currentSeedId="seed-dqn"
         onEnlarge={() => {}}
       />,
     )
     expect(container.querySelector('.chat-graph')).toBeNull()
   })
 
-  it('names the graph on a researcher answer too, not just a lecture', () => {
+  it('omits the retired graph-switch control on researcher answers too', () => {
     render(
       <ChatMessage
         message={turn({ text: 'Because [1].', cited: ['n1'], graph: GRAPH })}
         active={false}
         streaming={false}
-        currentSeedId="seed-dqn"
         onEnlarge={() => {}}
       />,
     )
-    expect(screen.getByText(/From the “Attention Is All You Need” graph/)).toBeTruthy()
+    expect(screen.queryByText(/From the “Attention Is All You Need” graph/)).toBeNull()
   })
 })
 

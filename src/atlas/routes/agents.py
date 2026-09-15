@@ -11,9 +11,9 @@ POST /api/ask_sources  -> streamed chat with no graph open (library + search)
 Each endpoint validates the request, builds typed inputs, and hands off to
 the agent that serves it; the typed event stream comes back as SSE
 frames named by each event's ``type`` tag (``model_dump`` minus the tag),
-always terminated by ``done`` or ``error``. Conversation history lives HERE
-(a locked design decision — agents receive history, they never store it):
-two in-memory stores, one per chat, persisted only on success.
+always terminated by ``done`` or ``error``. The client owns the persisted
+transcript and sends completed history on every request. Agents receive
+history; neither agents nor routes maintain a competing copy.
 
 (This module is ``routes/agents.py``, the route face of the ``agents``
 package — a deliberate name-cousin, different full paths.)
@@ -25,7 +25,6 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 from __future__ import annotations
 
 import logging
-import re
 from typing import Iterable, Iterator
 
 from flask import Blueprint, jsonify, request
@@ -46,22 +45,6 @@ bp = Blueprint("agents", __name__)
 # current_app there raises RuntimeError and kills the stream before the
 # `error` event the frontend waits for can be sent.
 log = logging.getLogger(__name__)
-
-# Session-scoped Q&A history, kept in memory (cleared on restart — fine for a
-# local single-user app). Maps a client-generated session id ->
-# [{role, content}, ...]. The library chat gets its own store so a graph Q&A
-# and a library chat never cross-contaminate context.
-_QA_SESSIONS: dict[str, list[dict]] = {}
-_SOURCES_SESSIONS: dict[str, list[dict]] = {}
-
-# Inline-figure markers (<<FIG n>>) are stripped from the PERSISTED history:
-# they stream to the frontend (which replaces them with the image) but must
-# not re-enter the model's context on follow-ups — a model that sees
-# "<<FIG 1>>" already sitting in its previous answer skips placing the fresh
-# marker for this turn's figure, and the image falls back to the end of the
-# bubble.
-_FIG_MARKER_RE = re.compile(r"[ \t]*<<FIG \d+>>\n?")
-
 
 def _opt_filters(payload: dict, provider: Provider) -> dict:
     """Parse the optional paper-discovery filters from a request body.
@@ -152,52 +135,21 @@ def _node(raw: dict) -> Node:
     return Node.model_validate(data)
 
 
-def _relay(
-    workflow: Iterable[events.Event],
-    *,
-    store: dict[str, list[dict]] | None = None,
-    session_id: str = "",
-    question: str = "",
-) -> Iterator[str]:
-    """Serialize a workflow's typed events as SSE frames, persisting on success.
-
-    Frame name = the event's ``type`` tag; payload = ``model_dump`` minus the
-    tag — one rule for every event, replacing the old per-kind tuple
-    matching. ``streams.terminated`` guarantees the stream ends with ``Done`` or
-    ``Error``; a turn is persisted only when it ended with ``Done`` (a failed
-    answer must not poison the follow-up context), with figure markers
-    stripped and the window trimmed to ``config.server.history_turns`` pairs.
+def _relay(workflow: Iterable[events.Event]) -> Iterator[str]:
+    """Serialize a terminated workflow without storing conversational state.
 
     Args:
-        workflow: The agent's event stream, already terminated.
-        store: The history store to persist into (None = no persistence —
-            lectures aren't chat).
-        session_id: The client's session key; blank disables persistence.
-        question: The user's question, persisted as the ``user`` turn.
+        workflow: Typed events ending in Done or Error.
 
     Yields:
-        SSE frame strings.
+        SSE frames for the client-owned transcript.
     """
-    answer_parts: list[str] = []
-    succeeded = False
     try:
         for event in workflow:
-            if isinstance(event, events.Token):
-                answer_parts.append(event.text)
-            succeeded = isinstance(event, events.Done)
             yield sse(event.type, event.model_dump(exclude={"type"}))
-    except Exception:  # `terminated` catches the workflow's; this guards serialization
+    except Exception:
         log.exception("agent stream failed")
         yield sse("error", {"message": "The teacher hit an unexpected error."})
-        return
-    if succeeded and store is not None and session_id:
-        answer = _FIG_MARKER_RE.sub("", "".join(answer_parts)).strip()
-        convo = store.setdefault(session_id, [])
-        convo.append({"role": "user", "content": question})
-        convo.append({"role": "assistant", "content": answer})
-        keep = config.server.history_turns * 2
-        if len(convo) > keep:
-            del convo[:-keep]
 
 
 @bp.post("/api/route")
@@ -273,30 +225,47 @@ def api_lecture() -> ResponseReturnValue:
     )
 
 
-def _resumed_history(payload: dict, stored: list[dict]) -> list[dict]:
-    """The conversation history to answer against, preferring the server's own.
-
-    ``_QA_SESSIONS`` lives in memory and is keyed by a client-generated id, so
-    it is empty in exactly the case a **retry** cares about: the reader
-    reloaded the page (or reopened a saved exploration) after an answer failed,
-    and the id they now hold is one this process has never seen. The transcript
-    is still on their screen, so the client can supply what the server lost.
-
-    The server's own copy wins whenever it has one — it is authoritative, and
-    it already excludes failed turns, since history is only written on success.
-    The client's copy is a fallback, accepted only in the shape the model
-    expects and capped by the same ``history_turns`` budget so a crafted body
-    cannot stuff the context window.
+def _sibling_context(payload: dict) -> str:
+    """Bound explicitly labelled background material from sibling threads.
 
     Args:
-        payload: The request body, which may carry ``history``.
-        stored: What this process holds for the session (possibly empty).
+        payload: Request containing an index and optionally mentioned histories.
 
     Returns:
-        The history to pass to the agent; ``[]`` when neither side has one.
+        A bounded context string; empty when no siblings were supplied.
     """
-    if stored:
-        return stored
+    raw = payload.get("thread_context")
+    if not isinstance(raw, list):
+        return ""
+    sections: list[str] = []
+    remaining = 24000
+    for item in raw[:max(0, config.server.history_turns * 2)]:
+        if not isinstance(item, dict) or not isinstance(item.get("title"), str):
+            continue
+        summary = item.get("summary", "")
+        summary = summary[:1500] if isinstance(summary, str) else ""
+        section = f"From sibling thread {item['title'][:200]!r}:\n{summary}"
+        if item.get("mentioned") is True:
+            turns = _resumed_history(item)
+            section += "\nExplicitly attached discussion:\n" + "\n".join(
+                f"{turn['role']}: {turn['content']}" for turn in turns
+            )
+        sections.append(section[:remaining])
+        remaining -= len(sections[-1])
+        if remaining <= 0:
+            break
+    return "\n\n".join(sections)
+
+
+def _resumed_history(payload: dict) -> list[dict]:
+    """Validate and cap the completed history supplied by the client.
+
+    Args:
+        payload: Request body containing optional role/content turns.
+
+    Returns:
+        Valid turns within the configured history window.
+    """
     raw = payload.get("history")
     if not isinstance(raw, list):
         return []
@@ -316,17 +285,16 @@ def _resumed_history(payload: dict, stored: list[dict]) -> list[dict]:
 def api_ask() -> ResponseReturnValue:
     """Answer a question grounded in the visible graph, streamed as SSE.
 
-    The researcher reads papers via tool use; conversation history is keyed by
-    ``session_id`` so follow-ups keep context, persisted only on success.
+    The researcher reads papers via tool use. The client supplies completed
+    history for the active thread on every request, including lecture prose.
 
     Body:
-        ``{question, session_id, seed, nodes, provider?, source_ids?,
+        ``{question, seed, nodes, provider?, source_ids?,
         history?}`` — ``provider`` (``s2``/``openalex``) matches the graph's
         backend so the researcher's expand/search/hydrate use it;
         ``source_ids`` scopes the library search to a subset of uploaded
         sources. ``history`` is the client's own copy of the conversation,
-        used **only** when this process holds none for the session — see
-        ``_resumed_history``.
+        validated and bounded by ``_resumed_history`` on every request.
 
         A ``lectures`` field used to ride along here, carrying every lecture
         the reader had played so the researcher could build on it. It went in
@@ -352,10 +320,9 @@ def api_ask() -> ResponseReturnValue:
         nodes = [_node(raw) for raw in raw_nodes]
     except ValidationError:
         return jsonify({"error": "seed/nodes are malformed"}), 400
-    session_id = payload.get("session_id") or ""
     source_ids = _opt_source_ids(payload)
     provider = resolve_provider(payload.get("provider"))
-    history = _resumed_history(payload, _QA_SESSIONS.get(session_id, []) if session_id else [])
+    history = _resumed_history(payload)
 
     return sse_response(
         _relay(
@@ -365,14 +332,12 @@ def api_ask() -> ResponseReturnValue:
                     seed=seed,
                     nodes=nodes,
                     history=history,
+                    sibling_context=_sibling_context(payload),
                     source_ids=source_ids,
                     provider=provider,
                     **_opt_filters(payload, provider),
                 )
             ),
-            store=_QA_SESSIONS,
-            session_id=session_id,
-            question=question,
         )
     )
 
@@ -384,11 +349,11 @@ def api_ask_sources() -> ResponseReturnValue:
     The graph-free chat — the same researcher as ``/api/ask``, run with no
     seed and no numbered papers, so it reaches for the library (and, if it
     needs to, Semantic Scholar) through its tools rather than having
-    passages pushed at it. History is keyed by ``session_id`` in its own
-    store, kept separate from the graph chat's.
+    passages pushed at it. History is supplied by the client, just as for
+    graph-thread questions.
 
     Body:
-        ``{question, session_id, provider?, source_ids?}`` — ``provider``
+        ``{question, history?, thread_context?, provider?, source_ids?}`` — ``provider``
         (``s2``/``openalex``) is the backend the agent's paper search runs
         against, sent by the header's Data source dropdown exactly as
         ``/api/ask`` does; ``source_ids`` scopes retrieval to a subset of
@@ -404,7 +369,6 @@ def api_ask_sources() -> ResponseReturnValue:
     question = (payload.get("question") or "").strip()
     if not question:
         return jsonify({"error": "question is required"}), 400
-    session_id = payload.get("session_id") or ""
     source_ids = _opt_source_ids(payload)
     # The graph-free chat has no graph to inherit a backend from, so the
     # provider rides on the request like everything else here. Omitting it
@@ -413,9 +377,7 @@ def api_ask_sources() -> ResponseReturnValue:
     # OpenAlex dropdown ended up searching Semantic Scholar and handing back
     # citations no OpenAlex seed build could resolve.
     provider = resolve_provider(payload.get("provider"))
-    history = _resumed_history(
-        payload, _SOURCES_SESSIONS.get(session_id, []) if session_id else []
-    )
+    history = _resumed_history(payload)
 
     return sse_response(
         _relay(
@@ -423,13 +385,11 @@ def api_ask_sources() -> ResponseReturnValue:
                 researcher.answer(
                     question=question,
                     history=history,
+                    sibling_context=_sibling_context(payload),
                     source_ids=source_ids,
                     provider=provider,
                     **_opt_filters(payload, provider),
                 )
             ),
-            store=_SOURCES_SESSIONS,
-            session_id=session_id,
-            question=question,
         )
     )

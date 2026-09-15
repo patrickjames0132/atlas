@@ -182,3 +182,11 @@ and `GraphExplorer` trims the view by it. Worth knowing:
 keeps a `@ts-expect-error`). The mutation-heavy behavior (pins surviving
 filters, discoveries settling near anchors, timeline freezing) is exactly
 what the end-of-phase browser milestone exercises by hand.
+
+## Thread ownership
+
+Each graph belongs to one thread, keyed by provider and resolved seed. Opening
+another seed selects or creates its thread. Filter values, selection and layout
+are parked with the outgoing workspace and restored on return. The simulation
+is still local and rebuilds its positions; mutable force nodes never enter Redux.
+Citation inspection can open paper details without changing this graph.

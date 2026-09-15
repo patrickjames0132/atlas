@@ -44,6 +44,7 @@ import type {
   SourceRef,
   TraceEvent,
 } from '../api'
+import { explorationOpened, threadActivated } from './explorations'
 import { restoreSession, workspaceCleared } from './workspace'
 
 /** One exploration's conversation. */
@@ -334,12 +335,35 @@ const transcriptSlice = createSlice({
      * @param state  The slice state (mutated via immer).
      * @param action Carries the question, and the conversation in `meta`.
      */
+    /** Mark the last assistant turn complete only after a successful stream.
+     * @param state The transcript state.
+     * @param action The owning conversation key.
+     */
+    turnContextSet: {
+      reducer(
+        state,
+        action: PayloadAction<NonNullable<ChatMsg['borrowedThreads']>, string, Keyed>,
+      ) {
+        const conversation = target(state, action.meta.key)
+        const msg = conversation && lastMsg(conversation)
+        if (msg) msg.borrowedThreads = action.payload
+      },
+      prepare: keyed<NonNullable<ChatMsg['borrowedThreads']>>(),
+    },
+    turnCompleted: {
+      reducer(state, action: PayloadAction<undefined, string, Keyed>) {
+        const conversation = target(state, action.meta.key)
+        const msg = conversation && lastMsg(conversation)
+        if (msg) msg.unfinished = false
+      },
+      prepare: (key?: string) => ({ payload: undefined, meta: { key } }),
+    },
     turnStarted: {
       reducer(state, action: PayloadAction<string, string, Keyed>) {
         const conversation = target(state, action.meta.key)
         if (!conversation) return
         conversation.chat.push({ role: 'user', text: action.payload })
-        conversation.chat.push({ role: 'assistant', text: '' })
+        conversation.chat.push({ role: 'assistant', text: '', unfinished: true })
       },
       prepare: keyed<string>(),
     },
@@ -601,24 +625,18 @@ const transcriptSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Loading a graph used to drop the exploration's lecture, on the
-      // reasoning that a lecture belongs to the *graph* — its beats point at
-      // that graph's nodes, so carrying one onto a different graph would
-      // narrate papers that aren't there. That case is **gone in v7.21.0**,
-      // and deliberately: a lecture is a turn now, and the chat has always
-      // survived a graph load because those are the reader's own questions.
-      // Deleting half a transcript on a graph load would be a conversation
-      // rewriting itself.
-      //
-      // Safe for the same reason the chat always was — citations degrade. An
-      // `[n]` whose paper isn't on the graph renders greyed and inert rather
-      // than silently highlighting nothing, a bubble stops being clickable
-      // when none of its papers are loaded, and beats go through the same
-      // `onGraphIds` check. What that does *not* do is say which graph a now-
-      // inert turn came from, which is what the turn's provenance line is for.
-      // ✎ New Exploration: a brand-new conversation, with the old one left
-      // exactly as it was — it may still be streaming, and it is still listed
-      // in the rail.
+      // Navigation selects a thread without disturbing streams owned by siblings.
+      .addCase(explorationOpened, (state, action) => {
+        for (const thread of action.payload.threads) {
+          state.byKey[thread.id] ??= { ...emptyConversation(), chat: thread.data.chat }
+        }
+        state.activeKey = action.payload.activeThreadId
+      })
+      .addCase(threadActivated, (state, action) => {
+        const thread = action.payload.thread
+        state.byKey[thread.id] ??= { ...emptyConversation(), chat: thread.data.chat }
+        state.activeKey = thread.id
+      })
       .addCase(workspaceCleared, (state, action) => {
         const key = action.payload?.conversationKey ?? newConversationKey()
         state.byKey[key] = emptyConversation()
@@ -646,6 +664,8 @@ export const {
   streamEnded,
   backgroundDiscovery,
   turnStarted,
+  turnCompleted,
+  turnContextSet,
   tokenAppended,
   answerSet,
   traceAdded,

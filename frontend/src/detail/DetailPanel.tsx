@@ -58,7 +58,7 @@ export interface DetailPanelProps {
   /** Whether the node is currently pinned in place. */
   isPinned: boolean
   /** Pin/unpin the node. */
-  onTogglePin: () => void
+  onTogglePin?: () => void
   /** Close the panel. */
   onClose: () => void
   /** Re-seed the whole graph on this paper (hidden for the current seed). */
@@ -414,12 +414,14 @@ export default function DetailPanel({
             </a>
           )
         )}
-        <button className="ghost-btn" onClick={onTogglePin}>
-          {isPinned ? 'Unpin' : 'Pin'}
-        </button>
+        {onTogglePin && (
+          <button className="ghost-btn" onClick={onTogglePin}>
+            {isPinned ? 'Unpin' : 'Pin'}
+          </button>
+        )}
         {!node.is_seed && (
           <button className="explore-btn" onClick={() => onExplore(node.id)}>
-            Explore from here →
+            Explore in a thread →
           </button>
         )}
       </div>

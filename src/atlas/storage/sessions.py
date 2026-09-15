@@ -168,6 +168,13 @@ def _count_nodes(payload: dict) -> int:
         The paper count for the ``n_nodes`` column; 0 for a graphless
         exploration (a conversation with no graph is a valid row).
     """
+    exploration = payload.get("exploration")
+    if isinstance(exploration, dict) and isinstance(exploration.get("threads"), list):
+        return sum(
+            _count_nodes(thread["data"])
+            for thread in exploration["threads"]
+            if isinstance(thread, dict) and isinstance(thread.get("data"), dict)
+        )
     legacy_nodes = payload.get("nodes")
     if isinstance(legacy_nodes, list) and legacy_nodes:
         return len(legacy_nodes)

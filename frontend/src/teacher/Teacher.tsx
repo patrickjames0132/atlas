@@ -1,3 +1,4 @@
+import { activateThread } from '../store/workspace'
 /**
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
@@ -61,7 +62,6 @@ import {
 } from '../api'
 import { useAppDispatch, useAppSelector } from '../store'
 import { loadLibrary, selectLibrary } from '../store/library'
-import { selectSeedNode } from '../store/workspace'
 import { selectConversation } from '../store/transcript'
 import HopDots from './HopDots'
 import ScopePicker from './ScopePicker'
@@ -145,7 +145,14 @@ export default function Teacher({
 }) {
   const chat = useAppSelector((state) => selectConversation(state).chat)
   // The graph on screen, so a turn answered over a different one can say which.
-  const seedId = useAppSelector(selectSeedNode)?.id
+  const subject = useAppSelector((state) =>
+    state.explorations.byId[state.explorations.activeId]?.threads.find(
+      (thread) => thread.id === state.transcript.activeKey,
+    ),
+  )
+  const scopeCount = useAppSelector(
+    (state) => state.workspace.selectedNodeIds.length || state.workspace.visibleNodeIds.length,
+  )
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
   // to scope the teacher; 0 means it grounds in every visible paper.
   const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
@@ -158,7 +165,6 @@ export default function Teacher({
     onChatBeatClick,
     onChatClick,
     onRefClick,
-    onGraphIds,
     onPaperSeed,
     provider,
     send,
@@ -169,6 +175,21 @@ export default function Teacher({
     clearChat,
   } = useConversation()
 
+  const siblingThreads = useAppSelector(
+    (state) =>
+      state.explorations.byId[state.explorations.activeId]?.threads.filter(
+        (thread) => thread.id !== state.transcript.activeKey,
+      ) ?? [],
+  )
+  const [threadQuery, setThreadQuery] = useState<{
+    start: number
+    end: number
+    query: string
+  } | null>(null)
+  const [threadChoice, setThreadChoice] = useState(0)
+  const threadOptions = siblingThreads.filter((thread) =>
+    thread.title.toLowerCase().includes(threadQuery?.query.toLowerCase() ?? ''),
+  )
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   // The uploaded library, powering the source-scope picker (shown whenever
@@ -250,6 +271,7 @@ export default function Teacher({
     setInput('')
     mentions.reset()
     menu.reset()
+    setThreadQuery(null)
     // A `/command`: the reader named the destination themselves, so nothing
     // has to be inferred and nothing can be misrouted. First in the tree
     // because it is the only branch where the message is *entirely* an
@@ -275,6 +297,10 @@ export default function Teacher({
     // startsWith — the three branches below stay free and exact. What changed
     // in v7.18.0 is that the reader says which of them they meant, with `@`,
     // instead of arming a mode beforehand.
+    if (question.includes('@thread[')) {
+      void send(question, scopeArg, searchOptions)
+      return
+    }
     const intent = readMessage(question, resolvedMentions.current)
     resolvedMentions.current = new Map()
     if (intent.kind === 'seed') {
@@ -335,8 +361,31 @@ export default function Teacher({
    *
    * @param field The textarea, read for both its value and its caret.
    */
+  /** Insert a labelled sibling reference without invoking paper search.
+   * @param title The selected discussion's title.
+   */
+  const pickThread = (title: string) => {
+    if (!threadQuery) return
+    const inserted = `@thread[${title}] `
+    setInput(input.slice(0, threadQuery.start) + inserted + input.slice(threadQuery.end))
+    const caret = threadQuery.start + inserted.length
+    setThreadQuery(null)
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      inputRef.current?.setSelectionRange(caret, caret)
+    })
+  }
+
   const syncComposer = (field: HTMLTextAreaElement) => {
     const caret = field.selectionStart ?? field.value.length
+    const threadMatch = /@thread(?:\[)?([^\]\n]*)$/.exec(field.value.slice(0, caret))
+    if (threadMatch) {
+      setThreadQuery({ start: threadMatch.index, end: caret, query: threadMatch[1].trim() })
+      setThreadChoice(0)
+      mentions.reset()
+      return
+    }
+    setThreadQuery(null)
     mentions.onInput(field.value, caret)
     menu.onInput(field.value, caret)
   }
@@ -390,6 +439,28 @@ export default function Teacher({
       if (event.key === 'Escape') {
         event.preventDefault()
         menu.dismiss()
+        return
+      }
+    }
+    if (threadQuery) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setThreadQuery(null)
+        return
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        setThreadChoice((previous) =>
+          Math.max(
+            0,
+            Math.min(threadOptions.length - 1, previous + (event.key === 'ArrowDown' ? 1 : -1)),
+          ),
+        )
+        return
+      }
+      if ((event.key === 'Enter' || event.key === 'Tab') && threadOptions[threadChoice]) {
+        event.preventDefault()
+        pickThread(threadOptions[threadChoice].title)
         return
       }
     }
@@ -635,14 +706,12 @@ export default function Teacher({
     // clickable bubble that highlights nothing is the same dead pointer its
     // `[n]` chips grey out for. Partial overlap still counts: lighting the
     // papers that *are* here is useful.
-    const clickable =
-      message.role === 'assistant' &&
-      !!message.cited &&
-      message.cited.some((nodeId) => onGraphIds.has(nodeId))
+    const clickable = message.role === 'assistant' && !!message.cited && message.cited.length > 0
     return (
       <ChatMessage
         key={`c${index}`}
         message={message}
+        onThreadOpen={(id) => void dispatch(activateThread(id))}
         active={activeChat === index}
         streaming={asking || searching}
         // Only the LAST turn can be the one being generated, so only it gets
@@ -651,7 +720,6 @@ export default function Teacher({
         onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
         onRetry={message.failed ? () => retryAnswer(index) : undefined}
         onRefClick={onRefClick}
-        onGraphIds={onGraphIds}
         onPaperSeed={onPaperSeed}
         provider={provider}
         onEnlarge={setLightbox}
@@ -659,7 +727,6 @@ export default function Teacher({
         // time. `activeChatBeat` addresses a beat by turn as well as index,
         // since a conversation can hold more than one lecture.
         activeBeat={activeChatBeat?.turn === index ? activeChatBeat.beat : null}
-        currentSeedId={seedId}
         beatsOpen={openByReader[index] ?? index === newestLecture}
         onToggleBeats={
           message.beats?.length
@@ -766,6 +833,11 @@ export default function Teacher({
           first question, and a row that snapped down while the bar above it
           slid would read as two separate controls. */}
       <div className="ask-dock" ref={askRef}>
+        <p className="ask-context-note thread-subject">
+          {subject?.identity
+            ? `Asking about ${subject.title} · ${scopeCount} papers`
+            : 'General · Search and discuss across your exploration'}
+        </p>
         <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
           {/* The `/` menu, in the same slot as the `@` dropdown below and for
               the same reason. Only one of the two can be open at a time, so
@@ -786,6 +858,24 @@ export default function Teacher({
           {/* The `@` dropdown, anchored to the bar (which is positioned) and
               opening upward — the composer sits at the bottom of the panel, so
               a list below it would open off-screen. */}
+          {threadQuery && (
+            <div className="thread-suggestions" role="listbox" aria-label="Mention a thread">
+              <div className="thread-suggestions-title">Discussions in this exploration</div>
+              {threadOptions.map((thread, index) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={index === threadChoice}
+                  key={thread.id}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => pickThread(thread.title)}
+                >
+                  {thread.title}
+                </button>
+              ))}
+              {!threadOptions.length && <p>No matching threads</p>}
+            </div>
+          )}
           {mentions.open && (
             <MentionSuggestions
               papers={mentions.papers}

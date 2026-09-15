@@ -22,6 +22,27 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### Thread switches accumulated entire graph explorers (v7.22.0)
+
+- **Symptom.** Switching between General and graph threads left multiple explorer
+  panels tiled across the page during browser review.
+- **Root cause.** GraphExplorer and Teacher were siblings with the same epoch key.
+  Duplicate React keys made reconciliation retain stale explorer elements.
+- **Fix.** Distinct `graph:<epoch>` and `teacher:<epoch>` keys preserve the intended
+  remount boundary without collisions.
+- **Lesson / guard.** `frontend/test/Atlas.test.tsx` exercises repeated navigation
+  through General and two graph threads and counts the rendered panels.
+
+### Lecture follow-ups had no lecture in their history (v7.22.0)
+
+- **Symptom.** Follow-up questions could not refer reliably to the preceding lecture.
+- **Root cause.** Lecture prose lived in beats, while the client omitted ordinary
+  request history and separate server dictionaries tracked only their own endpoints.
+- **Fix.** A single completed-turn converter includes lecture prose; every request
+  sends client-owned history, and both server history dictionaries are removed.
+- **Lesson / guard.** Hook and route tests check completed lecture-to-question history
+  and exclude unfinished turns. A persisted transcript is the history authority.
+
 ### A lecture beat card was invisible against the bubble holding it
 
 *Found 2026-09-13 by Patrick, browser-testing the chat-only lecture — "can we

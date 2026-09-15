@@ -2,7 +2,7 @@
 
 React + TypeScript (strict) + Vite. State follows one rule: **a component's
 state lives where the component lives; only genuinely cross-cutting state
-goes to the Redux store** (`store/` — four slices: workspace, transcript,
+goes to the Redux store** (`store/` — five slices: explorations, workspace, transcript,
 highlight, library). Structure follows the hybrid rule: feature folders at the root
 for anything with multiple consumers or render sites; single-parent
 components nest inside their parent's folder (e.g. `teacher/transcript/`).
@@ -14,8 +14,9 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 ├─ left rail (collapsible)         shell/SideBar.tsx
 │  ├─ brand row (the whole row collapses the rail): "Atlas" · seed title
 │  ├─ ✎ New Exploration
+│  ├─ threads (General + graphs)   shell/ThreadList.tsx
 │  ├─ explorations (⋮ → rename / delete)  shell/useSessions.ts
-│  │                       autosaved by  shell/useAutosave.ts
+│  │                       autosaved by  shell/useExplorations.ts
 │  └─ data source · 📚 Library · ⚙ Settings · theme · ? tour
 │                                   — the header died here in v7.8.0; the
 │                                   search box had already left in v7.6.0, so
@@ -80,7 +81,7 @@ component (promoted from `teacher/figures/` once the detail panel became a
 second caller) — see "the hybrid rule" above.
 
 Non-visual folders: `api/` (the typed backend client — the only layer that
-knows URLs and SSE frames), `store/` (the four slices + typed hooks),
+knows URLs and SSE frames), `store/` (the five slices + typed hooks),
 `notation/` (the cross-cutting math renderer — `<MathText>` for the DOM
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
@@ -113,3 +114,8 @@ TypeScript property *signatures* are still checked (they're declarations, not
 accesses), so the handful of genuinely external field names declared in our
 own types carry a scoped `oxlint-disable` with a comment saying whose name it
 is — see `graph/model.ts` (`x`/`y`) and `api/search.ts` (the `q` wire key).
+
+Thread navigation remounts the canvas and chat with distinct sibling keys
+(`graph:<epoch>` and `teacher:<epoch>`). The shell regression test cycles
+between General and two graphs and checks that only one explorer and one
+chat panel remain mounted. General renders no explorer.

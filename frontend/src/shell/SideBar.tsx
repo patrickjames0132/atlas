@@ -25,11 +25,13 @@
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
+import ThreadList from './ThreadList'
 import { useResizablePanel } from '../ui/useResizablePanel'
 import { PROVIDER_LABEL } from '../api'
 import type { Provider, SavedSessionMeta } from '../api'
 import './shell.css'
+import SessionRow from './SessionRow'
 
 /** The folded rail's width, px — `.rail.collapsed` in `shell.css`, repeated
  *  here because the unfold-by-drag has to measure from what is on screen. */
@@ -169,144 +171,6 @@ function ProviderPicker({ provider, onChange, disabled }: ProviderPickerProps) {
   )
 }
 
-/** Props for {@link SessionRow}. */
-interface SessionRowProps {
-  session: SavedSessionMeta
-  active: boolean
-  /** This exploration still has a stream running (here or in the background). */
-  working?: boolean
-  onOpen: () => void
-  onRename: (name: string) => void
-  onDelete: () => void
-}
-
-/**
- * One saved exploration in the rail: a click opens it, a ⋮ menu renames or
- * deletes it.
- *
- * Rename edits **in place** rather than in a modal — the row is the label, so
- * editing it where it sits is both shorter and clearer about what is being
- * named. Enter commits, Escape abandons, and blur commits too (a click
- * elsewhere reads as "done", not "cancel").
- *
- * @param session The saved exploration's metadata row.
- * @param active  This exploration is the one currently open.
- * @param working This exploration still has a stream running.
- * @param onOpen  Restore this exploration.
- * @param onRename Commit a new name.
- * @param onDelete Remove it.
- * @returns The rendered row.
- */
-function SessionRow({
-  session,
-  active,
-  working = false,
-  onOpen,
-  onRename,
-  onDelete,
-}: SessionRowProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(session.name)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (editing) inputRef.current?.select()
-  }, [editing])
-
-  /** Commit the edited name, unless it's unchanged. */
-  const commit = () => {
-    setEditing(false)
-    const next = draft.trim()
-    if (next && next !== session.name) onRename(next)
-    else setDraft(session.name)
-  }
-
-  if (editing) {
-    return (
-      <div className="rail-item rail-session editing">
-        <input
-          ref={inputRef}
-          className="rail-rename"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') commit()
-            // Escape abandons — and stops here, or the graph's own Escape
-            // handler would clear the canvas selection behind the rail.
-            if (event.key === 'Escape') {
-              event.stopPropagation()
-              setDraft(session.name)
-              setEditing(false)
-            }
-          }}
-          onBlur={commit}
-          aria-label={`Rename ${session.name}`}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className={`rail-item rail-session${active ? ' active' : ''}`}>
-      <button type="button" className="rail-session-open" onClick={onOpen} title={session.name}>
-        <span className="rail-dot" aria-hidden="true" />
-        <span className="rail-label">{session.name}</span>
-        {/* Deliberately the only status the rail shows. It is not chatter
-            about saving — it is the one thing a reader cannot otherwise know
-            once they have walked away from a running answer. */}
-        {working && (
-          <span className="rail-working" role="status" aria-label="Still working">
-            <span className="rail-working-dot" />
-            <span className="rail-working-dot" />
-            <span className="rail-working-dot" />
-          </span>
-        )}
-      </button>
-      <button
-        type="button"
-        className="rail-more"
-        onClick={() => setMenuOpen((prev) => !prev)}
-        aria-label={`Options for ${session.name}`}
-        aria-expanded={menuOpen}
-      >
-        ⋮
-      </button>
-      {menuOpen && (
-        <>
-          {/* A click anywhere else closes it — cheaper and more reliable than
-              a document listener, and it can't leak past unmount. */}
-          <div className="rail-menu-scrim" onClick={() => setMenuOpen(false)} />
-          <div className="rail-menu" role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false)
-                setDraft(session.name)
-                setEditing(true)
-              }}
-            >
-              ✎ Rename
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="danger"
-              onClick={() => {
-                setMenuOpen(false)
-                onDelete()
-              }}
-            >
-              🗑 Delete
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
 /**
  * Render the left rail.
  *
@@ -333,6 +197,8 @@ export default function SideBar({
   loadingGraph,
   seedTitle,
 }: SideBarProps) {
+  const [expandedId, setExpandedId] = useState(openSessionId)
+  useEffect(() => setExpandedId(openSessionId), [openSessionId])
   const collapsed = !open
   // Same drag-to-resize the two right-docked panels use, mirrored. The width
   // only applies while expanded — collapsed is a fixed icon rail, and a
@@ -425,15 +291,26 @@ export default function SideBar({
         {open && sessions.length > 0 && <p className="rail-heading">Explorations</p>}
         {open &&
           sessions.map((session) => (
-            <SessionRow
-              key={session.id}
-              session={session}
-              active={session.id === openSessionId}
-              working={workingSessionIds.includes(session.id)}
-              onOpen={() => onOpenSession(session.id)}
-              onRename={(name) => onRenameSession(session.id, name)}
-              onDelete={() => onDeleteSession(session.id)}
-            />
+            <Fragment key={session.id}>
+              <SessionRow
+                session={session}
+                expanded={session.id === openSessionId && expandedId === session.id}
+                onToggle={() => {
+                  if (session.id !== openSessionId) {
+                    onOpenSession(session.id)
+                    setExpandedId(session.id)
+                  } else setExpandedId(expandedId === session.id ? null : session.id)
+                }}
+                active={session.id === openSessionId}
+                working={workingSessionIds.includes(session.id)}
+                onOpen={() => onOpenSession(session.id)}
+                onRename={(name) => onRenameSession(session.id, name)}
+                onDelete={() => onDeleteSession(session.id)}
+              />
+              {session.id === openSessionId && expandedId === session.id && (
+                <ThreadList explorationId={session.id} />
+              )}
+            </Fragment>
           ))}
         {open && sessions.length === 0 && (
           <p className="rail-empty">

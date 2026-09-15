@@ -54,13 +54,6 @@ def frames(response) -> list[tuple[str, dict]]:
     return parsed
 
 
-@pytest.fixture(autouse=True)
-def _fresh_stores():
-    agents_routes._QA_SESSIONS.clear()
-    agents_routes._SOURCES_SESSIONS.clear()
-    yield
-
-
 def test_lecture_types_the_payload_and_relays_by_event_type(client, monkeypatch):
     seen = {}
 
@@ -156,7 +149,7 @@ def test_lecture_input_validation(client):
     )
 
 
-def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
+def test_ask_streams_without_server_history(client, monkeypatch):
     seen = {}
 
     def fake_run(**kwargs):
@@ -171,15 +164,12 @@ def test_ask_streams_persists_and_strips_figure_markers(client, monkeypatch):
     assert [name for name, _ in frames(response)] == ["token", "cited", "done"]
     assert seen["kwargs"]["source_ids"] == ["s1"]  # non-strings dropped
     assert seen["kwargs"]["history"] == []
-    # Persisted turn: marker stripped, both roles recorded.
-    convo = agents_routes._QA_SESSIONS["sess1"]
-    assert convo[0] == {"role": "user", "content": "why?"}
-    assert "<<FIG" not in convo[1]["content"]
-    assert "So it works." in convo[1]["content"]
-
-    # The follow-up sees the stored history.
-    client.post("/api/ask", json=body)
-    assert seen["kwargs"]["history"] == convo[:2]
+    body["history"] = [{"role": "assistant", "content": "Lecture: the earlier approach"}]
+    client.post("/api/ask", json=body).data
+    assert seen["kwargs"]["history"] == body["history"]
+    body.pop("history")
+    client.post("/api/ask", json=body).data
+    assert seen["kwargs"]["history"] == []
 
 
 def test_an_empty_scope_survives_the_wire_as_an_empty_list(client, monkeypatch):
@@ -242,34 +232,22 @@ def test_failed_answers_do_not_poison_history(client, monkeypatch):
     assert frames(response)[-1] == (
         "error", {"message": "Semantic Scholar is unavailable — try again."}
     )
-    assert agents_routes._QA_SESSIONS == {}  # nothing persisted
 
 
-def test_history_window_is_trimmed(client, monkeypatch):
-    monkeypatch.setattr(config.server, "history_turns", 1)
+def test_both_endpoints_receive_client_lecture_history(client, monkeypatch):
+    seen = []
 
     def fake_run(**kwargs):
-        yield events.Token(text="answer")
-
-    patch_agents(monkeypatch, fake_run)
-    for question in ("first?", "second?"):
-        # .data consumes the stream — persistence happens during iteration.
-        client.post("/api/ask_sources", json={"question": question, "session_id": "lib1"}).data
-    convo = agents_routes._SOURCES_SESSIONS["lib1"]
-    assert len(convo) == 2  # one pair kept
-    assert convo[0]["content"] == "second?"
-
-
-def test_the_two_chats_use_separate_stores(client, monkeypatch):
-    def fake_run(**kwargs):
+        seen.append(kwargs["history"])
         yield events.Token(text="ok")
 
     patch_agents(monkeypatch, fake_run)
-    client.post("/api/ask", json={"question": "graph q", "session_id": "same-id",
-                                  "seed": SEED, "nodes": NODES}).data
-    client.post("/api/ask_sources", json={"question": "library q", "session_id": "same-id"}).data
-    assert agents_routes._QA_SESSIONS["same-id"][0]["content"] == "graph q"
-    assert agents_routes._SOURCES_SESSIONS["same-id"][0]["content"] == "library q"
+    history = [{"role": "user", "content": "/lecture"},
+               {"role": "assistant", "content": "Early methods\nThey abandoned that approach."}]
+    for endpoint in ("/api/ask", "/api/ask_sources"):
+        client.post(endpoint, json={"question": "why?", "seed": SEED,
+                                   "nodes": NODES, "history": history}).data
+    assert seen == [history, history]
 
 
 def test_ask_sources_runs_the_researcher_without_a_graph(client, monkeypatch):
@@ -311,22 +289,6 @@ def test_ask_sources_runs_on_the_requested_provider(client, monkeypatch):
     assert seen["provider"] == config.providers.default_provider
 
 
-def test_client_history_is_a_fallback_not_an_override():
-    """A retry after a reload has to bring its own context.
-
-    The server's history is in memory and keyed by an id a reload discards, so
-    after one it holds nothing — the very situation a retry is usually in. The
-    client's copy fills that gap, but never overrides the server's own, which
-    is authoritative and already excludes failed turns.
-    """
-    from atlas.routes.agents import _resumed_history
-
-    stored = [{"role": "user", "content": "from the server"}]
-    client = {"history": [{"role": "user", "content": "from the client"}]}
-    assert _resumed_history(client, stored) == stored
-    assert _resumed_history(client, []) == client["history"]
-
-
 def test_client_history_is_validated_before_it_reaches_the_model():
     """The body is untrusted: only well-formed turns get through."""
     from atlas.routes.agents import _resumed_history
@@ -340,9 +302,9 @@ def test_client_history_is_validated_before_it_reaches_the_model():
             {"role": "assistant", "content": "a real turn"},
         ]
     }
-    assert _resumed_history(payload, []) == [{"role": "assistant", "content": "a real turn"}]
-    assert _resumed_history({"history": "not a list"}, []) == []
-    assert _resumed_history({}, []) == []
+    assert _resumed_history(payload) == [{"role": "assistant", "content": "a real turn"}]
+    assert _resumed_history({"history": "not a list"}) == []
+    assert _resumed_history({}) == []
 
 
 def test_client_history_is_capped_by_the_configured_budget():
@@ -352,7 +314,7 @@ def test_client_history_is_capped_by_the_configured_budget():
 
     keep = config.server.history_turns * 2
     long_history = [{"role": "user", "content": f"turn {index}"} for index in range(keep + 20)]
-    resumed = _resumed_history({"history": long_history}, [])
+    resumed = _resumed_history({"history": long_history})
     assert len(resumed) == keep
     # The most RECENT turns survive — the ones nearest the question being retried.
     assert resumed[-1]["content"] == f"turn {keep + 19}"
@@ -401,3 +363,19 @@ class TestRouteEndpoint:
         response = client.post("/api/route", json=body)
         assert response.status_code == 200
         assert response.get_json() == {"target": "answer", "framing": "summary"}
+
+
+def test_sibling_context_is_bounded_and_labelled(monkeypatch):
+    from atlas.routes.agents import _sibling_context
+
+    monkeypatch.setattr(config.server, "history_turns", 1)
+    context = _sibling_context({"thread_context": [
+        {"title": "DQN", "summary": "A summary", "mentioned": True,
+         "history": [{"role": "system", "content": "bad"},
+                     {"role": "assistant", "content": "A finding"}]},
+        {"title": "Long thread", "summary": "long" * 10000},
+    ]})
+    assert "From sibling thread 'DQN'" in context
+    assert "assistant: A finding" in context
+    assert "system: bad" not in context
+    assert len(context) <= 24000

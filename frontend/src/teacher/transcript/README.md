@@ -62,20 +62,10 @@ transcript/
   about the whole conversation. `Teacher.tsx` derives it and holds the reader's
   overrides; see its README.
 
-- **A turn says which graph it came from, but only when that matters.**
-  `message.graph` (the seed's id and title plus the papers in scope) is stamped
-  on every turn at turn start, and `.chat-graph` renders *"From the “…” graph"*
-  **only when `currentSeedId` differs from it**. That condition is the whole
-  design. The app already degrades correctly when a conversation outlives its
-  graph — stale `[n]` chips grey out, the bubble stops being clickable — but
-  every one of those signals is negative: they say *this points nowhere any
-  more* and never *this was about the Attention graph*. The line is the
-  positive half, and it appears exactly where a reader would otherwise be
-  confused. When the graph matches, they are looking at it, and a line
-  repeating its title under every turn is noise.
-
-  It sits **above** the content rather than in the footer: a reader scrolling
-  back needs it before they wonder why clicking a citation does nothing.
+- **A turn belongs to one thread.** The old graph-switch provenance line and
+  off-canvas greying checks are removed. Graph stamps remain for migration and
+  lecture scope counts. Explicitly borrowed sibling discussions appear in a
+  `Context from` line, with stable ids for navigating to their own threads.
 
 - **A lecture gets its own grounding line.** An answer's footer comes from
   `provenance`, which counts what the backend watched itself do — and a lecture
@@ -95,47 +85,12 @@ transcript/
   can swallow the other: `[n]` → `citeref` (a graph paper) and `[S2, p.460]`
   → `sourceref` (a passage from the user's own library). It only rewrites the
   *shape*; whether a marker resolves is decided at render time — `[n]` from
-  the answer's `graphRefs` map (clickable, spotlighting that node), `[Sn]` from
-  its `sourceRefs` map (rendered as the source's real title and page, the
-  page read off the marker itself). Either kind degrades to its raw text when
-  unresolvable — never broken. With **no graph** to spotlight, `[n]` falls
-  through to the answer's `paperRefs` map and becomes a button that *builds*
-  that paper's graph (`onPaperSeed`) — what makes a graph-free survey a way
-  *into* the graph rather than a list of outbound links. It stays the bare
-  `[n]` the prose was written around (rendering full titles inline derailed
-  the sentence, twice over when two papers back one claim) with the title on
-  hover, and carries a small node-and-edge glyph.
-
-  **The seed click builds under the citation's own provider**, not the
-  dropdown's. A `PaperRef` carries the backend that minted its `node_id`
-  (since v6.14.0), because that id resolves nowhere else: switch the Data
-  source mid-conversation, or restore a session saved under the other
-  backend, and building with the selected provider looks the id up in a
-  namespace it was never in — the graph just fails to build. Following the
-  ref instead takes the workspace to that backend, which is the honest
-  outcome (the graph on screen really is from there, and every expand off it
-  follows), so the chip's tooltip names the switch *before* the click rather
-  than letting the dropdown change under the reader. Refs from before v6.14.0
-  carry no provider and fall back to the selected one — the old behaviour.
-
-  **The glyphs are not decoration.** After a chat→graph jump one transcript
-  holds both kinds of chip, and they do different things — a spotlight is a
-  reversible highlight, a seed rebuilds the workspace — so a reader must be
-  able to tell them apart *before* clicking. They're a matched pair in one
-  visual language, differing exactly where the behaviour does: **three nodes
-  wired together** (teal) builds a graph, **one node lit** (accent blue)
-  lights up a paper already on one. Marked in shape as well as colour on
-  purpose — colour alone says *that* they differ without saying *what*, and
-  says nothing at all to a colour-blind reader.
-
-  **A third state, from the same cause.** Because a transcript now
-  outlives the graph it was written against, an older answer can cite a
-  paper that is no longer loaded — the marker resolved fine when it was
-  written, but clicking would highlight nothing. Those chips render
-  **greyed and inert**, checked per-chip against `selectWorkspaceNodeIds`
-  (the loaded set, *not* the visible one — keying on the year/citation
-  filters would flicker chips as a slider is dragged). They come back to
-  life by themselves if that paper appears on a later graph.
+  the answer's `graphRefs` map (highlight a paper on the current graph) or
+  `paperRefs` map (graph icon opens that paper's graph thread directly), and
+  `[Sn]` from `sourceRefs` (the real source title and page). The spotlight and
+  graph glyphs distinguish these actions; neither opens a paper modal.
+  Unresolved markers retain their text. Whole-answer and beat clicks can still
+  spotlight the associated papers.
 
   All of this runs on mdast text nodes only, so markers inside inline code
   or math are left untouched.

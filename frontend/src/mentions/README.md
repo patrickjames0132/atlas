@@ -181,3 +181,12 @@ that it shows *alongside* results, since the provisional list lands first).
 On the backend, `test_search.py` pins the frame order, the provider's name in
 its label, that the resolve step precedes the resolve, and that no resolve step
 is claimed when the resolve was skipped.
+
+## Sibling discussion references
+
+The composer reserves `@thread` for discussions within the current exploration.
+It offers an accessible keyboard picker and inserts `@thread[Title]`, intercepted
+before the paper parser runs. These references attach bounded, labelled sibling
+history rather than resolve a paper or change the canvas. The sent answer retains
+stable thread ids for its `Context from` navigation controls. Ordinary paper
+mentions continue through this package unchanged.

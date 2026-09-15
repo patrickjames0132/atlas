@@ -17,13 +17,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { PROVIDER_LABEL } from '../../api'
 import type { AnswerFigure, Beat, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
 import HopDots from '../HopDots'
 import { splitAnswer } from '../figures/split'
-import AnswerMarkdown, { GraphGlyph } from './AnswerMarkdown'
+import AnswerMarkdown from './AnswerMarkdown'
 import BeatList from './BeatList'
 import { provenanceLine } from './provenance'
 
@@ -204,14 +203,13 @@ export default function ChatMessage({
   onActivate,
   onRetry,
   onRefClick,
-  onGraphIds,
   onPaperSeed,
+  onThreadOpen,
   provider,
   onEnlarge,
   activeBeat,
   onBeatClick,
   onReroute,
-  currentSeedId,
   // Defaults open: a caller that forgets to manage this shows the lecture
   // rather than silently hiding it, which is the right way round to fail.
   beatsOpen = true,
@@ -231,8 +229,8 @@ export default function ChatMessage({
   /** Spotlight one paper from a clicked inline `[n]` marker. */
   onRefClick?: (nodeId: string) => void
   /** Paper ids still on the graph; a `[n]` outside it greys out. */
-  onGraphIds?: Set<string>
   /** Build a graph seeded on a cited paper (graph-free answers only). */
+  onThreadOpen?: (id: string) => void
   onPaperSeed?: (nodeId: string, refProvider?: Provider) => void
   /** The selected backend, so a citation from the other one says so. */
   provider?: Provider
@@ -246,7 +244,6 @@ export default function ChatMessage({
   onReroute?: () => void
   /** The seed of the graph currently on screen, so a turn from another one can
    *  say which. Undefined graph-free, where nothing is on screen to differ. */
-  currentSeedId?: string
   /** Whether this turn's beats are expanded. */
   beatsOpen?: boolean
   /** Fold or unfold this turn's beats (undefined = not a lecture turn). */
@@ -254,55 +251,32 @@ export default function ChatMessage({
 }) {
   const clickable = !!onActivate
   const beats = message.beats ?? []
-  // A turn answered over a *different* graph than the one on screen. Named
-  // only in that case, deliberately: when the graph matches, the reader is
-  // looking at it, and a line repeating its title under every turn is noise.
-  // What earns the line is the discrimination — this turn's citations have
-  // gone grey and it is the only thing that can say why.
-  const elsewhere = message.graph && currentSeedId && message.graph.seedId !== currentSeedId
   return (
     <div
       className={`chat ${message.role}${clickable ? ' clickable' : ''}${active ? ' active' : ''}`}
       onClick={onActivate}
     >
-      {elsewhere &&
-        message.graph &&
-        (() => {
-          // Above the content rather than in the footer: a reader scrolling
-          // back needs this *before* they wonder why clicking a citation does
-          // nothing, not after they have read the answer.
-          //
-          // And it is a **control**, not a caption. The turn has gone inert
-          // because its graph is not loaded; the useful thing to offer at that
-          // exact moment is the graph. Same claim and same motif as a seeding
-          // citation chip (`GraphGlyph`) — one gesture for "this builds a map".
-          const { seedId, seedTitle, provider: graphProvider } = message.graph
-          const label = `From the “${seedTitle}” graph`
-          if (!onPaperSeed) return <div className="chat-graph">{label}</div>
-          // A graph built on the other backend still re-opens — it just takes
-          // the workspace with it, since its ids resolve nowhere else. Said in
-          // the tooltip rather than letting the dropdown change unannounced,
-          // exactly as a cross-provider citation chip does.
-          const switching = graphProvider && graphProvider !== provider ? graphProvider : null
-          return (
-            <button
-              type="button"
-              className="chat-graph chat-graph-btn"
-              title={
-                switching
-                  ? `Re-open this graph, switching to ${PROVIDER_LABEL[switching]} — ${seedTitle}`
-                  : `Re-open this graph — ${seedTitle}`
-              }
-              onClick={(event) => {
-                event.stopPropagation() // don't also re-light the whole answer
-                onPaperSeed(seedId, graphProvider)
-              }}
-            >
-              <span className="chat-graph-label">{label}</span>
-              <GraphGlyph />
-            </button>
-          )
-        })()}
+      {!!message.borrowedThreads?.length && (
+        <div className="chat-borrowed">
+          Context from{' '}
+          {message.borrowedThreads.map((thread) =>
+            onThreadOpen ? (
+              <button
+                type="button"
+                key={thread.id}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onThreadOpen(thread.id)
+                }}
+              >
+                {thread.title}
+              </button>
+            ) : (
+              <span key={thread.id}>{thread.title}</span>
+            ),
+          )}
+        </div>
+      )}
       {/* Library-chat retrieval summary (graph-free mode). */}
       {message.retrieve && (
         <div className="chat-trace">
@@ -398,7 +372,6 @@ export default function ChatMessage({
               sourceRefs={message.sourceRefs}
               onBeatClick={(index, beat) => onBeatClick?.(index, beat)}
               onRefClick={onRefClick}
-              onGraphIds={onGraphIds}
               onEnlarge={onEnlarge}
             />
           </div>
@@ -437,7 +410,6 @@ export default function ChatMessage({
                     sourceRefs={message.sourceRefs}
                     paperRefs={message.paperRefs}
                     onRefClick={onRefClick}
-                    onGraphIds={onGraphIds}
                     onPaperSeed={onPaperSeed}
                     provider={provider}
                   />

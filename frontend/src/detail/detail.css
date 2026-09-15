@@ -314,3 +314,8 @@
 .detail-figs-skel {
   margin-top: 16px;
 }
+
+.thread-subject {
+  width: 100%;
+  flex-basis: 100%;
+}

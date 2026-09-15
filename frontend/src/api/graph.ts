@@ -209,6 +209,9 @@ export async function fetchGraphStream(
   return graph
 }
 
+/** Bibliographic detail responses have no relationship to a particular graph. */
+export type PaperDetails = Omit<GraphNode, 'rels' | 'is_seed'>
+
 /**
  * Full details (abstract, tldr, authors) for one paper — used to hydrate a
  * node's detail panel on click, since graph nodes arrive summary-light.
@@ -223,7 +226,7 @@ export async function fetchGraphStream(
 export async function fetchPaperDetail(
   paperRef: string,
   provider: Provider = 's2',
-): Promise<GraphNode> {
+): Promise<PaperDetails> {
   const params = new URLSearchParams({ provider })
   const res = await fetch(`/api/paper/${encodeURIComponent(paperRef)}?${params.toString()}`)
   if (!res.ok) {

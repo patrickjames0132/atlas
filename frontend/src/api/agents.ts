@@ -298,7 +298,6 @@ export interface HistoryTurn {
 export async function streamAsk(
   body: {
     question: string
-    session_id: string
     seed: GraphNode
     nodes: GraphNode[]
     provider: Provider
@@ -311,6 +310,7 @@ export async function streamAsk(
      * Ignored whenever the server has its own copy.
      */
     history?: HistoryTurn[]
+    thread_context?: ThreadContext[]
   },
   handlers: AskHandlers,
 ): Promise<void> {
@@ -447,11 +447,11 @@ export interface AskSourcesHandlers {
 export async function streamAskSources(
   body: {
     question: string
-    session_id: string
     provider: Provider
     source_ids?: string[]
     /** See `streamAsk` — the client's copy, for a retry after a reload. */
     history?: HistoryTurn[]
+    thread_context?: ThreadContext[]
   },
   handlers: AskSourcesHandlers,
 ): Promise<void> {
@@ -475,4 +475,12 @@ export async function streamAskSources(
     else if (event === 'done') handlers.onDone?.()
     else if (event === 'error') handlers.onError?.((data as { message: string }).message)
   })
+}
+
+/** Explicitly attributed sibling memory, bounded again by the server. */
+export interface ThreadContext {
+  title: string
+  summary: string
+  mentioned: boolean
+  history?: HistoryTurn[]
 }

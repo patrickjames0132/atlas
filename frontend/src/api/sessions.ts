@@ -27,6 +27,8 @@ import type {
  * trace steps.
  */
 export interface ChatMsg {
+  /** Explicitly attached sibling discussions, with stable navigation ids. */
+  borrowedThreads?: { id: string; title: string }[]
   role: 'user' | 'assistant'
   text: string
   /** Ids of the papers this answer cited (assistant turns only). */
@@ -131,6 +133,8 @@ export interface ChatMsg {
    * durable marker the transcript gives no account of itself at all.
    */
   failed?: string
+  /** True until the stream ends successfully; partial prose stays out of history. */
+  unfinished?: boolean
   /** Figures the agent pulled into this answer (assistant turns only). */
   figures?: AnswerFigure[]
   /** Library-retrieval summary — set only on the graph-free library-chat path
@@ -174,6 +178,15 @@ export interface SessionGraphRef {
  * rather than of the seed. They are merged back over the rebuilt graph.
  */
 export interface SessionData {
+  viewFilters?: import('../store/workspace').WorkspaceState['viewFilters']
+  selectedNodeIds?: string[]
+  /** Versioned exploration container; each child data uses the existing session shape. */
+  exploration?: {
+    version: 1
+    summary?: string
+    activeThreadId: string
+    threads: import('../store/explorations').ThreadRecord[]
+  }
   /**
    * Present only on **legacy** saves (before 2026-08-29), which stored the
    * whole graph inline. New saves carry `graph_ref` instead; a graphless

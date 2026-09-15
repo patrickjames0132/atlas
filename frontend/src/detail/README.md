@@ -109,3 +109,9 @@ ring. The teacher's "papers I cited" chips also drive `setSelectedId`.
 `tsc --noEmit` strict + oxlint; the lazy-load/caching behavior and the
 double-click re-seed are browser-milestone items (click a journal paper —
 its abstract should now appear).
+
+## Citation navigation
+
+Inline paper citations highlight nodes on the current canvas. Graph icons open
+or resume a graph thread directly, without fetching paper details first. The
+canvas's existing detail panel remains available by selecting a graph node.

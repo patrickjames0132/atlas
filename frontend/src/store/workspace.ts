@@ -35,9 +35,19 @@ import {
 } from '../api'
 import { cleanNode, countRels, foldRetiredEdgeTypes, foldRetiredNodeRels } from '../graph/model'
 import type { VNode } from '../graph/model'
+import { explorationOpened, threadActivated } from './explorations'
+import type { ExplorationsState, ThreadRecord } from './explorations'
 import type { Conversation, TranscriptState } from './transcript'
 
 export interface WorkspaceState {
+  viewFilters?: {
+    enabled: string[]
+    yearLo: number
+    yearHi: number
+    citeLo: number
+    citeHi: number
+    relCaps: Record<string, number>
+  }
   graph: GraphResponse | null
   /**
    * The exact reference this graph was loaded with (arXiv id, pasted URL, or
@@ -81,6 +91,7 @@ export interface WorkspaceState {
    * scroll container at the top (see the `loadGraph` reducer).
    */
   epoch: number
+  loadRequestId?: string
   loading: boolean
   /**
    * The current graph-build stage while `loading`, streamed from the SSE build
@@ -118,24 +129,144 @@ const initialState: WorkspaceState = {
  * @param refresh  Bypass the server's day-cached snapshot for this seed and
  *                 rebuild from the provider (the "Refresh" action) — useful when
  *                 the provider's data for a paper has visibly changed.
- * @param provider Build under this backend instead of the selected one, and
- *                 leave the workspace on it. Only a chat citation passes this:
- *                 its `node_id` came from whichever provider answered, and an
- *                 id means nothing anywhere else — so a dropdown switched
- *                 mid-conversation would otherwise turn a live chip into a
- *                 failed build. The switch is the honest outcome, not a side
- *                 effect: the graph on screen really is from that backend, and
- *                 every expand from here follows it.
+ * @param provider Build under this backend instead of the selected one. Graph
+ *                 identity includes the provider; explicit Explore actions
+ *                 resume or create the matching thread.
  */
 export const loadGraph = createAsyncThunk<
   GraphResponse,
   { seed: string; refresh?: boolean; provider?: Provider },
-  { state: { workspace: WorkspaceState } }
->('workspace/loadGraph', ({ seed, refresh = false, provider }, { dispatch, getState }) =>
-  fetchGraphStream(seed, provider ?? getState().workspace.provider, refresh, (progress) =>
-    dispatch(buildProgressSet(progress)),
-  ),
+  {
+    state: {
+      workspace: WorkspaceState
+      explorations?: ExplorationsState
+      transcript?: TranscriptState
+    }
+  }
+>(
+  'workspace/loadGraph',
+  async ({ seed, refresh = false, provider }, { dispatch, getState, requestId }) => {
+    const before = getState()
+    const backend = provider ?? before.workspace.provider
+    const owner = before.explorations?.byId[before.explorations.activeId]
+    const known = owner?.threads.find(
+      (thread) =>
+        thread.identity === `${backend}:${seed}` ||
+        (thread.data.graph_ref?.seed_ref === seed && thread.data.provider === backend),
+    )
+    const graph =
+      !refresh && known?.workspace?.graph
+        ? known.workspace.graph
+        : await fetchGraphStream(seed, backend, refresh, (progress) =>
+            dispatch(buildProgressSet(progress)),
+          )
+    if (owner) {
+      // Resolve aliases before creating: an arXiv URL and a provider id may name the same seed.
+      const current = getState()
+      if (
+        current.explorations?.activeId !== owner.id ||
+        current.transcript?.activeKey !== before.transcript?.activeKey ||
+        current.workspace.loadRequestId !== requestId
+      )
+        throw new Error('Graph load superseded by exploration navigation')
+      const record = current.explorations.byId[owner.id]
+      const identity = `${backend}:${graph.seed.id}`
+      const existing = record.threads.find((thread) => thread.identity === identity)
+      const thread: ThreadRecord = existing ?? {
+        id: nanoid(),
+        title: graph.seed.title,
+        identity,
+        origin: record.activeThreadId,
+        data: {
+          chat: [],
+          layout: 'timeline',
+          provider: backend,
+          graph_ref: { seed: graph.seed, seed_ref: seed, n_nodes: graph.nodes.length },
+        },
+      }
+      const pending = current.transcript?.byKey[thread.id]?.pendingDiscoveries
+      if (thread.id !== record.activeThreadId)
+        dispatch(
+          threadActivated({
+            explorationId: owner.id,
+            thread,
+            outgoingId: record.activeThreadId,
+            outgoing: current.workspace,
+            requestId,
+          }),
+        )
+      if (pending?.nodes.length) {
+        dispatch(discoveryMerged(pending))
+        dispatch({ type: 'transcript/pendingDiscoveriesDrained', payload: thread.id })
+      }
+    }
+    return graph
+  },
 )
+
+/** Delete a graph thread after moving its active canvas back to General.
+ * @param threadId Thread to delete.
+ */
+export const deleteThread = createAsyncThunk<
+  void,
+  string,
+  {
+    state: {
+      workspace: WorkspaceState
+      explorations: ExplorationsState
+      transcript: TranscriptState
+    }
+  }
+>('workspace/deleteThread', async (threadId, { dispatch, getState }) => {
+  const state = getState()
+  const record = state.explorations.byId[state.explorations.activeId]
+  const thread = record.threads.find((item) => item.id === threadId)
+  if (!thread?.identity) return
+  if (record.activeThreadId === threadId) {
+    const general = record.threads.find((item) => !item.identity)!
+    await dispatch(activateThread(general.id))
+  }
+  dispatch({ type: 'explorations/threadRemoved', payload: threadId })
+  dispatch({ type: 'transcript/conversationDropped', payload: threadId })
+})
+
+/** Activate a sibling, rebuilding only when its graph is not in memory.
+ * @param threadId The thread to show.
+ */
+export const activateThread = createAsyncThunk<
+  void,
+  string,
+  {
+    state: {
+      workspace: WorkspaceState
+      explorations: ExplorationsState
+      transcript: TranscriptState
+    }
+  }
+>('workspace/activateThread', async (threadId, { dispatch, getState }) => {
+  const state = getState()
+  const owner = state.explorations.byId[state.explorations.activeId]
+  const thread = owner.threads.find((item) => item.id === threadId)
+  if (!thread || threadId === owner.activeThreadId) return
+  const pending = state.transcript.byKey[threadId]?.pendingDiscoveries
+  dispatch(
+    threadActivated({
+      explorationId: owner.id,
+      thread,
+      outgoingId: owner.activeThreadId,
+      outgoing: state.workspace,
+    }),
+  )
+  if (pending?.nodes.length && getState().workspace.graph) {
+    dispatch(discoveryMerged(pending))
+    dispatch({ type: 'transcript/pendingDiscoveriesDrained', payload: threadId })
+  }
+  if (thread.identity && !thread.workspace?.graph && thread.data.graph_ref) {
+    await dispatch(
+      loadGraph({ seed: thread.data.graph_ref.seed_ref, provider: thread.data.provider }),
+    ).unwrap()
+  }
+})
 
 /**
  * Switch the academic-data backend, then rebuild the current graph (if any)
@@ -151,8 +282,8 @@ export const switchProvider = createAsyncThunk<
 >('workspace/switchProvider', (provider, { dispatch, getState }) => {
   const { provider: current, seedRef } = getState().workspace
   if (provider === current) return
-  dispatch(providerSet(provider))
-  if (seedRef) dispatch(loadGraph({ seed: seedRef }))
+  if (seedRef) dispatch(loadGraph({ seed: seedRef, provider }))
+  else dispatch(providerSet(provider))
 })
 
 /** A saved chat turn or lecture beat as it may appear on disk: `graphRefs` /
@@ -169,7 +300,7 @@ type LegacyRefs = { refs?: Record<string, string> }
  * @param message The saved chat turn.
  * @returns The turn with `graphRefs` populated from whichever key it carries.
  */
-function withGraphRefs<Message extends { graphRefs?: Record<string, string> }>(
+export function withGraphRefs<Message extends { graphRefs?: Record<string, string> }>(
   message: Message,
 ): Message {
   const legacy = (message as Message & LegacyRefs).refs
@@ -224,7 +355,10 @@ const LEGACY_MODE_ORDER = ['history', 'intuition', 'evolution', 'frontier', 'bri
  * @param migrate The per-beat transform to apply (graph-ref backfill).
  * @returns The turn to append, or null when the save holds no lecture.
  */
-function restoredLectureTurn(data: SessionData, migrate: (beat: Beat) => Beat): ChatMsg | null {
+export function restoredLectureTurn(
+  data: SessionData,
+  migrate: (beat: Beat) => Beat = withBeatGraphRefs,
+): ChatMsg | null {
   /**
    * The turn a set of beats and their `[Sn]` index become.
    *
@@ -423,7 +557,13 @@ export function settleInFlight(chat: ChatMsg[]): ChatMsg[] {
     // prose, and nothing left to produce it has plainly not finished. Only the
     // last turn qualifies: an empty assistant turn earlier in the transcript
     // would already carry its own marker.
-    if (index === last && settled.role === 'assistant' && !settled.text && !settled.failed) {
+    if (
+      index === last &&
+      settled.role === 'assistant' &&
+      !settled.text &&
+      !settled.beats?.length &&
+      !settled.failed
+    ) {
       return { ...settled, failed: 'This answer stopped before it finished.' }
     }
     return settled
@@ -450,6 +590,8 @@ export function buildSaveBody(
       graph && workspace.seedRef
         ? { seed: graph.seed, seed_ref: workspace.seedRef, n_nodes: graph.nodes.length }
         : undefined,
+    viewFilters: workspace.viewFilters,
+    selectedNodeIds: workspace.selectedNodeIds,
     layout: workspace.layout,
     provider: workspace.provider,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
@@ -463,10 +605,49 @@ export function buildSaveBody(
   }
 }
 
+/** Restore a thread's own workspace, including its retained discoveries.
+ * @param thread Thread being displayed.
+ * @param epoch Remount generation for local component state.
+ * @returns Workspace belonging only to this thread.
+ */
+function workspaceForThread(thread: ThreadRecord, epoch: number): WorkspaceState {
+  if (thread.workspace) return { ...thread.workspace, epoch, loading: false, error: null }
+  const data = thread.data
+  const graph =
+    data.nodes?.length && data.seed
+      ? {
+          seed: { ...data.seed, arxiv_id: data.seed.arxiv_id ?? null },
+          nodes: foldRetiredNodeRels(data.nodes),
+          edges: foldRetiredEdgeTypes(data.edges ?? []),
+          counts: countRels(data.nodes),
+        }
+      : null
+  return {
+    ...initialState,
+    epoch,
+    graph,
+    seedRef: data.graph_ref?.seed_ref ?? data.seed?.id ?? null,
+    discoveredNodes: data.discovered_nodes ?? [],
+    discoveredEdges: data.discovered_edges ?? [],
+    provider: data.provider ?? 's2',
+    layout: data.layout ?? 'timeline',
+    viewFilters: data.viewFilters,
+    selectedNodeIds: data.selectedNodeIds ?? [],
+  }
+}
+
 const workspaceSlice = createSlice({
   name: 'workspace',
   initialState,
   reducers: {
+    /** Keep each thread's declutter choices when its canvas is unmounted.
+     * @param state Workspace state.
+     * @param action Current filter values.
+     */
+    viewFiltersSet(state, action: PayloadAction<WorkspaceState['viewFilters']>) {
+      state.viewFilters = action.payload
+    },
+
     /**
      * Merge a discovery event, deduped against the graph and prior finds.
      *
@@ -474,9 +655,8 @@ const workspaceSlice = createSlice({
      * @param action Carries the discovered nodes and edges.
      */
     discoveryMerged(state, action: PayloadAction<{ nodes: GraphNode[]; edges: GraphEdge[] }>) {
-      if (!state.graph) return
       const knownIds = new Set([
-        ...state.graph.nodes.map((node) => node.id),
+        ...(state.graph?.nodes ?? []).map((node) => node.id),
         ...state.discoveredNodes.map((node) => node.id),
       ])
       for (const node of action.payload.nodes) {
@@ -485,7 +665,9 @@ const workspaceSlice = createSlice({
         state.discoveredNodes.push(node)
       }
       const edgeKey = (edge: GraphEdge) => `${edge.source}|${edge.target}|${edge.type}`
-      const knownEdges = new Set([...state.graph.edges, ...state.discoveredEdges].map(edgeKey))
+      const knownEdges = new Set(
+        [...(state.graph?.edges ?? []), ...state.discoveredEdges].map(edgeKey),
+      )
       for (const edge of action.payload.edges) {
         if (knownEdges.has(edgeKey(edge))) continue
         knownEdges.add(edgeKey(edge))
@@ -606,40 +788,42 @@ const workspaceSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(loadGraph.pending, (state) => {
+      .addCase(explorationOpened, (state, action) => {
+        const thread = action.payload.threads.find(
+          (item) => item.id === action.payload.activeThreadId,
+        )!
+        return workspaceForThread(thread, state.epoch + 1)
+      })
+      .addCase(threadActivated, (state, action) => ({
+        ...workspaceForThread(action.payload.thread, state.epoch + 1),
+        loadRequestId: action.payload.requestId,
+      }))
+      .addCase(loadGraph.pending, (state, action) => {
+        state.loadRequestId = action.meta.requestId
         state.loading = true
         state.buildProgress = null
         state.error = null
       })
       .addCase(loadGraph.fulfilled, (state, action) => {
+        if (state.loadRequestId !== action.meta.requestId) return
+        state.loadRequestId = undefined
         state.graph = action.payload
         state.buildProgress = null
         // The reference actually requested — refresh must re-fetch with this
         // same string to bust the exact snapshot the server keyed.
         state.seedRef = action.meta.arg.seed
-        state.discoveredNodes = []
-        state.discoveredEdges = []
+
         // Cleared until GraphExplorer republishes this graph's visible set —
         // never carry the previous graph's ids into the new one's grounding.
         state.visibleNodeIds = []
-        // A hand-picked selection is per-graph; a new seed starts unscoped.
-        state.selectedNodeIds = []
-        // Loading a graph deliberately does NOT bump the epoch. The shell
-        // keys the teacher panel on it, so a bump remounts the panel and
-        // rebuilds the transcript's scroll container at the top — and since
-        // the conversation now survives a graph change, that would throw the
-        // reader back to the start of an answer they were mid-way through.
-        // Only Home and a session restore remount now; `useConversation`
-        // aborts in-flight streams on the seed change instead of relying on
-        // an unmount that no longer happens.
-        //
-        // An override built under a different backend; the dropdown has to
-        // follow, or the header would claim one provider while the graph and
-        // every expand off it run on another.
+        // Thread activation already restored its selection and remounted the
+        // canvas. Refreshing this same graph keeps that thread's view intact.
         if (action.meta.arg.provider) state.provider = action.meta.arg.provider
         state.loading = false
       })
       .addCase(loadGraph.rejected, (state, action) => {
+        if (state.loadRequestId !== action.meta.requestId) return
+        state.loadRequestId = undefined
         state.loading = false
         state.buildProgress = null
         state.error = action.error.message ?? 'Failed to load graph'
@@ -674,6 +858,7 @@ const workspaceSlice = createSlice({
 
 export const {
   discoveryMerged,
+  viewFiltersSet,
   layoutSet,
   providerSet,
   buildProgressSet,

@@ -93,10 +93,9 @@ export const HOME_TOUR: TourStep[] = [
     target: '[data-tour="assistant-panel"]',
     title: 'Every answer is a way in',
     body:
-      'Papers the assistant cites are clickable: the chip marked with three linked nodes ' +
-      'builds that paper’s graph, bringing the conversation with it. Once a map is up ' +
-      'this chat collapses into a side panel — the 🎓 button above the graph brings it ' +
-      'back.',
+      'Click a paper citation to highlight it on the current graph. A graph icon opens ' +
+      'that paper’s graph thread directly. General stays available for searches and broad questions; ' +
+      'each graph thread keeps its own conversation. Type @thread to attach another discussion.',
   },
   {
     target: '[data-tour="rail"]',
@@ -104,8 +103,8 @@ export const HOME_TOUR: TourStep[] = [
     body:
       'Every exploration saves itself — there is no Save button. Ask a question or open ' +
       'a paper and a row appears here, named after what you were asking about and kept ' +
-      'up to date as you work. Reopening one brings back the conversation, every paper ' +
-      'the assistant discovered, and the graph you were reading. ✎ above starts a new ' +
+      'up to date as you work. Threads nest underneath: General for broad questions and ' +
+      'one discussion per graph. Use the caret to collapse them, and each ⋮ menu to rename or delete a graph thread. Click a thread to resume it. ✎ starts a new ' +
       'exploration; the one you leave is already saved. Hover a row for ⋮ to rename or ' +
       'delete it, and collapse the whole rail when the map wants the room — click its ' +
       'title row, or drag its right edge; the drag folds it away and pulls it back open.',
@@ -316,7 +315,7 @@ export const GRAPH_TOUR: TourStep[] = [
       'Ask anything about what’s on screen. The agent grounds in the papers you’ve ' +
       'selected — or in every visible paper when you haven’t picked any. It reads them ' +
       'in full, hops the graph, searches the literature and your uploaded library, then ' +
-      'answers with numbered citations (click one to light up the paper behind it). New ' +
+      'answers with numbered citations (click one to highlight its paper on the graph). New ' +
       'papers it finds join the map with dashed rings. ' +
       'Press Enter to send; ⇧ Shift+Enter starts a new line for longer questions.',
   },

@@ -1,3 +1,4 @@
+import { conversationHistory, siblingContext } from './history'
 /**
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
@@ -56,6 +57,8 @@ import {
   traceAdded,
   turnRouted,
   turnStarted,
+  turnCompleted,
+  turnContextSet,
 } from '../store/transcript'
 import {
   discoveryMerged,
@@ -63,15 +66,7 @@ import {
   selectGroundingNodes,
   selectLectureNodes,
   selectSeedNode,
-  selectWorkspaceNodeIds,
 } from '../store/workspace'
-
-/**
- * Mint a fresh chat-session id (keys the backend's per-conversation history).
- *
- * @returns A UUID, or a random-digits fallback off-HTTPS.
- */
-const newSessionId = () => (crypto.randomUUID?.() as string) || String(Math.random()).slice(2)
 
 /** An inline citation marker in answer prose: a single index (`[7]`) or a
  *  combined list (`[14, 29]`). Group 1 holds the digits and separators; split
@@ -160,6 +155,8 @@ function mentionNode(paper: MentionPaper): GraphNode {
   }
 }
 
+const threadControllers = new Map<string, { current: AbortController | null }>()
+
 export function useConversation() {
   const dispatch = useAppDispatch()
   // Read synchronously when retrying: the history to resend is whatever is
@@ -173,7 +170,6 @@ export function useConversation() {
   // Which cited papers are still reachable — a transcript now outlives the
   // graph it was written against, so `[n]` chips are checked before they
   // render as controls.
-  const onGraphIds = useAppSelector(selectWorkspaceNodeIds)
   // The selected provider — so the researcher's expand/search/hydrate use the
   // same backend (and id space) as the graph the question is grounded in, and
   // so the graph-free chat searches the backend the dropdown actually names.
@@ -192,7 +188,8 @@ export function useConversation() {
     activeKeyRef.current = activeKey
   }, [activeKey])
 
-  const [asking, setAsking] = useState(false)
+  const [routing, setAsking] = useState(false)
+  const running = useAppSelector((state) => state.transcript.byKey[activeKey]?.running.length ?? 0)
   const [error, setError] = useState<string | null>(null)
   // Which chat answer is "active" (its whole grounding set lit on the graph).
   // Panel-local UI state — only the RESULTING highlight ids are global.
@@ -217,7 +214,8 @@ export function useConversation() {
 
   // The message in flight — an answer or a lecture, since both are replies to
   // something typed and only one of them can be the latest.
-  const askCtrl = useRef<AbortController | null>(null)
+  if (!threadControllers.has(activeKey)) threadControllers.set(activeKey, { current: null })
+  const askCtrl = threadControllers.get(activeKey)!
   // The in-flight message classification (see `send`). Its own controller
   // rather than `askCtrl`'s, because it runs *before* the turn exists: a
   // second message must abort the first's route without also aborting an
@@ -253,10 +251,9 @@ export function useConversation() {
     keyAtMount.current = activeKey
     if (!sameConversation || seedId === previousSeed) return
     askCtrl.current?.abort()
-  }, [seedNode, activeKey])
+  }, [seedNode, activeKey, askCtrl])
   // Keys the backend's per-chat history; clearing the chat mints a new one so
   // the fresh conversation also detaches from server-side context.
-  const sessionId = useRef(newSessionId())
   // The chat index the in-flight answer streams into (for onCited's active
   // marking) — chat.length + 1 at turn start (user turn, then assistant).
   const askIdxRef = useRef(0)
@@ -316,14 +313,8 @@ export function useConversation() {
     [activeRef, highlight],
   )
 
-  /** Click a cited paper in a graph-free answer: build that paper's graph.
-   * The conversation survives the jump on its own (every graph load keeps it
-   * now — see `store/transcript`), and the graph arrives with nothing selected,
-   * like any other build: the click asked for the map around that paper, and
-   * the detail panel it used to open landed on top of it. `refProvider` is the
-   * backend that minted the id (absent on pre-v6.14.0 saves, where the selected
-   * one is the best guess available); building under anything else looks the id
-   * up in a namespace it was never in, and the build simply fails. */
+  /** Open a graph citation directly in its own thread, resuming the existing
+   * thread when this provider and seed already belong to the exploration. */
   const onPaperSeed = useCallback(
     (nodeId: string, refProvider?: Provider) => {
       dispatch(loadGraph({ seed: nodeId, provider: refProvider }))
@@ -344,7 +335,7 @@ export function useConversation() {
     routeCtrl.current?.abort()
     routeCtrl.current = null
     setAsking(false)
-  }, [])
+  }, [askCtrl])
 
   /** Clear the conversation and detach its server session.
    *
@@ -361,8 +352,7 @@ export function useConversation() {
     setActiveChat(null)
     setActiveRef(null)
     highlight([])
-    sessionId.current = newSessionId()
-  }, [dispatch, highlight])
+  }, [dispatch, highlight, askCtrl])
 
   const ask = useCallback(
     async (
@@ -391,10 +381,20 @@ export function useConversation() {
       // asked. `isActive()` guards the things that are about the *screen*
       // (errors, highlights, the active-turn mark) rather than the transcript.
       const key = activeKeyRef.current
-      const isActive = () => activeKeyRef.current === key
+      const isActive = () => store.getState().transcript.activeKey === key
       const streamId = `ask:${nextStreamId()}`
       dispatch(streamStarted(streamId, key))
+      history ??= conversationHistory(store.getState().transcript.byKey[key]?.chat ?? [])
       dispatch(turnStarted(question, key))
+      const owner = store.getState().explorations.byId[store.getState().explorations.activeId]
+      dispatch(
+        turnContextSet(
+          owner.threads
+            .filter((thread) => thread.id !== key && question.includes(`@thread[${thread.title}]`))
+            .map((thread) => ({ id: thread.id, title: thread.title })),
+          key,
+        ),
+      )
       // Stamp the turn with the graph it is about, while that is still what is
       // on screen. Skipped graph-free: there is no graph to name, and an
       // answer over the library alone is not made clearer by saying so.
@@ -414,6 +414,7 @@ export function useConversation() {
       // Why it ended, if it ended badly. The default covers the commonest
       // case by far — the run was simply abandoned (tab closed, exploration
       // deleted), which raises nothing worth quoting at a reader.
+      let failed = false
       let failure = 'This answer stopped before it finished.'
       // Whether any prose reached the turn. An answer that produces none has
       // failed as far as the reader is concerned, however it ended — and the
@@ -452,12 +453,12 @@ export function useConversation() {
           await streamAsk(
             {
               question,
-              session_id: sessionId.current,
               seed: seedNode,
               nodes: askNodes,
               provider,
               source_ids: sourceIds,
               history,
+              thread_context: siblingContext(store.getState(), question),
               ...askFilters(filters),
             },
             {
@@ -502,6 +503,7 @@ export function useConversation() {
                 // Keep the real reason: this is how the *backend's* account of
                 // the failure ("Tool 'find_papers' exceeded max retries…")
                 // reaches the turn, instead of the generic default.
+                failed = true
                 failure = message
                 if (isActive()) setError(message)
               },
@@ -518,10 +520,10 @@ export function useConversation() {
           await streamAskSources(
             {
               question,
-              session_id: sessionId.current,
               provider,
               source_ids: sourceIds,
               history,
+              thread_context: siblingContext(store.getState(), question),
               ...askFilters(filters),
             },
             {
@@ -536,12 +538,14 @@ export function useConversation() {
                 dispatch(tokenAppended(token, key))
               },
               onError: (message) => {
+                failed = true
                 failure = message
                 if (isActive()) setError(message)
               },
             },
           )
         }
+        if (!failed && !ctrl.signal.aborted) dispatch(turnCompleted(key))
       } catch (err) {
         // An abort is not worth quoting ("AbortError: signal is aborted…");
         // the default already says the useful part.
@@ -555,16 +559,26 @@ export function useConversation() {
         dispatch(streamEnded(streamId, key))
         // Nothing is in progress any more, whatever the outcome — so no chip
         // may still say it is.
-        dispatch(tracesSettled(key))
+        if (!superseded) dispatch(tracesSettled(key))
         // An answer that produced nothing gets a durable note on its own turn.
         // A *superseded* one is excluded: asking a new question deliberately
         // aborts the last, and that is not a failure to report — the reader
         // replaced that turn on purpose.
         if (!produced && !superseded) dispatch(answerFailed(failure, key))
-        setAsking(false)
+        if (!superseded) setAsking(false)
       }
     },
-    [seedNode, groundingNodes, provider, chatLength, dispatch, highlight, nextStreamId],
+    [
+      seedNode,
+      groundingNodes,
+      provider,
+      chatLength,
+      dispatch,
+      highlight,
+      nextStreamId,
+      store,
+      askCtrl,
+    ],
   )
 
   /**
@@ -601,7 +615,7 @@ export function useConversation() {
       setActiveChatBeat(null)
       setActiveRef(null)
       const key = activeKeyRef.current
-      const isActive = () => activeKeyRef.current === key
+      const isActive = () => store.getState().transcript.activeKey === key
       const turnIdx = chatLength + 1 // the assistant turn about to be added
       const streamId = `ask:${nextStreamId()}`
       dispatch(streamStarted(streamId, key))
@@ -621,6 +635,7 @@ export function useConversation() {
         ),
       )
       if (routed) dispatch(turnRouted('lecture', key))
+      let failed = false
       let failure = 'This lecture stopped before it finished.'
       let beatCount = 0
       try {
@@ -644,11 +659,13 @@ export function useConversation() {
               beatCount += 1
             },
             onError: (message) => {
+              failed = true
               failure = message
               if (isActive()) setError(message)
             },
           },
         )
+        if (!failed && !ctrl.signal.aborted) dispatch(turnCompleted(key))
       } catch (error) {
         if (!ctrl.signal.aborted) {
           failure = error instanceof Error ? error.message : String(error)
@@ -666,7 +683,17 @@ export function useConversation() {
         if (!superseded) setAsking(false)
       }
     },
-    [seedNode, lectureNodes, provider, chatLength, dispatch, highlight, nextStreamId],
+    [
+      seedNode,
+      lectureNodes,
+      provider,
+      chatLength,
+      dispatch,
+      highlight,
+      nextStreamId,
+      store,
+      askCtrl,
+    ],
   )
 
   /**
@@ -708,7 +735,12 @@ export function useConversation() {
       routeCtrl.current?.abort()
       const ctrl = new AbortController()
       routeCtrl.current = ctrl
+      const routingKey = store.getState().transcript.activeKey
       const decision = await routeMessage(question, ctrl.signal)
+      if (store.getState().transcript.activeKey !== routingKey) {
+        setAsking(false)
+        return
+      }
       if (ctrl.signal.aborted) return // superseded; the new send owns `asking`
       routeCtrl.current = null
       if (decision.target === 'lecture') {
@@ -717,7 +749,7 @@ export function useConversation() {
       }
       void ask(question, sourceIds, filters, undefined, mentioned)
     },
-    [seedNode, lectureNodes, ask, lectureInChat],
+    [seedNode, lectureNodes, ask, lectureInChat, store],
   )
 
   /**
@@ -772,10 +804,7 @@ export function useConversation() {
       const conversation = selectConversation(store.getState())
       const question = conversation.chat[index - 1]
       if (!question || question.role !== 'user') return
-      const history: HistoryTurn[] = conversation.chat
-        .slice(0, index - 1)
-        .filter((turn) => turn.text.trim())
-        .map((turn) => ({ role: turn.role, content: turn.text }))
+      const history = conversationHistory(conversation.chat.slice(0, index - 1))
       dispatch(failedTurnDropped(index))
       void ask(question.text, undefined, undefined, history)
     },
@@ -785,12 +814,11 @@ export function useConversation() {
   return {
     hasGraph: !!seedNode,
     groundingNodes: groundingNodes as GraphNode[],
-    asking,
+    asking: running > 0 || routing,
     error,
     activeChat,
     onChatClick,
     onRefClick,
-    onGraphIds,
     onPaperSeed,
     provider,
     ask,

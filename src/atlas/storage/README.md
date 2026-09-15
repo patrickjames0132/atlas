@@ -160,3 +160,11 @@ mechanism carries over unchanged.)
 a dedicated test file in the original app; both were previously exercised
 only indirectly through whatever called them. TTL expiry is tested by
 backdating rows directly via raw SQL rather than sleeping.
+
+## Exploration containers
+
+Threaded saves use the same SQLite row with a versioned exploration container.
+Each ordered child retains the existing session payload. The parent count sums
+its threads as a list-view hint; it does not claim globally distinct papers.
+The storage layer never eagerly migrates legacy blobs. The frontend reads them
+without writing, then uses the new shape on a later edited save.

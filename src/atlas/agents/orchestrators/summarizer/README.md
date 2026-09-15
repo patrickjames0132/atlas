@@ -145,3 +145,11 @@ and a trailing period), an empty conversation never reaches the model, and a
 raising model degrades to None. The route behaviour lives in
 `test/atlas/routes/test_graph.py` (TL;DR cache hit/miss/error) and
 `test/atlas/routes/test_sessions.py` (title validation, and null-as-200).
+
+## Thread summaries
+
+`summary_for_thread` is a fourth micro-agent sharing the summarizer model. It
+combines the previous paragraph with completed discussion prose, bounded to
+24,000 input characters and 1,500 output characters. It is called only when a
+thread settles and its transcript has advanced, separately from saving. Failure
+returns None so a missing model never prevents persistence.
