@@ -243,7 +243,8 @@ The Vite dev server proxies `/api/*` to Flask.
    **alt-drag** a marquee to add papers to the teacher's scope (additive —
    several sweeps build one cluster), **shift-click** to add/remove one, and
    **alt-click** empty (or **Clear**) to reset. Picked papers ring cyan and the
-   rest dim; the teacher then grounds only in your selection. Click the
+   rest dim; the teacher then grounds only in your selection — even papers a
+   filter later hides, which stay drawn with a dotted ring. Click the
    **Atlas** brand anytime to go home. By default the app **sizes each graph
    for you** (how many landmark citers to ship, where the Latest bands start —
    per seed); turn **"Size graphs automatically" off** in Settings ▸ Graph to
@@ -264,25 +265,28 @@ The Vite dev server proxies `/api/*` to Flask.
      means re-seeding the graph on it first. Four mode buttons did that carving
      for you until v7.17.0 — and in doing so *overrode* whatever you had
      filtered or selected.
-     Scoping is not just hand-picking: the **filter chips** (the seed included —
-     it has its own chip now), the **year range**, the **citation window** and the
-     per-chip count sliders all narrow what a lecture covers, because they all
-     narrow what is on screen. And the lecture takes that literally — it will
-     not narrate a paper the assistant found earlier if your filters are
-     currently hiding it.
-     **Or say which papers in the message itself** — *"lecture me on the
-     references"*, *"on the citations"*, *"on the seed"*, *"on the Bekenstein
-     paper and Hawking 1975"*, *"on this paper: Attention Is All You Need"*.
-     A period works too, alone or on top of any of those — *"summarize the
-     papers between 2016 and 2017"*, *"the references from the 2010s"*,
-     *"everything since 2020"*, *"the last five years"*. Those are selected
-     on the map first, brought back on screen if a chip or slider was hiding
-     them, and then narrated — so what you see ringed is what the lecture is
-     about; when it finishes the ring lets go and the whole lecture stays
-     lit instead (click its bubble any time to light it again, Esc to
-     clear). A message that names nothing in particular narrates what is on
-     screen, as before; one that names papers the graph doesn't have says so
-     instead of lecturing on everything.
+     **What a turn is about follows one rule, for lectures and questions
+     alike:** what your message asks for, else your hand-picked selection,
+     else what your filters show. So the **filter chips** (the seed included
+     — it has its own chip), the **year range**, the **citation window** and
+     the per-chip count sliders set the *default* — narrow the view and
+     "lecture me on these" or "which of these used dropout?" covers what's
+     left. A selection outranks them (a picked paper a slider later hides
+     stays in scope and stays drawn, dotted). And **the message outranks
+     both** — *"lecture me on the references"*, *"what do the citations say
+     about entropy?"*, *"on the seed"*, *"on the Bekenstein paper and Hawking
+     1975"*, *"what does Hawking 1975 argue?"*, plus a period on top of any of
+     those — *"the references from the 2010s"*, *"the last five years"*.
+     Those papers become the selection — ringed, drawn even if a chip or
+     slider hides them, narrated or answered over — and stay selected
+     afterwards, exactly as if you'd marqueed them (Esc clears). Each reply
+     says what it was scoped to (*"Scoped to the references, 2010–2019 · 12
+     papers"*). A bare period (*"the papers between 2016 and 2017"*) narrows
+     what you were already looking at rather than reaching past the year
+     slider. A message that asks for papers the graph doesn't have says so
+     instead of quietly answering over everything. When a lecture finishes
+     the whole of it stays lit (click its bubble any time to light it again,
+     Esc to clear).
      **One choice the scope can't make for you, so your words make it:**
      say *history* — *"the story of"*, *"how we got here"* — and the papers
      are told as a chronological arc; otherwise they are grouped into their

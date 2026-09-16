@@ -3,10 +3,12 @@
 **Intent:** `lecture` — the reader asked for one in the chat bar, and the
 router sent the message here.
 
-**Input:** seed paper, the nodes the reader has **scoped** on screen — their
-filters and selection, or, since v7.23.0, the set their message named
-("lecture me on the references", "…on the Bekenstein paper"), which the
-frontend has already selected and revealed on the canvas before calling —
+**Input:** seed paper, the nodes the reader has **scoped** — resolved by the
+frontend under one contract shared with the research workflow
+(`frontend/src/scope/README.md`, v7.24.0): what the message asked for
+("lecture me on the references", "…on the Bekenstein paper", "…from the
+2010s"), else their hand-picked selection, else what passes their view
+filters; held on the canvas as the turn's scope before this is called —
 the `framing` (`summary` | `history`) read off the message, and — for a
 bridge lecture only — a target paper.
 

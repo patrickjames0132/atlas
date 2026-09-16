@@ -52,8 +52,12 @@ export interface GraphCanvasProps {
   pinned: Set<string>
   /** The selected node id (bright ring + always-on label). */
   selectedId: string | null
-  /** Hand-picked nodes scoping the teacher (cyan ring; others dim). */
+  /** The teacher's scope — the running turn's message scope, else the
+   *  hand-picked selection (cyan ring; others dim). */
   selectedIds: Set<string>
+  /** Scoped nodes the view filters would hide, drawn anyway (dotted outer
+   *  ring: "shown because it is in scope"). A subset of `selectedIds`. */
+  ghostIds: Set<string>
   /** Nodes the teacher is currently talking about (gold glow + ring). */
   highlightIds: Set<string>
   /** Select / re-seed handler (single vs. quick double click); the DOM event
@@ -94,6 +98,7 @@ export default function GraphCanvas({
   pinned,
   selectedId,
   selectedIds,
+  ghostIds,
   highlightIds,
   onNodeClick,
   onNodeHover,
@@ -188,13 +193,26 @@ export default function GraphCanvas({
           ctx.stroke()
         }
         if (isPicked && !dim) {
-          // Cyan ring marks a node hand-picked into the teacher's scope. Drawn
-          // just outside the fill so it coexists with a pin/select/lit ring.
+          // Cyan ring marks a node in the teacher's scope. Drawn just outside
+          // the fill so it coexists with a pin/select/lit ring.
           ctx.beginPath()
           ctx.arc(node.x, node.y, radius + 2.5, 0, 2 * Math.PI)
           ctx.lineWidth = 2 / globalScale
           ctx.strokeStyle = SELECTION_RING
           ctx.stroke()
+          if (ghostIds.has(node.id)) {
+            // A dotted ring outside the scope ring: this paper is on screen
+            // ONLY because it is in scope — the view filters would hide it.
+            // The mark is what keeps "the filters are a lens" honest: the
+            // reader can see which papers the lens would have dropped.
+            ctx.beginPath()
+            ctx.arc(node.x, node.y, radius + 5, 0, 2 * Math.PI)
+            ctx.lineWidth = 1.2 / globalScale
+            ctx.strokeStyle = canvasInk.soft
+            ctx.setLineDash([1.5 / globalScale, 2.5 / globalScale])
+            ctx.stroke()
+            ctx.setLineDash([])
+          }
         }
         if (isSel) {
           ctx.lineWidth = 2 / globalScale

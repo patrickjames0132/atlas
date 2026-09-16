@@ -2,10 +2,10 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The workspace slice's node-selection reducers and grounding scope: setting /
- * adding / toggling / clearing the hand-picked selection (with dedupe), and the
- * `selectGroundingNodes` intersection semantics — a non-empty selection narrows
- * grounding to `selected ∩ visible`, while discoveries are always kept.
+ * The workspace slice's node-selection reducers and the default scope: setting
+ * / adding / toggling / clearing the hand-picked selection (with dedupe), the
+ * `selectScope` rule — the selection when there is one, whatever the filters
+ * show, else what passes them.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -21,11 +21,8 @@ import reducer, {
   nodeSelectionCleared,
   nodeSelectionSet,
   nodeSelectionToggled,
-  lectureScopeApplied,
-  lectureScopeReleased,
   providerSet,
-  selectGroundingNodes,
-  selectLectureNodes,
+  selectScope,
   restoreSession,
   switchProvider,
   visibleNodesSet,
@@ -89,7 +86,7 @@ describe('node-selection reducers', () => {
   })
 })
 
-describe('selectGroundingNodes', () => {
+describe('selectScope — the default scope', () => {
   const graph = makeGraph([makeNode('a'), makeNode('b'), makeNode('c')])
 
   /** Build a root state around a workspace patch, from the slice's initial. */
@@ -97,79 +94,45 @@ describe('selectGroundingNodes', () => {
     return { workspace: { ...initial(), graph, ...patch } }
   }
 
-  it('grounds in the whole visible set when nothing is picked', () => {
-    const grounding = selectGroundingNodes(stateWith({ visibleNodeIds: ['a', 'b', 'c'] }))
-    expect(grounding.map((node) => node.id)).toEqual(['a', 'b', 'c'])
+  it('is what passes the filters when nothing is picked', () => {
+    const scope = selectScope(stateWith({ visibleNodeIds: ['a', 'b'] }))
+    expect(scope.source).toBe('visible')
+    expect(scope.nodes.map((node) => node.id)).toEqual(['a', 'b'])
   })
 
-  it('narrows to selected ∩ visible when a selection exists', () => {
-    // 'c' is picked but hidden by the filter, so it drops; 'a' is picked and
-    // visible, so it stays; 'b' is visible but not picked, so it drops.
-    const grounding = selectGroundingNodes(
+  it('is the selection when there is one — whatever the filters show', () => {
+    // 'c' is picked but hidden by the filter: it STAYS. The reader chose it;
+    // a slider dragged afterwards is a view choice, not a retraction. (Until
+    // v7.24.0 this was selected ∩ visible, and 'c' silently dropped out.)
+    const scope = selectScope(
       stateWith({ visibleNodeIds: ['a', 'b'], selectedNodeIds: ['a', 'c'] }),
     )
-    expect(grounding.map((node) => node.id)).toEqual(['a'])
+    expect(scope.source).toBe('selection')
+    expect(scope.nodes.map((node) => node.id)).toEqual(['a', 'c'])
   })
 
-  it('always keeps discoveries, even outside the selection', () => {
+  it('treats a discovery like any other paper: in when the filters admit it, out when not', () => {
+    // The researcher used to keep every discovery regardless. Under the one
+    // contract a hidden discovery stays in the workspace but is not evidence
+    // for the turn unless the reader selects or names it.
     const discovered = makeNode('d', { discovered: true })
-    const grounding = selectGroundingNodes(
-      stateWith({
-        visibleNodeIds: ['a', 'b'],
-        selectedNodeIds: ['a'],
-        discoveredNodes: [discovered],
-      }),
-    )
-    // 'a' (selected ∩ visible) plus the discovery, which the selection can't drop.
-    expect(grounding.map((node) => node.id)).toEqual(['a', 'd'])
+    const hidden = stateWith({ visibleNodeIds: ['a', 'b'], discoveredNodes: [discovered] })
+    expect(selectScope(hidden).nodes.map((node) => node.id)).toEqual(['a', 'b'])
+    const shown = stateWith({ visibleNodeIds: ['a', 'd'], discoveredNodes: [discovered] })
+    expect(selectScope(shown).nodes.map((node) => node.id)).toEqual(['a', 'd'])
+    const picked = stateWith({
+      visibleNodeIds: ['a'],
+      selectedNodeIds: ['d'],
+      discoveredNodes: [discovered],
+    })
+    expect(selectScope(picked).nodes.map((node) => node.id)).toEqual(['d'])
   })
 
-  it('is empty when the selection intersects nothing visible', () => {
-    const grounding = selectGroundingNodes(
-      stateWith({ visibleNodeIds: ['a', 'b'], selectedNodeIds: ['c'] }),
-    )
-    expect(grounding).toEqual([])
-  })
-})
-
-describe('selectLectureNodes — strictly what is on screen', () => {
-  const graph = makeGraph([makeNode('a'), makeNode('b'), makeNode('c')])
-
-  /** Build a root state around a workspace patch, from the slice's initial. */
-  function stateWith(patch: Partial<WorkspaceState>) {
-    return { workspace: { ...initial(), graph, ...patch } }
-  }
-
-  it('drops a discovery the filters exclude, where grounding keeps it', () => {
-    // The one place the two scopes diverge, and the reason there are two. An
-    // answer may draw on a paper the agent found even when a filter hides it —
-    // the agent pulled it in deliberately. A lecture promises to narrate the
-    // papers you have ON SCREEN, so narrating one you cannot see breaks its
-    // only rule, and you have no way to tell why it appeared.
-    const hidden = makeNode('d', { discovered: true })
-    const state = stateWith({ visibleNodeIds: ['a', 'b'], discoveredNodes: [hidden] })
-    expect(selectGroundingNodes(state).map((node) => node.id)).toEqual(['a', 'b', 'd'])
-    expect(selectLectureNodes(state).map((node) => node.id)).toEqual(['a', 'b'])
-  })
-
-  it('keeps a discovery that IS visible', () => {
-    // Discoveries are merged into the graph and normally visible; only a
-    // filter excluding one makes the scopes differ at all.
-    const shown = makeNode('d', { discovered: true })
-    const state = stateWith({ visibleNodeIds: ['a', 'd'], discoveredNodes: [shown] })
-    expect(selectLectureNodes(state).map((node) => node.id)).toEqual(['a', 'd'])
-  })
-
-  it('still narrows to selected ∩ visible like grounding does', () => {
-    const state = stateWith({ visibleNodeIds: ['a', 'b'], selectedNodeIds: ['a', 'c'] })
-    expect(selectLectureNodes(state).map((node) => node.id)).toEqual(['a'])
-  })
-
-  it('is empty when nothing is visible, so the backend falls back to the seed', () => {
-    // A reader can now filter every paper away — the seed has a chip too — and
-    // an empty scope is a real state, not a bug. `_story_nodes` on the backend
-    // treats it as "lecture the seed".
-    expect(selectLectureNodes(stateWith({ visibleNodeIds: [] }))).toEqual([])
+  it('is empty when nothing passes the filters, so the backend falls back to the seed', () => {
+    // A reader can filter every paper away — the seed has a chip too — and an
+    // empty default scope is a real state, not a bug. `_story_nodes` on the
+    // backend treats it as "lecture the seed".
+    expect(selectScope(stateWith({ visibleNodeIds: [] })).nodes).toEqual([])
   })
 })
 
@@ -268,49 +231,6 @@ describe('selection lifecycle', () => {
     let state = reducer(initial(), nodeSelectionSet(['a']))
     state = reducer(state, visibleNodesSet(['a', 'b', 'c']))
     expect(state.selectedNodeIds).toEqual(['a'])
-  })
-})
-
-describe('a lecture scope named by a message', () => {
-  it('becomes the selection, with the hidden part revealed', () => {
-    const state = reducer(
-      initial(),
-      lectureScopeApplied({ ids: ['a', 'b', 'a'], hidden: ['b', 'b'] }),
-    )
-    expect(state.selectedNodeIds).toEqual(['a', 'b'])
-    expect(state.revealedNodeIds).toEqual(['b'])
-  })
-
-  it('survives a hand edit to the selection but dies with a clear', () => {
-    // Shift-clicking one more paper into an inferred scope must not hide the
-    // ones the message revealed; Esc / alt-click-empty drops the lot, since a
-    // reveal without the selection it served is a filter silently ignored.
-    let state = reducer(initial(), lectureScopeApplied({ ids: ['a', 'b'], hidden: ['b'] }))
-    state = reducer(state, nodeSelectionToggled('c'))
-    expect(state.revealedNodeIds).toEqual(['b'])
-    state = reducer(state, nodeSelectionCleared())
-    expect(state.selectedNodeIds).toEqual([])
-    expect(state.revealedNodeIds).toEqual([])
-  })
-
-  it('is released when its lecture ends — the selection only, not the reveal', () => {
-    let state = reducer(initial(), lectureScopeApplied({ ids: ['a', 'b'], hidden: ['b'] }))
-    state = reducer(state, lectureScopeReleased(['b', 'a']))
-    expect(state.selectedNodeIds).toEqual([])
-    expect(state.revealedNodeIds).toEqual(['b'])
-  })
-
-  it('is not released over a selection the reader changed meanwhile', () => {
-    let state = reducer(initial(), lectureScopeApplied({ ids: ['a', 'b'], hidden: ['b'] }))
-    state = reducer(state, nodeSelectionToggled('c'))
-    state = reducer(state, lectureScopeReleased(['a', 'b']))
-    expect(state.selectedNodeIds).toEqual(['a', 'b', 'c'])
-  })
-
-  it('is reset by a new exploration', () => {
-    let state = reducer(initial(), lectureScopeApplied({ ids: ['a'], hidden: ['a'] }))
-    state = reducer(state, workspaceCleared({ conversationKey: 'k' }))
-    expect(state.revealedNodeIds).toEqual([])
   })
 })
 

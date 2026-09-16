@@ -169,11 +169,13 @@ export default function GraphControls({
   const citePct = (position: number) => (position / CITE_SLIDER_STEPS) * 100
 
   // One readout string for the expanded footer AND the collapsed bar: a
-  // hand-pick wins over the plain filter count, and its denominator is the
-  // SHOWN papers — honest to the teacher scope (selected ∩ visible).
+  // hand-pick wins over the plain filter count. No denominator on the pick
+  // since v7.24.0 — the selection outranks the filters (`scope/README.md`),
+  // so it is not "out of the shown papers": a selected paper the filters
+  // hide is still in scope, still drawn, and would make "5 / 3" a lie.
   const countReadout =
     selectedCount > 0
-      ? `${selectedCount} / ${visibleCount} papers selected`
+      ? `${selectedCount} paper${selectedCount === 1 ? '' : 's'} selected`
       : `${visibleCount} / ${totalCount} papers shown`
 
   return (

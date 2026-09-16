@@ -236,6 +236,38 @@ describe('the graph a turn came from', () => {
   })
 })
 
+describe('the scope line', () => {
+  it('says what a turn was scoped to, unless that was simply what was on screen', () => {
+    const { unmount } = render(
+      <ChatMessage
+        message={turn({
+          text: 'Entropy is area.',
+          scope: {
+            source: 'message',
+            kind: 'references',
+            years: { from: 2010, to: 2019 },
+            nodes: 12,
+          },
+        })}
+        active={false}
+        streaming={false}
+        onEnlarge={() => {}}
+      />,
+    )
+    expect(screen.getByText('Scoped to the references, 2010–2019 · 12 papers')).toBeTruthy()
+    unmount()
+    render(
+      <ChatMessage
+        message={turn({ text: 'Entropy is area.', scope: { source: 'visible', nodes: 40 } })}
+        active={false}
+        streaming={false}
+        onEnlarge={() => {}}
+      />,
+    )
+    expect(screen.queryByText(/Scoped to/)).toBeNull()
+  })
+})
+
 describe('the route line', () => {
   it('names the assistant that answered and offers the other one', () => {
     render(

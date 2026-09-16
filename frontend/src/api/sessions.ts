@@ -100,9 +100,9 @@ export interface ChatMsg {
   graph?: {
     seedId: string
     seedTitle: string
-    /** Papers in scope for this turn: the grounding set for an answer, the
-     *  narrated set for a lecture. The two differ (see `selectLectureNodes`),
-     *  so each turn stores its own rather than the graph's node count. */
+    /** Papers in scope for this turn — the resolved scope's size, stored per
+     *  turn rather than the graph's node count because the scope is the
+     *  turn's own (see `scope/resolve.ts`). */
     nodes: number
     /**
      * The backend `seedId` belongs to. Stored because the line this feeds is
@@ -121,6 +121,17 @@ export interface ChatMsg {
    * correction the reader made themselves).
    */
   routedTo?: 'lecture' | 'answer'
+  /**
+   * Where this turn's scope came from and what it asked for (v7.24.0) —
+   * the snapshot `send` resolved once and handed to whichever agent
+   * answered. `source` is the rung of the priority list that decided it
+   * (message / selection / visible); `kind`, `years` and `ids` are the
+   * message's request when there was one, kept so a correction or retry
+   * can ask for the same thing again against the graph as it stands then.
+   * Persisted so the transcript's "Scoped to …" line survives a reload.
+   * Absent on turns before this, and graph-free.
+   */
+  scope?: TurnScope
   /** The agent steps that produced this answer (assistant turns only). */
   trace?: TraceEvent[]
   /**
@@ -177,12 +188,21 @@ export interface SessionGraphRef {
  * rebuild reproduces them, because they are a product of the conversation
  * rather than of the seed. They are merged back over the rebuilt graph.
  */
+/** A turn's resolved scope, as stamped on the assistant message. */
+export interface TurnScope {
+  source: 'message' | 'selection' | 'visible'
+  /** How many papers were in scope. */
+  nodes: number
+  /** The message's request, when the message chose the scope. */
+  kind?: 'screen' | 'references' | 'citations' | 'seed' | 'named'
+  years?: { from: number | null; to: number | null }
+  /** For a `named` request, the ids the resolver found. */
+  ids?: string[]
+}
+
 export interface SessionData {
   viewFilters?: import('../store/workspace').WorkspaceState['viewFilters']
   selectedNodeIds?: string[]
-  /** Nodes a message's lecture scope forced past the view filters (v7.23.0);
-   *  saved with the selection they belong to, so a restored scope shows. */
-  revealedNodeIds?: string[]
   /** Versioned exploration container; each child data uses the existing session shape. */
   exploration?: {
     version: 1

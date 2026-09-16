@@ -38,7 +38,6 @@ import {
   nodeSelectionToggled,
   selectHasDiscovered,
   selectNodeSelectionSet,
-  selectRevealedSet,
   selectWorkspace,
   visibleNodesSet,
 } from '../store/workspace'
@@ -111,12 +110,12 @@ export default function GraphExplorer({
   const savedFilters = useAppSelector((state) => state.workspace.viewFilters)
   const initialFilters = useRef(savedFilters)
   const highlightIds = useAppSelector(selectHighlightSet)
+  // The teacher's scope — the reader's pick, or the one a message chose
+  // (`send` makes it the selection). It sits ABOVE the filters (see
+  // `scope/resolve.ts`), so a selected paper the filters would hide is drawn
+  // anyway, marked — the view shows what the agent is reasoning over, and a
+  // filter is a lens, not a retraction of a pick or an ask.
   const selectedIds = useAppSelector(selectNodeSelectionSet)
-  // Papers a typed lecture request reached for past the filters ("lecture me
-  // on the references" with the references chip off). The view shows them
-  // whatever the chips, sliders and caps say — the message chose the scope,
-  // and a lecture must narrate what is on screen. See `lectureScopeApplied`.
-  const revealedIds = useAppSelector(selectRevealedSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
 
   // Declutter controls, one chip per relation. Two relations used to be held
@@ -356,7 +355,14 @@ export default function GraphExplorer({
   }, [base])
 
   const view = useMemo(() => {
-    if (!base) return { nodes: [] as VNode[], links: [] as VLink[] }
+    if (!base) {
+      return {
+        nodes: [] as VNode[],
+        links: [] as VLink[],
+        eligibleIds: new Set<string>(),
+        ghostIds: new Set<string>(),
+      }
+    }
     // The citation window a neighbor must fall inside (0…maxCitations = filter
     // off). The backend already ranks by citations and caps the pool; this is a
     // live display trim on top of it.
@@ -383,9 +389,6 @@ export default function GraphExplorer({
       }
     })
     const nodeOk = (node: VNode) => {
-      // Forced on screen by a lecture scope: every filter below is a way the
-      // reader narrowed the view, and the message overrode them for these.
-      if (revealedIds.has(node.id)) return true
       // The seed has its own chip since v7.17.0 — it used to be unconditionally
       // shown, which made it the one paper a reader could not scope out of a
       // lecture. Still exempt from the year and citation sliders below: those
@@ -419,26 +422,36 @@ export default function GraphExplorer({
     // its enabled relations, mirroring the reachability rule above: a paper
     // that's both a top reference and a mid-ranked landmark keeps the slot its
     // best relation earns it.
-    const nodes = capsActive
+    const eligible = capsActive
       ? filtered.filter((node) => {
           const capped = node.rels.filter((rel) => enabled.has(rel) && relCaps[rel] !== undefined)
-          // No capped relation applies (or it's the seed, or a paper the
-          // lecture scope forced on screen) — nothing to trim by.
-          if (node.is_seed || capped.length === 0 || revealedIds.has(node.id)) return true
+          // No capped relation applies (or it's the seed) — nothing to trim by.
+          if (node.is_seed || capped.length === 0) return true
           return capped.some((rel) => (relRank.get(rel)?.get(node.id) ?? 0) < relCaps[rel])
         })
       : filtered
+    // ELIGIBILITY vs DRAWING. `eligible` is what the filters admit, and it is
+    // what gets published as the default scope. On top of it the canvas also
+    // draws every scoped paper the filters would hide (`ghosts`) — a selected
+    // paper after a slider change, "the references" with the references chip
+    // off — because the scope outranks the filters and the reader should see
+    // what the agent is reasoning over. Kept apart on purpose: if the drawn
+    // set were published, a paper shown only because it was asked for would
+    // leak into the default scope of the next, unscoped question.
+    const eligibleIds = new Set(eligible.map((node) => node.id))
+    const ghosts = base.nodes.filter(
+      (node) => selectedIds.has(node.id) && !eligibleIds.has(node.id),
+    )
+    const nodes = [...eligible, ...ghosts]
     const ids = new Set(nodes.map((node) => node.id))
-    // A revealed paper keeps its edges even when their chip is off, or it
-    // would float unattached — the chip hid the relation, the message
-    // brought it back.
-    const revealedLink = (link: VLink) => revealedIds.has(link._s) || revealedIds.has(link._t)
+    const ghostIds = new Set(ghosts.map((node) => node.id))
+    // A ghost keeps its edges even when their chip is off, or it would float
+    // unattached — the chip hid the relation, the scope brought it back.
+    const ghostLink = (link: VLink) => ghostIds.has(link._s) || ghostIds.has(link._t)
     const links = base.links
-      .filter(
-        (link) => (linkOk(link) || revealedLink(link)) && ids.has(link._s) && ids.has(link._t),
-      )
+      .filter((link) => (linkOk(link) || ghostLink(link)) && ids.has(link._s) && ids.has(link._t))
       .map((link) => ({ ...link, source: link._s, target: link._t }))
-    return { nodes, links }
+    return { nodes, links, eligibleIds, ghostIds }
     // graphVersion isn't read directly — it's a signal that base.nodes/links
     // were mutated in place (discoveries) and this must recompute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -454,14 +467,14 @@ export default function GraphExplorer({
     capsActive,
     relCaps,
     relRank,
-    revealedIds,
+    selectedIds,
   ])
 
-  // Publish the on-screen node ids so agent grounding (selectGroundingNodes)
-  // tracks the visible view, not the whole shipped pool. Fires whenever the
-  // filters change; consumers re-render only when the id set actually differs.
+  // Publish the filter-passing ids — the default scope (`selectScope`) — not
+  // the drawn set, which also holds the ghosts. Fires whenever the filters
+  // change; consumers re-render only when the id set actually differs.
   useEffect(() => {
-    dispatch(visibleNodesSet(view.nodes.map((node) => node.id)))
+    dispatch(visibleNodesSet([...view.eligibleIds]))
   }, [view, dispatch])
 
   // Alt-drag marquee selection: arms while Alt is held, captures the drag on an
@@ -628,7 +641,7 @@ export default function GraphExplorer({
               dispatch(threadEdited())
               setCiteHi(value)
             }}
-            visibleCount={view.nodes.length}
+            visibleCount={view.eligibleIds.size}
             totalCount={base!.nodes.length}
             selectedCount={selectedIds.size}
             litCount={highlightIds.size}
@@ -653,6 +666,7 @@ export default function GraphExplorer({
             pinned={pinned}
             selectedId={selectedId}
             selectedIds={selectedIds}
+            ghostIds={view.ghostIds}
             highlightIds={litSet}
             onNodeClick={onCanvasNodeClick}
             onNodeHover={setHoverId}
@@ -692,7 +706,7 @@ export default function GraphExplorer({
             onSelectAll={onFindSelectAll}
           />
         )}
-        {hasGraph && <Legend hasDiscovered={hasDiscovered} />}
+        {hasGraph && <Legend hasDiscovered={hasDiscovered} hasGhosts={view.ghostIds.size > 0} />}
       </main>
 
       {selected && (

@@ -77,7 +77,8 @@ make it coexist with the sim's own drag-to-pan:
 
 The selected ids live in the **workspace slice** (`selectedNodeIds`) — the one
 piece of this hook's state that's genuinely cross-cutting, since
-`selectGroundingNodes` reads it to scope the teacher. The rectangle and the
+`scope/resolve.ts` reads it to scope the teacher (the selection is the
+middle rung of its priority list, above the filters). The rectangle and the
 `armed` flag stay local (only the canvas paints them).
 
 ## `useEscapeClear` — one key drops every highlight

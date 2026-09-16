@@ -16,42 +16,29 @@ chat replies with beats, including real figures and citations. (A `/lecture`
 command was the explicit path from v7.21.0 to v7.23.0; asking in words
 replaced it once the router could read everything the command said, and more.)
 
-**A lecture's scope is the message's to choose** (v7.23.0). The route carries
-a `scope` — `screen` when the message did not say, which is what every lecture
-used to be and still the common case; `references`, `citations`, `seed`; or
-`named`, meaning the message pointed at specific papers — and a **year
-window** (`year_from`/`year_to`) when the message limited it to a period,
-which combines with any scope: "the references from the 2010s" is a relation
-and a window, "the papers between 2016 and 2017" is the graph and a window.
-`lectureScope.ts` turns that into nodes on the current graph: "the
-references" are the reference-tagged nodes (the tag the paper is coloured by
-and the set its chip toggles, so the word means the same said as clicked),
-"the seed" is the solo lecture, a period filters off the *whole* graph (a
-year the sliders exclude is exactly what the message should reach past —
-narrowed within a hand-picked selection when there is one), and a `named`
-scope pays one more call (`resolveRoutedPapers`, with the graph's
-titles/authors/years only — never abstracts) to turn nicknames and
-author-year references into ids. `send` then puts the scope on the canvas
-*before* the lecture starts — `lectureScopeApplied` makes it the hand-picked
-selection and **reveals** whichever of those papers a chip or slider was
-hiding, so the reader sees what is about to be narrated and the lecturer's
-one promise (it narrates what is on screen) holds — and hands the same nodes
-to `lectureInChat` explicitly, because the canvas republishes its visible set
-only on its next render. A scope that matches nothing on the graph fails the
-turn in words; lecturing on everything instead would be the app deciding it
-knew better, which is the override this app keeps having to remove.
+**Which papers a turn is about is one rule, shared by both agents**
+(v7.24.0, `scope/README.md` has the full story): what the message asked
+for, else the hand-picked selection, else what passes the view filters.
+`send` resolves it **once**, with the router's `scope`/period in play — "the
+references", "the seed", named papers (one more call, `resolveRoutedPapers`,
+with titles/authors/years only), "between 2016 and 2017" — and hands the
+same `ResolvedScope` to `ask` or `lectureInChat`, which stamp it on the turn
+(`ChatMsg.scope`, shown as *"Scoped to the references, 2010–2019 · 12
+papers"*) and never read the store for it again. A message scope **becomes
+the selection** (`nodeSelectionSet`: ringed, drawn even where a filter would
+hide it) and stays after the turn, like a pick made by hand — Patrick's
+call: a request that changes the scope changes it, it does not borrow it. A
+message scope that matches nothing **fails the turn in words** for either
+agent, never falling through to the next rung, and leaves the selection as
+it was. A correction (`reroute`) or a retry re-resolves the turn's *stamped
+request* against the graph as it stands now, sets the selection again, and
+re-asks. Callers that skip routing (graph-free asks) take `selectScope`, the
+default.
 
-**The scope is one-shot** (Patrick, 2026-09-15: the request should force the
-scope, but once the lecture finishes it should only be *highlighting* the
-papers). The selection holds while the lecture streams — papers ringed, the
-rest dimmed, "Scoped to N papers" in the panel — and `lectureScopeReleased`
-lets it go when the stream ends, unless the reader re-picked meanwhile. What
-stays is the highlight: every lecture, scoped or not, ends with all of its
-beats' papers lit and its bubble active — the same state as clicking the
-bubble — where before only the last beat stayed lit, which read as the
-lecture pointing at its ending rather than at what it covered. The revealed
-papers stay on screen too (a released reveal would hide the very papers the
-highlight is lighting) until the next Esc.
+Every lecture ends with all of its beats' papers lit and its bubble active —
+the same state as clicking the bubble — rather than the last beat alone,
+which read as the lecture pointing at its ending rather than at what it
+covered.
 
 Bare paper mentions and pasted paper ids open graph threads. Paper mentions
 inside questions attach those papers without changing the graph. `@thread` opens
@@ -84,9 +71,10 @@ threads. Borrowing a discussion never silently swaps the canvas.
 ## Scopes and citations
 
 Source exclusions remain panel-local; the uploaded-source list is shared Redux
-state. The graph selectors own paper scope. Researchers can retain discoveries
-that filters hide; lectures narrate only the visible selection. Scope changes do
-not invalidate earlier answers.
+state. `scope/resolve.ts` owns paper scope, for lectures and answers alike; a
+discovery is in scope on the same terms as any other paper (eligible,
+selected or named — no longer kept regardless for the researcher). Scope
+changes do not invalidate earlier answers; each turn keeps its own stamp.
 
 Paper citations highlight their node on the current graph, toggling off on a
 second click. Graph icons on search references open or resume that paper's
@@ -106,10 +94,11 @@ rendering boundary; `figures/README.md` describes figure placement.
 
 `test/teacher/useConversation.test.tsx` runs the real hook through a lecture and
 an ordinary follow-up, asserting that researcher history includes the lecture —
-and through each routed scope, asserting what reaches the lecturer, what the
-canvas is scoped to, which hidden papers are revealed, and that an unmatched
-named scope fails the turn without streaming. `lectureScope.test.ts` pins the
-scope-to-nodes rule and the thin resolver list. `history.test.ts` covers
+and through the scope priority list's acceptance cases (see
+`scope/README.md`): what reaches each agent, a message scope becoming the
+selection and staying, an unmatched scope failing the turn, a correction
+re-asking for the same papers. `test/scope/resolve.test.ts` pins
+the rule itself. `history.test.ts` covers
 incomplete exchanges and figure-marker removal. Teacher and transcript
 component tests exercise layout controls, lecture folding and citation clicks
 offline. Browser handoff checks the complete flow:

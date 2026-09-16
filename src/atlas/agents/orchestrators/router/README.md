@@ -103,6 +103,14 @@ period, and the prompt says so. Measured after the scope and period joined
 the prompt: **~0.9–1.1s** per classify on `claude-haiku-4-5`, up from the
 ~780ms median below — a longer prompt, paid on every message.
 
+Since v7.24.0 the scope and period are read for a **question** exactly as
+for a lecture — "what do the references say about entropy?" is `references`,
+"who wrote the seed?" is `seed`, "which of these used dropout?" is `screen` —
+because the researcher grounds in the scope the same way the lecturer
+narrates it, under one frontend contract (`frontend/src/scope/README.md`).
+The prompt's tie-break is `screen`: it keeps the context the reader already
+set up.
+
 The router says **which kind**, never which ids: it reads the message alone.
 `named` is a promise that a second call can finish the job — and it is a
 separate call, `resolve_papers`, so the graph's paper list crosses the wire
@@ -117,9 +125,10 @@ repeated picks dropped. Its prompt is strict in one direction: match loosely
 points at, since the reader will get a lecture on exactly the list and a
 paper they did not ask for is worse than one that could not be found.
 
-What the frontend does with a scope — selecting those nodes, forcing the
-hidden ones back on screen, failing the turn in words when a named scope
-matches nothing — is `frontend/src/teacher/README.md`'s story. The line
+What the frontend does with a scope — making it the canvas selection,
+drawing the hidden ones, failing the turn in words when an explicit scope
+matches nothing — is `frontend/src/scope/README.md`'s story.
+The line
 between the two halves is worth holding: the backend says what the message
 *means*, the frontend decides what that means *on this graph*, because only
 it knows what is on screen.

@@ -35,8 +35,8 @@ import type {
   Beat,
   GraphNode,
   HistoryTurn,
+  TurnScope,
   LectureFraming,
-  LectureScope,
   MentionPaper,
   Provider,
   SearchOptions,
@@ -63,21 +63,20 @@ import {
   tokenAppended,
   traceAdded,
   turnRouted,
+  turnScopeStamped,
   turnStarted,
   turnCompleted,
   turnContextSet,
 } from '../store/transcript'
 import {
   discoveryMerged,
-  lectureScopeApplied,
-  lectureScopeReleased,
   loadGraph,
-  selectGroundingNodes,
-  selectLectureNodes,
+  nodeSelectionSet,
+  selectScope,
   selectSeedNode,
 } from '../store/workspace'
-import { routePapers, scopeLecture } from './lectureScope'
-import type { YearWindow } from './lectureScope'
+import { emptyScopeMessage, requestsScope, resolveScope, routePapers } from '../scope/resolve'
+import type { ResolvedScope, ScopeRequest } from '../scope/resolve'
 
 /** An inline citation marker in answer prose: a single index (`[7]`) or a
  *  combined list (`[14, 29]`). Group 1 holds the digits and separators; split
@@ -169,41 +168,33 @@ function mentionNode(paper: MentionPaper): GraphNode {
 const threadControllers = new Map<string, { current: AbortController | null }>()
 
 /**
- * What a lecture request that reached for papers the graph lacks is told.
+ * The scope stamp for a turn — what the transcript shows and a correction
+ * re-resolves from.
  *
- * @param scope The routed scope that came up empty.
- * @param years The period it was limited to, if any.
- * @returns The failure line for the turn.
+ * @param scope The turn's resolved scope.
+ * @returns The stamp.
  */
-function scopeFailure(scope: LectureScope, years: YearWindow): string {
-  const period =
-    years.from !== null && years.to !== null
-      ? years.from === years.to
-        ? `from ${years.from}`
-        : `from ${years.from}–${years.to}`
-      : years.from !== null
-        ? `from ${years.from} on`
-        : years.to !== null
-          ? `up to ${years.to}`
-          : ''
-  const subject = {
-    screen: 'papers',
-    references: 'references',
-    citations: 'citations',
-    seed: 'seed paper',
-    named: 'papers',
-  }[scope]
-  if (period) return `This graph has no ${subject} ${period} to lecture on.`
-  switch (scope) {
-    case 'references':
-      return 'This graph has no references to lecture on.'
-    case 'citations':
-      return 'This graph has no citations to lecture on.'
-    case 'seed':
-      return 'This graph has no seed paper to lecture on.'
-    default:
-      return 'None of the papers you named are on this graph — @-mention one to open it, or expand the graph to bring it in.'
+function scopeStamp(scope: ResolvedScope): TurnScope {
+  return {
+    source: scope.source,
+    nodes: scope.nodes.length,
+    ...(scope.request
+      ? { kind: scope.request.kind, years: scope.request.years, ids: scope.request.ids }
+      : {}),
   }
+}
+
+/**
+ * Rebuild a stamped turn's request, so a correction or retry asks for the
+ * same thing again — against the graph as it stands now, which is why the
+ * request is re-resolved rather than the node list reused.
+ *
+ * @param stamp The stamp on the turn being corrected or retried.
+ * @returns The request, or null when the turn's scope was the reader's own.
+ */
+function requestFromStamp(stamp: TurnScope | undefined): ScopeRequest | null {
+  if (!stamp || stamp.source !== 'message' || !stamp.kind) return null
+  return { kind: stamp.kind, ids: stamp.ids ?? [], years: stamp.years ?? { from: null, to: null } }
 }
 
 export function useConversation() {
@@ -212,10 +203,10 @@ export function useConversation() {
   // on screen at the moment of the click, not at the last render.
   const store = useAppStore()
   const seedNode = useAppSelector(selectSeedNode)
-  const groundingNodes = useAppSelector(selectGroundingNodes)
-  // Strictly what's on screen — the lecture's promise, and the one place it
-  // differs from the researcher's grounding (see `selectLectureNodes`).
-  const lectureNodes = useAppSelector(selectLectureNodes)
+  // The default scope — the selection, else what passes the filters — for
+  // the callers that bypass `send` (a correction, a retry, a graph-free ask).
+  // `send` resolves its own, once, with the message's request in play.
+  const defaultScope = useAppSelector(selectScope)
   // Which cited papers are still reachable — a transcript now outlives the
   // graph it was written against, so `[n]` chips are checked before they
   // render as controls.
@@ -410,7 +401,14 @@ export function useConversation() {
       filters?: SearchOptions,
       history?: HistoryTurn[],
       mentioned?: MentionPaper[],
+      scope?: ResolvedScope,
     ) => {
+      // The turn's scope, resolved ONCE — by `send`, with the message's
+      // request in play, or here from the store for the callers that skip
+      // routing. Read at the start and never again: the canvas republishes
+      // its visible set on its next render, and the papers this turn is
+      // about must not change under it.
+      const turnScope = scope ?? defaultScope
       // Supersede whatever was in flight. One controller covers answers and
       // lectures alike now: both are replies to a typed message, and a new
       // message means the reader has moved on from the last one.
@@ -453,12 +451,13 @@ export function useConversation() {
             {
               seedId: seedNode.id,
               seedTitle: seedNode.title,
-              nodes: groundingNodes.length,
+              nodes: turnScope.nodes.length,
               provider,
             },
             key,
           ),
         )
+        dispatch(turnScopeStamped(scopeStamp(turnScope), key))
       }
       // Why it ended, if it ended badly. The default covers the commonest
       // case by far — the run was simply abandoned (tab closed, exploration
@@ -485,11 +484,11 @@ export function useConversation() {
           // as a side effect of a question is exactly the override this app
           // keeps having to remove. A mention already on screen is deduped
           // rather than numbered twice.
-          const onScreen = new Set(groundingNodes.map((node) => node.id))
+          const inScope = new Set(turnScope.nodes.map((node) => node.id))
           const attached = (mentioned ?? [])
-            .filter((paper) => !onScreen.has(paper.id))
+            .filter((paper) => !inScope.has(paper.id))
             .map((paper) => mentionNode(paper))
-          const askNodes = [...attached, ...groundingNodes]
+          const askNodes = [...attached, ...turnScope.nodes]
           const numberedIds = askNodes.map((node) => node.id)
           // No `lectures` argument any more. A played lecture used to be
           // pushed into the prompt here as extra context, gated by the 🎓
@@ -619,7 +618,7 @@ export function useConversation() {
     },
     [
       seedNode,
-      groundingNodes,
+      defaultScope,
       provider,
       chatLength,
       dispatch,
@@ -649,19 +648,16 @@ export function useConversation() {
    *                 turn so the transcript can offer the researcher instead;
    *                 false is a choice the reader made themselves, which needs
    *                 no second-guessing.
-   * @param scoped   The papers to narrate when the *message* chose them
-   *                 ("lecture me on the references") — the same set `send`
-   *                 has just applied to the canvas. Omitted, the lecture is
-   *                 about what is on screen. Passed explicitly rather than
-   *                 read back from the store because the canvas republishes
-   *                 its visible set on its next render, and this runs before
-   *                 that: reading `lectureNodes` here would narrate the
-   *                 scope the message replaced.
+   * @param scope    The turn's scope, resolved once by `send` (or by a
+   *                 correction re-resolving a stamped request). Omitted, the
+   *                 default scope from the store — the selection, else what
+   *                 passes the filters.
    */
   const lectureInChat = useCallback(
-    async (question: string, framing: LectureFraming, routed: boolean, scoped?: GraphNode[]) => {
+    async (question: string, framing: LectureFraming, routed: boolean, scope?: ResolvedScope) => {
       if (!seedNode) return
-      const subject = scoped ?? lectureNodes
+      const turnScope = scope ?? defaultScope
+      const subject = turnScope.nodes
       askCtrl.current?.abort()
       const ctrl = new AbortController()
       askCtrl.current = ctrl
@@ -677,9 +673,7 @@ export function useConversation() {
       const streamId = `ask:${nextStreamId()}`
       dispatch(streamStarted(streamId, key))
       dispatch(turnStarted(question, key))
-      // The subject's count, not `groundingNodes` — it has to be the set
-      // actually narrated, which is the stricter of the two (see
-      // `selectLectureNodes`). `seedNode` is non-null: the guard above returns.
+      // `seedNode` is non-null: the guard above returns.
       dispatch(
         turnGraphSet(
           {
@@ -691,6 +685,7 @@ export function useConversation() {
           key,
         ),
       )
+      dispatch(turnScopeStamped(scopeStamp(turnScope), key))
       if (routed) dispatch(turnRouted('lecture', key))
       let failed = false
       let failure = 'This lecture stopped before it finished.'
@@ -700,10 +695,9 @@ export function useConversation() {
       const litIds: string[] = []
       try {
         await streamLecture(
-          // Strictly what the reader can see — either their own scope, or
-          // the one the message named, which `send` has just put on screen
-          // (selected, and revealed where a filter hid it). Either way the
-          // lecture narrates what is on the canvas, never something invisible.
+          // The turn's scope, which the canvas is drawing — scoped papers the
+          // filters would hide are drawn anyway, marked — so the lecture
+          // narrates what is on the canvas, never something invisible.
           { seed: seedNode, nodes: subject, framing },
           {
             signal: ctrl.signal,
@@ -742,12 +736,10 @@ export function useConversation() {
         // excluded: sending another message aborts this on purpose.
         if (beatCount === 0 && !superseded) dispatch(answerFailed(failure, key))
         if (!superseded) setAsking(false)
-        // The scope the message made was for the lecture, not for afterwards:
-        // let the selection go, and leave the whole lecture lit instead —
-        // the same state as clicking its bubble. The last beat alone stayed
-        // lit before, which read as the lecture still pointing at its
-        // ending rather than at what it covered.
-        if (scoped) dispatch(lectureScopeReleased(scoped.map((node) => node.id)))
+        // The lecture ends with the whole of it lit — the same state as
+        // clicking its bubble. The last beat alone stayed lit before, which
+        // read as the lecture still pointing at its ending rather than at
+        // what it covered.
         if (beatCount > 0 && !superseded && isActive()) {
           setActiveChatBeat(null)
           setActiveChat(turnIdx)
@@ -757,7 +749,7 @@ export function useConversation() {
     },
     [
       seedNode,
-      lectureNodes,
+      defaultScope,
       provider,
       chatLength,
       dispatch,
@@ -778,23 +770,24 @@ export function useConversation() {
    * "teach me these papers" and "which of these used dropout" lives in the
    * words and nowhere else.
    *
-   * **The classify is skipped whenever a lecture is impossible**: no graph, or
-   * nothing visible to lecture about. That is not an optimization, it is the
-   * routing rule — there is no second destination to choose, so paying for a
-   * choice would be spending the reader's latency on a foregone conclusion.
+   * **The classify is skipped whenever there is no graph.** With no second
+   * destination to choose and no papers a message could name, paying for
+   * the choice would be spending the reader's latency on a foregone
+   * conclusion.
    *
-   * **A lecture's scope is the message's to choose** (v7.23.0). The route
-   * says which papers the message asked for — `screen` when it didn't say,
-   * which is every lecture before this and still the common case — and the
-   * rest is `scopeLecture`: "the references" are the reference-tagged nodes,
-   * "the seed" is the seed, and a message that *named* papers pays one more
-   * call to resolve them against the graph. The scope is then put on the
-   * canvas before the lecture starts — selected, and forced past any filter
-   * hiding it — so the reader sees what is about to be narrated and the
-   * lecturer's promise (it narrates what is on screen) holds. A named scope
-   * that matches nothing fails the turn in words rather than lecturing on
-   * everything: the reader asked for a paper, and silence about not finding
-   * it would be the app deciding it knew better.
+   * **The turn's scope is resolved here, once, for whichever agent answers.**
+   * The route says what the message asked for — `screen` when it didn't
+   * say, still the common case; "the references", "the seed", named papers
+   * (one more call to resolve them against the graph), a period — and
+   * `resolveScope` applies the priority list: message, else the hand-picked
+   * selection, else what passes the filters. A message scope **becomes the
+   * selection** (`nodeSelectionSet`: ringed, drawn even where a filter would
+   * hide it) and stays after the turn, like a pick made by hand — a request
+   * that changes the scope changes it, it does not borrow it (Patrick,
+   * 2026-09-15). A message scope that matches nothing fails the turn in
+   * words rather than falling through to the next rung: the reader asked
+   * for papers, and silence about not finding them would be the app
+   * deciding it knew better — and the selection is left as it was.
    *
    * @param question  The message as typed.
    * @param sourceIds Library scope, passed through to {@link ask}.
@@ -808,8 +801,7 @@ export function useConversation() {
       filters?: SearchOptions,
       mentioned?: MentionPaper[],
     ) => {
-      const routable = !!seedNode && lectureNodes.length > 0
-      if (!routable) {
+      if (!seedNode) {
         void ask(question, sourceIds, filters, undefined, mentioned)
         return
       }
@@ -827,11 +819,6 @@ export function useConversation() {
         return
       }
       if (ctrl.signal.aborted) return // superseded; the new send owns `asking`
-      if (decision.target !== 'lecture') {
-        routeCtrl.current = null
-        void ask(question, sourceIds, filters, undefined, mentioned)
-        return
-      }
       const { graph, discoveredNodes, visibleNodeIds, selectedNodeIds } = store.getState().workspace
       let namedIds: string[] = []
       if (decision.scope === 'named') {
@@ -849,18 +836,14 @@ export function useConversation() {
         if (ctrl.signal.aborted) return
       }
       routeCtrl.current = null
-      const years: YearWindow = { from: decision.year_from, to: decision.year_to }
-      const scoped = scopeLecture(
-        decision.scope,
-        namedIds,
-        years,
-        graph,
-        discoveredNodes,
-        visibleNodeIds,
-        selectedNodeIds,
-      )
-      if (scoped && scoped.nodes.length === 0) {
-        // A failed turn, not a silent fallback — see the docblock. Goes
+      const request: ScopeRequest = {
+        kind: decision.scope,
+        ids: namedIds,
+        years: { from: decision.year_from, to: decision.year_to },
+      }
+      const scope = resolveScope(request, graph, discoveredNodes, visibleNodeIds, selectedNodeIds)
+      if (scope.source === 'message' && scope.nodes.length === 0 && requestsScope(request)) {
+        // The empty-scope signal — a failed turn, not a silent fallback. Goes
         // through the ordinary turn actions so it reads, retries and saves
         // like any other failure.
         const key = activeKeyRef.current
@@ -868,19 +851,45 @@ export function useConversation() {
         dispatch(
           turnGraphSet({ seedId: seedNode.id, seedTitle: seedNode.title, nodes: 0, provider }, key),
         )
-        dispatch(turnRouted('lecture', key))
-        dispatch(answerFailed(scopeFailure(decision.scope, years), key))
+        dispatch(turnScopeStamped(scopeStamp(scope), key))
+        dispatch(turnRouted(decision.target, key))
+        dispatch(answerFailed(emptyScopeMessage(request), key))
         setAsking(false)
         return
       }
-      if (scoped) {
-        dispatch(
-          lectureScopeApplied({ ids: scoped.nodes.map((node) => node.id), hidden: scoped.hidden }),
-        )
+      if (scope.source === 'message') {
+        dispatch(nodeSelectionSet(scope.nodes.map((node) => node.id)))
       }
-      void lectureInChat(question, decision.framing, true, scoped?.nodes)
+      if (decision.target === 'lecture') {
+        void lectureInChat(question, decision.framing, true, scope)
+        return
+      }
+      void ask(question, sourceIds, filters, undefined, mentioned, scope)
     },
-    [seedNode, lectureNodes, provider, ask, lectureInChat, store, dispatch],
+    [seedNode, provider, ask, lectureInChat, store, dispatch],
+  )
+
+  /**
+   * Resolve a stamped request again, for a correction or a retry, and make
+   * it the selection the way `send` would. A request that no longer matches
+   * anything fails as an empty scope would — but with nothing to attach the
+   * failure to here, it simply declines, and the caller stops.
+   *
+   * @param request The original turn's request, or null for the default.
+   * @returns The re-resolved scope, or null when an explicit request now
+   *          matches nothing.
+   */
+  const rescope = useCallback(
+    (request: ScopeRequest | null): ResolvedScope | null => {
+      const { graph, discoveredNodes, visibleNodeIds, selectedNodeIds } = store.getState().workspace
+      const scope = resolveScope(request, graph, discoveredNodes, visibleNodeIds, selectedNodeIds)
+      if (scope.source === 'message') {
+        if (scope.nodes.length === 0) return null
+        dispatch(nodeSelectionSet(scope.nodes.map((node) => node.id)))
+      }
+      return scope
+    },
+    [dispatch, store],
   )
 
   /**
@@ -902,16 +911,22 @@ export function useConversation() {
       const answer = conversation.chat[index]
       const question = conversation.chat[index - 1]
       if (!answer || !question || question.role !== 'user') return
+      // The same ask, against the graph as it stands now: the original
+      // turn's request is re-resolved rather than its node list reused, so a
+      // paper expanded since is in, and the selection is set again for the
+      // corrected turn exactly as it was for the first.
+      const scope = rescope(requestFromStamp(answer.scope))
+      if (!scope) return
       // The correction is the reader's own decision, so `routed` is false:
       // the new turn carries no offer to route it back again, which would be
       // an invitation to ping-pong between two answers they already have.
       if (answer.routedTo === 'lecture') {
-        void ask(question.text, undefined, undefined, undefined, undefined)
+        void ask(question.text, undefined, undefined, undefined, undefined, scope)
       } else {
-        void lectureInChat(question.text, 'summary', false)
+        void lectureInChat(question.text, 'summary', false, scope)
       }
     },
-    [ask, lectureInChat, store],
+    [ask, lectureInChat, rescope, store],
   )
 
   /**
@@ -933,18 +948,21 @@ export function useConversation() {
   const retryAnswer = useCallback(
     (index: number) => {
       const conversation = selectConversation(store.getState())
+      const answer = conversation.chat[index]
       const question = conversation.chat[index - 1]
       if (!question || question.role !== 'user') return
       const history = conversationHistory(conversation.chat.slice(0, index - 1))
+      // Read before the turn is dropped: the retry asks for the same papers.
+      const scope = rescope(requestFromStamp(answer?.scope))
       dispatch(failedTurnDropped(index))
-      void ask(question.text, undefined, undefined, history)
+      if (!scope) return
+      void ask(question.text, undefined, undefined, history, undefined, scope)
     },
-    [ask, dispatch, store],
+    [ask, dispatch, rescope, store],
   )
 
   return {
     hasGraph: !!seedNode,
-    groundingNodes: groundingNodes as GraphNode[],
     asking: running > 0 || routing,
     error,
     activeChat,

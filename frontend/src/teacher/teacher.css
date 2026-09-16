@@ -641,6 +641,14 @@
   color: var(--accent);
 }
 
+/* What a turn was scoped to, when the message or the selection chose it.
+   Same register as the routed line below: an account, not a control. */
+.chat-scoped {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* --- A turn the router placed: which assistant answered, and the offer of
    the other. Quiet by design — it is an account of what happened, not a
    control the reader should feel they have to use. --- */
