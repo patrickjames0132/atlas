@@ -169,7 +169,7 @@ def api_route() -> ResponseReturnValue:
 
     Returns:
         ``{target: 'lecture'|'answer', framing: 'summary'|'history', scope:
-        'screen'|'references'|'citations'|'seed'|'named', year_from: int|null,
+        'screen'|'references'|'citations'|'seed'|'named'|'graph', year_from: int|null,
         year_to: int|null}``, always HTTP 200.
         A blank message, a missing key, a dead model and an unparseable
         classification all come back as the researcher (see

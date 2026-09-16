@@ -92,6 +92,10 @@ for:
 - **`named`** — the message identified specific papers: by title, nickname,
   author, or author and year. A field or topic is *not* a named paper;
   "lecture me on transformers" over a transformer graph is `screen`.
+- **`graph`** — the whole graph, asked for by name: "the whole graph",
+  "everything on the map". The explicit widening past every filter, which is
+  what lets the frontend keep *visible* as the default scope. "Everything"
+  alone is deictic and stays `screen`.
 
 A **year window** (`year_from` / `year_to`) rides beside the scope rather
 than being a sixth kind, because a period *combines* with the others: "the

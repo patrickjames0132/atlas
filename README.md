@@ -275,8 +275,10 @@ The Vite dev server proxies `/api/*` to Flask.
      stays in scope and stays drawn, dotted). And **the message outranks
      both** — *"lecture me on the references"*, *"what do the citations say
      about entropy?"*, *"on the seed"*, *"on the Bekenstein paper and Hawking
-     1975"*, *"what does Hawking 1975 argue?"*, plus a period on top of any of
-     those — *"the references from the 2010s"*, *"the last five years"*.
+     1975"*, *"what does Hawking 1975 argue?"*, *"lecture me on the whole
+     graph"* (the lot, past every filter), plus a period on top of any of
+     those — *"the references from the 2010s"*, *"the last five years"* (a
+     period also bounds what the researcher goes looking for that turn).
      Those papers become the selection — ringed, drawn even if a chip or
      slider hides them, narrated or answered over — and stay selected
      afterwards, exactly as if you'd marqueed them (Esc clears). Each reply

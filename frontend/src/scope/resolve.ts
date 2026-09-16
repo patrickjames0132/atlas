@@ -148,7 +148,9 @@ function inWindow(nodes: GraphNode[], years: YearWindow): GraphNode[] {
  * that relation (the tag a paper is *coloured* by and the set its chip
  * toggles, so the word means the same said as clicked); `seed` is the seed
  * alone; `named` is the resolved ids in the order they were named, dropping
- * any the graph lacks. A period filters whichever of those the message
+ * any the graph lacks; `graph` is everything the workspace holds — the
+ * explicit way to widen past the filters, which is what lets "visible" stay
+ * the default. A period filters whichever of those the message
  * named. A period **alone** ("the papers between 2016 and 2017") names no
  * set, so it narrows the reader's existing context — the selection if they
  * have one, else the visible papers — rather than reaching past the filters:
@@ -204,6 +206,9 @@ export function resolveScope(
     case 'seed':
       nodes = papers.filter((node) => node.is_seed)
       break
+    case 'graph':
+      nodes = papers
+      break
     case 'references':
     case 'citations': {
       const relation = request.kind === 'references' ? 'reference' : 'citation'
@@ -214,6 +219,40 @@ export function resolveScope(
       nodes = context
   }
   return { source: 'message', nodes: inWindow(nodes, request.years), request }
+}
+
+/**
+ * The reader's search filters, narrowed by the turn's period — what the
+ * researcher's paper *discovery* is bound to for this turn.
+ *
+ * A message that asked for "the citations from the last three years" has
+ * said something about the papers it wants found as well as the ones it
+ * wants read, so the period joins the ▽ filters as that turn's search floor
+ * and ceiling (the tighter of the two on each side; the same wire fields the
+ * filters already use). Discovery only, like the ▽ filters themselves:
+ * `expand_node` walks citations somebody actually wrote, and filtering a
+ * reference list by year would hide real edges (see `ResearcherDeps`).
+ *
+ * @param filters The bar's ▽ filters, if any.
+ * @param years   The turn's period.
+ * @returns The filters with the period folded in.
+ */
+export function filtersForTurn(
+  filters: { yearFrom: number | null; yearTo: number | null; fields: string[] } | undefined,
+  years: YearWindow,
+): { yearFrom: number | null; yearTo: number | null; fields: string[] } | undefined {
+  if (years.from === null && years.to === null) return filters
+  const base = filters ?? { yearFrom: null, yearTo: null, fields: [] }
+  const tighter = (
+    one: number | null,
+    other: number | null,
+    pick: (first: number, second: number) => number,
+  ) => (one === null ? other : other === null ? one : pick(one, other))
+  return {
+    ...base,
+    yearFrom: tighter(base.yearFrom, years.from, Math.max),
+    yearTo: tighter(base.yearTo, years.to, Math.min),
+  }
 }
 
 /**
@@ -241,6 +280,7 @@ export function emptyScopeMessage(request: ScopeRequest): string {
       citations: 'citations',
       seed: 'seed paper',
       named: 'papers',
+      graph: 'papers',
     }[request.kind]
     const hint = request.kind === 'screen' ? ' — widen the year filter, or say which papers.' : '.'
     return `This graph has no ${subject} ${period}${hint}`
@@ -281,6 +321,7 @@ export function describeScope(scope: {
     citations: 'the citations',
     seed: 'the seed paper',
     named: scope.nodes === 1 ? 'the paper you named' : 'the papers you named',
+    graph: 'the whole graph',
   }[scope.kind ?? 'screen']
   const years = scope.years ?? ANY_TIME
   const period =

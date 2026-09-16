@@ -243,24 +243,6 @@ than deleted so the plan doesn't get re-proposed.
 
 ### Teacher & agent reach
 
-- [ ] **Scope contract, part (b): the researcher's tools honour the turn's
-      constraints, and "the whole graph" is an explicit scope** — v7.24.0
-      shipped the priority list (message → selection → visible) and the
-      resolve-once snapshot both agents ground in. Two pieces of Codex's
-      review were deliberately left for a second step: **(1)** *"new
-      discoveries used during research should satisfy that turn's
-      constraints, including its year window"* — the researcher's
-      `find_papers`/`expand` tools take no notice of a message's period today,
-      so "what did the citations from the last three years find?" grounds in
-      the right papers but may pull in a 2015 discovery; the turn's
-      `ScopeRequest.years` should ride along as that turn's search filter
-      (the same field the ▽ filters already send). **(2)** a `graph` scope
-      kind ("lecture me on the whole graph", "everything on the map") so the
-      whole shipped pool is reachable *by asking* rather than by clearing
-      every filter — Codex's condition for keeping visible as the default.
-      Router prompt + `Scope` literal + `resolveScope` case + tests. *(Filed
-      2026-09-15 while shipping v7.24.0.)*
-
 - [ ] **The reroute-to-lecture correction should keep the framing the reader
       asked for** — with the `/lecture` command gone (v7.23.0), the only ways
       to name a lecture's framing are the words in the message (the router's

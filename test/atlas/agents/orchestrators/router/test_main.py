@@ -85,6 +85,10 @@ def test_naming_a_lecture_over_the_screen_needs_no_model(message):
         "Lecture me about the attention papers",
         "lecture: transformers",
         "lecture me on the story of deep learning",
+        # "everything" is deictic (what is on screen); "the whole graph" is an
+        # explicit widening, which the model reads as the `graph` scope.
+        "lecture me on the whole graph",
+        "give me a lecture on everything on the map",
     ],
 )
 def test_the_fast_path_leaves_the_ambiguous_cases_to_the_model(message):
@@ -122,6 +126,12 @@ def test_the_models_decision_is_passed_through():
     assert decision.framing == "history"
     assert decision.scope == "references"
     assert (decision.year_from, decision.year_to) == (2010, 2019)
+
+
+def test_the_whole_graph_is_an_explicit_scope_the_model_reads():
+    model = TestModel(custom_output_args={"target": "lecture", "framing": "summary", "scope": "graph"})
+    with router.agent.override(model=model):
+        assert router.route("lecture me on the whole graph").scope == "graph"
 
 
 def test_a_question_routed_to_the_researcher_stays_there():
