@@ -566,6 +566,20 @@
   border-color: var(--accent);
   background: color-mix(in srgb, rgb(var(--lecture)) 14%, var(--chip));
 }
+/* Inside an ACTIVE bubble (the whole lecture lit — v7.23.0, when clicking the
+   bubble and a finished lecture both land here) the bubble wears the lecture
+   wash, which over `--bg` composites to very nearly `--chip`'s luminance: the
+   resting cards sank into it. The same mixing trick, at a lower dose than
+   the selected beat's 14%, keeps every card lifted off the washed bubble and
+   the selected one still the brightest of them. */
+.chat.assistant.active .beat {
+  background: color-mix(in srgb, rgb(var(--lecture)) 7%, var(--chip));
+  border-color: color-mix(in srgb, var(--muted) 45%, var(--border));
+}
+.chat.assistant.active .beat.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, rgb(var(--lecture)) 16%, var(--chip));
+}
 .beat-heading {
   font-size: 11px;
   text-transform: uppercase;
