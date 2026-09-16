@@ -558,7 +558,7 @@ const transcriptSlice = createSlice({
      * transcript can say so and offer the other one.
      *
      * Dispatched only when a *model* made the choice. A route the reader made
-     * themselves — a `/lecture` command, a correction — leaves this unset,
+     * themselves — a correction — leaves this unset,
      * which is what keeps the "answered as a lecture / answer instead?" line
      * off turns where there was never a decision to second-guess.
      *

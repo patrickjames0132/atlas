@@ -72,15 +72,41 @@ export interface Discovery {
 }
 
 /**
+ * Which papers a lecture is about, as far as the message says.
+ *
+ * `screen` is "the message doesn't say" — the reader's on-screen scope, which
+ * is what every lecture was about before a message could name a set of its
+ * own. `named` means the message pointed at specific papers, and a second
+ * call ({@link resolveRoutedPapers}) turns it into ids given the graph.
+ */
+export type LectureScope = 'screen' | 'references' | 'citations' | 'seed' | 'named'
+
+/**
  * Which assistant a typed message wants — the answer from {@link routeMessage}.
  *
- * `framing` is only meaningful when `target` is `'lecture'`; on an answer the
- * backend returns `'summary'` as a filler rather than making the field
- * optional, so the caller never has to check two things to read one.
+ * `framing` and `scope` are only meaningful when `target` is `'lecture'`; on
+ * an answer the backend returns `'summary'` and `'screen'` as fillers rather
+ * than making the fields optional, so the caller never has to check two
+ * things to read one.
  */
 export interface MessageRoute {
   target: 'lecture' | 'answer'
   framing: LectureFraming
+  scope: LectureScope
+  /** A period the message limited the lecture to ("between 2016 and 2017",
+   *  "the 2010s"), applied on top of `scope`. Null when none was given;
+   *  either end alone is open-ended ("since 2020", "before 2000"). */
+  year_from: number | null
+  year_to: number | null
+}
+
+/** The fallback route, and the shape of every failure: answer the question. */
+const ANSWER: MessageRoute = {
+  target: 'answer',
+  framing: 'summary',
+  scope: 'screen',
+  year_from: null,
+  year_to: null,
 }
 
 /**
@@ -109,10 +135,55 @@ export async function routeMessage(message: string, signal?: AbortSignal): Promi
       body: JSON.stringify({ message }),
       signal,
     })
-    if (!res.ok) return { target: 'answer', framing: 'summary' }
+    if (!res.ok) return ANSWER
     return (await res.json()) as MessageRoute
   } catch {
-    return { target: 'answer', framing: 'summary' }
+    return ANSWER
+  }
+}
+
+/** One graph paper as the name resolver sees it: what a reader names it *by*. */
+export interface RoutePaper {
+  id: string
+  title: string
+  year: number | null
+  authors?: string | null
+}
+
+/**
+ * Ask the backend which of the graph's papers a lecture request named.
+ *
+ * The second half of routing, and a separate call on purpose: it carries the
+ * graph's whole paper list, so it runs only after {@link routeMessage} has
+ * answered `scope: 'named'` — never on the every-message classify.
+ *
+ * **Never rejects**, like its sibling: an empty list is both "nothing matched"
+ * and every failure, because the caller already has to handle the first.
+ *
+ * @param message The message as typed.
+ * @param papers  Every paper on the graph — a thin cut, no abstracts.
+ * @param signal  Abort signal, so a superseded message stops resolving.
+ * @returns The named papers' ids, in the order the message named them.
+ */
+export async function resolveRoutedPapers(
+  message: string,
+  papers: RoutePaper[],
+  signal?: AbortSignal,
+): Promise<string[]> {
+  try {
+    const res = await fetch('/api/route/papers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, papers }),
+      signal,
+    })
+    if (!res.ok) return []
+    const body = (await res.json()) as { ids?: unknown }
+    return Array.isArray(body.ids)
+      ? body.ids.filter((id): id is string => typeof id === 'string')
+      : []
+  } catch {
+    return []
   }
 }
 

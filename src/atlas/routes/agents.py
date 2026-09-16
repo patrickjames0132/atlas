@@ -4,6 +4,7 @@ Description:
 AI-teacher routes: one endpoint per agent, each streaming typed events.
 
 POST /api/route        -> which assistant a typed message wants (JSON, not SSE)
+POST /api/route/papers -> which graph papers a lecture request named (JSON)
 POST /api/lecture      -> streamed AI lecture over the visible graph
 POST /api/ask          -> the research agent, streamed over the visible graph
 POST /api/ask_sources  -> streamed chat with no graph open (library + search)
@@ -167,17 +168,56 @@ def api_route() -> ResponseReturnValue:
         ``{message: str}`` — the message as typed, mentions and all.
 
     Returns:
-        ``{target: 'lecture'|'answer', framing: 'summary'|'history'}``, always
-        HTTP 200. A blank message, a missing key, a dead model and an
-        unparseable classification all come back as the researcher (see
+        ``{target: 'lecture'|'answer', framing: 'summary'|'history', scope:
+        'screen'|'references'|'citations'|'seed'|'named', year_from: int|null,
+        year_to: int|null}``, always HTTP 200.
+        A blank message, a missing key, a dead model and an unparseable
+        classification all come back as the researcher (see
         ``router.route``): this endpoint sits in front of every message the
         reader sends, so failing it would break asking questions in order to
-        protect a routing nicety.
+        protect a routing nicety. ``scope`` is which papers a lecture is
+        about, as far as the message says; ``named`` means the message
+        pointed at specific papers and ``/api/route/papers`` can say which.
+        The years are a period the message limited it to, on top of the scope.
     """
     payload = request.get_json(silent=True) or {}
     message = payload.get("message")
     decision = router.route(message if isinstance(message, str) else "")
     return jsonify(decision.model_dump())
+
+
+@bp.post("/api/route/papers")
+def api_route_papers() -> ResponseReturnValue:
+    """Say which of the graph's papers a lecture request named.
+
+    The second half of routing, split out so the graph's paper list crosses
+    the wire only for the messages that need it: ``/api/route`` reads the
+    message alone, and a client calls this only when it answered ``scope:
+    'named'``. Plain JSON like its sibling — a decision, not a stream.
+
+    Body:
+        ``{message: str, papers: [{id, title, year?, authors?}]}`` — every
+        paper on the graph, in any order. Malformed entries are skipped
+        rather than 400-ing the call, since one bad node should not cost the
+        reader their lecture.
+
+    Returns:
+        ``{ids: [paper id, ...]}`` in the order the message named them, always
+        HTTP 200. Empty when nothing matched — and on every failure, for the
+        reason ``/api/route`` never fails: the client already has to handle
+        "nothing matched", so a dead model is just that case again.
+    """
+    payload = request.get_json(silent=True) or {}
+    message = payload.get("message")
+    raw_papers = payload.get("papers")
+    papers: list[router.RoutePaper] = []
+    for raw in raw_papers if isinstance(raw_papers, list) else []:
+        try:
+            papers.append(router.RoutePaper.model_validate(raw))
+        except ValidationError:
+            continue
+    ids = router.resolve_papers(message if isinstance(message, str) else "", papers)
+    return jsonify({"ids": ids})
 
 
 @bp.post("/api/lecture")

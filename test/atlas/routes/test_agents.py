@@ -333,11 +333,21 @@ class TestRouteEndpoint:
         from atlas.agents.orchestrators import router
 
         monkeypatch.setattr(
-            router, "route", lambda message: router.MessageRoute(target="lecture", framing="history")
+            router,
+            "route",
+            lambda message: router.MessageRoute(
+                target="lecture", framing="history", scope="references"
+            ),
         )
-        response = client.post("/api/route", json={"message": "lecture me on these"})
+        response = client.post("/api/route", json={"message": "lecture me on the references"})
         assert response.status_code == 200
-        assert response.get_json() == {"target": "lecture", "framing": "history"}
+        assert response.get_json() == {
+            "target": "lecture",
+            "framing": "history",
+            "scope": "references",
+            "year_from": None,
+            "year_to": None,
+        }
 
     def test_the_message_reaches_the_router_verbatim(self, client, monkeypatch):
         from atlas.agents.orchestrators import router
@@ -362,7 +372,55 @@ class TestRouteEndpoint:
         # path: either way the reader gets a route they can act on.
         response = client.post("/api/route", json=body)
         assert response.status_code == 200
-        assert response.get_json() == {"target": "answer", "framing": "summary"}
+        assert response.get_json() == {
+            "target": "answer",
+            "framing": "summary",
+            "scope": "screen",
+            "year_from": None,
+            "year_to": None,
+        }
+
+
+class TestRoutePapersEndpoint:
+    """``POST /api/route/papers``: the named-scope resolver, JSON like its
+    sibling and just as unable to fail — an empty ``ids`` is both "nothing
+    matched" and every failure, since the client handles the first anyway.
+    """
+
+    def test_it_passes_well_formed_papers_and_skips_the_rest(self, client, monkeypatch):
+        from atlas.agents.orchestrators import router
+
+        seen: list[tuple[str, list[str]]] = []
+
+        def capture(message, papers):
+            seen.append((message, [paper.id for paper in papers]))
+            return ["p2"]
+
+        monkeypatch.setattr(router, "resolve_papers", capture)
+        response = client.post(
+            "/api/route/papers",
+            json={
+                "message": "lecture me on the BERT paper",
+                "papers": [
+                    {"id": "p1", "title": "One", "year": 2019, "authors": "A, B"},
+                    {"title": "no id"},
+                    "not a dict",
+                    # Force-graph baggage on a node is ignored, not refused.
+                    {"id": "p2", "title": "BERT", "x": 1.5, "vy": 0},
+                ],
+            },
+        )
+        assert response.status_code == 200
+        assert response.get_json() == {"ids": ["p2"]}
+        assert seen == [("lecture me on the BERT paper", ["p1", "p2"])]
+
+    @pytest.mark.parametrize(
+        "body", [{}, {"message": "x"}, {"message": "x", "papers": "nope"}, {"papers": []}, None]
+    )
+    def test_a_malformed_body_matches_nothing_instead_of_400ing(self, client, body):
+        response = client.post("/api/route/papers", json=body)
+        assert response.status_code == 200
+        assert response.get_json() == {"ids": []}
 
 
 def test_sibling_context_is_bounded_and_labelled(monkeypatch):

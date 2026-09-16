@@ -298,8 +298,8 @@ describe('a lecture in the transcript', () => {
   })
 
   it('leaves routedTo unset when nothing routed the turn', () => {
-    // A `/lecture` command, or a reader correcting a route: no decision was
-    // made on their behalf, so the transcript must not offer to undo one.
+    // A reader correcting a route: no decision was made on their behalf, so
+    // the transcript must not offer to undo one.
     const state = play(turnStarted('what is attention?'))
     expect(active(state).chat[1].routedTo).toBeUndefined()
   })

@@ -243,6 +243,22 @@ than deleted so the plan doesn't get re-proposed.
 
 ### Teacher & agent reach
 
+- [ ] **The reroute-to-lecture correction should keep the framing the reader
+      asked for** — with the `/lecture` command gone (v7.23.0), the only ways
+      to name a lecture's framing are the words in the message (the router's
+      keyword rule on the fast path, the classifier's prompt otherwise). The
+      one path that ignores them is the **"Lecture it instead"** correction on
+      a turn the router sent to the researcher: `useConversation.ts`'s
+      `reroute` hard-codes `'summary'`, so *"what's the story of these
+      papers?"* misrouted to an answer comes back as a summary when corrected,
+      and the reader has to re-ask with the word "history" in it. The fix is
+      small: re-read the framing (and the scope, for the same reason) off the
+      original question — either by calling `/api/route` again with a
+      "target is settled" hint, or by exposing the router's `_HISTORY_WORDS`
+      rule on the frontend. Not worth a model call on its own; fold it into
+      whatever next touches the reroute. *(From Patrick, 2026-09-15, while
+      handing off v7.23.0: "that's okay for now".)*
+
 - [ ] **Click a library citation to open the source at that page** — Part 2 of
       the citation ticket whose Part 1 shipped in **v6.6.0** (see
       [docs/history.md](docs/history.md)). Citations now *resolve*: the model

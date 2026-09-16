@@ -2,9 +2,10 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * `routeMessage`'s one real contract: it never rejects.
+ * `routeMessage`'s one real contract: it never rejects — and neither does
+ * `resolveRoutedPapers`, its second half.
  *
- * This call sits in front of every message the reader sends, so a throw here
+ * The first sits in front of every message the reader sends, so a throw here
  * would break asking questions in order to protect a routing nicety. The
  * backend takes the same position for its own failures; these cover the ones
  * it never gets to see — the request that dies in the browser.
@@ -14,9 +15,15 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { routeMessage } from '../../src/api'
+import { resolveRoutedPapers, routeMessage } from '../../src/api'
 
-const ANSWER = { target: 'answer', framing: 'summary' }
+const ANSWER = {
+  target: 'answer',
+  framing: 'summary',
+  scope: 'screen',
+  year_from: null,
+  year_to: null,
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -28,12 +35,13 @@ describe('routeMessage', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ target: 'lecture', framing: 'history' }),
+        json: async () => ({ target: 'lecture', framing: 'history', scope: 'references' }),
       })),
     )
-    expect(await routeMessage('lecture me on these')).toEqual({
+    expect(await routeMessage('lecture me on the references')).toEqual({
       target: 'lecture',
       framing: 'history',
+      scope: 'references',
     })
   })
 
@@ -77,5 +85,43 @@ describe('routeMessage', () => {
       })),
     )
     expect(await routeMessage('what is attention?')).toEqual(ANSWER)
+  })
+})
+
+describe('resolveRoutedPapers', () => {
+  const papers = [{ id: 'p1', title: 'BERT', year: 2019, authors: 'Devlin' }]
+
+  it('returns the ids the backend picked, and sends the paper list', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ids: ['p1'] }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await resolveRoutedPapers('lecture me on BERT', papers)).toEqual(['p1'])
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body).toEqual({ message: 'lecture me on BERT', papers })
+  })
+
+  it('keeps only string ids from a malformed body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ ids: ['p1', 7, null] }) })),
+    )
+    expect(await resolveRoutedPapers('lecture me on BERT', papers)).toEqual(['p1'])
+  })
+
+  it('matches nothing when the request fails outright', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline')
+      }),
+    )
+    expect(await resolveRoutedPapers('lecture me on BERT', papers)).toEqual([])
+  })
+
+  it('matches nothing on a non-OK response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 500 })),
+    )
+    expect(await resolveRoutedPapers('lecture me on BERT', papers)).toEqual([])
   })
 })

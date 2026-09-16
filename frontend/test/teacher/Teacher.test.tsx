@@ -14,7 +14,7 @@ import explorationsReducer from '../../src/store/explorations'
  * (folded by default, a Summary|History pair, one Play button, `stagedOpen`
  * unfolding it for the tour) above a Chat section, and the ask-binding
  * controls living in one of two homes depending on the shape. The lecture half
- * went in v7.21.0 when `/lecture` replaced the button, which left a lone
+ * went in v7.21.0 when a `/lecture` command replaced the button, which left a lone
  * "CHAT" caret folding away the only thing in a panel already titled "AI
  * Teacher & Discovery" — so the sections went too, and with them the two-homes
  * rule. The negative assertions below are the point.
@@ -76,6 +76,9 @@ vi.mock('../../src/store', () => ({
   useAppSelector: (selector: (rootState: ReturnType<typeof state>) => unknown) => selector(state()),
 }))
 
+/** What the last whole-turn click asked to light — see the lecture-bubble test. */
+const onChatClick = vi.fn()
+
 vi.mock('../../src/teacher/useConversation', () => ({
   useConversation: () => ({
     hasGraph,
@@ -84,7 +87,7 @@ vi.mock('../../src/teacher/useConversation', () => ({
     activeChat: null,
     activeChatBeat: null,
     onChatBeatClick: () => {},
-    onChatClick: () => {},
+    onChatClick,
     onRefClick: () => {},
     onGraphIds: new Set<string>(),
     onPaperSeed: () => {},
@@ -110,6 +113,7 @@ beforeEach(() => {
   hasGraph = true
   sources = []
   turns = []
+  onChatClick.mockClear()
 })
 
 afterEach(() => {
@@ -118,10 +122,10 @@ afterEach(() => {
 })
 
 describe('the docked assistant panel', () => {
-  it('has no lecture UI left — it is a command now', () => {
+  it('has no lecture UI left — it is asked for in words now', () => {
     // The whole section went in v7.21.0: no Play button, no Summary|History
-    // pair, no caret to unfold. A lecture is `/lecture summary` typed into the
-    // bar, and the command menu is where a reader finds that out. `stagedOpen`
+    // pair, no caret to unfold. A lecture is "lecture me on these" typed into
+    // the bar (v7.21.0's `/lecture` command went too, in v7.23.0). `stagedOpen`
     // is passed because it used to be what revealed this section for the tour
     // — if any of it came back, this is where it would show up.
     render(<Teacher onClose={() => {}} stagedOpen />)
@@ -132,6 +136,27 @@ describe('the docked assistant panel', () => {
     expect(screen.queryByRole('group', { name: 'How to frame the lecture' })).toBeNull()
   })
 
+  it('lights every beat\u2019s papers when the lecture bubble itself is clicked', () => {
+    // A lecture turn has no `cited` list — its papers live on the beats — so
+    // the bubble used to be the one assistant turn that was not a control.
+    // Clicking it lights the whole scope, deduped; a beat still lights its own.
+    const beat = (heading: string, nodeIds: string[]) => ({
+      heading,
+      text: 'A beat.',
+      node_ids: nodeIds,
+    })
+    turns = [
+      turnStarted('lecture me on the references'),
+      chatBeatAdded(beat('Origins', ['r1', 'r2'])),
+      chatBeatAdded(beat('Aftermath', ['r2', 'r3'])),
+    ]
+    const { container } = render(<Teacher onClose={() => {}} />)
+    const bubble = container.querySelector('.chat.assistant')!
+    expect(bubble.classList.contains('clickable')).toBe(true)
+    fireEvent.click(bubble)
+    expect(onChatClick).toHaveBeenCalledWith(1, ['r1', 'r2', 'r3'])
+  })
+
   it('keeps the newest lecture open and folds the ones behind it', () => {
     // Twelve beats are fine as the newest thing on screen and unusable as the
     // third lecture you have scrolled past — and the Lecture section that
@@ -140,9 +165,9 @@ describe('the docked assistant panel', () => {
     // stored per turn.
     const beat = (heading: string) => ({ heading, text: 'A beat.', node_ids: [] })
     turns = [
-      turnStarted('/lecture summary'),
+      turnStarted('lecture me on these'),
       chatBeatAdded(beat('First lecture')),
-      turnStarted('/lecture history'),
+      turnStarted('lecture me on the history of these'),
       chatBeatAdded(beat('Second lecture')),
     ]
     const { container } = render(<Teacher onClose={() => {}} />)
@@ -156,9 +181,9 @@ describe('the docked assistant panel', () => {
   it('lets the reader overrule that on a turn, without touching the others', () => {
     const beat = (heading: string) => ({ heading, text: 'A beat.', node_ids: [] })
     turns = [
-      turnStarted('/lecture summary'),
+      turnStarted('lecture me on these'),
       chatBeatAdded(beat('First lecture')),
-      turnStarted('/lecture history'),
+      turnStarted('lecture me on the history of these'),
       chatBeatAdded(beat('Second lecture')),
     ]
     const { container } = render(<Teacher onClose={() => {}} />)
@@ -181,10 +206,20 @@ describe('the docked assistant panel', () => {
 
   it('tells a reader with an empty conversation how to get a lecture', () => {
     // The deleted section carried a paragraph explaining what a lecture
-    // covers. With it gone this hint and the command menu are the only places
-    // a first-time reader learns lectures exist.
+    // covers, and the `/lecture` command menu that replaced it went in
+    // v7.23.0. This hint and the placeholder are now the only places a
+    // first-time reader learns lectures exist — and that a message can say
+    // which papers.
     render(<Teacher onClose={() => {}} />)
-    expect(screen.getByText(/\/lecture/)).toBeTruthy()
+    expect(screen.getByText(/ask for a lecture on them/)).toBeTruthy()
+    expect(screen.getByPlaceholderText(/or for a lecture/)).toBeTruthy()
+  })
+
+  it('has no `/` command menu any more', () => {
+    const { container } = render(<Teacher onClose={() => {}} />)
+    const field = screen.getByLabelText('Ask the assistant a question') as HTMLTextAreaElement
+    fireEvent.change(field, { target: { value: '/lec' } })
+    expect(container.querySelector('.command-menu')).toBeNull()
   })
 
   it('has no 🎓 lecture scope, because there is nothing to opt out of', () => {

@@ -51,12 +51,11 @@ import { activateThread } from '../store/workspace'
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import {
   DEFAULT_SEARCH_OPTIONS,
   type AnswerFigure,
-  type LectureFraming,
   type MentionPaper,
   type SearchOptions,
 } from '../api'
@@ -71,10 +70,6 @@ import { ID_RE } from '../graph/model'
 import MentionSuggestions from '../mentions/MentionSuggestions'
 import { insertMention, readMessage } from '../mentions/parse'
 import { useMentionSuggestions } from '../mentions/useMentionSuggestions'
-import CommandMenu from '../commands/CommandMenu'
-import { COMMANDS, insertCommand, readCommand } from '../commands/parse'
-import type { CommandChoice } from '../commands/parse'
-import { useCommandMenu } from '../commands/useCommandMenu'
 import Lightbox from '../figures/Lightbox'
 import ChatMessage from './transcript/ChatMessage'
 import { useConversation } from './useConversation'
@@ -169,7 +164,6 @@ export default function Teacher({
     provider,
     send,
     reroute,
-    lectureInChat,
     retryAnswer,
     stopAsk,
     clearChat,
@@ -211,14 +205,6 @@ export default function Teacher({
   // composer on every pick would fight the textarea's own caret handling.
   const resolvedMentions = useRef<Map<string, MentionPaper>>(new Map())
   const mentions = useMentionSuggestions(provider)
-  // Which commands this composer offers. `/lecture` needs papers on screen to
-  // be about, so with no graph it is not merely hidden but **unrecognised** —
-  // the same list gates the menu and `readCommand`, so a command that cannot
-  // run is never suggested and never fires silently either. Memoised because
-  // it is the hook's dependency, and a fresh array each render would rebuild
-  // the matcher on every keystroke.
-  const commands = useMemo(() => (hasGraph ? COMMANDS : []), [hasGraph])
-  const menu = useCommandMenu(commands)
   // Which scope picker's popover is open — one shared slot, so opening either
   // picker closes the other (their popovers overlap when both are open).
   const [openScope, setOpenScope] = useState<'lectures' | 'sources' | 'filters' | null>(null)
@@ -257,38 +243,29 @@ export default function Teacher({
   const scopeAll = libraryItems.length === 0 || scopeIds.length === libraryItems.length
   const scopeArg = scopeAll ? undefined : scopeIds
 
-  // One bar, five destinations. The first four are decided HERE on plain facts
-  // — a `/command` is what the reader literally asked for, a pasted id is
-  // exact, a picked mention is a paper they already chose, an unresolved
-  // `@phrase` is a search — so they cost nothing and cannot be wrong. Only the
-  // fifth asks a model, because "teach me these papers" and "which of these
-  // used dropout" differ in their words and nowhere else; `send` owns that,
-  // and the turn it produces says which assistant it picked so the reader can
-  // take the other in one click.
+  // One bar, four destinations. The first three are decided HERE on plain
+  // facts — a pasted id is exact, a picked mention is a paper they already
+  // chose, an unresolved `@phrase` is a search — so they cost nothing and
+  // cannot be wrong. Only the fourth asks a model, because "teach me these
+  // papers" and "which of these used dropout" differ in their words and
+  // nowhere else; `send` owns that, and the turn it produces says which
+  // assistant it picked so the reader can take the other in one click.
+  //
+  // There was a fifth until v7.23.0: a `/lecture` command, the deterministic
+  // way to name the lecturer (and its framing) without a classify. It went
+  // because the router already reads all of that off the words — and, since
+  // the same version, reads *which papers* too ("lecture me on the
+  // references"), which a two-value command could never say. What survives
+  // of it is the router's own no-model fast path for "lecture me on these".
   const submitQuestion = () => {
     const question = input.trim()
     if (!question || asking || searching) return
     setInput('')
     mentions.reset()
-    menu.reset()
     setThreadQuery(null)
-    // A `/command`: the reader named the destination themselves, so nothing
-    // has to be inferred and nothing can be misrouted. First in the tree
-    // because it is the only branch where the message is *entirely* an
-    // instruction — every other one reads words that might also be a question.
-    // `routed: false` follows from that: there was no guess to offer to undo.
-    const call = readCommand(question, commands)
-    if (call) {
-      // Mapped rather than cast: the registry's argument values happen to be
-      // the framings today, and a cast would let a future command's argument
-      // reach `streamLecture` as a framing it has never heard of.
-      const framing: LectureFraming = call.arg === 'history' ? 'history' : 'summary'
-      void lectureInChat(question, framing, false)
-      return
-    }
     // A pasted arXiv id/URL is a statement of intent, not a question: land on
-    // that exact paper. Still needing no lookup at all — the id IS the answer,
-    // where every branch below has to resolve something.
+    // that exact paper. First in the tree because it needs no lookup at all —
+    // the id IS the answer, where every branch below has to resolve something.
     if (ID_RE.test(question)) {
       onPaperSeed(question)
       return
@@ -351,16 +328,6 @@ export default function Teacher({
     })
   }
 
-  /**
-   * Re-read the composer after any change that could move the caret.
-   *
-   * Both typeaheads are fed from here, and they cannot both be open: a command
-   * is anchored to the start of the message and a mention opens at an `@` that
-   * starts a word, so at most one of them matches the caret's position. That
-   * makes this a single call rather than an either/or.
-   *
-   * @param field The textarea, read for both its value and its caret.
-   */
   /** Insert a labelled sibling reference without invoking paper search.
    * @param title The selected discussion's title.
    */
@@ -376,6 +343,12 @@ export default function Teacher({
     })
   }
 
+  /**
+   * Re-read the composer after any change that could move the caret, so the
+   * typeaheads (the `@thread` picker and the `@` mention dropdown) follow it.
+   *
+   * @param field The textarea, read for both its value and its caret.
+   */
   const syncComposer = (field: HTMLTextAreaElement) => {
     const caret = field.selectionStart ?? field.value.length
     const threadMatch = /@thread(?:\[)?([^\]\n]*)$/.exec(field.value.slice(0, caret))
@@ -387,61 +360,12 @@ export default function Teacher({
     }
     setThreadQuery(null)
     mentions.onInput(field.value, caret)
-    menu.onInput(field.value, caret)
-  }
-
-  /**
-   * Accept a command row: splice its text in, and keep the menu open when the
-   * pick is only half the invocation.
-   *
-   * A command with arguments inserts `/name ` and then re-opens on those
-   * arguments, so picking `/lecture` walks the reader straight to Summary and
-   * History. That re-open happens through the ordinary input sync rather than
-   * any special case here — the text now ends in a space after a known
-   * command, which is exactly what `activeCommand` reads as the argument
-   * stage.
-   *
-   * @param choice The picked row.
-   */
-  const pickCommand = (choice: CommandChoice) => {
-    const field = inputRef.current
-    if (!field || !menu.active) return
-    const { text: next, caret } = insertCommand(input, menu.active, choice)
-    setInput(next)
-    if (!choice.continues) menu.reset()
-    // The caret has to be restored after React paints the new value, or the
-    // browser parks it at the end and the reader's next keystroke lands in the
-    // wrong place. Re-syncing here is what moves the menu on to the arguments.
-    requestAnimationFrame(() => {
-      field.focus()
-      field.setSelectionRange(caret, caret)
-      syncComposer(field)
-    })
   }
 
   const onInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // While either typeahead is open it owns the arrows, Enter, Tab and Escape
-    // — the keys a reader picking from a list expects to work. Everything else
-    // still reaches the textarea, so typing never stops. The command menu is
-    // asked first only for tidiness: the two can't both be open (see
-    // `syncComposer`).
-    if (menu.open) {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        menu.move(event.key === 'ArrowDown' ? 1 : -1)
-        return
-      }
-      if ((event.key === 'Enter' || event.key === 'Tab') && menu.choice) {
-        event.preventDefault()
-        pickCommand(menu.choice)
-        return
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        menu.dismiss()
-        return
-      }
-    }
+    // While a typeahead is open it owns the arrows, Enter, Tab and Escape —
+    // the keys a reader picking from a list expects to work. Everything else
+    // still reaches the textarea, so typing never stops.
     if (threadQuery) {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -582,18 +506,16 @@ export default function Teacher({
   // variant names it: the gesture is the same with a graph, without one, and
   // with a library. The graph variant also teaches the lecture, and only that
   // one does — a lecture needs papers on screen to be about, so offering it
-  // with no graph would advertise something the bar cannot do. It is also the
-  // only variant that names `/`, for exactly that reason: with no graph the
-  // command list is empty, so there is no menu to teach.
+  // with no graph would advertise something the bar cannot do.
   //
-  // **It names at most one prefix.** All three used to end "…or @ a paper" as
-  // well, and with `/` added the graph variant was a verb and two prefixes in
-  // one line of grey text — it read as a legend, not an invitation. `@`
-  // teaches itself the moment it is typed (the dropdown opens on the third
-  // character), and the tour covers both; `/` is the one that needs saying
-  // here, because a menu nobody types `/` into is a hidden feature.
+  // **No prefix is named.** All three used to end "…or @ a paper", and for a
+  // while the graph variant taught `/` — a verb and two prefixes in one line
+  // of grey text read as a legend, not an invitation. `@` teaches itself the
+  // moment it is typed (the dropdown opens on the third character) and the
+  // tour covers it; the lecture is asked for in words, which needs no
+  // teaching beyond saying so.
   const askPlaceholder = hasGraph
-    ? 'Ask about these papers… / for a lecture'
+    ? 'Ask about these papers, or for a lecture…'
     : libraryItems.length > 0
       ? 'Ask your books, PDFs, or the literature…'
       : 'Ask a research question…'
@@ -706,7 +628,15 @@ export default function Teacher({
     // clickable bubble that highlights nothing is the same dead pointer its
     // `[n]` chips grey out for. Partial overlap still counts: lighting the
     // papers that *are* here is useful.
-    const clickable = message.role === 'assistant' && !!message.cited && message.cited.length > 0
+    //
+    // A lecture turn has no `cited` — its papers live on its beats — so the
+    // whole-turn set is every beat's papers, deduped. Clicking the bubble
+    // lights the lecture's full scope; clicking a beat lights that beat's.
+    const grounded =
+      message.cited && message.cited.length > 0
+        ? message.cited
+        : [...new Set((message.beats ?? []).flatMap((beat) => beat.node_ids))]
+    const clickable = message.role === 'assistant' && grounded.length > 0
     return (
       <ChatMessage
         key={`c${index}`}
@@ -717,7 +647,7 @@ export default function Teacher({
         // Only the LAST turn can be the one being generated, so only it gets
         // the live trace treatment; every earlier turn's trace stays folded.
         working={(asking || searching) && index === chat.length - 1}
-        onActivate={clickable ? () => onChatClick(index, message.cited!) : undefined}
+        onActivate={clickable ? () => onChatClick(index, grounded) : undefined}
         onRetry={message.failed ? () => retryAnswer(index) : undefined}
         onRefClick={onRefClick}
         onPaperSeed={onPaperSeed}
@@ -806,8 +736,8 @@ export default function Teacher({
             <h1 className="landing-greeting">What do you want to explore?</h1>
           ) : hasGraph ? (
             <div className="teacher-hint">
-              Ask a question about the papers on the graph — or type <code>/lecture</code> for a
-              narrated tour of them.
+              Ask a question about the papers on the graph — or ask for a lecture on them, on the
+              references, or on a paper by name.
             </div>
           ) : (
             <div className="teacher-hint">
@@ -839,22 +769,6 @@ export default function Teacher({
             : 'General · Search and discuss across your exploration'}
         </p>
         <form className="teacher-ask" data-tour="ask" onSubmit={onAsk}>
-          {/* The `/` menu, in the same slot as the `@` dropdown below and for
-              the same reason. Only one of the two can be open at a time, so
-              they never overlap. */}
-          {menu.open && (
-            <CommandMenu
-              choices={menu.choices}
-              highlighted={menu.highlighted}
-              heading={
-                menu.active?.stage === 'argument'
-                  ? `/${menu.active.command?.name ?? ''} — how to tell it`
-                  : 'Commands'
-              }
-              onPick={pickCommand}
-              onHighlight={menu.setHighlighted}
-            />
-          )}
           {/* The `@` dropdown, anchored to the bar (which is positioned) and
               opening upward — the composer sits at the bottom of the panel, so
               a list below it would open off-screen. */}
@@ -899,10 +813,7 @@ export default function Teacher({
             // mention the reader has navigated out of.
             onKeyUp={(event) => syncComposer(event.currentTarget)}
             onClick={(event) => syncComposer(event.currentTarget)}
-            onBlur={() => {
-              mentions.reset()
-              menu.reset()
-            }}
+            onBlur={() => mentions.reset()}
             onKeyDown={onInputKeyDown}
             rows={1}
             placeholder={askPlaceholder}

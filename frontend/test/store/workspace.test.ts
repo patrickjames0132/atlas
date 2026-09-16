@@ -21,6 +21,8 @@ import reducer, {
   nodeSelectionCleared,
   nodeSelectionSet,
   nodeSelectionToggled,
+  lectureScopeApplied,
+  lectureScopeReleased,
   providerSet,
   selectGroundingNodes,
   selectLectureNodes,
@@ -266,6 +268,49 @@ describe('selection lifecycle', () => {
     let state = reducer(initial(), nodeSelectionSet(['a']))
     state = reducer(state, visibleNodesSet(['a', 'b', 'c']))
     expect(state.selectedNodeIds).toEqual(['a'])
+  })
+})
+
+describe('a lecture scope named by a message', () => {
+  it('becomes the selection, with the hidden part revealed', () => {
+    const state = reducer(
+      initial(),
+      lectureScopeApplied({ ids: ['a', 'b', 'a'], hidden: ['b', 'b'] }),
+    )
+    expect(state.selectedNodeIds).toEqual(['a', 'b'])
+    expect(state.revealedNodeIds).toEqual(['b'])
+  })
+
+  it('survives a hand edit to the selection but dies with a clear', () => {
+    // Shift-clicking one more paper into an inferred scope must not hide the
+    // ones the message revealed; Esc / alt-click-empty drops the lot, since a
+    // reveal without the selection it served is a filter silently ignored.
+    let state = reducer(initial(), lectureScopeApplied({ ids: ['a', 'b'], hidden: ['b'] }))
+    state = reducer(state, nodeSelectionToggled('c'))
+    expect(state.revealedNodeIds).toEqual(['b'])
+    state = reducer(state, nodeSelectionCleared())
+    expect(state.selectedNodeIds).toEqual([])
+    expect(state.revealedNodeIds).toEqual([])
+  })
+
+  it('is released when its lecture ends — the selection only, not the reveal', () => {
+    let state = reducer(initial(), lectureScopeApplied({ ids: ['a', 'b'], hidden: ['b'] }))
+    state = reducer(state, lectureScopeReleased(['b', 'a']))
+    expect(state.selectedNodeIds).toEqual([])
+    expect(state.revealedNodeIds).toEqual(['b'])
+  })
+
+  it('is not released over a selection the reader changed meanwhile', () => {
+    let state = reducer(initial(), lectureScopeApplied({ ids: ['a', 'b'], hidden: ['b'] }))
+    state = reducer(state, nodeSelectionToggled('c'))
+    state = reducer(state, lectureScopeReleased(['a', 'b']))
+    expect(state.selectedNodeIds).toEqual(['a', 'b', 'c'])
+  })
+
+  it('is reset by a new exploration', () => {
+    let state = reducer(initial(), lectureScopeApplied({ ids: ['a'], hidden: ['a'] }))
+    state = reducer(state, workspaceCleared({ conversationKey: 'k' }))
+    expect(state.revealedNodeIds).toEqual([])
   })
 })
 

@@ -45,6 +45,17 @@ them. Note the discovery data flow is one-way: teacher → store → explorer
 → `base` — the discovery *lists* live in the workspace slice (grounding,
 Save, and the legend read them there); this folder owns only the sim merge.
 
+The `view` has one exemption from its own filters, since v7.23.0: the
+store's **`revealedNodeIds`** — papers a typed lecture request reached for
+past the chips, sliders and caps ("lecture me on the references" with the
+references chip off). `nodeOk` shows them first, the cap trim skips them, and
+a link touching one survives its chip being off, or the paper would float
+unattached. The set is tiny and short-lived (it is cleared with the
+selection it serves), so it is a check at the top of the filter rather than a
+second filter path — and the chips deliberately stay as the reader set them:
+the message overrode the view for these papers, it did not edit the reader's
+controls.
+
 ## The core constraint: react-force-graph MUTATES your objects
 
 Everything in this folder is shaped by one fact. The simulation writes

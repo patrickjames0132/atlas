@@ -406,8 +406,9 @@
 /* --- the panel's sections, and why there are none -----------------------
    It stacked two folding sections from v7.10.0 to v7.21.0 — Lecture above
    Chat, each behind its own caret, each owning its own controls — because the
-   panel held two things that had to be able to coexist. `/lecture` replaced
-   the Lecture button, which left a lone "CHAT" caret folding away the only
+   panel held two things that had to be able to coexist. A `/lecture` command
+   replaced the Lecture button (and was itself replaced by asking in words in
+   v7.23.0), which left a lone "CHAT" caret folding away the only
    thing in a panel already titled "AI Teacher & Discovery", so both sections
    went. The styling they needed went with them: `.panel-section`,
    `.section-head` and its sticky rules, `.section-toggle`, `.section-caret`,

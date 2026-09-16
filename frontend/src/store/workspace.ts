@@ -76,6 +76,18 @@ export interface WorkspaceState {
    * load/restore and never persisted in a save.
    */
   selectedNodeIds: string[]
+  /**
+   * Ids the view filter must show regardless of chips, sliders and caps —
+   * set when a typed lecture request names papers the filters hide ("lecture
+   * me on the references" with the references chip off), so the lecture's
+   * one promise, *it narrates what is on screen*, survives the message
+   * choosing the scope. It outlives the selection it came with — the
+   * selection is one-shot (`lectureScopeReleased`) while the lit papers
+   * have to stay visible — and goes with the next clear-all
+   * (`nodeSelectionCleared`) or load/restore; never set by a gesture on the
+   * canvas.
+   */
+  revealedNodeIds: string[]
   layout: 'force' | 'timeline'
   /**
    * The academic-data backend graphs are built from — the header dropdown's
@@ -111,6 +123,7 @@ const initialState: WorkspaceState = {
   discoveredEdges: [],
   visibleNodeIds: [],
   selectedNodeIds: [],
+  revealedNodeIds: [],
   layout: 'timeline',
   provider: 's2',
   epoch: 0,
@@ -599,6 +612,7 @@ export function buildSaveBody(
         : undefined,
     viewFilters: workspace.viewFilters,
     selectedNodeIds: workspace.selectedNodeIds,
+    revealedNodeIds: workspace.revealedNodeIds,
     layout: workspace.layout,
     provider: workspace.provider,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
@@ -640,6 +654,7 @@ function workspaceForThread(thread: ThreadRecord, epoch: number): WorkspaceState
     layout: data.layout ?? 'timeline',
     viewFilters: data.viewFilters,
     selectedNodeIds: data.selectedNodeIds ?? [],
+    revealedNodeIds: data.revealedNodeIds ?? [],
   }
 }
 
@@ -759,6 +774,43 @@ const workspaceSlice = createSlice({
      */
     nodeSelectionCleared(state) {
       state.selectedNodeIds = []
+      state.revealedNodeIds = []
+    },
+    /**
+     * Scope the canvas to what a typed lecture request named: the ids become
+     * the hand-picked selection, and the ones the view filters currently
+     * hide are forced on screen. One action rather than a `nodeSelectionSet`
+     * plus a reveal, because the two are one decision — a scope that is
+     * selected but invisible is not on screen, and a lecture would narrate
+     * papers the reader cannot see.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the scoped ids and which of them are hidden.
+     */
+    lectureScopeApplied(state, action: PayloadAction<{ ids: string[]; hidden: string[] }>) {
+      state.selectedNodeIds = [...new Set(action.payload.ids)]
+      state.revealedNodeIds = [...new Set(action.payload.hidden)]
+    },
+    /**
+     * The lecture that scoped the canvas has ended: drop the selection it
+     * made, so the scope was one-shot — it held while the lecture streamed
+     * (the papers ringed, the rest dimmed, "Scoped to N papers" in the
+     * panel) and lets go once there is nothing left to scope. The lit
+     * papers stay lit through the highlight slice, and the revealed ones
+     * stay on screen (or the highlight would be lighting nothing) until Esc.
+     *
+     * Only if the selection is still the one the lecture made: a reader who
+     * re-picked mid-lecture has taken it over, and their pick stands.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the ids the lecture scoped, for the comparison.
+     */
+    lectureScopeReleased(state, action: PayloadAction<string[]>) {
+      const scoped = new Set(action.payload)
+      const untouched =
+        state.selectedNodeIds.length === scoped.size &&
+        state.selectedNodeIds.every((id) => scoped.has(id))
+      if (untouched) state.selectedNodeIds = []
     },
     /**
      * New Exploration: back to the default no-graph state (the page-load
@@ -779,6 +831,7 @@ const workspaceSlice = createSlice({
       state.discoveredEdges = []
       state.visibleNodeIds = []
       state.selectedNodeIds = []
+      state.revealedNodeIds = []
       state.layout = 'timeline'
       state.error = null
       state.epoch += 1
@@ -851,6 +904,7 @@ const workspaceSlice = createSlice({
         state.discoveredEdges = action.payload.graph ? action.payload.discoveredEdges : []
         state.visibleNodeIds = []
         state.selectedNodeIds = []
+        state.revealedNodeIds = []
         state.layout = action.payload.layout
         state.provider = action.payload.provider
         state.epoch += 1
@@ -874,6 +928,8 @@ export const {
   nodeSelectionAdded,
   nodeSelectionToggled,
   nodeSelectionCleared,
+  lectureScopeApplied,
+  lectureScopeReleased,
   errorSet,
   workspaceCleared,
 } = workspaceSlice.actions
@@ -986,6 +1042,19 @@ export const selectLectureNodes = createSelector(
   (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
   (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] =>
     scopedNodes(graph, discovered, visibleNodeIds, selectedNodeIds, false),
+)
+
+/**
+ * The ids a lecture scope forced past the view filters, as a Set for the
+ * canvas's filter to exempt. Empty unless a typed lecture request reached
+ * for hidden papers.
+ *
+ * @param state The root state.
+ * @returns The revealed node ids as a Set.
+ */
+export const selectRevealedSet = createSelector(
+  (state: StateWithWorkspace) => state.workspace.revealedNodeIds,
+  (revealedNodeIds) => new Set(revealedNodeIds),
 )
 
 /**

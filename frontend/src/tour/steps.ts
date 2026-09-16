@@ -125,13 +125,14 @@ export const HOME_TOUR: TourStep[] = [
  * bottom-right find control, then the detail panel (a whole-panel overview
  * stop, then its sections), then the teacher — the source scope under the ask
  * bar, then the bar itself, which carries two stops: what the researcher does
- * with a question, and how `/lecture` reaches the other assistant. The walk
- * follows the eye down the panel and ends where the reader types.
+ * with a question, and how asking for a lecture reaches the other assistant.
+ * The walk follows the eye down the panel and ends where the reader types.
  *
  * It used to open on a lecture grid at the top of the panel. That grid became
- * one button in v7.17.0, was folded behind a caret in v7.10.0, and became a
- * command in v7.21.0 — which also deleted the panel's folding sections
- * entirely, so every teacher stop now hangs off the composer.
+ * one button in v7.17.0, was folded behind a caret in v7.10.0, became a
+ * `/lecture` command in v7.21.0 — which also deleted the panel's folding
+ * sections entirely, so every teacher stop now hangs off the composer — and
+ * became plain words in v7.23.0, when the command went.
  * (Find used to open the tour — a leftover from its top-right era; starting on
  * a tiny corner button read as a diagonal jump.)
  * The steps inside the controls panel stage `'controls'` so a
@@ -325,18 +326,19 @@ export const GRAPH_TOUR: TourStep[] = [
     presentIf: '[data-tour="assistant-btn"]',
     title: 'Ask to be taught, not answered',
     body:
-      'Type “/” in the same bar and pick “/lecture”, and the other assistant narrates ' +
-      'the papers you have on screen — so you decide what the lecture is about. Filter ' +
-      'to the references and you get the story of how the field arrived here; keep only ' +
-      'recent work and you get the current frontier; alt-drag a cluster and it narrates ' +
-      'just those. Scope it to a single paper — any paper — and it teaches that one, ' +
-      'chapter by chapter. The one thing your selection can’t say is how to tell it, so ' +
-      'that is the second half of the command: “/lecture summary” groups the papers into ' +
-      'their key themes, “/lecture history” walks them oldest to newest. Papers light up ' +
-      'on the map as each part of the story arrives, and the beats read as the reply, in ' +
-      'the conversation with everything else. ' +
-      'You can also just say it — “lecture me on these”, “what’s the story here” — and ' +
-      'the lecturer takes the message. Every turn it guessed on says which assistant ' +
+      'Ask for a lecture in the same bar — “lecture me on these”, “what’s the story ' +
+      'here?” — and the other assistant narrates the papers you have on screen, so you ' +
+      'decide what it is about. Filter to the references and you get the story of how ' +
+      'the field arrived here; keep only recent work and you get the current frontier; ' +
+      'alt-drag a cluster and it narrates just those. Scope it to a single paper — any ' +
+      'paper — and it teaches that one, chapter by chapter. Or say which papers in the ' +
+      'message itself: “lecture me on the references”, “on the seed”, “on the Bekenstein ' +
+      'paper and Hawking 1975”, “the papers between 2016 and 2017” — those are selected ' +
+      'on the map first, brought back if a filter was hiding them, and then narrated; ' +
+      'when it finishes the whole lecture stays lit. Say “history” and it walks them oldest ' +
+      'to newest; otherwise it groups them into their key themes. Papers light up on the ' +
+      'map as each part of the story arrives, and the beats read as the reply, in the ' +
+      'conversation with everything else. Every turn it guessed on says which assistant ' +
       'answered and offers the other in a click, so a wrong guess costs nothing.',
   },
 ]
