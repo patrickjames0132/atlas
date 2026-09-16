@@ -45,7 +45,7 @@ Target = Literal["lecture", "answer"]
 #: doesn't say": the reader's own scope (their selection, else what passes
 #: their filters), which is what every turn was about before a message could
 #: name a set of its own.
-Scope = Literal["screen", "references", "citations", "seed", "named"]
+Scope = Literal["screen", "references", "citations", "seed", "named", "graph"]
 
 
 class MessageRoute(BaseModel):

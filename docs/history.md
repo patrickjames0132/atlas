@@ -688,6 +688,25 @@
 
 ### AI teacher & lectures
 
+- [x] **Scope contract, part (b): the whole graph by name, and a period that
+      binds discovery** *(v7.25.0)* — the two pieces of Codex's v7.24.0 review
+      deliberately left for a second step. **`graph`** is a sixth scope kind
+      the router reads off "the whole graph", "everything on the map", "all
+      the papers in this graph" (live: all three → `graph`; "lecture me on
+      everything" stays the deictic `screen`, via the fast path): everything
+      the workspace holds, past every filter, selected like any message
+      scope. It is the condition the review set for keeping *visible* as the
+      default — the lot is one sentence away, not a filter-reset away. And
+      **`filtersForTurn`** folds a message's period into the researcher's
+      discovery filters — the same `year_from`/`year_to` wire fields the ▽
+      filters use, the stricter side of each — so "what did the citations
+      from the last three years find?" no longer grounds in the right papers
+      and then pulls in a 2015 discovery. Discovery only, like the ▽ filters
+      themselves: `expand_node` walks citations somebody actually wrote, and
+      the v6-era reasoning in `ResearcherDeps` (filtering a reference list by
+      year hides real edges) stands. *(Filed 2026-09-15 while shipping
+      v7.24.0; shipped 2026-09-15.)*
+
 - [x] **One scope rule for both agents: message → selection → visible**
       *(v7.24.0)* — Patrick, the day after v7.23.0 shipped: *"now that we
       have changed the scoping to whatever the user asks about in their

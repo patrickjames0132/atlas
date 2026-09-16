@@ -11,9 +11,10 @@ lecturer and the researcher:
 ```
 scope/
   resolve.ts   — resolveScope (the list, applied), requestsScope, routePapers
-                 (the thin list the name resolver is shown), emptyScopeMessage
-                 and describeScope (the words for an empty scope and for the
-                 transcript's "Scoped to …" line)
+                 (the thin list the name resolver is shown), filtersForTurn
+                 (the turn's period folded into the researcher's discovery
+                 filters), emptyScopeMessage and describeScope (the words for
+                 an empty scope and for the transcript's "Scoped to …" line)
 ```
 
 ## Why it exists
@@ -64,8 +65,19 @@ this folder is where they live:
 
 - **Visible is the default, not the whole graph.** Filters are how a reader
   establishes context; defaulting to everything would weaken that control.
-  "The whole graph" is meant to be an explicit scope a message can ask for
-  (`graph`, planned with the researcher's tool constraints).
+  "The whole graph" is an explicit scope a message asks for by name — the
+  `graph` kind ("lecture me on the whole graph", "everything on the map"),
+  everything the workspace holds, past every filter — which is what lets
+  the default stay narrow: the lot is one sentence away, not a filter-reset
+  away. "Everything" alone stays deictic (what is on screen).
+- **The turn's period binds discovery too.** `filtersForTurn` folds a
+  message's period into the researcher's search filters — the same
+  `year_from`/`year_to` wire fields the ▽ filters use, the stricter side of
+  each — so "what did the citations from the last three years find?" does
+  not ground in the right papers and then pull in a 2015 discovery. Discovery
+  only, like the ▽ filters themselves: `expand_node` walks citations somebody
+  actually wrote, and filtering a reference list by year would hide real
+  edges (`ResearcherDeps` in the researcher's `tools.py` has the reasoning).
 - **A message kind reads off the whole graph; a bare period narrows the
   context.** "The references" with the references chip off means the
   references — that is what the message is for. "The papers between 2016

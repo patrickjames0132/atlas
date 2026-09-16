@@ -75,7 +75,13 @@ import {
   selectScope,
   selectSeedNode,
 } from '../store/workspace'
-import { emptyScopeMessage, requestsScope, resolveScope, routePapers } from '../scope/resolve'
+import {
+  emptyScopeMessage,
+  filtersForTurn,
+  requestsScope,
+  resolveScope,
+  routePapers,
+} from '../scope/resolve'
 import type { ResolvedScope, ScopeRequest } from '../scope/resolve'
 
 /** An inline citation marker in answer prose: a single index (`[7]`) or a
@@ -409,6 +415,12 @@ export function useConversation() {
       // its visible set on its next render, and the papers this turn is
       // about must not change under it.
       const turnScope = scope ?? defaultScope
+      // The turn's period binds what the researcher goes looking for, too —
+      // the same wire fields the ▽ filters use, tightened by it.
+      const turnFilters = filtersForTurn(
+        filters,
+        turnScope.request?.years ?? { from: null, to: null },
+      )
       // Supersede whatever was in flight. One controller covers answers and
       // lectures alike now: both are replies to a typed message, and a new
       // message means the reader has moved on from the last one.
@@ -507,7 +519,7 @@ export function useConversation() {
               source_ids: sourceIds,
               history,
               thread_context: siblingContext(store.getState(), question),
-              ...askFilters(filters),
+              ...askFilters(turnFilters),
             },
             {
               signal: ctrl.signal,

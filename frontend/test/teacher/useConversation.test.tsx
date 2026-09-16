@@ -249,6 +249,40 @@ describe('the scope priority list, resolved once per turn', () => {
     expect(lastTurn().scope).toMatchObject({ source: 'message', years: { from: 2015, to: 2015 } })
   })
 
+  it('binds the researcher\u2019s discovery to the turn\u2019s period, tightened by the bar\u2019s filters', async () => {
+    const { result, streamAsk } = await setUp(
+      answer('citations', { year_from: 2013, year_to: 2017 }),
+    )
+    await act(async () => {
+      await result.current.send('what did the citations from 2013 to 2017 find?', undefined, {
+        yearFrom: 2015,
+        yearTo: null,
+        fields: [],
+      })
+    })
+    const body = streamAsk.mock.calls[0][0]
+    expect(body.nodes.map((item) => item.id)).toEqual(['c1'])
+    // The stricter floor (the bar's 2015) and the period's ceiling.
+    expect(body.year_from).toBe(2015)
+    expect(body.year_to).toBe(2017)
+  })
+
+  it('scopes "the whole graph" to everything, whatever the filters and selection', async () => {
+    const { store, result, streamLecture, lastTurn } = await setUp(lecture('graph'))
+    store.dispatch(nodeSelectionSet(['r1']))
+    await act(async () => {
+      await result.current.send('lecture me on the whole graph', undefined)
+    })
+    expect(streamLecture.mock.calls[0][0].nodes.map((item) => item.id)).toEqual([
+      'seed',
+      'r1',
+      'r2',
+      'c1',
+    ])
+    expect(store.getState().workspace.selectedNodeIds).toEqual(['seed', 'r1', 'r2', 'c1'])
+    expect(lastTurn().scope).toMatchObject({ source: 'message', kind: 'graph', nodes: 4 })
+  })
+
   it('fails the turn in words when an explicit scope matches nothing, for either agent', async () => {
     for (const [route, pattern] of [
       [lecture('named'), /None of the papers you named are on this graph/],

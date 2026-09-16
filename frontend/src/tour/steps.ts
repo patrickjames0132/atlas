@@ -334,7 +334,7 @@ export const GRAPH_TOUR: TourStep[] = [
       'alt-drag a cluster and it narrates just those. Scope it to a single paper — any ' +
       'paper — and it teaches that one, chapter by chapter. Or say which papers in the ' +
       'message itself: “lecture me on the references”, “on the seed”, “on the Bekenstein ' +
-      'paper and Hawking 1975”, “the papers between 2016 and 2017” — those become the ' +
+      'paper and Hawking 1975”, “the whole graph”, “the papers between 2016 and 2017” — those become the ' +
       'selection, drawn even if a filter hides them, and are narrated; questions scope ' +
       'the same way, and each reply says what it was scoped to. When a ' +
       'lecture finishes the whole of it stays lit. Say “history” and it walks them oldest ' +

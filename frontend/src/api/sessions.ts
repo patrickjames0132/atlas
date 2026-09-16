@@ -194,7 +194,7 @@ export interface TurnScope {
   /** How many papers were in scope. */
   nodes: number
   /** The message's request, when the message chose the scope. */
-  kind?: 'screen' | 'references' | 'citations' | 'seed' | 'named'
+  kind?: 'screen' | 'references' | 'citations' | 'seed' | 'named' | 'graph'
   years?: { from: number | null; to: number | null }
   /** For a `named` request, the ids the resolver found. */
   ids?: string[]

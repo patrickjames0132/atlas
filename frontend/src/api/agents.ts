@@ -77,9 +77,11 @@ export interface Discovery {
  * `screen` is "the message doesn't say" — the reader's on-screen scope, which
  * is what every lecture was about before a message could name a set of its
  * own. `named` means the message pointed at specific papers, and a second
- * call ({@link resolveRoutedPapers}) turns it into ids given the graph.
+ * call ({@link resolveRoutedPapers}) turns it into ids given the graph;
+ * `graph` is the whole graph asked for by name — the one way to reach past
+ * every filter without clearing them.
  */
-export type LectureScope = 'screen' | 'references' | 'citations' | 'seed' | 'named'
+export type LectureScope = 'screen' | 'references' | 'citations' | 'seed' | 'named' | 'graph'
 
 /**
  * Which assistant a typed message wants — the answer from {@link routeMessage}.

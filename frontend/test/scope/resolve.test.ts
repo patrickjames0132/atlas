@@ -19,6 +19,7 @@ import {
   ANY_TIME,
   describeScope,
   emptyScopeMessage,
+  filtersForTurn,
   resolveScope,
   routePapers,
 } from '../../src/scope/resolve'
@@ -105,6 +106,13 @@ describe('a message scope', () => {
     expect(ids(ask('seed'))).toEqual(['seed'])
   })
 
+  it('makes "the whole graph" everything the workspace holds, past every filter', () => {
+    // The explicit widening that lets "visible" stay the default: a reader
+    // who wants the lot says so rather than clearing every filter.
+    expect(ids(ask('graph'), ['r1'])).toEqual(['seed', 'r1', 'r2', 'c1', 'b1', 'u1', 'd1'])
+    expect(ids(ask('graph', [], { from: 2016, to: 2016 }))).toEqual(['r2', 'd1'])
+  })
+
   it('keeps named papers in the order they were named, dropping what the graph lacks', () => {
     expect(ids(ask('named', ['d1', 'nope', 'r1', 'd1']))).toEqual(['d1', 'r1'])
   })
@@ -160,6 +168,36 @@ describe('emptyScopeMessage', () => {
   })
 })
 
+describe('filtersForTurn', () => {
+  const bar = { yearFrom: 2010, yearTo: 2025, fields: ['cs'] }
+
+  it('leaves the bar\u2019s filters alone when the turn has no period', () => {
+    expect(filtersForTurn(bar, ANY_TIME)).toBe(bar)
+    expect(filtersForTurn(undefined, ANY_TIME)).toBeUndefined()
+  })
+
+  it('tightens each side to the stricter of the bar and the period', () => {
+    expect(filtersForTurn(bar, { from: 2016, to: 2030 })).toEqual({
+      yearFrom: 2016,
+      yearTo: 2025,
+      fields: ['cs'],
+    })
+    expect(filtersForTurn(bar, { from: 2000, to: 2017 })).toEqual({
+      yearFrom: 2010,
+      yearTo: 2017,
+      fields: ['cs'],
+    })
+  })
+
+  it('stands in for absent bar filters', () => {
+    expect(filtersForTurn(undefined, { from: 2016, to: null })).toEqual({
+      yearFrom: 2016,
+      yearTo: null,
+      fields: [],
+    })
+  })
+})
+
 describe('describeScope', () => {
   it('says nothing for the visible default, and what was chosen otherwise', () => {
     expect(describeScope({ source: 'visible', nodes: 12 })).toBeNull()
@@ -184,6 +222,9 @@ describe('describeScope', () => {
         nodes: 3,
       }),
     ).toBe('2020 on · 3 papers')
+    expect(describeScope({ source: 'message', kind: 'graph', years: ANY_TIME, nodes: 40 })).toBe(
+      'the whole graph · 40 papers',
+    )
   })
 })
 
