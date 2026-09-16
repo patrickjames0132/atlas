@@ -100,10 +100,12 @@ canvas about what "a reference" looks like, and both style via
   against each other (`lo ≤ hi`).
 - **One count readout, shared by the footer and the collapsed bar.** The
   same string renders in both places: `N / total papers shown` under bare
-  filters, flipping to `N / shown papers selected` while a hand-pick exists —
-  out of the *shown* papers, not the total, since the pick scopes the teacher
-  as `selected ∩ visible` (`selectGroundingNodes`). The old `N picked · clear`
-  status row under the gesture hint retired in favor of this flip.
+  filters, flipping to `N papers selected` while a hand-pick exists. It read
+  `N / shown papers selected` until v7.24.0, when the pick scoped the teacher
+  as `selected ∩ visible`; the selection outranks the filters now
+  (`scope/README.md`), so a denominator of shown papers would be a lie the
+  moment a slider hid a selected one. The old `N picked · clear` status row
+  under the gesture hint retired in favor of this flip.
 - **The node-selector row teaches the marquee gestures.** An always-on hint
   line (`alt-drag to pick nodes for the teacher · shift-click to add/remove`)
   makes the modifier-drag discoverable — the gesture itself lives in

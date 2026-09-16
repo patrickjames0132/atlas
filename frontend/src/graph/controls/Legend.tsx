@@ -2,8 +2,10 @@
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
  * Description:
- * The color legend under the graph. The two teacher-related entries only
- * appear once the agent has actually discovered papers mid-conversation.
+ * The color legend under the graph. The teacher-related entries only appear
+ * when they apply: the dashed ring once the agent has discovered papers
+ * mid-conversation, the dotted ring while a scoped paper is on screen that
+ * the view filters would otherwise hide.
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -16,6 +18,8 @@ import '../graph.css'
 export interface LegendProps {
   /** The teacher has pulled in at least one off-graph paper (dashed ring). */
   hasDiscovered: boolean
+  /** At least one scoped paper is drawn past the view filters (dotted ring). */
+  hasGhosts: boolean
 }
 
 /**
@@ -23,7 +27,7 @@ export interface LegendProps {
  *
  * @returns The legend row.
  */
-export default function Legend({ hasDiscovered }: LegendProps) {
+export default function Legend({ hasDiscovered, hasGhosts }: LegendProps) {
   return (
     <div className="legend">
       <span>
@@ -42,6 +46,12 @@ export default function Legend({ hasDiscovered }: LegendProps) {
         <span>
           <i className="ring" />
           Discovered by teacher
+        </span>
+      )}
+      {hasGhosts && (
+        <span>
+          <i className="ring ghost" />
+          In scope, hidden by your filters
         </span>
       )}
     </div>

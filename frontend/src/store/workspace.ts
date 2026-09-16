@@ -36,6 +36,8 @@ import {
 import { cleanNode, countRels, foldRetiredEdgeTypes, foldRetiredNodeRels } from '../graph/model'
 import type { VNode } from '../graph/model'
 import { explorationOpened, threadActivated } from './explorations'
+import { resolveScope } from '../scope/resolve'
+import type { ResolvedScope } from '../scope/resolve'
 import type { ExplorationsState, ThreadRecord } from './explorations'
 import type { Conversation, TranscriptState } from './transcript'
 
@@ -60,34 +62,30 @@ export interface WorkspaceState {
   discoveredNodes: GraphNode[]
   discoveredEdges: GraphEdge[]
   /**
-   * Ids of the nodes currently VISIBLE on the canvas — published by
-   * GraphExplorer's view filter (relation chips, year range, citation-count
-   * threshold). Agents ground on what's on screen, not the whole shipped pool
-   * (which holds far more than the filters show), so this is the intersection
-   * `selectGroundingNodes` applies. Empty until the first render.
+   * Ids of the nodes PASSING THE VIEW FILTERS (relation chips, year range,
+   * citation window, per-chip caps) — published by GraphExplorer's filter,
+   * independent of the viewport, of a collapsed panel, and of what else the
+   * canvas draws on top. This is the **default scope**, the last rung of the
+   * priority list in `scope/resolve.ts`: what the agents reason over when the
+   * message and the selection say nothing. Deliberately the *eligible* set
+   * rather than the *drawn* set — the canvas also draws selected and
+   * message-scoped papers the filters would hide, and those must not leak
+   * back into the default. Empty until the first render.
    */
   visibleNodeIds: string[]
   /**
-   * Ids the user has HAND-PICKED on the canvas (alt-drag marquee / shift-click)
-   * to scope the teacher to a cluster of interest. When non-empty it narrows
-   * grounding to the selected ∩ visible nodes (see `selectGroundingNodes`);
-   * empty means "no manual pick" and grounding falls back to the whole visible
-   * set. A transient exploration choice, like `visibleNodeIds` — reset on every
-   * load/restore and never persisted in a save.
+   * Ids SELECTED on the canvas as the teacher's scope — the middle rung of
+   * `scope/resolve.ts`'s list: when non-empty it is the scope, whatever the
+   * filters say (a selected paper a later slider change would hide stays in
+   * scope, and the canvas keeps drawing it, marked). Two things write it:
+   * the reader's hand (alt-drag marquee / shift-click), and a message that
+   * chose its own scope ("what do the references say?") — `send` makes that
+   * scope the selection, and it *stays* after the turn, like one made by
+   * hand (Patrick's call, 2026-09-15: a scope set by a request changes the
+   * scope permanently rather than reverting to the previous pick). Empty
+   * means "no pick". Saved with the thread, like the filters.
    */
   selectedNodeIds: string[]
-  /**
-   * Ids the view filter must show regardless of chips, sliders and caps —
-   * set when a typed lecture request names papers the filters hide ("lecture
-   * me on the references" with the references chip off), so the lecture's
-   * one promise, *it narrates what is on screen*, survives the message
-   * choosing the scope. It outlives the selection it came with — the
-   * selection is one-shot (`lectureScopeReleased`) while the lit papers
-   * have to stay visible — and goes with the next clear-all
-   * (`nodeSelectionCleared`) or load/restore; never set by a gesture on the
-   * canvas.
-   */
-  revealedNodeIds: string[]
   layout: 'force' | 'timeline'
   /**
    * The academic-data backend graphs are built from — the header dropdown's
@@ -123,7 +121,6 @@ const initialState: WorkspaceState = {
   discoveredEdges: [],
   visibleNodeIds: [],
   selectedNodeIds: [],
-  revealedNodeIds: [],
   layout: 'timeline',
   provider: 's2',
   epoch: 0,
@@ -612,7 +609,6 @@ export function buildSaveBody(
         : undefined,
     viewFilters: workspace.viewFilters,
     selectedNodeIds: workspace.selectedNodeIds,
-    revealedNodeIds: workspace.revealedNodeIds,
     layout: workspace.layout,
     provider: workspace.provider,
     // cleanNode strips the researcher's per-conversation idx from discovered nodes.
@@ -654,7 +650,6 @@ function workspaceForThread(thread: ThreadRecord, epoch: number): WorkspaceState
     layout: data.layout ?? 'timeline',
     viewFilters: data.viewFilters,
     selectedNodeIds: data.selectedNodeIds ?? [],
-    revealedNodeIds: data.revealedNodeIds ?? [],
   }
 }
 
@@ -774,43 +769,6 @@ const workspaceSlice = createSlice({
      */
     nodeSelectionCleared(state) {
       state.selectedNodeIds = []
-      state.revealedNodeIds = []
-    },
-    /**
-     * Scope the canvas to what a typed lecture request named: the ids become
-     * the hand-picked selection, and the ones the view filters currently
-     * hide are forced on screen. One action rather than a `nodeSelectionSet`
-     * plus a reveal, because the two are one decision — a scope that is
-     * selected but invisible is not on screen, and a lecture would narrate
-     * papers the reader cannot see.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the scoped ids and which of them are hidden.
-     */
-    lectureScopeApplied(state, action: PayloadAction<{ ids: string[]; hidden: string[] }>) {
-      state.selectedNodeIds = [...new Set(action.payload.ids)]
-      state.revealedNodeIds = [...new Set(action.payload.hidden)]
-    },
-    /**
-     * The lecture that scoped the canvas has ended: drop the selection it
-     * made, so the scope was one-shot — it held while the lecture streamed
-     * (the papers ringed, the rest dimmed, "Scoped to N papers" in the
-     * panel) and lets go once there is nothing left to scope. The lit
-     * papers stay lit through the highlight slice, and the revealed ones
-     * stay on screen (or the highlight would be lighting nothing) until Esc.
-     *
-     * Only if the selection is still the one the lecture made: a reader who
-     * re-picked mid-lecture has taken it over, and their pick stands.
-     *
-     * @param state  The slice state (mutated via immer).
-     * @param action Carries the ids the lecture scoped, for the comparison.
-     */
-    lectureScopeReleased(state, action: PayloadAction<string[]>) {
-      const scoped = new Set(action.payload)
-      const untouched =
-        state.selectedNodeIds.length === scoped.size &&
-        state.selectedNodeIds.every((id) => scoped.has(id))
-      if (untouched) state.selectedNodeIds = []
     },
     /**
      * New Exploration: back to the default no-graph state (the page-load
@@ -831,7 +789,6 @@ const workspaceSlice = createSlice({
       state.discoveredEdges = []
       state.visibleNodeIds = []
       state.selectedNodeIds = []
-      state.revealedNodeIds = []
       state.layout = 'timeline'
       state.error = null
       state.epoch += 1
@@ -904,7 +861,6 @@ const workspaceSlice = createSlice({
         state.discoveredEdges = action.payload.graph ? action.payload.discoveredEdges : []
         state.visibleNodeIds = []
         state.selectedNodeIds = []
-        state.revealedNodeIds = []
         state.layout = action.payload.layout
         state.provider = action.payload.provider
         state.epoch += 1
@@ -928,8 +884,6 @@ export const {
   nodeSelectionAdded,
   nodeSelectionToggled,
   nodeSelectionCleared,
-  lectureScopeApplied,
-  lectureScopeReleased,
   errorSet,
   workspaceCleared,
 } = workspaceSlice.actions
@@ -955,106 +909,23 @@ export const selectSeedNode = createSelector(
 )
 
 /**
- * The papers the agents may reason over, in two flavours that differ on one
- * question: **may a paper the reader cannot currently see be in scope?**
- *
- * Both start from the nodes VISIBLE on the canvas — grounding tracks what's on
- * screen, because the graph ships a much larger pool than the filters show and
- * an agent must reason over the papers the user actually sees, not the hidden
- * remainder. When `selectedNodeIds` is non-empty the graph side is the
- * **intersection** of the selection with the visible set (`selected ∩
- * visible`): a hand-pick narrows *within* what the filters already show, so
- * hiding a relation after selecting also drops those nodes. An empty selection
- * means "no manual pick" and the whole visible set grounds.
- *
- * `visibleNodeIds` is published by GraphExplorer's view filter; before it
- * lands (e.g. the instant a graph loads) grounding is just the discoveries,
- * which corrects on the next render.
- *
- * @param graph           The current graph.
- * @param discovered      Papers the agent pulled in this session.
- * @param visibleNodeIds  The ids surviving the view filter.
- * @param selectedNodeIds The reader's hand-picked selection.
- * @param keepHidden      Whether a discovery excluded by the filters stays in
- *                        scope (see the two selectors below).
- * @returns The scoped nodes, on-screen ones first, then discoveries.
+ * The **default scope** — the priority list of `scope/resolve.ts` with no
+ * message in play: the hand-picked selection when there is one, else the
+ * papers passing the view filters. What the teacher panel's readouts show,
+ * and what `useConversation.send` resolves *from* when the router reads
+ * nothing off the message. The v7.17.0 selectors this replaced
+ * (`selectGroundingNodes`, `selectLectureNodes`) intersected the selection
+ * with the visible set and kept hidden discoveries for the researcher only;
+ * both rules are gone — the selection stands whatever the filters do, and a
+ * discovery is in scope on the same terms as any other paper.
  */
-function scopedNodes(
-  graph: GraphResponse | null,
-  discovered: GraphNode[],
-  visibleNodeIds: string[],
-  selectedNodeIds: string[],
-  keepHidden: boolean,
-): GraphNode[] {
-  if (!graph) return []
-  const visible = new Set(visibleNodeIds)
-  const hasSelection = selectedNodeIds.length > 0
-  const selected = new Set(selectedNodeIds)
-  const seen = new Set<string>()
-  const merged: GraphNode[] = []
-  for (const node of graph.nodes) {
-    if (!visible.has(node.id) || seen.has(node.id)) continue
-    if (hasSelection && !selected.has(node.id)) continue
-    seen.add(node.id)
-    merged.push(node)
-  }
-  for (const node of discovered) {
-    if (seen.has(node.id)) continue
-    if (!keepHidden && !visible.has(node.id)) continue
-    seen.add(node.id)
-    merged.push(node)
-  }
-  return merged
-}
-
-/**
- * The **researcher's** grounding scope: what's on screen, plus every paper the
- * agent has discovered this session — kept even when a filter or the selection
- * would exclude it, because the agent pulled it in deliberately and an answer
- * that silently forgets its own find is worse than one that mentions a paper
- * currently filtered away.
- */
-export const selectGroundingNodes = createSelector(
+export const selectScope = createSelector(
   (state: StateWithWorkspace) => state.workspace.graph,
   (state: StateWithWorkspace) => state.workspace.discoveredNodes,
   (state: StateWithWorkspace) => state.workspace.visibleNodeIds,
   (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
-  (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] =>
-    scopedNodes(graph, discovered, visibleNodeIds, selectedNodeIds, true),
-)
-
-/**
- * The **lecture's** scope: strictly what is on screen. Same as the
- * researcher's, except a discovery the filters exclude is excluded too.
- *
- * The two diverge because they make different promises. An answer is about a
- * question, and drawing on a paper the agent found is honest even if a filter
- * currently hides it. A lecture, since v7.17.0, promises to narrate *the papers
- * you have on screen* — so narrating one the reader cannot see breaks the only
- * rule it has, and the reader has no way to tell why an unfamiliar paper
- * appeared. (Reachable only in a narrow case: the agent finds a 2019 paper
- * mid-chat, the reader filters to 2024+, then presses Lecture.)
- */
-export const selectLectureNodes = createSelector(
-  (state: StateWithWorkspace) => state.workspace.graph,
-  (state: StateWithWorkspace) => state.workspace.discoveredNodes,
-  (state: StateWithWorkspace) => state.workspace.visibleNodeIds,
-  (state: StateWithWorkspace) => state.workspace.selectedNodeIds,
-  (graph, discovered, visibleNodeIds, selectedNodeIds): GraphNode[] =>
-    scopedNodes(graph, discovered, visibleNodeIds, selectedNodeIds, false),
-)
-
-/**
- * The ids a lecture scope forced past the view filters, as a Set for the
- * canvas's filter to exempt. Empty unless a typed lecture request reached
- * for hidden papers.
- *
- * @param state The root state.
- * @returns The revealed node ids as a Set.
- */
-export const selectRevealedSet = createSelector(
-  (state: StateWithWorkspace) => state.workspace.revealedNodeIds,
-  (revealedNodeIds) => new Set(revealedNodeIds),
+  (graph, discovered, visibleNodeIds, selectedNodeIds): ResolvedScope =>
+    resolveScope(null, graph, discovered, visibleNodeIds, selectedNodeIds),
 )
 
 /**

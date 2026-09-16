@@ -84,10 +84,10 @@ surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
 `mentions/` (the chat bar's `@` paper lookup — its grammar, typeahead and
-dropdown), `search/useDirectSearch.ts`, `shell/useSessions.ts`,
-`detail/useSelection.ts`, `teacher/useConversation.ts` (each feature's
-state/logic hooks), `teacher/lectureScope.ts` (what a message's lecture
-scope — "the references", a named paper — is on the current graph).
+dropdown), `scope/` (which papers a turn is about — the message → selection →
+visible priority list both agents share), `search/useDirectSearch.ts`,
+`shell/useSessions.ts`, `detail/useSelection.ts`,
+`teacher/useConversation.ts` (each feature's state/logic hooks).
 
 (`commands/` sat here from v7.21.0 to v7.23.0 — the `/lecture` command's
 grammar and menu. It went when the router learned to read a lecture's scope

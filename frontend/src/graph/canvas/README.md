@@ -18,11 +18,17 @@ paints, the shell decides.
 
 - **Gold glow + gold ring** — the teacher is talking about this paper
   (`highlightIds`).
-- **Cyan ring** — hand-picked into the teacher's scope (`selectedIds`, the
-  alt-drag marquee / shift-click selection). While a selection is active,
-  everything outside it **dims** like a focus set, so the picked cluster
-  stands out; the ring is cyan to stay distinct from the gold, pale-white,
-  and bright-white rings it can coexist with.
+- **Cyan ring** — in the teacher's scope (`selectedIds`: the alt-drag
+  marquee / shift-click selection, or the papers a message asked for, which
+  `send` makes the selection). While a scope is active, everything
+  outside it **dims** like a focus set, so the scoped cluster stands out; the
+  ring is cyan to stay distinct from the gold, pale-white, and bright-white
+  rings it can coexist with.
+- **Dotted outer ring** — a scoped paper the view filters would hide, drawn
+  anyway (`ghostIds`, always a subset of `selectedIds`; v7.24.0). The scope
+  outranks the filters, and this is what keeps "the filters are a lens"
+  honest: the reader can see which papers the lens would have dropped. The
+  legend names it *"In scope, hidden by your filters"* while any is drawn.
 - **Dashed ring** — agent-discovered mid-chat (`node.discovered`). Drawn on
   its own path just outside the fill: stroking the fill's arc buries half the
   line width under the disc, which made the original ring easy to miss.

@@ -45,16 +45,20 @@ them. Note the discovery data flow is one-way: teacher → store → explorer
 → `base` — the discovery *lists* live in the workspace slice (grounding,
 Save, and the legend read them there); this folder owns only the sim merge.
 
-The `view` has one exemption from its own filters, since v7.23.0: the
-store's **`revealedNodeIds`** — papers a typed lecture request reached for
-past the chips, sliders and caps ("lecture me on the references" with the
-references chip off). `nodeOk` shows them first, the cap trim skips them, and
-a link touching one survives its chip being off, or the paper would float
-unattached. The set is tiny and short-lived (it is cleared with the
-selection it serves), so it is a check at the top of the filter rather than a
-second filter path — and the chips deliberately stay as the reader set them:
-the message overrode the view for these papers, it did not edit the reader's
-controls.
+The `view` separates **eligibility from drawing** (v7.24.0). `eligible` is
+what the chips, sliders and caps admit, and it is what gets published as
+`visibleNodeIds` — the default scope. On top of it the canvas also draws
+every *scoped* paper the filters would hide (`ghosts`: a selected paper after
+a slider change, "the references" with the references chip off), because the
+scope outranks the filters (`scope/README.md`) and the reader should see
+what the agent is reasoning over. A ghost keeps its edges even when their
+chip is off, or it would float unattached, and wears a dotted outer ring the
+legend names *"In scope, hidden by your filters"*. Kept apart on purpose: if
+the drawn set were published, a paper shown only because it was asked for
+would leak into the default scope of the next, unscoped question. The chips
+deliberately stay as the reader set them — the scope overrode the view for
+these papers, it did not edit the controls. (v7.23.0 did this with a stored
+`revealedNodeIds`; it is derived now.)
 
 ## The core constraint: react-force-graph MUTATES your objects
 

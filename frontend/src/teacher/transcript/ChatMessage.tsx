@@ -25,6 +25,7 @@ import { splitAnswer } from '../figures/split'
 import AnswerMarkdown from './AnswerMarkdown'
 import BeatList from './BeatList'
 import { provenanceLine } from './provenance'
+import { describeScope } from '../../scope/resolve'
 
 /**
  * Why a failed search never turned anything up, in plain words — "the budget
@@ -313,6 +314,16 @@ export default function ChatMessage({
           )}
         </div>
       )}
+      {(() => {
+        // What the turn was scoped to, when that was anything other than
+        // "what you were looking at": the message's ask ("the references,
+        // 2010–2019 · 12 papers") or the hand-picked selection. The one
+        // place the priority list is visible in the transcript, so a reader
+        // can tell why an answer covered what it did — and why a filtered-out
+        // paper turned up anyway.
+        const scoped = message.scope ? describeScope(message.scope) : null
+        return scoped ? <div className="chat-scoped">Scoped to {scoped}</div> : null
+      })()}
       {message.routedTo && (
         // Which assistant answered, and the offer of the other. This line is
         // what makes routing by model acceptable at all: a misroute costs one

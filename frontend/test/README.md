@@ -43,15 +43,15 @@ test/
     library.test.ts           — one shared copy of the uploaded sources
     transcript.test.ts        — the exploration lecture's show/hide/drop, and a
                                 routed lecture landing on its own chat turn
-    workspace.test.ts         — hand-picked selection + grounding scope, and
-                                the message-named lecture scope's reveal
-                                living and dying with the selection
+    workspace.test.ts         — hand-picked selection, and the default scope
+                                (selection outranks filters)
+  scope/
+    resolve.test.ts           — the priority list rung by rung, the
+                                empty-scope signal, periods, and the words
   teacher/
     Teacher.test.tsx          — the panel's folding sections: the defaults,
                                 the carets, tour staging, and which of its two
                                 homes the 📚 source picker renders in
-    lectureScope.test.ts      — "the references", "the seed", named papers →
-                                nodes on this graph, and which are hidden
     HopDots.test.tsx          — the shared indicator's accessibility contract
     ScopePicker.test.tsx      — the controlled open/close contract (popover
                                 only when `open`; trigger and ✕ report via
@@ -108,6 +108,7 @@ background ownership. `shell/useExplorations.test.ts` replaces the old single-ch
 autosave tests; `shell/saveQueue.test.ts` covers ordered teardown recovery and
 deletion. `teacher/useConversation.test.tsx` verifies a lecture followed by an
 ordinary question includes the lecture in client-owned researcher history, and
-runs each routed lecture scope through `send`: what reaches the lecturer, what
-the canvas is scoped to and has revealed, and that an unmatched named scope
-fails the turn without streaming.
+runs the scope priority list's acceptance cases through `send`: what reaches
+each agent, a message scope becoming the selection and staying (through a
+mid-turn edit and a failure alike), an unmatched scope failing the turn for
+either agent, and a correction re-asking for the same papers.

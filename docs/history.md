@@ -688,6 +688,99 @@
 
 ### AI teacher & lectures
 
+- [x] **One scope rule for both agents: message → selection → visible**
+      *(v7.24.0)* — Patrick, the day after v7.23.0 shipped: *"now that we
+      have changed the scoping to whatever the user asks about in their
+      context or whatever is manually scoped by the user, the filters in the
+      graph controls should no longer affect the scope"* — and, on reflection,
+      *"maybe the filters is what the agent ultimately defaults on if the
+      first 2 options fail. However, this needs to be coded in the agent's
+      workflow — right? I don't believe we have a priority list like this
+      anywhere? … I was worried that these different scoping features could
+      overlap in destructive and unintended ways."* They did. The order
+      existed, but only as the emergent behaviour of three pieces of code
+      (`useConversation.send`'s message scope, the workspace's `scopedNodes`
+      — selection ∩ visible, else visible — and the view filter feeding it),
+      and reading them together found two destructive overlaps and a gap: a
+      message scope *replaced* a hand-picked selection and released it to
+      nothing; the filters silently beat the selection (a selected paper a
+      later slider change hid dropped out of scope with no signal); and only
+      lectures got message scoping — the router's `scope` was ignored on a
+      question. *(From Patrick, 2026-09-15; design reviewed by Codex the same
+      day; shipped 2026-09-15.)*
+
+      **The rule is one function now.** `frontend/src/scope/resolve.ts`,
+      `resolveScope`: what the **message** asked for, else the reader's
+      **hand-picked selection**, else what is **visible** — with "visible"
+      defined as *passes the view filters*, independent of the viewport and
+      of what else the canvas draws. `selectScope` replaces
+      `selectGroundingNodes`/`selectLectureNodes`; the researcher and the
+      lecturer get the same snapshot. Codex's review kept **visible as the
+      default** ("filters give users a way to establish context; defaulting
+      to the whole graph would weaken that control" — "the whole graph" is to
+      be an explicit scope, planned with the researcher's tool constraints)
+      and tightened four parts, three of which shipped as stated:
+
+      - **Absent ≠ empty.** An explicit ask that matches nothing is the
+        empty-scope signal — `{source: 'message', nodes: []}` — and fails the
+        turn in words for either agent (*"None of the papers you named are
+        on this graph…"*, *"This graph has no references from 1990–1999."*),
+        never falling through to the selection or the visible papers, and
+        leaving the selection as it was.
+      - **Eligibility is not rendering.** `GraphExplorer` now publishes the
+        *filter-passing* set as `visibleNodeIds` and separately draws every
+        scoped paper the filters would hide (`ghosts`, with a dotted outer
+        ring and a legend entry, *"In scope, hidden by your filters"*). This
+        also caught a v7.23.0 bug: the drawn set was being published, so a
+        revealed paper leaked into the default scope of the next question.
+        The stored `revealedNodeIds` is gone — a scoped-but-hidden paper is
+        drawn *because* it is selected, derived rather than stored.
+      - **Resolve once per turn.** `send` resolves, stamps `ChatMsg.scope`
+        (source, request, count — shown as *"Scoped to the references,
+        2010–2019 · 12 papers"* / *"Scoped to your 5 selected papers"*,
+        nothing for the visible default), and hands the same `ResolvedScope`
+        to `ask` or `lectureInChat`, which never read the store for it again.
+        A correction or retry re-resolves the *stamped request* against the
+        graph as it stands then.
+
+      **The fourth was Patrick's to overrule, and he did.** The review
+      proposed message scope as an override layer released at the turn's
+      end, exposing the prior selection. Built that way, tested, and
+      reversed on the browser pass: *"if the scope changes for a user's
+      request, it should change permanently and not revert back to the user's
+      manual scope. To me, the turn should just end with the scope of the
+      turn."* So a message scope **becomes the selection** (`send` dispatches
+      `nodeSelectionSet`) and stays, exactly as if the reader had marqueed
+      it — which also deleted the override state, its two actions, its ring
+      selector and its thread-activation cleanup: the selection *is* the
+      scope, whoever set it, and Esc clears it either way. (This supersedes
+      v7.23.0's "one-shot" release, which Patrick had asked for a day
+      earlier; the earlier ask was about not leaving a *stale* scope behind,
+      and a scope that is the selection is not stale.)
+
+      **Selection beats filters.** A picked paper a slider later hides stays
+      in scope and stays drawn, dotted. The controls readout lost its
+      denominator (`N papers selected`, not `N / shown`) because the shown
+      count could now be smaller than the selection. **Discoveries are
+      papers**: in scope on the same terms as any other (eligible, selected
+      or named); the researcher's "keep every discovery regardless" special
+      case went. **Questions scope too**: the router prompt reads scope and
+      period for an `answer` exactly as for a lecture — live probe: *"what
+      do the references say about entropy?"* → references, *"who wrote the
+      seed paper?"* → seed, *"what does Hawking 1975 argue?"* → named,
+      *"which of these used dropout?"* → screen — with `screen` as the
+      tie-break, keeping the context the reader already set up.
+
+      **One reversal from v7.23.0 in the resolver:** a *bare* period ("the
+      papers between 2016 and 2017") narrows the reader's existing context
+      (selection, else visible) instead of reaching past the year slider —
+      per the review's "an ambiguous ask preserves the existing context"; a
+      year outside the slider gets *"…widen the year filter, or say which
+      papers."* A period *with* a kind ("the references from the 2010s")
+      still reads off the whole graph. Filed for (b): the researcher's
+      search/expand honouring the turn's year window, and the explicit
+      `graph` scope.
+
 - [x] **A lecture request says which papers — and `/lecture` is gone**
       *(v7.23.0)* — Patrick's ask, 2026-09-15: *"I think we can probably
       remove the /lecture command. It's not really needed if the orchestration

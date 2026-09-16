@@ -43,6 +43,7 @@ import type {
   RetrieveEvent,
   SourceRef,
   TraceEvent,
+  TurnScope,
 } from '../api'
 import { explorationOpened, threadActivated } from './explorations'
 import { restoreSession, workspaceCleared } from './workspace'
@@ -575,6 +576,24 @@ const transcriptSlice = createSlice({
       prepare: keyed<'lecture' | 'answer'>(),
     },
     /**
+     * Record the in-flight turn's resolved scope — which rung of the
+     * priority list decided it and what the message asked for — so the
+     * transcript can say what the turn was about, and a correction or retry
+     * can ask for the same thing again.
+     *
+     * @param state  The slice state (mutated via immer).
+     * @param action Carries the scope, and the conversation in `meta`.
+     */
+    turnScopeStamped: {
+      reducer(state, action: PayloadAction<TurnScope, string, Keyed>) {
+        const conversation = target(state, action.meta.key)
+        if (!conversation) return
+        const msg = lastMsg(conversation)
+        if (msg) msg.scope = action.payload
+      },
+      prepare: keyed<TurnScope>(),
+    },
+    /**
      * What actually grounded the finished answer — searched or not, what came
      * back, what it ended up citing. Observed server-side, so it lands with
      * the other end-of-answer fields.
@@ -677,6 +696,7 @@ export const {
   chatBeatAdded,
   turnGraphSet,
   turnRouted,
+  turnScopeStamped,
   provenanceSet,
   paperRefsSet,
   chatCleared,

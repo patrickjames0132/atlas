@@ -483,3 +483,6 @@
   background: transparent;
   border: 1.5px dashed rgba(242, 244, 248, 0.6);
 }
+.legend i.ring.ghost {
+  border-style: dotted;
+}

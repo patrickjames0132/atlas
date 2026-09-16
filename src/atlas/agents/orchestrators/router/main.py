@@ -40,9 +40,11 @@ log = logging.getLogger(__name__)
 #: Which assistant a message goes to.
 Target = Literal["lecture", "answer"]
 
-#: Which papers a lecture is about, as far as the message says. ``screen`` is
-#: "the message doesn't say": the reader's on-screen scope, which is what every
-#: lecture was about before the message could name a set of its own.
+#: Which papers the message is about — a lecture's subject or a question's
+#: grounding alike, as far as the message says. ``screen`` is "the message
+#: doesn't say": the reader's own scope (their selection, else what passes
+#: their filters), which is what every turn was about before a message could
+#: name a set of its own.
 Scope = Literal["screen", "references", "citations", "seed", "named"]
 
 
@@ -57,7 +59,9 @@ class MessageRoute(BaseModel):
 
     ``scope`` says which papers, never *which ids*: the classifier reads the
     message alone, and ``named`` is a promise that a second call
-    (``resolve_papers``) can turn the message into ids given the graph.
+    (``resolve_papers``) can turn the message into ids given the graph. Read
+    for an ``answer`` exactly as for a ``lecture`` (since v7.24.0): the
+    researcher grounds in the scope the same way the lecturer narrates it.
 
     ``year_from`` / ``year_to`` are a period the message limited the lecture
     to ("between 2016 and 2017", "the 2010s", "the last five years"), applied

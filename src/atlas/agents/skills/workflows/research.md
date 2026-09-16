@@ -6,7 +6,14 @@ since v6.7.0 it serves both chats, with a graph open and without (the
 
 **Input:** the question, the session's conversation history, an optional
 library scope (`source_ids`), and — when a graph is open — the seed paper,
-the visible nodes, the provider, and any lectures already played:
+the **scoped nodes**, and the provider. Which papers are scoped is the
+frontend's contract (`frontend/src/scope/README.md`, v7.24.0), the same one
+the lecture workflow gets: what the message asked for (the router's `scope`
+and period — "the references", "the seed", named papers, "the last five
+years"), else the reader's hand-picked selection, else what passes their
+view filters. Resolved once per turn and sent as the numbered list; the
+researcher grounds in it and never re-derives a set of its own. The library
+scope is separate:
 
 - `None` — no scope; the researcher may search the whole library.
 - a present list — the researcher is pinned to exactly those sources: only they

@@ -105,7 +105,7 @@ describe('GraphControls count readout', () => {
 
   it('flips to the selected count (out of the shown papers) during a hand-pick', () => {
     renderPanel({ selectedCount: 2 })
-    expect(screen.getByText('2 / 10 papers selected')).toBeTruthy()
+    expect(screen.getByText('2 papers selected')).toBeTruthy()
     expect(screen.queryByText('10 / 12 papers shown')).toBeNull()
   })
 })
@@ -142,7 +142,7 @@ describe('GraphControls collapse', () => {
   it('reports the hand-picked selection in the collapsed bar, and reverts on clear', () => {
     const { rerender } = render(<GraphControls {...makeProps({ selectedCount: 3 })} />)
     const head = screen.getByRole('button', { name: /Graph controls/ })
-    expect(head.textContent).toContain('3 / 10 papers selected')
+    expect(head.textContent).toContain('3 papers selected')
 
     // Deselecting all hands the bar back to the visible-count readout.
     rerender(<GraphControls {...makeProps({ selectedCount: 0 })} />)

@@ -222,8 +222,9 @@ export const GRAPH_TOUR: TourStep[] = [
     body:
       'Hold ⌥ Alt and drag a box around papers to add them to the assistant’s scope — ' +
       'sweep several clusters to build one. ⇧ Shift-click toggles a single paper. ' +
-      'Lectures and answers then ground in exactly those papers — and Esc clears ' +
-      'every highlight at once, the pick and the assistant’s glow alike.',
+      'Lectures and answers then ground in exactly those papers — even ones a filter ' +
+      'later hides, which stay drawn with a dotted ring — unless a message names its own. ' +
+      'Esc clears every highlight at once, the pick and the assistant’s glow alike.',
   },
   {
     target: '[data-tour="hint"]',
@@ -333,9 +334,10 @@ export const GRAPH_TOUR: TourStep[] = [
       'alt-drag a cluster and it narrates just those. Scope it to a single paper — any ' +
       'paper — and it teaches that one, chapter by chapter. Or say which papers in the ' +
       'message itself: “lecture me on the references”, “on the seed”, “on the Bekenstein ' +
-      'paper and Hawking 1975”, “the papers between 2016 and 2017” — those are selected ' +
-      'on the map first, brought back if a filter was hiding them, and then narrated; ' +
-      'when it finishes the whole lecture stays lit. Say “history” and it walks them oldest ' +
+      'paper and Hawking 1975”, “the papers between 2016 and 2017” — those become the ' +
+      'selection, drawn even if a filter hides them, and are narrated; questions scope ' +
+      'the same way, and each reply says what it was scoped to. When a ' +
+      'lecture finishes the whole of it stays lit. Say “history” and it walks them oldest ' +
       'to newest; otherwise it groups them into their key themes. Papers light up on the ' +
       'map as each part of the story arrives, and the beats read as the reply, in the ' +
       'conversation with everything else. Every turn it guessed on says which assistant ' +

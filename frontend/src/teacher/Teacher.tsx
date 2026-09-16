@@ -1,4 +1,4 @@
-import { activateThread } from '../store/workspace'
+import { activateThread, selectScope } from '../store/workspace'
 /**
  * Copyright (c) 2026 Charles Patrick James <charles.patrick.james@gmail.com>. MIT License — see LICENSE.
  *
@@ -145,11 +145,11 @@ export default function Teacher({
       (thread) => thread.id === state.transcript.activeKey,
     ),
   )
-  const scopeCount = useAppSelector(
-    (state) => state.workspace.selectedNodeIds.length || state.workspace.visibleNodeIds.length,
-  )
+  // The default scope's size — the selection, else what passes the filters
+  // (`scope/resolve.ts`'s last two rungs; the message's rung is per turn).
+  const scopeCount = useAppSelector((state) => selectScope(state).nodes.length)
   // How many nodes the user has hand-picked on the graph (alt-drag / shift-click)
-  // to scope the teacher; 0 means it grounds in every visible paper.
+  // to scope the teacher; 0 means it grounds in every paper passing the filters.
   const pickedCount = useAppSelector((state) => state.workspace.selectedNodeIds.length)
   const {
     hasGraph,
@@ -751,7 +751,8 @@ export default function Teacher({
       {hasGraph && pickedCount > 0 && (
         <p className="ask-context-note">
           Scoped to {pickedCount} hand-picked paper{pickedCount > 1 ? 's' : ''} — lectures and
-          answers focus on your selection (clear it on the graph to widen).
+          answers focus on your selection, whatever the filters show (clear it on the graph to
+          widen), unless a message names its own papers.
         </p>
       )}
       {askContextParts.length > 0 && (
