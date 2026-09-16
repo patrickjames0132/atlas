@@ -279,7 +279,8 @@ Thin wrappers over `services/sources`. Points worth knowing:
 
 | Endpoint | Job |
 | --- | --- |
-| `POST /api/route` | which assistant a typed message wants (**JSON, not SSE**) |
+| `POST /api/route` | which assistant a typed message wants, and over which papers (**JSON, not SSE**) |
+| `POST /api/route/papers` | which graph papers a lecture request named (**JSON**) |
 | `POST /api/lecture` | streamed lecture over the reader's scoped graph |
 | `POST /api/ask` | agentic Q&A over the graph |
 | `POST /api/ask_sources` | chat with no graph open (library + search) |
@@ -305,6 +306,18 @@ Design decisions worth knowing:
   asking questions in order to protect a routing nicety. See
   `agents/orchestrators/router/README.md` for the cost model behind that
   asymmetry.
+
+  Since v7.23.0 its answer also carries a **`scope`** — which papers a
+  lecture is about, as far as the message says (`screen`, `references`,
+  `citations`, `seed`, `named`). **`/api/route/papers`** is the second half
+  of that: called by the client only when the scope was `named`, with the
+  graph's paper list (`{id, title, year, authors}` per paper — a thin cut,
+  no abstracts), it returns the ids the message pointed at. Split from
+  `/api/route` on purpose, so the paper list crosses the wire and is billed
+  only for the messages that name a paper, never on the every-message
+  classify. It, too, always returns 200: an empty `ids` is both "nothing
+  matched" and every failure, because the client already has to handle the
+  first.
 - **One serialization rule replaces six tuple matches.** Frame name = the
   event's `type` tag, payload = `model_dump(exclude={"type"})`. That
   reproduces the old wire shapes for `token`/`beat`/`cited`/`trace`/`done`

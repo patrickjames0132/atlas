@@ -1,11 +1,14 @@
 # Workflow: lecture
 
-**Intent:** `lecture` — the user pressed the Lecture button on an open
-graph.
+**Intent:** `lecture` — the reader asked for one in the chat bar, and the
+router sent the message here.
 
-**Input:** seed paper, the nodes the reader has **scoped** on screen, the
-reader's `framing` (`summary` | `history`), and — for a bridge lecture only —
-a target paper.
+**Input:** seed paper, the nodes the reader has **scoped** on screen — their
+filters and selection, or, since v7.23.0, the set their message named
+("lecture me on the references", "…on the Bekenstein paper"), which the
+frontend has already selected and revealed on the canvas before calling —
+the `framing` (`summary` | `history`) read off the message, and — for a
+bridge lecture only — a target paper.
 
 **Steps:**
 

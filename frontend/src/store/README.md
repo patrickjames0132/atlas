@@ -17,6 +17,15 @@ cannot collide. The seed title supplies the initial thread name; users can renam
 `workspace.ts` holds the active graph, discoveries, selections, layout and view
 filters. `threadActivated` parks the outgoing state and restores the incoming
 state in one action, also handled by `transcript.ts` and `highlight.ts`.
+Beside the hand-picked `selectedNodeIds` sits `revealedNodeIds` (v7.23.0):
+the papers a typed lecture request forced past the view filters, written only
+by `lectureScopeApplied` (which sets both at once — a scope that is selected
+but invisible is not on screen). The selection half is one-shot —
+`lectureScopeReleased` drops it when the lecture ends, if the reader has not
+re-picked meanwhile — while the reveal outlives it, because the lecture's
+papers stay lit afterwards and a hidden paper cannot be lit; both go with the
+next clear-all (`nodeSelectionCleared`) and every load/restore. It is saved
+with the selection for the same reason the selection is.
 `loadGraph` resolves aliases before creating a thread. Refresh and display
 changes stay with the current thread. A response from a superseded graph load
 cannot navigate back over a newer user choice.

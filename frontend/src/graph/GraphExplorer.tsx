@@ -38,6 +38,7 @@ import {
   nodeSelectionToggled,
   selectHasDiscovered,
   selectNodeSelectionSet,
+  selectRevealedSet,
   selectWorkspace,
   visibleNodesSet,
 } from '../store/workspace'
@@ -111,6 +112,11 @@ export default function GraphExplorer({
   const initialFilters = useRef(savedFilters)
   const highlightIds = useAppSelector(selectHighlightSet)
   const selectedIds = useAppSelector(selectNodeSelectionSet)
+  // Papers a typed lecture request reached for past the filters ("lecture me
+  // on the references" with the references chip off). The view shows them
+  // whatever the chips, sliders and caps say — the message chose the scope,
+  // and a lecture must narrate what is on screen. See `lectureScopeApplied`.
+  const revealedIds = useAppSelector(selectRevealedSet)
   const hasDiscovered = useAppSelector(selectHasDiscovered)
 
   // Declutter controls, one chip per relation. Two relations used to be held
@@ -377,6 +383,9 @@ export default function GraphExplorer({
       }
     })
     const nodeOk = (node: VNode) => {
+      // Forced on screen by a lecture scope: every filter below is a way the
+      // reader narrowed the view, and the message overrode them for these.
+      if (revealedIds.has(node.id)) return true
       // The seed has its own chip since v7.17.0 — it used to be unconditionally
       // shown, which made it the one paper a reader could not scope out of a
       // lecture. Still exempt from the year and citation sliders below: those
@@ -413,14 +422,21 @@ export default function GraphExplorer({
     const nodes = capsActive
       ? filtered.filter((node) => {
           const capped = node.rels.filter((rel) => enabled.has(rel) && relCaps[rel] !== undefined)
-          // No capped relation applies (or it's the seed) — nothing to trim by.
-          if (node.is_seed || capped.length === 0) return true
+          // No capped relation applies (or it's the seed, or a paper the
+          // lecture scope forced on screen) — nothing to trim by.
+          if (node.is_seed || capped.length === 0 || revealedIds.has(node.id)) return true
           return capped.some((rel) => (relRank.get(rel)?.get(node.id) ?? 0) < relCaps[rel])
         })
       : filtered
     const ids = new Set(nodes.map((node) => node.id))
+    // A revealed paper keeps its edges even when their chip is off, or it
+    // would float unattached — the chip hid the relation, the message
+    // brought it back.
+    const revealedLink = (link: VLink) => revealedIds.has(link._s) || revealedIds.has(link._t)
     const links = base.links
-      .filter((link) => linkOk(link) && ids.has(link._s) && ids.has(link._t))
+      .filter(
+        (link) => (linkOk(link) || revealedLink(link)) && ids.has(link._s) && ids.has(link._t),
+      )
       .map((link) => ({ ...link, source: link._s, target: link._t }))
     return { nodes, links }
     // graphVersion isn't read directly — it's a signal that base.nodes/links
@@ -438,6 +454,7 @@ export default function GraphExplorer({
     capsActive,
     relCaps,
     relRank,
+    revealedIds,
   ])
 
   // Publish the on-screen node ids so agent grounding (selectGroundingNodes)

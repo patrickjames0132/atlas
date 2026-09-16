@@ -688,6 +688,124 @@
 
 ### AI teacher & lectures
 
+- [x] **A lecture request says which papers — and `/lecture` is gone**
+      *(v7.23.0)* — Patrick's ask, 2026-09-15: *"I think we can probably
+      remove the /lecture command. It's not really needed if the orchestration
+      router can already infer how to answer the user's question on its own. I
+      also would like the lecture agent to be able to infer from the user's
+      context which nodes it should focus on … if the user mentions a specific
+      set of nodes such as 'references' or 'citations' or 'this paper: <paper
+      name>' or 'these papers: <paper1>, <paper2>, …'. If, for whatever
+      reason, those nodes are currently filtered out on screen, the agent
+      could somehow make them pop on screen by force. Perhaps the scoping
+      should only be implicit if the user doesn't add context to their
+      request?"* — and, mid-test, *"can you summarize the papers between
+      2016-2017?"*.
+
+      **The command went first, and it went because of the second half.**
+      `/lecture history` was the deterministic path: destination and framing
+      named outright, no classify, nothing to correct. But a two-value command
+      has no way to spell *"on the references"* — and once the router reads
+      scope off the words, it reads target and framing too, so the command
+      was a second, narrower spelling of the same thing. `frontend/src/commands/`
+      (parse, menu engine, menu, CSS, tests) is deleted; the composer, its
+      placeholder (*"Ask about these papers, or for a lecture…"*), the
+      empty-chat hint, the tour's lecture step and the README teach asking in
+      words. What survives of the deterministic path is the router's own
+      no-model fast path — and it got **narrower**, not wider: `OBVIOUS_LECTURE`
+      still claims "lecture me on these", but a new `DEICTIC_TAIL` whitelist
+      lets it keep a match only when the tail points at the screen ("these",
+      "the selected papers", "how we got here"). "Lecture me on the
+      references" now goes to the model, because the scope is the half a
+      regex cannot read — and a keyword pattern that gets "the references"
+      right and "the papers that reference the seed" wrong is the guessing
+      fast path the v7.20.0 design ruled out. The negative tests grew by one
+      block: every lecture request that says which papers is pinned as *not*
+      claimed.
+
+      **The router returns three things now, plus a period.** `MessageRoute`
+      gained `scope` — `screen` (the message didn't say: the reader's own
+      on-screen scope, every lecture before this and still the common case),
+      `references`, `citations`, `seed`, or `named` (the message pointed at
+      specific papers) — and `year_from`/`year_to`, a window that *combines*
+      with any scope ("the references from the 2010s") rather than being a
+      sixth kind; the message goes out with today's date appended so "the
+      last five years" has something to count back from. `named` is a
+      promise, not an answer: the classifier reads the message alone, and a
+      **second, separate call** — `resolve_papers` behind `POST
+      /api/route/papers` — is shown the graph's papers as `[n] title (first
+      author, year)` and returns indices. Separate so the paper list crosses
+      the wire and is billed only for the one message in many that names a
+      paper, never on the every-message classify; thin (`RoutePaper`: id,
+      title, year, authors — no abstract) because a title, an author and a
+      year are what a reader names a paper *by*. Both calls keep the v7.20.0
+      failure contract — never raise, never None; an empty `ids` is both
+      "nothing matched" and every failure, since the client handles the first
+      anyway. Live probe on `claude-haiku-4-5`: every phrasing routed right
+      ("this paper: Particle creation by black holes" → named; "lecture me on
+      transformers" → screen, a topic is not a paper); the resolver found "the
+      Bekenstein paper", "Hawking 1975" and "Hawking's papers", and declined
+      "transformers" after one prompt tightening. The framing rule was
+      tightened in the same pass — `history` **only** when asked for the
+      story — after "the papers that cite this one" drifted to history for no
+      reason. Cost: ~0.9–1.1s per classify, up from ~780ms; the longer prompt.
+
+      **The frontend decides what a scope means *on this graph*, because
+      only it knows what is on screen.** `teacher/lectureScope.ts`: "the
+      references" are the reference-tagged nodes — the tag the paper is
+      *coloured* by and the set its chip toggles, so the word means the same
+      said as clicked (a satellite's references count, per the v7.17.0 rule
+      that what the reader put on screen is narrated); "the seed" is the solo
+      lecture by name; a period filters off the **whole** graph, not the
+      visible part — a year the sliders exclude is exactly the case the
+      message should reach past, like a hidden relation — narrowed within a
+      hand-picked selection when there is one, and never admitting an undated
+      paper (placing one in a period is a claim we cannot make). Then the
+      scope goes on the canvas *before* the lecture starts: `lectureScopeApplied`
+      makes it the hand-picked selection and **reveals** the hidden ones — a
+      new `revealedNodeIds` the view filter exempts from chips, sliders and
+      caps, with a revealed paper's edges surviving their chip being off (or it
+      would float unattached). The chips deliberately stay as the reader set
+      them: the message overrode the view for these papers, it did not edit
+      their controls. And `send` hands the same nodes to `lectureInChat`
+      explicitly rather than reading the store back, because the canvas
+      republishes its visible set on its *next* render and the lecture starts
+      before that — reading `selectLectureNodes` would narrate the scope the
+      message had just replaced. A scope that matches nothing on the graph
+      **fails the turn in words** (*"None of the papers you named are on this
+      graph — @-mention one to open it…"*, *"This graph has no references from
+      1990–1999 to lecture on."*) rather than lecturing on everything: the
+      reader asked for a paper, and silence about not finding it would be the
+      app deciding it knew better — the override this app keeps having to
+      remove.
+
+      **The scope is one-shot** — Patrick, on the first browser pass: *"I led
+      you astray here: while I want the user's initial request to force scope,
+      once the lecture finishes, it should only be highlighting the nodes. The
+      scope should be reset."* So the selection holds while the lecture streams
+      (papers ringed, the rest dimmed, "Scoped to N papers" in the panel) and
+      `lectureScopeReleased` lets it go when the stream ends — unless the
+      reader re-picked meanwhile, in which case their pick stands. What stays is
+      the highlight: **every** lecture, scoped or not, now ends with all of its
+      beats' papers lit and its bubble active, where before only the last beat
+      stayed lit, which read as the lecture pointing at its ending rather than
+      at what it covered. The revealed papers stay on screen too (a released
+      reveal would hide the very papers the highlight is lighting) until the
+      next Esc — so the reveal outlives the selection it came with, and the
+      store README says why.
+
+      **And the lecture bubble is a control.** A lecture turn has no `cited`
+      list — its papers live on its beats — so it was the one assistant turn
+      whose bubble did nothing when clicked. It now lights every beat's papers
+      at once, deduped (a beat still lights its own), which is also the state
+      a lecture ends in. Patrick, same pass: *"I should be able to click on the
+      lecture background box and re-highlight all the nodes on screen related
+      to the full lecture."*
+
+      Filed alongside, not shipped: the "Lecture it instead" correction still
+      hard-codes `summary` — see the Backlog. *(From Patrick, 2026-09-15;
+      shipped 2026-09-15.)*
+
 - [x] **Lecture turns never reach the researcher as history** *(v7.22.0)* — v7.21.0
       dropped the `lectures` wire field on the grounds that a lecture is a chat
       turn now and *"reaches the agent as ordinary history like any other

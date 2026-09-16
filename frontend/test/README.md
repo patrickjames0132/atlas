@@ -8,7 +8,8 @@ a test lives in the folder matching the module under test.
 test/
   api/
     agents.test.ts            — `routeMessage` never rejects: it fronts every
-                                message, so a dead backend routes to `answer`
+                                message, so a dead backend routes to `answer`;
+                                `resolveRoutedPapers` likewise matches nothing
   detail/
     DetailPanel.test.tsx      — the joint loading gate: one skeleton set, one
                                 reveal, once every fetch has answered
@@ -42,11 +43,15 @@ test/
     library.test.ts           — one shared copy of the uploaded sources
     transcript.test.ts        — the exploration lecture's show/hide/drop, and a
                                 routed lecture landing on its own chat turn
-    workspace.test.ts         — hand-picked selection + grounding scope
+    workspace.test.ts         — hand-picked selection + grounding scope, and
+                                the message-named lecture scope's reveal
+                                living and dying with the selection
   teacher/
     Teacher.test.tsx          — the panel's folding sections: the defaults,
                                 the carets, tour staging, and which of its two
                                 homes the 📚 source picker renders in
+    lectureScope.test.ts      — "the references", "the seed", named papers →
+                                nodes on this graph, and which are hidden
     HopDots.test.tsx          — the shared indicator's accessibility contract
     ScopePicker.test.tsx      — the controlled open/close contract (popover
                                 only when `open`; trigger and ✕ report via
@@ -102,4 +107,7 @@ events, the same idea as the backend's `fake_claude`.
 background ownership. `shell/useExplorations.test.ts` replaces the old single-chat
 autosave tests; `shell/saveQueue.test.ts` covers ordered teardown recovery and
 deletion. `teacher/useConversation.test.tsx` verifies a lecture followed by an
-ordinary question includes the lecture in client-owned researcher history.
+ordinary question includes the lecture in client-owned researcher history, and
+runs each routed lecture scope through `send`: what reaches the lecturer, what
+the canvas is scoped to and has revealed, and that an unmatched named scope
+fails the turn without streaming.

@@ -44,9 +44,11 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
    └─ assistant (🎓)               teacher/Teacher.tsx — landing or docked,
       │                             and since v7.21.0 the SAME shape either
       │                             way. Two folding sections (Lecture above
-      │                             Chat) from v7.10.0 until `/lecture`
-      │                             replaced the button and left a caret whose
-      │                             only job was hiding the panel's contents
+      │                             Chat) from v7.10.0 until a `/lecture`
+      │                             command replaced the button and left a
+      │                             caret whose only job was hiding the panel's
+      │                             contents (the command itself went in
+      │                             v7.23.0: a lecture is asked for in words)
       ├─ chat turns                teacher/transcript/ChatMessage.tsx
       │  ├─ lecture beats          teacher/transcript/BeatList.tsx (a turn
       │  │                          whose answer IS a lecture, behind its own
@@ -58,11 +60,6 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
       │  │                          UPWARD out of the bar; anchored to it,
       │  │                          because it belongs to the text being typed
       │  │                          rather than to a control
-      │  ├─ / command menu          commands/CommandMenu.tsx — the same slot
-      │  │                          and the same gesture with a different
-      │  │                          prefix, so only one of the two is ever
-      │  │                          open (a command is anchored to the start
-      │  │                          of the message, a mention is not)
       │  └─ filters                search/SearchControls.tsx (▽ — year slider,
       │                             field picker). Moved OUT of the pill in
       │                             v7.11.0 with three others and back in on
@@ -87,10 +84,16 @@ surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
 `mentions/` (the chat bar's `@` paper lookup — its grammar, typeahead and
-dropdown), `commands/` (its `/` command grammar and menu — static and local,
-so no network half at all), `search/useDirectSearch.ts`, `shell/useSessions.ts`,
+dropdown), `search/useDirectSearch.ts`, `shell/useSessions.ts`,
 `detail/useSelection.ts`, `teacher/useConversation.ts` (each feature's
-state/logic hooks).
+state/logic hooks), `teacher/lectureScope.ts` (what a message's lecture
+scope — "the references", a named paper — is on the current graph).
+
+(`commands/` sat here from v7.21.0 to v7.23.0 — the `/lecture` command's
+grammar and menu. It went when the router learned to read a lecture's scope
+off the words, which a two-value command could never express; its shape —
+`mentions/` minus the network half — is in `docs/history.md` if a command
+system is ever wanted again.)
 
 Every folder has its own README with the full story — this file is just the
 map. Verified by `npm run build` (strict tsc + Vite) and oxlint; behavior

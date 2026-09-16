@@ -118,7 +118,7 @@ export interface ChatMsg {
    * all. Persisted, because the transcript's offer of the *other* one has to
    * survive a reload — a misroute is most annoying on the answer you come
    * back to. Absent on turns whose destination was never in doubt (a
-   * `/lecture` command, a correction the reader made themselves).
+   * correction the reader made themselves).
    */
   routedTo?: 'lecture' | 'answer'
   /** The agent steps that produced this answer (assistant turns only). */
@@ -180,6 +180,9 @@ export interface SessionGraphRef {
 export interface SessionData {
   viewFilters?: import('../store/workspace').WorkspaceState['viewFilters']
   selectedNodeIds?: string[]
+  /** Nodes a message's lecture scope forced past the view filters (v7.23.0);
+   *  saved with the selection they belong to, so a restored scope shows. */
+  revealedNodeIds?: string[]
   /** Versioned exploration container; each child data uses the existing session shape. */
   exploration?: {
     version: 1

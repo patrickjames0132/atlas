@@ -250,10 +250,11 @@ The Vite dev server proxies `/api/*` to Flask.
    have it ship everything it can and size the bands yourself, and each filter
    chip gains a **count slider** to trim how many of that relation you see.
 4. **Learn** (the 🎓 Assistant panel):
-   - **Lecture** (`/lecture`) — a narrated tour of the papers **you have on
-     screen**, oldest first, over the graph as you built it (lectures never
-     expand it — only the research agent does). Type `/` in the chat bar and a
-     menu opens on it; there was a Lecture button in the panel until v7.21.0.
+   - **Lecture** — a narrated tour of the papers **you have on screen**,
+     oldest first, over the graph as you built it (lectures never expand it —
+     only the research agent does). Ask for it in the chat bar: *"lecture me
+     on these"*. (There was a Lecture button in the panel until v7.21.0, and a
+     `/lecture` command until v7.23.0.)
      **What it covers is your choice, not a menu's:**
      filter to the references and you get the story of how the field arrived
      here; keep only recent work and you get the current frontier; alt-drag a
@@ -269,11 +270,24 @@ The Vite dev server proxies `/api/*` to Flask.
      narrow what is on screen. And the lecture takes that literally — it will
      not narrate a paper the assistant found earlier if your filters are
      currently hiding it.
-     **One choice the scope can't make for you, so the command's second word
-     makes it:** `/lecture summary` groups the scoped papers into their key
-     themes, `/lecture history` tells them as a chronological arc. A bare
-     `/lecture` means summary — a chronological arc is a strong claim to make
-     about an arbitrary selection.
+     **Or say which papers in the message itself** — *"lecture me on the
+     references"*, *"on the citations"*, *"on the seed"*, *"on the Bekenstein
+     paper and Hawking 1975"*, *"on this paper: Attention Is All You Need"*.
+     A period works too, alone or on top of any of those — *"summarize the
+     papers between 2016 and 2017"*, *"the references from the 2010s"*,
+     *"everything since 2020"*, *"the last five years"*. Those are selected
+     on the map first, brought back on screen if a chip or slider was hiding
+     them, and then narrated — so what you see ringed is what the lecture is
+     about; when it finishes the ring lets go and the whole lecture stays
+     lit instead (click its bubble any time to light it again, Esc to
+     clear). A message that names nothing in particular narrates what is on
+     screen, as before; one that names papers the graph doesn't have says so
+     instead of lecturing on everything.
+     **One choice the scope can't make for you, so your words make it:**
+     say *history* — *"the story of"*, *"how we got here"* — and the papers
+     are told as a chronological arc; otherwise they are grouped into their
+     key themes. Summary is the default because a chronological arc is a
+     strong claim to make about an arbitrary selection.
      The lecture is nudged to span the whole publication history it is given —
      both ends, not just the oldest, most-cited papers. Length is tunable
      (`min_beats`/`max_beats` in the lecturer's config `extras`, default 7–12).
@@ -287,18 +301,17 @@ The Vite dev server proxies `/api/*` to Flask.
      sections from v7.10.0, a **Lecture** section above a **Chat** one, which
      was itself a fix for an older shape where the two took turns and asking a
      question tucked away the lecture you were reading.
-     **You don't have to know the command.** Ask in words — *"lecture me on
-     these"*, *"summarize these papers for me"*, *"what's the story here?"* —
-     and the lecturer answers just the same (the last of those arrives framed
-     as history, because that is what it asked for). The composer works out
-     which assistant you meant: phrasings that name a lecture outright are
-     matched outright, and anything less obvious is settled by a quick
-     classifier — *"summarize this"* is a question about the paper you have
-     open, *"summarize these papers"* is a lecture, and no pattern tells those
-     apart. Every turn it guessed on says which assistant answered and offers
-     the other in a click, so a wrong guess costs one line rather than a
-     re-typed question; a `/lecture` you typed yourself says nothing, because
-     nothing was guessed.
+     **You don't have to say "lecture".** *"Summarize these papers for me"*,
+     *"what's the story here?"* — the lecturer answers just the same (the
+     last of those arrives framed as history, because that is what it asked
+     for). The composer works out which assistant you meant: phrasings that
+     name a lecture outright and point at nothing in particular are matched
+     outright, and anything less obvious — including *which* papers — is
+     settled by a quick classifier: *"summarize this"* is a question about
+     the paper you have open, *"summarize these papers"* is a lecture, and
+     no pattern tells those apart. Every turn it guessed on says which
+     assistant answered and offers the other in a click, so a wrong guess
+     costs one line rather than a re-typed question.
    - **Ask** — the research agent answers grounded in what it actually
      reads, streaming its tool steps live (read / expand / search the
      literature / search the web / search your sources / show a figure). It

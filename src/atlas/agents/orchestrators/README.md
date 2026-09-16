@@ -66,10 +66,12 @@ passed through, threading an enum between callers that already knew their
 own workflow. This one is a **classifier with one caller**: the chat composer,
 holding a sentence a person typed, for which working out what the sentence
 *is* is the entire job. `/api/lecture` and `/api/ask` are still called
-directly by everything that already knows — the Lecture button, an
-`@`-mention seed, a reader correcting a route — so nothing pays for a decision
-it doesn't need. See [`router/README.md`](router/README.md) for the two-stage
-design and why every failure answers the question.
+directly by everything that already knows — a reader correcting a route — so
+nothing pays for a decision it doesn't need. Since v7.23.0 the router also
+reads a lecture's **scope** off the message ("lecture me on the references",
+"…on the Bekenstein paper"), with a second, rarer call resolving named papers
+against the graph. See [`router/README.md`](router/README.md) for the
+two-stage design, the scope, and why every failure answers the question.
 
 ## What moved here, and what it cost
 
