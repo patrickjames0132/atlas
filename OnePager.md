@@ -1160,6 +1160,31 @@ than deleted so the plan doesn't get re-proposed.
 
 ### Enhancements & tech debt
 
+- [ ] **Deleting a running thread or exploration resurrects it; a search in
+      General once spawned a whole new exploration** — filed 2026-09-17 from
+      Patrick's browser round on v7.26.0, deliberately *not* investigated
+      yet: it was late. Two symptoms, probably one family of cause.
+      (1) Delete a thread or an exploration **while its stream is still
+      running** and "some funky behaviour starts": the deleted thread or
+      exploration comes back. The likely shape: the stream keeps writing
+      into the transcript keyed by the dead id (`streamStarted`/`turnStarted`
+      target `byKey[key]` — see `store/transcript.ts` and `useConversation`'s
+      captured `activeKeyRef`), and the autosave / `threadActivated` /
+      browser-close outbox (`store/threadPersistence.ts`) then re-saves a
+      record whose owner was removed, or `explorationRemoved` (which only
+      deletes local ownership "so a pending save cannot resurrect a
+      deletion", per its own docstring) isn't enough when the save is
+      *already* in flight. (2) A **direct search sent from General** landed
+      in a **brand-new exploration** with the search as its thread, instead
+      of in the General thread of the one on screen — not reproduced yet;
+      look at how `useDirectSearch` (no explicit key: `turnStarted(query)`
+      resolves to `activeKey`) interacts with a thread switch or a fresh
+      `newExploration()` at the moment of send. First step is a reliable
+      repro of each with the Redux devtools open, then decide whether the
+      fix is "a stream aborts when its owner is deleted" or "a save is
+      refused for an owner that no longer exists" — both, probably. Check
+      `docs/history.md`'s v7.22.0 threads entry and the v7.16.0 autosave
+      entry for the invariants those were supposed to hold.
 - [ ] **`atlas corpus verify` mistakes a tidied-up release for a destroyed
       one** — deleting a release's `raw/` shards once its ingest succeeds is
       **supported and documented** (`corpus/paths.py`'s module docstring: "A
