@@ -257,8 +257,9 @@ class OpenAIConfig(ConfigModel):
         "OpenAI-compatible server that wants no key, leave it blank and set base_url."
     )
     base_url: str = Field(
-        description="Blank = OpenAI's own API. Otherwise the full base URL of an "
-        "OpenAI-compatible endpoint, e.g. 'https://api.groq.com/openai/v1'."
+        description="Blank = OpenAI's own API, over its Responses endpoint. Otherwise "
+        "the full base URL of an OpenAI-compatible endpoint, e.g. "
+        "'https://api.groq.com/openai/v1', driven over chat-completions."
     )
 
     @property

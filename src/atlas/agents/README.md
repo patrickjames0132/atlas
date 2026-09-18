@@ -144,8 +144,17 @@ range-checking or `.get`-defaulting them.
 matches on the entry's provider prefix and constructs the matching PydanticAI
 pair — `anthropic`, `openai` (whose `base_url` also covers every
 OpenAI-compatible server), `google`, `ollama` — so teaching Atlas a new vendor
-is one case arm plus a config block, and no agent package changes. Two
-consequences worth holding onto:
+is one case arm plus a config block, and no agent package changes. The
+`openai` arm is the one that picks between two wire APIs (since v7.28.1): a
+blank `base_url` is OpenAI proper and gets the **Responses** API, because
+OpenAI's current models reason by default and its older chat-completions
+endpoint refuses function tools while reasoning is on — and every agent here
+is function tools, structured output included (the live symptom was
+`Function tools with reasoning_effort are not supported for gpt-5.6-… in
+/v1/chat/completions`). Responses is also where OpenAI's provider-side web
+search lives. A custom `base_url` is a Groq/OpenRouter/LM-Studio-style
+compatible server, and those speak chat-completions — few implement Responses
+at all — so they keep the chat model. Two consequences worth holding onto:
 
 - **Vendors are per agent, not global.** Each `config.llm.agents` entry names
   its own, so running the lecturer on a free local model while the web scout
