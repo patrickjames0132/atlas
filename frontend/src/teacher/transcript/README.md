@@ -42,7 +42,10 @@ transcript/
   grounding set.
 
   A turn whose answer is a **lecture** (`message.beats`) renders a
-  `BeatList` where the prose would be, behind its own **caret**
+  `BeatList` where the prose would be — a beat with no papers (the synthesis
+  that closes most lectures) keeps its full colour but is not a control:
+  `.paperless`, no pointer, no click; it used to be dimmed like a beat whose
+  papers had left the graph and read as disabled — behind its own **caret**
   (`.beats-toggle`, naming the beat count), and under a `.chat-routed` line
   naming the assistant that answered and offering the other when a model chose
   it. Details that are easy to get wrong and are pinned by tests: beats must

@@ -544,17 +544,15 @@
 .beat:hover {
   border-color: var(--muted);
 }
-/* A beat whose papers are not on the graph currently open. Not a control, so
-   it must not look like one: no pointer, no hover, and the whole card dimmed —
-   the same treatment `[n]` chips get when their paper is gone, applied to the
-   card that would have lit them. Dimming rather than restyling keeps it
-   legible: the narration is still worth reading, it just cannot point
-   anywhere. */
-.beat.stale {
+/* A beat with no papers to light — the synthesis that closes most lectures.
+   Not a control, so it must not behave like one: no pointer, no hover. But
+   it keeps the card's full colour: dimming it (the old `.stale` treatment,
+   meant for a beat whose papers had left the graph) made the lecture's
+   closing paragraph look disabled. */
+.beat.paperless {
   cursor: default;
-  opacity: 0.62;
 }
-.beat.stale:hover {
+.beat.paperless:hover {
   border-color: var(--border);
 }
 /* The lecture hue mixed INTO the card rather than washed over it. The wash

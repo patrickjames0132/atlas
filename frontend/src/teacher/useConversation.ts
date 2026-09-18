@@ -71,6 +71,7 @@ import {
 import {
   discoveryMerged,
   loadGraph,
+  nodeSelectionCleared,
   nodeSelectionSet,
   selectScope,
   selectSeedNode,
@@ -645,6 +646,16 @@ export function useConversation() {
         // replaced that turn on purpose.
         if (!produced && !superseded) dispatch(answerFailed(failure, key))
         if (!superseded) setAsking(false)
+        // The scope was for the turn. It was set at the start so the reader
+        // could see which papers the question was about (the rings), and
+        // now the answer is here the rings go — the cited papers stay lit,
+        // which is the answer pointing at what it used, while the selection
+        // resets to nothing. Not to what was selected before: Patrick's
+        // v7.24.0 objection was to a scope *reverting* to the manual
+        // selection, and clearing is not reverting. Only for the thread on
+        // screen — a background thread's workspace is a snapshot the switch
+        // took, and clearing it here would clear the wrong canvas.
+        if (!superseded && isActive()) dispatch(nodeSelectionCleared())
       }
     },
     [
@@ -767,6 +778,11 @@ export function useConversation() {
         // excluded: sending another message aborts this on purpose.
         if (beatCount === 0 && !superseded) dispatch(answerFailed(failure, key))
         if (!superseded) setAsking(false)
+        // The scope was for the lecture; the rings go now it is over (see
+        // `ask`'s ending for the reasoning). The papers it narrated stay lit
+        // below, so the canvas still shows what the lecture covered — just
+        // no longer what it was *asked* to cover.
+        if (!superseded && isActive()) dispatch(nodeSelectionCleared())
         // The lecture ends with the whole of it lit — the same state as
         // clicking its bubble. The last beat alone stayed lit before, which
         // read as the lecture still pointing at its ending rather than at

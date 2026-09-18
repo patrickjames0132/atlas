@@ -225,7 +225,8 @@ export const GRAPH_TOUR: TourStep[] = [
       'sweep several clusters to build one. ⇧ Shift-click toggles a single paper. ' +
       'Lectures and answers then ground in exactly those papers — even ones a filter ' +
       'later hides, which stay drawn with a dotted ring — unless a message names its own. ' +
-      'Esc clears every highlight at once, the pick and the assistant’s glow alike.',
+      'The rings show what a turn is about while it runs and clear when the answer lands; ' +
+      'the papers it cited stay lit. Esc clears every highlight at once.',
   },
   {
     target: '[data-tour="hint"]',

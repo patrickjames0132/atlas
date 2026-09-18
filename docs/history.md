@@ -746,6 +746,35 @@
 
 ### AI teacher & lectures
 
+- [x] **The scope is for the turn: rings while the agent works, nothing
+      after — and a paperless beat keeps its colour** *(v7.28.0)* — the last
+      two of Patrick's 2026-09-17 round.
+
+      **The closing beat looked disabled.** `BeatList` dimmed any beat with
+      no `node_ids` under a `.stale` class written for a beat whose papers
+      had *left the graph* — a check that no longer existed, so the only
+      beat it ever hit was the synthesis that closes most lectures, the one
+      paragraph tying the rest together. Now `.paperless`: full colour, no
+      pointer, no hover, no click, because it has nothing to light.
+
+      **"I can't remember why we leave the scoping."** The record: Codex's
+      review (2026-09-15) proposed releasing the message scope at the turn's
+      end *back to the prior manual selection*, and Patrick overruled it —
+      *"it should change permanently and not revert back to the user's
+      manual scope"* (v7.24.0). What he asked for now is a third thing, and
+      consistent with that objection: *"It should only scope at the
+      beginning … to show the user what nodes are in scope for this request.
+      By the end of the agent's response, the scoping (blue rings) should go
+      away and reset to nothing."* Clearing is not reverting. So both stream
+      endings (`ask`, `lectureInChat`) dispatch `nodeSelectionCleared` on the
+      on-screen thread once the answer lands, after the highlight — the
+      rings show what the turn was about while it runs, then go; the cited
+      or narrated papers stay lit. On failure too: a retry re-resolves the
+      stamped request, so nothing depends on the rings surviving. The
+      consequence flagged and accepted: a hand-picked selection is consumed
+      by the turn it grounds. `scope/README.md` carries both decisions.
+      *(Browser-tested and approved by Patrick, 2026-09-17.)*
+
 - [x] **"Lecture on it instead" on a router-chosen answer** *(v7.27.0)* —
       the transcript had rendered the offer in both directions since the
       router shipped, and `reroute` handled both — but only `lectureInChat`

@@ -159,7 +159,7 @@ describe('the scope priority list, resolved once per turn', () => {
     expect(result.current.activeChat).toBe(1)
   })
 
-  it('makes a message scope the selection, and it stays after the turn', async () => {
+  it('makes a message scope the selection for the turn, then releases it to nothing', async () => {
     const { store, result, streamLecture, lastTurn } = await setUp(
       lecture('references', { framing: 'history' }),
     )
@@ -177,9 +177,10 @@ describe('the scope priority list, resolved once per turn', () => {
     expect(body.nodes.map((item) => item.id)).toEqual(['r1', 'r2'])
     expect(body.framing).toBe('history')
     expect(selectedWhileStreaming).toEqual(['r1', 'r2'])
-    // The scope the message chose is the selection now, like one made by
-    // hand — it does not revert. And the whole lecture stays lit.
-    expect(store.getState().workspace.selectedNodeIds).toEqual(['r1', 'r2'])
+    // The rings were for the turn: they showed what the lecture was asked to
+    // cover, and go once it is over. Not back to a prior selection — to
+    // nothing. What the lecture narrated stays lit.
+    expect(store.getState().workspace.selectedNodeIds).toEqual([])
     expect(store.getState().highlight.ids).toEqual(['r1', 'r2'])
     expect(lastTurn().scope).toEqual({
       source: 'message',
@@ -191,7 +192,7 @@ describe('the scope priority list, resolved once per turn', () => {
     expect(lastTurn().graph?.nodes).toBe(2)
   })
 
-  it('replaces a prior hand-picked selection with the message scope, keeping mid-turn edits', async () => {
+  it('replaces a prior hand-picked selection with the message scope; the end clears it, edits included', async () => {
     const { store, result, streamAsk } = await setUp(answer('citations'))
     store.dispatch(nodeSelectionSet(['r1']))
     let selectedWhileStreaming: string[] = []
@@ -207,8 +208,10 @@ describe('the scope priority list, resolved once per turn', () => {
     // The question grounded in the message's scope, not the old selection.
     expect(streamAsk.mock.calls[0][0].nodes.map((item) => item.id)).toEqual(['c1'])
     expect(selectedWhileStreaming).toEqual(['c1'])
-    // Nothing reverts at the end: the message's scope plus the reader's edit.
-    expect(store.getState().workspace.selectedNodeIds).toEqual(['c1', 'r2'])
+    // The end clears the selection outright — the message's scope and the
+    // reader's mid-turn edit alike. There is one selection, and the turn is
+    // what it was for.
+    expect(store.getState().workspace.selectedNodeIds).toEqual([])
   })
 
   it('stamps a router-chosen answer, so the transcript can offer the lecture instead', async () => {
@@ -299,6 +302,11 @@ describe('the scope priority list, resolved once per turn', () => {
   it('scopes "the whole graph" to everything, whatever the filters and selection', async () => {
     const { store, result, streamLecture, lastTurn } = await setUp(lecture('graph'))
     store.dispatch(nodeSelectionSet(['r1']))
+    let selectedWhileStreaming: string[] = []
+    streamLecture.mockImplementation(async (_body, options) => {
+      selectedWhileStreaming = store.getState().workspace.selectedNodeIds
+      options.onBeat?.(beat)
+    })
     await act(async () => {
       await result.current.send('lecture me on the whole graph', undefined)
     })
@@ -308,7 +316,8 @@ describe('the scope priority list, resolved once per turn', () => {
       'r2',
       'c1',
     ])
-    expect(store.getState().workspace.selectedNodeIds).toEqual(['seed', 'r1', 'r2', 'c1'])
+    expect(selectedWhileStreaming).toEqual(['seed', 'r1', 'r2', 'c1'])
+    expect(store.getState().workspace.selectedNodeIds).toEqual([])
     expect(lastTurn().scope).toMatchObject({ source: 'message', kind: 'graph', nodes: 4 })
   })
 
@@ -336,16 +345,21 @@ describe('the scope priority list, resolved once per turn', () => {
     }
   })
 
-  it('keeps the message scope as the selection even when the turn fails', async () => {
+  it('releases the scope when the turn fails, too — a retry re-resolves it', async () => {
     const { store, result, streamLecture } = await setUp(lecture('references'))
+    let selectedWhileStreaming: string[] = []
     streamLecture.mockImplementation(async (_body, options) => {
+      selectedWhileStreaming = store.getState().workspace.selectedNodeIds
       options.onError?.('the model fell over')
     })
     await act(async () => {
       await result.current.send('lecture me on the references', undefined)
     })
-    // The scope was set before the turn ran; a retry asks over the same set.
-    expect(store.getState().workspace.selectedNodeIds).toEqual(['r1', 'r2'])
+    // The scope was set before the turn ran, so the failure names the right
+    // set; a retry resolves the stamped request again rather than reading
+    // the selection, so nothing is lost by clearing it.
+    expect(selectedWhileStreaming).toEqual(['r1', 'r2'])
+    expect(store.getState().workspace.selectedNodeIds).toEqual([])
   })
 
   it('re-asks a corrected turn for the same papers, against the graph as it stands', async () => {
@@ -359,7 +373,7 @@ describe('the scope priority list, resolved once per turn', () => {
     })
     expect(streamAsk.mock.calls[0][0].nodes.map((item) => item.id)).toEqual(['r1', 'r2'])
     expect(lastTurn().scope).toMatchObject({ source: 'message', kind: 'references' })
-    expect(store.getState().workspace.selectedNodeIds).toEqual(['r1', 'r2'])
+    expect(store.getState().workspace.selectedNodeIds).toEqual([])
   })
 })
 
