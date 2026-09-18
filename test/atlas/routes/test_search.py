@@ -52,6 +52,18 @@ def result_of(response) -> dict:
     return next(payload for name, payload in frames(response) if name == "result")
 
 
+@pytest.fixture(autouse=True)
+def _no_nickname(monkeypatch):
+    """Default the direct search's nickname resolve to a miss.
+
+    It runs on every direct search now (alongside the scout), and unstubbed it
+    would reach for a model. Tests about the resolve itself override this.
+    """
+    monkeypatch.setattr(
+        search_routes.search_service, "paper_by_name", lambda name, provider="s2": None
+    )
+
+
 def stub_scout(monkeypatch, seen, found=(), summary="found some", queries=("q",)):
     """Swap the paper scout for a recorder, so the route is tested, not the agent.
 
@@ -148,6 +160,73 @@ def test_limit_is_clamped_and_garbage_defaults(client, monkeypatch):
     client.get("/api/search?q=x&limit=abc")
     assert limits == [50, 12]
     assert seen == {}
+
+
+def test_direct_search_prepends_the_resolved_nickname_paper(client, monkeypatch):
+    """The scout has the dropdown's blind spot: asked for `dqn` it led with a
+    2020 paper *titled* "Deep Q-Networks" and called it canonical, because a
+    text-searching agent cannot get from the acronym to *Playing Atari with
+    Deep Reinforcement Learning* any more than a text search can. The same
+    day-cached resolve the dropdown runs now runs alongside the scout, and its
+    confirmed paper goes to the top — deduped, not doubled, when the scout
+    happened to find it too."""
+    seen = {}
+    stub_scout(
+        monkeypatch,
+        seen,
+        found=[
+            {"id": "s2new", "title": "Deep Q-Networks", "citation_count": 61},
+            {"id": "s2atari", "title": "Playing Atari with Deep Reinforcement Learning"},
+        ],
+    )
+    monkeypatch.setattr(
+        search_routes.search_service,
+        "paper_by_name",
+        lambda name, provider="s2": {
+            "id": "s2atari", "title": "Playing Atari with Deep Reinforcement Learning"
+        },
+    )
+    response = client.get("/api/search?q=dqn")
+    result = result_of(response)
+    assert [paper["id"] for paper in result["papers"]] == ["s2atari", "s2new"]
+    assert result["count"] == 2
+    # The hit leaves a chip, in the dropdown's own words for the phase, so the
+    # trace says where the top row came from.
+    traces = [payload for name, payload in frames(response) if name == "trace"]
+    assert traces[-1] == {
+        "action": "search", "ok": True, "query": "Working out which paper “dqn” is", "found": 1
+    }
+
+
+def test_the_direct_search_resolve_is_skipped_when_a_found_title_is_the_query(
+    client, monkeypatch
+):
+    """Same gate as the dropdown: exact equality, not "contains". The scout
+    finding a paper titled exactly what was typed is the one case world
+    knowledge cannot improve on."""
+    seen = {}
+    stub_scout(monkeypatch, seen, found=[{"id": "s2x", "title": "Attention Is All You Need"}])
+    monkeypatch.setattr(
+        search_routes.search_service,
+        "paper_by_name",
+        lambda name, provider="s2": {"id": "s2other", "title": "Something Else"},
+    )
+    response = client.get("/api/search?q=attention is all you need")
+    assert [paper["id"] for paper in result_of(response)["papers"]] == ["s2x"]
+    assert not any(
+        payload.get("query", "").startswith("Working out")
+        for name, payload in frames(response) if name == "trace"
+    )
+
+
+def test_a_miss_on_the_resolve_leaves_no_chip_and_no_change(client, monkeypatch):
+    """Most queries are not a paper's name. A miss must be invisible — no
+    "nothing new" chip about a step the reader never asked for."""
+    seen = {}
+    stub_scout(monkeypatch, seen, found=[{"id": "s2x", "title": "Replay"}])
+    response = client.get("/api/search?q=replay buffers in rl")
+    assert [name for name, _ in frames(response)] == ["result", "done"]
+    assert [paper["id"] for paper in result_of(response)["papers"]] == ["s2x"]
 
 
 def test_a_failing_scout_is_a_normal_result_with_the_reason_not_an_error_frame(client, monkeypatch):

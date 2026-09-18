@@ -32,6 +32,15 @@ its title-recall half became the scout's `match_title` tool.
 
 ## Design decisions worth knowing
 
+- **The scout's turn is marked complete when it lands** (`turnCompleted`,
+  since v7.26.0). It wasn't, and the omission was invisible on screen —
+  the list rendered fine — while being total for the model:
+  `teacher/history.ts`'s `conversationHistory` drops unfinished turns, so a
+  search result never became history for the next question in its thread,
+  never travelled through `@thread[…]` to another, and never entered the
+  thread's summary. "What other papers appeared in this search?" got "I have
+  no record of a prior search". A broken run still stays unfinished, the
+  same as an aborted answer.
 - **Three destinations, decided before any model runs.** `Teacher`'s submit
   handler branches on plain facts, not on an agent classifying your intent:
   a pasted arXiv id/URL goes straight to the graph (`ID_RE`, no LLM at all);
@@ -120,8 +129,10 @@ the search box is gone entirely (v7.8.0).
 
 ## How it's verified
 
-`tsc -b` strict + oxlint + prettier. The reducer sequence is pinned in
-`test/store/transcript.test.ts` ("direct search reuses the streamed-answer
-reducers"); the binding filters are pinned server-side, where they are
-actually enforced (`test/atlas/agents/workers/search/papers/test_main.py`),
-along with the route's SSE frames (`test/atlas/routes/test_search.py`).
+`tsc -b` strict + oxlint + prettier. `test/search/useDirectSearch.test.ts`
+pins the reducer sequence (`turnStarted` → `answerSet` → `paperRefsSet` →
+`turnCompleted`), that the finished turn is in `conversationHistory`, and
+that a broken run stays unfinished; the binding filters are pinned
+server-side, where they are actually enforced
+(`test/atlas/agents/workers/search/papers/test_main.py`), along with the
+route's SSE frames and its nickname resolve (`test/atlas/routes/test_search.py`).

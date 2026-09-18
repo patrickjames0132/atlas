@@ -318,6 +318,64 @@
 
 ### Search & seeding
 
+- [x] **One `@` list for papers and threads, Enter that does what the lit row
+      says, and the scout given the dropdown's nickname resolve** *(v7.26.0)* —
+      Patrick's first round on the `@` mention after v7.25.0 (2026-09-17),
+      which surfaced as two complaints and grew into six fixes.
+
+      **Enter loaded a graph when he wanted a search.** The dropdown
+      pre-highlighted its top row and Enter accepted the highlight, so Enter
+      on an untouched list spliced in whichever paper the cache ranked first,
+      and Enter again on the bare `@Title` that left behind seeded the graph.
+      Now **nothing is selected until the reader selects it** (`highlighted`
+      is `-1`, `choice` null, until an arrow or a hover); Enter with no row
+      chosen falls through to send, so a bare `@phrase` goes to the scout's
+      full search as it did before the dropdown existed. Then the second
+      complaint, once that shipped: arrow, Enter, Enter was a press too many.
+      Settled as **Enter does the thing, Tab completes**: Enter on a chosen
+      paper that is the whole message (`ActiveMention.whole`) picks *and*
+      sends in one press; Tab only completes the text; a paper inside a
+      sentence, or a thread, completes and waits for the question. Because
+      Enter's two jobs are told apart only by whether a row is lit, the
+      dropdown's footer says what Enter does *right now* (`hintFor`: five
+      states) — and is pinned outside the scrolling list, after Patrick
+      noticed it vanished the moment eight rows landed.
+
+      **Threads didn't appear at all.** The tour said "type @thread", which
+      reads as "@ plus the thread's name"; that went to the paper lookup,
+      because threads lived behind a separate picker keyed on the literal
+      word. Offered three shapes (one list / hybrid with a `@thread` filter /
+      keep the keyword), Patrick picked **one list**: the exploration's other
+      discussions are a section above the paper results, matched by title
+      substring with no request at all, from the first character — `@` alone
+      lists them, which is how a reader learns they exist. Picking one still
+      inserts `@thread[Title]`, the syntax the send path already read;
+      `readMessage` now keeps a bare one away from the scout. The keyword
+      picker, its regex, state and CSS are gone.
+
+      **A completed mention kept the lookup running.** A mention has no
+      closing delimiter, so after a pick the `@` at the start of the message
+      still owned everything typed after it — "Searching Semantic Scholar"
+      for every keystroke of the question. Pre-existing for papers, noticed
+      with `@thread[General] what are some of the other…`. `activeMention`
+      now takes the draft's completed texts, and a closed `@thread[…]` ends
+      itself. See `docs/bugs.md`.
+
+      **`dqn` led with the wrong paper.** The scout — a text-searching Haiku
+      agent — has the blind spot the dropdown fixed in v7.19.0: nothing
+      textual reaches *Playing Atari…* from the acronym, so it led with a 2020
+      paper *titled* "Deep Q-Networks" and called it canonical. `api_search`
+      now runs the same day-cached `paper_by_name` **alongside** the scout
+      (its own small thread pool; no added wall-clock) and prepends the
+      confirmed paper under the dropdown's exact-title gate. A hit leaves one
+      trace chip in the dropdown's words; a miss leaves nothing.
+
+      **A search was invisible to the model.** `useDirectSearch` never marked
+      its turn complete, so no scout result ever became history — not for the
+      next question in General, not through `@thread[General]`, not in the
+      summary. One `turnCompleted`. See `docs/bugs.md`. *(Browser-tested and
+      approved by Patrick, 2026-09-17.)*
+
 - [x] **Stream the `@` lookup's real steps as a live line in the dropdown** *(v7.19.0)* —
       while the full pass worked, the panel said only *"Searching…"*. The ask
       (from the developer, 2026-09-09, with the ChatGPT "Searching

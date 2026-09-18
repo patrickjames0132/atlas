@@ -68,7 +68,8 @@ import SearchControls from '../search/SearchControls'
 import { useDirectSearch } from '../search/useDirectSearch'
 import { ID_RE } from '../graph/model'
 import MentionSuggestions from '../mentions/MentionSuggestions'
-import { insertMention, readMessage } from '../mentions/parse'
+import { insertMention, mentionText, readMessage } from '../mentions/parse'
+import type { MentionChoice } from '../mentions/parse'
 import { useMentionSuggestions } from '../mentions/useMentionSuggestions'
 import Lightbox from '../figures/Lightbox'
 import ChatMessage from './transcript/ChatMessage'
@@ -169,20 +170,13 @@ export default function Teacher({
     clearChat,
   } = useConversation()
 
+  // The other discussions in this exploration, offered as `@` rows above the
+  // paper results so a question can carry one of them along.
   const siblingThreads = useAppSelector(
     (state) =>
       state.explorations.byId[state.explorations.activeId]?.threads.filter(
         (thread) => thread.id !== state.transcript.activeKey,
       ) ?? [],
-  )
-  const [threadQuery, setThreadQuery] = useState<{
-    start: number
-    end: number
-    query: string
-  } | null>(null)
-  const [threadChoice, setThreadChoice] = useState(0)
-  const threadOptions = siblingThreads.filter((thread) =>
-    thread.title.toLowerCase().includes(threadQuery?.query.toLowerCase() ?? ''),
   )
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -204,7 +198,7 @@ export default function Teacher({
   // nothing renders from it — it is read once, at send — and re-rendering the
   // composer on every pick would fight the textarea's own caret handling.
   const resolvedMentions = useRef<Map<string, MentionPaper>>(new Map())
-  const mentions = useMentionSuggestions(provider)
+  const mentions = useMentionSuggestions(provider, siblingThreads)
   // Which scope picker's popover is open — one shared slot, so opening either
   // picker closes the other (their popovers overlap when both are open).
   const [openScope, setOpenScope] = useState<'lectures' | 'sources' | 'filters' | null>(null)
@@ -257,12 +251,11 @@ export default function Teacher({
   // the same version, reads *which papers* too ("lecture me on the
   // references"), which a two-value command could never say. What survives
   // of it is the router's own no-model fast path for "lecture me on these".
-  const submitQuestion = () => {
-    const question = input.trim()
+  const submitQuestion = (text: string = input) => {
+    const question = text.trim()
     if (!question || asking || searching) return
     setInput('')
     mentions.reset()
-    setThreadQuery(null)
     // A pasted arXiv id/URL is a statement of intent, not a question: land on
     // that exact paper. First in the tree because it needs no lookup at all —
     // the id IS the answer, where every branch below has to resolve something.
@@ -273,11 +266,8 @@ export default function Teacher({
     // What the words turn out to be. `readMessage` is a substring check and a
     // startsWith — the three branches below stay free and exact. What changed
     // in v7.18.0 is that the reader says which of them they meant, with `@`,
-    // instead of arming a mode beforehand.
-    if (question.includes('@thread[')) {
-      void send(question, scopeArg, searchOptions)
-      return
-    }
+    // instead of arming a mode beforehand. A `@thread[…]` mention always
+    // reads as `ask`; `send` finds the named threads and attaches them.
     const intent = readMessage(question, resolvedMentions.current)
     resolvedMentions.current = new Map()
     if (intent.kind === 'seed') {
@@ -307,16 +297,18 @@ export default function Teacher({
   // the chat convention: Enter sends, Shift+Enter drops a newline (letting a
   // question run multiple lines without hitting the Ask button).
   /**
-   * Accept a suggestion: splice the paper's title in and remember what it
-   * resolved to, so `readMessage` can find it again at send.
+   * Accept a suggestion: splice its mention text in and, for a paper,
+   * remember what it resolved to so `readMessage` can find it again at send.
+   * A thread needs no such record — its `@thread[Title]` text is the whole
+   * reference, and `send` resolves it against the exploration's threads.
    *
-   * @param paper The picked paper.
+   * @param choice The picked paper or thread.
    */
-  const pickMention = (paper: MentionPaper) => {
+  const pickMention = (choice: MentionChoice) => {
     const field = inputRef.current
     if (!field || !mentions.active) return
-    const { text: next, caret } = insertMention(input, mentions.active, paper)
-    resolvedMentions.current.set(`@${paper.title}`, paper)
+    const { text: next, caret } = insertMention(input, mentions.active, choice)
+    if (choice.kind === 'paper') resolvedMentions.current.set(mentionText(choice), choice.paper)
     setInput(next)
     mentions.reset()
     // The caret has to be restored after React paints the new value, or the
@@ -328,66 +320,28 @@ export default function Teacher({
     })
   }
 
-  /** Insert a labelled sibling reference without invoking paper search.
-   * @param title The selected discussion's title.
-   */
-  const pickThread = (title: string) => {
-    if (!threadQuery) return
-    const inserted = `@thread[${title}] `
-    setInput(input.slice(0, threadQuery.start) + inserted + input.slice(threadQuery.end))
-    const caret = threadQuery.start + inserted.length
-    setThreadQuery(null)
-    requestAnimationFrame(() => {
-      inputRef.current?.focus()
-      inputRef.current?.setSelectionRange(caret, caret)
-    })
-  }
-
   /**
    * Re-read the composer after any change that could move the caret, so the
-   * typeaheads (the `@thread` picker and the `@` mention dropdown) follow it.
+   * `@` dropdown follows it. The draft's resolved mentions go along so a
+   * picked title ends its mention instead of the question typed after it
+   * becoming an ever-longer query.
    *
    * @param field The textarea, read for both its value and its caret.
    */
   const syncComposer = (field: HTMLTextAreaElement) => {
-    const caret = field.selectionStart ?? field.value.length
-    const threadMatch = /@thread(?:\[)?([^\]\n]*)$/.exec(field.value.slice(0, caret))
-    if (threadMatch) {
-      setThreadQuery({ start: threadMatch.index, end: caret, query: threadMatch[1].trim() })
-      setThreadChoice(0)
-      mentions.reset()
-      return
-    }
-    setThreadQuery(null)
-    mentions.onInput(field.value, caret)
+    mentions.onInput(
+      field.value,
+      field.selectionStart ?? field.value.length,
+      resolvedMentions.current.keys(),
+    )
   }
 
   const onInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    // While a typeahead is open it owns the arrows, Enter, Tab and Escape —
-    // the keys a reader picking from a list expects to work. Everything else
-    // still reaches the textarea, so typing never stops.
-    if (threadQuery) {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setThreadQuery(null)
-        return
-      }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        setThreadChoice((previous) =>
-          Math.max(
-            0,
-            Math.min(threadOptions.length - 1, previous + (event.key === 'ArrowDown' ? 1 : -1)),
-          ),
-        )
-        return
-      }
-      if ((event.key === 'Enter' || event.key === 'Tab') && threadOptions[threadChoice]) {
-        event.preventDefault()
-        pickThread(threadOptions[threadChoice].title)
-        return
-      }
-    }
+    // While the dropdown is open it owns the arrows and Escape, and Enter/Tab
+    // *only once a row is chosen* — an untouched list has no selection, so
+    // Enter falls through to send and the message goes out as typed (a bare
+    // `@words` to the paper scout). Everything else still reaches the
+    // textarea, so typing never stops.
     if (mentions.open) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
@@ -396,7 +350,21 @@ export default function Teacher({
       }
       if ((event.key === 'Enter' || event.key === 'Tab') && mentions.choice) {
         event.preventDefault()
-        pickMention(mentions.choice)
+        const choice = mentions.choice
+        // Enter on a paper that IS the whole message: pick and send in one
+        // press. The reader chose one paper and nothing else, which is
+        // already the seed rule — making them press Enter again on the
+        // `@Title` they just watched appear was a step with no decision in
+        // it. Tab is the escape hatch: it only completes the text. A paper
+        // inside a sentence, or a thread, just completes either way — the
+        // question still has to be written.
+        if (event.key === 'Enter' && choice.kind === 'paper' && mentions.active?.whole) {
+          const { text } = insertMention(input, mentions.active, choice)
+          resolvedMentions.current.set(mentionText(choice), choice.paper)
+          submitQuestion(text)
+          return
+        }
+        pickMention(choice)
         return
       }
       if (event.key === 'Escape') {
@@ -773,28 +741,12 @@ export default function Teacher({
           {/* The `@` dropdown, anchored to the bar (which is positioned) and
               opening upward — the composer sits at the bottom of the panel, so
               a list below it would open off-screen. */}
-          {threadQuery && (
-            <div className="thread-suggestions" role="listbox" aria-label="Mention a thread">
-              <div className="thread-suggestions-title">Discussions in this exploration</div>
-              {threadOptions.map((thread, index) => (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={index === threadChoice}
-                  key={thread.id}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => pickThread(thread.title)}
-                >
-                  {thread.title}
-                </button>
-              ))}
-              {!threadOptions.length && <p>No matching threads</p>}
-            </div>
-          )}
           {mentions.open && (
             <MentionSuggestions
+              threads={mentions.threads}
               papers={mentions.papers}
               highlighted={mentions.highlighted}
+              whole={mentions.active?.whole ?? false}
               loading={mentions.loading}
               step={mentions.step}
               onPick={pickMention}

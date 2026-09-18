@@ -59,7 +59,8 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
       │  ├─ @ suggestions          mentions/MentionSuggestions.tsx — opens
       │  │                          UPWARD out of the bar; anchored to it,
       │  │                          because it belongs to the text being typed
-      │  │                          rather than to a control
+      │  │                          rather than to a control; sibling threads
+      │  │                          above, paper results below
       │  └─ filters                search/SearchControls.tsx (▽ — year slider,
       │                             field picker). Moved OUT of the pill in
       │                             v7.11.0 with three others and back in on
@@ -83,8 +84,8 @@ knows URLs and SSE frames), `store/` (the five slices + typed hooks),
 surfaces, `latexToUnicode` for canvas node labels), `graph/hooks/` +
 `graph/model.ts`/`theme.ts` (the sim machinery), `ui/` (cross-cutting UI
 utilities — `useResizablePanel` for both right-docked panels),
-`mentions/` (the chat bar's `@` paper lookup — its grammar, typeahead and
-dropdown), `scope/` (which papers a turn is about — the message → selection →
+`mentions/` (the chat bar's `@` lookup for papers and sibling threads — its
+grammar, typeahead and dropdown), `scope/` (which papers a turn is about — the message → selection →
 visible priority list both agents share), `search/useDirectSearch.ts`,
 `shell/useSessions.ts`, `detail/useSelection.ts`,
 `teacher/useConversation.ts` (each feature's state/logic hooks).

@@ -1,17 +1,20 @@
 # `src/mentions`
 
-Naming a paper in the chat bar: type `@`, pick from the suggestions that
-appear, and the message carries a real paper rather than a phrase the assistant
-has to go and resolve.
+Naming a paper — or another discussion in this exploration — in the chat bar:
+type `@`, pick from the suggestions that appear, and the message carries a real
+paper (or a real thread's history) rather than a phrase the assistant has to go
+and resolve.
 
 ```
 mentions/
   parse.ts                  — the grammar, as pure functions: which mention the
-                              caret is in, what a pick splices in, and what a
-                              finished message turns out to be asking for
+                              caret is in, what a pick splices in (a paper or a
+                              thread), which threads match, and what a finished
+                              message turns out to be asking for
   useMentionSuggestions.ts  — the typeahead engine: debounce, abort, lookup,
-                              keyboard selection
-  MentionSuggestions.tsx    — the dropdown above the composer
+                              thread rows, keyboard selection
+  MentionSuggestions.tsx    — the dropdown above the composer: threads, then
+                              papers
   mentions.css              — its styles
 ```
 
@@ -62,7 +65,70 @@ question or losing the paper.
     grounding. An *unresolved* `@phrase` inside a question is simply part of
     the question: routing the whole sentence to the scout would drop the
     question, and the researcher has its own paper search for when an answer
-    needs one.
+    needs one. A **thread mention** (`@thread[Title]`) always lands here too,
+    even alone — it names a discussion to carry along, not a paper to find,
+    so `readMessage` keeps it away from the scout, which would otherwise
+    search for papers titled "thread[Title]".
+- **Sibling threads are rows of the same list, above the papers.** The other
+  discussions in the current exploration are offered under their own head
+  ("Discussions in this exploration") before "All paper results". They are a
+  local list of a few titles, filtered by substring with no request at all, so
+  they show from the **first character** — `@` alone lists every one of them,
+  which is how a reader finds out that a discussion is mentionable — while the
+  paper lookups still wait for the three-character floor. Picking one inserts
+  `@thread[Title]`: bracketed because a thread title is arbitrary text
+  ("PPO", "General") and the brackets are what tells the send path
+  (`teacher/history.ts`, `useConversation`'s `turnContextSet`) that the words
+  name a discussion to attach rather than a paper to look up. Nothing else
+  about a thread mention is tracked in the draft: the text is the whole
+  reference, and `send` resolves it against the exploration's threads.
+
+  This replaced a separate picker that opened only on the literal keyword
+  `@thread` (v7.22.0–v7.25.0). The keyword was the problem: the tour said
+  "type @thread" and that reads, naturally, as "@ plus the thread's name" —
+  which went to the paper lookup, and the reader concluded threads couldn't
+  be mentioned at all. One `@`, one list, labelled sections: the discovery
+  is in the dropdown instead of in a sentence the reader has to parse right.
+- **Nothing is selected until the reader selects it.** The dropdown used to
+  pre-highlight its top row, so Enter on an untouched list spliced in a paper
+  the reader had only been *shown* — and Enter again, on the bare mention
+  that left behind, seeded the graph. That is the wrong default for a list
+  whose top row is a guess: the reader who typed `@sparse autoencoders` and
+  hit Enter wanted the scout's full search (the `find` route above), not a
+  landing on whichever paper the cache ranked first. Now a row is only
+  chosen by arrowing onto it or hovering it (`highlighted` is `-1` until
+  then, and `choice` null); Enter or Tab with no row chosen falls through to
+  send. Down from nothing lands on the first row, up on the last.
+- **Enter does the thing; Tab completes.** Enter on a chosen paper that is
+  the **whole message** (`ActiveMention.whole`: nothing but whitespace
+  around it) picks *and sends* in one press — the reader chose one paper and
+  nothing else, which is already the seed rule, and completing `@Title` into
+  the box to demand a second Enter was a step with no decision in it. Tab on
+  the same row only completes the text, for the reader who wants the title
+  in the box without opening it. A paper inside a sentence, or a thread,
+  completes either way: the question still has to be written, and a thread
+  alone is not a message. Because Enter's two jobs — *send what I typed*,
+  *take what I chose* — are told apart only by whether a row is lit, the
+  dropdown's footer says what Enter does **right now** (`hintFor`): "Enter
+  searches for what you typed" with nothing chosen on a bare mention, "Enter
+  sends your message" inside a sentence, "Enter opens this paper", "Enter
+  adds this paper to your question", "Enter attaches this discussion". The
+  footer is pinned: the panel is capped at 320px but only the row list
+  (`.mention-list`) scrolls, so a full page of results can't push the one
+  line that explains Enter below the fold — which it did, and exactly when
+  the list was long enough to need it.
+- **A completed mention ends the mention.** A mention has no closing
+  delimiter, so after a pick the `@` at the start of the message still
+  "owned" everything typed after it — the lookup ran on *"Attention Is All
+  You Need what does it say about"* for every keystroke of the question, and
+  the same for *"thread[General] what are some of the other"* (which is how
+  it was noticed). `activeMention` therefore takes the draft's `completed`
+  texts (the composer passes its resolved-mention keys) and an `@` that opens
+  one of them is not active; a closed `@thread[…]` ends itself, its bracket
+  being the delimiter a paper title lacks. Editing *inside* a completed title
+  reopens it — the text before the caret is then only a prefix of the
+  completed one — which is the right answer for a reader changing their
+  mind.
 - **A mentioned paper grounds the question; it is never merged onto the
   canvas.** Asking *about* a paper is not asking to explore it, and
   rearranging the reader's graph as a side effect of a question is the
@@ -115,11 +181,12 @@ question or losing the paper.
   still favour it, since cached hits are passed first into a stable sort).
 
   Re-ranking a list someone is arrowing through is hostile if handled
-  carelessly, so the hook tracks the selection by **paper id, not index**
-  (`highlightedId`). The row moves, the selection moves with it, and Enter
-  takes what the reader was looking at. If a re-rank drops the tracked paper
-  entirely, the selection falls back to the top rather than pointing at
-  nothing.
+  carelessly, so the hook tracks the selection by **row key, not index**
+  (`highlightedKey` — the row's kind plus its id, so a thread and a paper
+  sharing an id can't be confused). The row moves, the selection moves with
+  it, and Enter takes what the reader was looking at. If a re-rank drops the
+  tracked paper entirely, the selection falls back to **nothing** — not to
+  the top, which would be a paper the reader never chose.
 - **One model call, and it is the only one — because nicknames are world
   knowledge.** Typing `@dqn` cannot reach *Playing Atari with Deep
   Reinforcement Learning* by any text match, and that was measured rather than
@@ -161,32 +228,45 @@ question or losing the paper.
 
 `teacher/Teacher.tsx` alone. It owns the textarea, so it holds the resolved-mention
 map for the draft (a ref — nothing renders from it, and re-rendering on every
-pick would fight the textarea's caret handling), re-reads the caret on input,
-click and key-up, and hands the arrows / Enter / Tab / Escape to the dropdown
-while it is open.
+pick would fight the textarea's caret handling), passes the exploration's
+sibling threads into the hook, re-reads the caret on input, click and key-up,
+and hands the arrows and Escape to the dropdown while it is open — and Enter /
+Tab only once a row is chosen, so an untouched list never eats a send.
 
 ## How it's verified
 
 `test/mentions/` mirrors this folder. `parse.test.ts` is the important one —
-it pins the three destinations and the edit-breaks-resolution behaviour, since
-those rules decide what a message *means*. `useMentionSuggestions.test.ts`
-pins the cost guarantees (a burst of typing is one *provider* lookup while the
-free pass runs per keystroke; the cache is asked with no debounce at all;
-Escape stays shut until the query changes) because that is the half that could
-quietly become expensive — and the two re-rank tests, which are the ones that
-matter most: the keyboard stays on the same paper when the list reorders, and
-falls back to the top when its paper is gone. `MentionSuggestions.test.tsx` covers the row layout, the sparse
-record with no byline, pointer-down picking, and the phase line (including
-that it shows *alongside* results, since the provisional list lands first).
+it pins the three destinations (including that a bare `@thread[…]` is never a
+search), the edit-breaks-resolution behaviour, the two insert forms, the
+thread matcher, `whole`, and that a completed mention (a resolved title, a
+closed `@thread[…]`) ends the mention while a later `@` opens a new one,
+since those rules decide what a message *means*.
+`useMentionSuggestions.test.ts` pins the cost guarantees (a burst of typing is
+one *provider* lookup while the free pass runs per keystroke; the cache is
+asked with no debounce at all; threads cost no request at all and show from
+the first character; Escape stays shut until the query changes) because that
+is the half that could quietly become expensive — the selection rules (nothing
+chosen until the reader moves; down from nothing is the top, up is the bottom;
+threads then papers walk as one list) — and the two re-rank tests, which are
+the ones that matter most: the keyboard stays on the same paper when the list
+reorders, and falls back to no selection when its paper is gone.
+`MentionSuggestions.test.tsx` covers the row layout, the thread section and
+its cross-section row numbering, the `-1` no-selection state, `hintFor`'s
+five states, the sparse record with no byline, pointer-down picking, and the
+phase line (including that it shows *alongside* results, since the
+provisional list lands first). The composer's side — Enter with nothing
+chosen is a send, Enter on a bare chosen paper seeds in one press, Tab only
+completes, a paper in a sentence or a thread only completes, a sent
+`@thread[…]` reaches the assistant and never the scout — is pinned in
+`test/teacher/Teacher.test.tsx` against a scripted hook.
 On the backend, `test_search.py` pins the frame order, the provider's name in
 its label, that the resolve step precedes the resolve, and that no resolve step
 is claimed when the resolve was skipped.
 
 ## Sibling discussion references
 
-The composer reserves `@thread` for discussions within the current exploration.
-It offers an accessible keyboard picker and inserts `@thread[Title]`, intercepted
-before the paper parser runs. These references attach bounded, labelled sibling
-history rather than resolve a paper or change the canvas. The sent answer retains
-stable thread ids for its `Context from` navigation controls. Ordinary paper
-mentions continue through this package unchanged.
+A picked thread's `@thread[Title]` attaches bounded, labelled sibling history
+to the message (`teacher/history.ts`'s `siblingContext`) rather than resolving
+a paper or changing the canvas. The sent answer retains stable thread ids for
+its `Context from` navigation controls. See `teacher/README.md` for the send
+side; this package only puts the reference in the text.

@@ -29,6 +29,8 @@ import explorationsReducer from '../../src/store/explorations'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { MentionPaper } from '../../src/api'
+import type { MentionThread } from '../../src/mentions/parse'
 import type { Source } from '../../src/api'
 import highlightReducer from '../../src/store/highlight'
 import libraryReducer from '../../src/store/library'
@@ -78,6 +80,10 @@ vi.mock('../../src/store', () => ({
 
 /** What the last whole-turn click asked to light — see the lecture-bubble test. */
 const onChatClick = vi.fn()
+/** The three destinations a submit can reach, spied — see the Enter tests. */
+const onPaperSeed = vi.fn()
+const send = vi.fn()
+const runSearch = vi.fn()
 
 vi.mock('../../src/teacher/useConversation', () => ({
   useConversation: () => ({
@@ -90,10 +96,10 @@ vi.mock('../../src/teacher/useConversation', () => ({
     onChatClick,
     onRefClick: () => {},
     onGraphIds: new Set<string>(),
-    onPaperSeed: () => {},
+    onPaperSeed,
     provider: 's2',
     ask: () => {},
-    send: () => {},
+    send,
     reroute: () => {},
     lectureInChat: () => {},
     retryAnswer: () => {},
@@ -103,7 +109,38 @@ vi.mock('../../src/teacher/useConversation', () => ({
 }))
 
 vi.mock('../../src/search/useDirectSearch', () => ({
-  useDirectSearch: () => ({ searching: false, runSearch: () => {} }),
+  useDirectSearch: () => ({ searching: false, runSearch }),
+}))
+
+/** The `@` dropdown's state, set per test: what is open, and what is chosen. */
+const mentionState: {
+  open: boolean
+  active: { query: string; start: number; end: number; whole: boolean } | null
+  choice: { kind: 'paper'; paper: MentionPaper } | { kind: 'thread'; thread: MentionThread } | null
+} = { open: false, active: null, choice: null }
+
+vi.mock('../../src/mentions/useMentionSuggestions', () => ({
+  useMentionSuggestions: () => ({
+    get open() {
+      return mentionState.open
+    },
+    get active() {
+      return mentionState.active
+    },
+    get choice() {
+      return mentionState.choice
+    },
+    threads: [],
+    papers: [],
+    loading: false,
+    step: null,
+    highlighted: -1,
+    onInput: () => {},
+    move: () => {},
+    setHighlighted: () => {},
+    dismiss: () => {},
+    reset: () => {},
+  }),
 }))
 
 // Imported after the mocks so the component picks them up.
@@ -114,6 +151,10 @@ beforeEach(() => {
   sources = []
   turns = []
   onChatClick.mockClear()
+  onPaperSeed.mockClear()
+  send.mockClear()
+  runSearch.mockClear()
+  Object.assign(mentionState, { open: false, active: null, choice: null })
 })
 
 afterEach(() => {
@@ -298,5 +339,95 @@ describe('the landing assistant', () => {
     const { container } = render(<Teacher landing />)
     expect(container.querySelector('.panel-section')).toBeNull()
     expect(screen.queryByRole('button', { name: /Lecture/ })).toBeNull()
+  })
+})
+
+describe('Enter in the composer, with the @ dropdown open', () => {
+  const atari: MentionPaper = {
+    id: 'p1',
+    arxiv_id: '1312.5602',
+    title: 'Playing Atari with Deep RL',
+  }
+
+  /**
+   * Type into the composer and press a key with the dropdown in a given state.
+   *
+   * @param text  The draft.
+   * @param key   The key to press.
+   * @param state The dropdown's open/chosen state during the press.
+   * @returns The textarea, for reading what the press left behind.
+   */
+  function press(text: string, key: string, state: Partial<typeof mentionState>) {
+    render(<Teacher landing={false} />)
+    const field = screen.getByRole('textbox', { name: /Ask the assistant/ })
+    fireEvent.change(field, { target: { value: text } })
+    Object.assign(mentionState, state)
+    fireEvent.keyDown(field, { key })
+    return field as HTMLTextAreaElement
+  }
+
+  it('with NO row chosen, sends what was typed — a bare @phrase to the scout', () => {
+    // The fix for "Enter loaded a graph": an untouched list has no
+    // selection, so Enter is a send, and a bare mention is a search.
+    press('@sparse autoencoders', 'Enter', {
+      open: true,
+      active: { query: 'sparse autoencoders', start: 0, end: 20, whole: true },
+      choice: null,
+    })
+    expect(runSearch).toHaveBeenCalledWith('sparse autoencoders')
+    expect(onPaperSeed).not.toHaveBeenCalled()
+  })
+
+  it('on a chosen paper that is the whole message, opens it in ONE press', () => {
+    // Completing `@Title` into the box and demanding a second Enter was a
+    // step with no decision in it.
+    const field = press('@atari', 'Enter', {
+      open: true,
+      active: { query: 'atari', start: 0, end: 6, whole: true },
+      choice: { kind: 'paper', paper: atari },
+    })
+    expect(onPaperSeed).toHaveBeenCalledTimes(1)
+    expect(onPaperSeed).toHaveBeenCalledWith('1312.5602')
+    expect(field.value).toBe('')
+    expect(runSearch).not.toHaveBeenCalled()
+  })
+
+  it('Tab on that same paper only completes the text', () => {
+    // The escape hatch: the title in the box, nothing sent.
+    const field = press('@atari', 'Tab', {
+      open: true,
+      active: { query: 'atari', start: 0, end: 6, whole: true },
+      choice: { kind: 'paper', paper: atari },
+    })
+    expect(onPaperSeed).not.toHaveBeenCalled()
+    expect(field.value).toBe('@Playing Atari with Deep RL ')
+  })
+
+  it('on a chosen paper inside a sentence, completes it and waits for the question', () => {
+    const field = press('what does @atari', 'Enter', {
+      open: true,
+      active: { query: 'atari', start: 10, end: 16, whole: false },
+      choice: { kind: 'paper', paper: atari },
+    })
+    expect(onPaperSeed).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+    expect(field.value).toBe('what does @Playing Atari with Deep RL ')
+  })
+
+  it('on a chosen thread, completes it — a thread alone is not a message', () => {
+    const field = press('@gen', 'Enter', {
+      open: true,
+      active: { query: 'gen', start: 0, end: 4, whole: true },
+      choice: { kind: 'thread', thread: { id: 't1', title: 'General' } },
+    })
+    expect(send).not.toHaveBeenCalled()
+    expect(field.value).toBe('@thread[General] ')
+  })
+
+  it('a sent @thread[…] mention goes to the assistant, never the scout', () => {
+    press('@thread[General] what else came up?', 'Enter', { open: false })
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0][0]).toBe('@thread[General] what else came up?')
+    expect(runSearch).not.toHaveBeenCalled()
   })
 })

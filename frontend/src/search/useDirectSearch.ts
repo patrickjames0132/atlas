@@ -28,7 +28,13 @@ import { useCallback, useRef, useState } from 'react'
 import { searchLive } from '../api'
 import type { GraphNode, PaperRef, Provider, SearchOptions } from '../api'
 import { useAppDispatch } from '../store'
-import { answerSet, paperRefsSet, traceAdded, turnStarted } from '../store/transcript'
+import {
+  answerSet,
+  paperRefsSet,
+  traceAdded,
+  turnCompleted,
+  turnStarted,
+} from '../store/transcript'
 
 /** What {@link useDirectSearch} hands back to the chat bar. */
 export interface DirectSearchApi {
@@ -185,6 +191,15 @@ export function useDirectSearch(
         // rather than continuing it, or the cached papers would appear twice.
         dispatch(answerSet(buildText(result.papers, result.summary, instant)))
         dispatch(paperRefsSet(buildRefs(result.papers, provider)))
+        // The turn is done, and saying so is what lets the search be talked
+        // about afterwards: `conversationHistory` drops unfinished turns, so
+        // without this a scout result never reached the model — not as
+        // history for the next question in this thread, not through
+        // `@thread[…]` from another, and not in the thread's summary. "What
+        // other papers appeared in this search?" got "I have no record of a
+        // prior search". Only on success: the catch below leaves a broken
+        // run unfinished, the same as an aborted answer.
+        dispatch(turnCompleted())
       } catch (error) {
         if (controller.signal.aborted) return // superseded: stay quiet
         // Only a genuine break reaches here — the scout degrades internally,
