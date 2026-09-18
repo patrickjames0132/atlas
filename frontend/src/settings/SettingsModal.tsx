@@ -20,11 +20,18 @@
  * picker never reveals absolute paths); a missing default config.json is
  * auto-created from the example server-side.
  *
+ * The modal carries its own guided tour (`SETTINGS_TOUR`, the ? beside the
+ * ✕): the same coach-mark engine as the app's tour, with steps that *stage*
+ * the section or sub-page they spotlight, so the walk moves through the nav
+ * on the reader's behalf.
+ *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import Tour from '../tour/Tour'
+import { SETTINGS_TOUR, TOUR_KEYS } from '../tour/steps'
 import {
   dropCache,
   getAgentModels,
@@ -83,6 +90,20 @@ const SECTIONS = [
     pages: [
       { id: 'providers', label: 'Model Providers' },
       { id: 'agents', label: 'Agent Settings' },
+    ],
+  },
+  {
+    // The config block is `sources`; the app calls the feature the Library.
+    id: 'sources',
+    icon: '📚',
+    label: 'Library',
+    blurb:
+      'Your library — uploaded PDFs and fetched web pages — made searchable on this machine: how the text is cut into passages, the local model that embeds them, and how many passages a search hands the assistant. Nothing here calls an API; the text never leaves the computer.',
+    pages: [
+      { id: 'general', label: 'General' },
+      { id: 'embedding', label: 'Embedding' },
+      { id: 'chunking', label: 'Chunking' },
+      { id: 'retrieval', label: 'Retrieval' },
     ],
   },
 ] as const
@@ -265,13 +286,31 @@ interface RowDef {
   group?: string
   label: string
   hint?: string
-  /** Which sub-tab of the Agents section this row belongs to. */
-  tab?: AgentTab
-  control: (draft: AtlasConfig, edit: Edit, models: AgentModels) => React.ReactNode
+  /** Which sub-page of its section this row belongs to. In a section with
+   *  sub-pages, a row with none is the section's own — shown on the landing
+   *  page only, never repeated on every sub-page. (No row uses this today;
+   *  the Library's master switch lived there briefly before getting its own
+   *  General sub-page.) */
+  page?: PageId
+  /** A `data-tour` anchor for the settings tour, when a step points here. */
+  tour?: string
+  /** Render the control alone, left-aligned, with no label column — for a
+   *  control that says everything itself (a button with its own caption).
+   *  `label` still feeds the search. */
+  bare?: boolean
+  control: (
+    draft: AtlasConfig,
+    edit: Edit,
+    models: AgentModels,
+    /** Move the modal to a sub-page of the current section — for a control
+     *  whose effect is best shown somewhere else (a vendor's one-click crew
+     *  lands on Agent Settings, where the change is visible). */
+    goToPage: (page: PageId) => void,
+  ) => React.ReactNode
 }
 
-/** Which sub-page of the Agents section a row belongs to. */
-type AgentTab = 'providers' | 'agents'
+/** A sub-page id from any section's `pages`. */
+type PageId = Extract<(typeof SECTIONS)[number], { pages: unknown }>['pages'][number]['id']
 
 /**
  * An agent's model, as two controls: which vendor, then which of its models.
@@ -413,16 +452,102 @@ function VendorField({
   )
 }
 
-/** What a group's heading badge says, and whether it is the good news.
+/** The agents whose work is long and judgment-heavy — a lecture, a research
+ *  run — and so get a vendor's *advanced* pick; every other agent (the
+ *  summarizer, the scouts) makes short structured calls a *light* model does
+ *  as well and far cheaper. Mirrors `config.example.json`'s own split. */
+const ADVANCED_AGENTS: ReadonlySet<string> = new Set(['lecturer', 'researcher'])
+
+/**
+ * Point the whole crew at one vendor: lecturer and researcher on its advanced
+ * model, everyone else on its light one — the backend's picks (`tiers`).
  *
- *  Cost rides the heading rather than a hint because for the reader this
- *  screen exists for it is the deciding fact: two of these four vendors run
- *  the teacher for nothing. */
-const GROUP_BADGES: Record<string, { text: string; free: boolean }> = {
-  Anthropic: { text: 'paid', free: false },
-  OpenAI: { text: 'paid', free: false },
-  Google: { text: 'free tier', free: true },
-  Ollama: { text: 'free, local', free: true },
+ * @param next The draft being edited.
+ * @param vendor The vendor key.
+ * @param tier That vendor's advanced/light picks.
+ */
+function applyVendorToAll(
+  next: AtlasConfig,
+  vendor: string,
+  tier: { advanced: string; light: string },
+): void {
+  for (const entry of next.llm.agents) {
+    entry.model = `${vendor}:${ADVANCED_AGENTS.has(entry.id) ? tier.advanced : tier.light}`
+  }
+}
+
+/**
+ * A vendor's one-click crew, as a row of its own under its credentials.
+ *
+ * The button's tooltip says what it will do before it is pressed — both
+ * picks, by name — and pressing it moves the modal to Agent Settings, where
+ * every agent's row now shows the new vendor: the change is visible where it
+ * happened rather than implied by a Save bar. Without a credential or a model
+ * list there is nothing to pick from, so the button is disabled and the
+ * tooltip says why.
+ *
+ * @returns The button.
+ */
+function VendorApply({
+  draft,
+  edit,
+  vendor,
+  models,
+  goToPage,
+}: {
+  draft: AtlasConfig
+  edit: Edit
+  vendor: string
+  models: AgentModels
+  goToPage: (page: PageId) => void
+}) {
+  const tier = models.tiers[vendor]
+  // Gated on the draft's credential as well as the backend's listing: the
+  // listing was fetched on open, so a key cleared since would otherwise
+  // leave the button live for a vendor that can no longer run anything.
+  const block = (draft.llm.providers[vendor] ?? {}) as Record<string, unknown>
+  const credential = vendor === 'ollama' ? block.base_url : block.api_key
+  const configured = typeof credential === 'string' && credential.trim() !== ''
+  const why = !configured
+    ? `Enter ${vendor === 'ollama' ? 'the server URL' : 'an API key'} above, then Save, to pick its models.`
+    : tier
+      ? `${tier.advanced} for the lecturer and researcher; ${tier.light} for the summarizer and scouts.`
+      : models.vendors.includes(vendor)
+        ? 'No models listed — is the key valid and the server reachable?'
+        : 'Save the key first, then reopen Settings to pick its models.'
+  return (
+    <div className="vendor-apply">
+      <button
+        type="button"
+        disabled={tier === undefined || !configured}
+        title={why}
+        onClick={() => {
+          if (!tier) return
+          edit((next) => applyVendorToAll(next, vendor, tier))
+          goToPage('agents')
+        }}
+      >
+        Apply Default Models
+      </button>
+    </div>
+  )
+}
+
+/** What each agent *is*, shown under its heading on Agent Settings. The
+ *  rows below a heading are the agent's knobs, and the Model row is only the
+ *  LLM that drives it — so the description of the job belongs to the group,
+ *  not to the model field. */
+const GROUP_BLURBS: Record<string, string> = {
+  Summarizer:
+    "Writes the detail panel's on-demand paper TL;DR — one short structured call per paper, cached forever.",
+  Lecturer:
+    'Narrates the lecture: the beat-by-beat story of whatever the reader scoped, each beat lighting the papers it is about. The longest single generation in the app.',
+  Researcher:
+    'Answers questions. Plans the research, reads papers in full, walks the citation graph, searches your library and the open web through the scouts, and writes the grounded answer — the most tool calls and the most judgment of any agent.',
+  'Paper scout':
+    "Finds papers by free-text search — on the researcher's behalf mid-answer, and directly from the search bar.",
+  'Web scout':
+    "Searches the open web for the researcher. The search itself runs on the vendor's side, so it needs a cloud vendor that offers one.",
 }
 
 /** Display names for the vendors the backend can construct. */
@@ -434,6 +559,38 @@ const VENDOR_LABELS: Record<string, string> = {
 }
 
 /**
+ * A boolean as a switch (`.settings-switch`): a real checkbox stays in the
+ * markup for keyboard and screen readers, visually hidden, with the track and
+ * knob painted from `:checked` / `:focus-visible`.
+ *
+ * @returns The labelled checkbox.
+ */
+function Switch({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  /** The accessible name — what a screen reader calls the switch. */
+  label: string
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="settings-switch">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-label={label}
+      />
+      <span className="settings-switch-track" aria-hidden="true">
+        <span className="settings-switch-knob" />
+      </span>
+    </label>
+  )
+}
+
+/**
  * The adaptive switch — the Graph section's headline control.
  *
  * Unlike every other row here it edits **no config draft**: the build shape
@@ -442,22 +599,89 @@ const VENDOR_LABELS: Record<string, string> = {
  * write-through the config-file location row uses, and the reason neither shows
  * up in the Save bar.
  *
- * @returns The checkbox.
+ * @returns The switch.
  */
 function AdaptiveToggle() {
   const shape = useBuildShape()
   return (
-    <label className="settings-switch">
-      <input
-        type="checkbox"
-        checked={shape.adaptive}
-        onChange={(event) => setBuildShape({ ...shape, adaptive: event.target.checked })}
-        aria-label="Size graphs automatically"
-      />
-      <span className="settings-switch-track" aria-hidden="true">
-        <span className="settings-switch-knob" />
-      </span>
-    </label>
+    <Switch
+      checked={shape.adaptive}
+      label="Size graphs automatically"
+      onChange={(adaptive) => setBuildShape({ ...shape, adaptive })}
+    />
+  )
+}
+
+/** The three typed sub-blocks of `config.sources`. */
+type SourcesGroup = 'embedding' | 'chunking' | 'retrieval'
+
+/**
+ * A text field on one of `config.sources`' sub-blocks.
+ *
+ * @returns The text input.
+ */
+function SourcesText({
+  draft,
+  edit,
+  group,
+  field,
+  placeholder,
+}: {
+  draft: AtlasConfig
+  edit: Edit
+  group: SourcesGroup
+  field: string
+  placeholder?: string
+}) {
+  const block = draft.sources[group] as unknown as Record<string, string>
+  return (
+    <input
+      type="text"
+      className="settings-wide"
+      value={block[field] ?? ''}
+      placeholder={placeholder}
+      onChange={(event) =>
+        edit((next) => {
+          ;(next.sources[group] as unknown as Record<string, string>)[field] = event.target.value
+        })
+      }
+    />
+  )
+}
+
+/**
+ * A number field on one of `config.sources`' sub-blocks. Unlike an agent
+ * knob these have no code default to fall back to — the file always carries
+ * a value — so clearing the field is refused rather than deleting anything.
+ *
+ * @returns The number input.
+ */
+function SourcesNumber({
+  draft,
+  edit,
+  group,
+  field,
+  min,
+}: {
+  draft: AtlasConfig
+  edit: Edit
+  group: SourcesGroup
+  field: string
+  /** 1 for a `PositiveInt` field, 0 for `NonNegativeInt`. */
+  min: number
+}) {
+  const block = draft.sources[group] as unknown as Record<string, number>
+  return (
+    <NumberInput
+      value={block[field] ?? ''}
+      min={min}
+      onChange={(value) => {
+        if (value === '') return
+        edit((next) => {
+          ;(next.sources[group] as unknown as Record<string, number>)[field] = value
+        })
+      }}
+    />
   )
 }
 
@@ -577,6 +801,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'adaptive',
     section: 'graph',
+    tour: 'settings-adaptive',
     group: 'Sizing',
     label: 'Size graphs automatically',
     hint: 'On, the app picks how many most-cited citers to ship and how far back the per-year recent-citer queries reach, per seed. Off, it ships everything it can and you set those yourself — and the filter chips gain count sliders to trim what you see. Kept in this browser, not the config file.',
@@ -611,6 +836,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 's2-key',
     section: 'providers',
+    tour: 'settings-s2-key',
     group: 'Semantic Scholar',
     label: 'API key',
     hint: 'Optional — keyless works, just rate-limited harder.',
@@ -707,7 +933,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'anthropic-key',
     section: 'agents',
-    tab: 'providers',
+    page: 'providers',
     group: 'Anthropic',
     label: 'API key',
     hint: 'From console.anthropic.com. Used by every agent on an anthropic:* model, and billed per lecture and per question.',
@@ -716,9 +942,27 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
+    key: 'anthropic-apply',
+    section: 'agents',
+    page: 'providers',
+    group: 'Anthropic',
+    label: 'Apply Default Models',
+    bare: true,
+    tour: 'settings-vendor-apply',
+    control: (draft, edit, models, goToPage) => (
+      <VendorApply
+        draft={draft}
+        edit={edit}
+        vendor="anthropic"
+        models={models}
+        goToPage={goToPage}
+      />
+    ),
+  },
+  {
     key: 'openai-key',
     section: 'agents',
-    tab: 'providers',
+    page: 'providers',
     group: 'OpenAI',
     label: 'API key',
     hint: 'From platform.openai.com/api-keys.',
@@ -727,20 +971,20 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
-    key: 'openai-base-url',
+    key: 'openai-apply',
     section: 'agents',
-    tab: 'providers',
+    page: 'providers',
     group: 'OpenAI',
-    label: 'Compatible server URL',
-    hint: 'Blank = OpenAI itself. Set it to drive any OpenAI-compatible server — Groq, OpenRouter, Together, LM Studio — several of which have free tiers.',
-    control: (draft, edit) => (
-      <VendorField draft={draft} edit={edit} vendor="openai" field="base_url" />
+    label: 'Apply Default Models',
+    bare: true,
+    control: (draft, edit, models, goToPage) => (
+      <VendorApply draft={draft} edit={edit} vendor="openai" models={models} goToPage={goToPage} />
     ),
   },
   {
     key: 'google-key',
     section: 'agents',
-    tab: 'providers',
+    page: 'providers',
     group: 'Google',
     label: 'API key',
     hint: 'From aistudio.google.com/apikey. The free tier is quota-limited but costs nothing, making this one of the two ways to run the teacher for free.',
@@ -749,9 +993,20 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
+    key: 'google-apply',
+    section: 'agents',
+    page: 'providers',
+    group: 'Google',
+    label: 'Apply Default Models',
+    bare: true,
+    control: (draft, edit, models, goToPage) => (
+      <VendorApply draft={draft} edit={edit} vendor="google" models={models} goToPage={goToPage} />
+    ),
+  },
+  {
     key: 'ollama-base-url',
     section: 'agents',
-    tab: 'providers',
+    page: 'providers',
     group: 'Ollama',
     label: 'Server URL',
     hint: 'Normally http://localhost:11434/v1 — keep the /v1. No key, no signup, and nothing leaves this machine. Local models cannot search the web, so the web scout goes quiet rather than inventing sources.',
@@ -760,12 +1015,23 @@ const ROW_DEFS: RowDef[] = [
     ),
   },
   {
+    key: 'ollama-apply',
+    section: 'agents',
+    page: 'providers',
+    group: 'Ollama',
+    label: 'Apply Default Models',
+    bare: true,
+    control: (draft, edit, models, goToPage) => (
+      <VendorApply draft={draft} edit={edit} vendor="ollama" models={models} goToPage={goToPage} />
+    ),
+  },
+  {
     key: 'summarizer-model',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Summarizer',
     label: 'Model',
-    hint: "Writes the detail panel's on-demand paper TL;DR (cached per paper forever).",
+    hint: 'The LLM that drives this agent. A small, fast model does the job.',
     control: (draft, edit, models) => (
       <ModelInput draft={draft} edit={edit} agentId="summarizer" models={models} />
     ),
@@ -773,35 +1039,19 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'lecturer-model',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Lecturer',
     label: 'Model',
-    hint: 'PydanticAI "<vendor>:<model>" shorthand, e.g. anthropic:claude-sonnet-4-6.',
+    hint: 'The LLM that drives this agent. This is where model quality shows most — a lecture is long and has to hold a story together.',
+    tour: 'settings-agent-model',
     control: (draft, edit, models) => (
       <ModelInput draft={draft} edit={edit} agentId="lecturer" models={models} />
     ),
   },
   {
-    key: 'lecturer-frontier-window',
-    section: 'agents',
-    tab: 'agents',
-    group: 'Lecturer',
-    label: 'Frontier window (months)',
-    hint: 'How far back "The current frontier" lecture reaches. Empty = the code default.',
-    control: (draft, edit) => (
-      <ExtrasNumber
-        draft={draft}
-        edit={edit}
-        agentId="lecturer"
-        extrasKey="frontier_window_months"
-        fallback={60}
-      />
-    ),
-  },
-  {
     key: 'lecturer-min-beats',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Lecturer',
     label: 'Minimum beats',
     hint: 'The shortest lecture, in beats. Empty = the code default.',
@@ -818,7 +1068,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'lecturer-max-beats',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Lecturer',
     label: 'Maximum beats',
     hint: 'The longest lecture, in beats — raising this materially lengthens (and slows) every lecture.',
@@ -835,10 +1085,10 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-model',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Researcher',
     label: 'Model',
-    hint: 'PydanticAI "<vendor>:<model>" shorthand.',
+    hint: 'The LLM that drives this agent. The other place model quality shows: it has to plan, judge sources, and stay grounded across many tool calls.',
     control: (draft, edit, models) => (
       <ModelInput draft={draft} edit={edit} agentId="researcher" models={models} />
     ),
@@ -846,7 +1096,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-max-steps',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Researcher',
     label: 'Step budget',
     hint: 'Total tool calls per question — the hard stop on a research run. Empty = the code default.',
@@ -863,7 +1113,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-full-reads',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Researcher',
     label: 'Full-text reads',
     hint: 'Whole-paper reads per question (the priciest tokens).',
@@ -881,7 +1131,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-hops',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Researcher',
     label: 'Graph hops',
     hint: 'expand_node calls per question — bounds how far the graph grows per answer.',
@@ -899,7 +1149,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-searches',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Researcher',
     label: 'Topic searches',
     hint: 'find_papers calls per question — bounds off-graph reach.',
@@ -917,7 +1167,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'researcher-figures',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Researcher',
     label: 'Inline figures',
     hint: 'show_source_figure calls per answer.',
@@ -935,10 +1185,10 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'paper-scout-model',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Paper scout',
     label: 'Model',
-    hint: "Finds papers by free-text search, on the researcher's behalf and from the search bar. A small fast model earns its keep here.",
+    hint: 'The LLM that drives this agent. A small, fast model earns its keep here.',
     control: (draft, edit, models) => (
       <ModelInput draft={draft} edit={edit} agentId="paper_scout" models={models} />
     ),
@@ -946,7 +1196,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'paper-scout-searches',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Paper scout',
     label: 'Searches per run',
     hint: 'Queries one scouting run may issue before it must report. Empty = the code default.',
@@ -963,7 +1213,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'paper-scout-search-limit',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Paper scout',
     label: 'Hits per query',
     hint: 'How many results each query fetches. Empty = the code default.',
@@ -980,10 +1230,10 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'web-scout-model',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Web scout',
     label: 'Model',
-    hint: 'Searches the open web. The search runs provider-side, so this is the one agent a local Ollama model cannot do — point it at a cloud vendor to keep web grounding.',
+    hint: 'The LLM that drives this agent. The one agent a local Ollama model cannot run — it goes quiet rather than inventing sources — so keep this on a cloud vendor for web grounding.',
     control: (draft, edit, models) => (
       <ModelInput draft={draft} edit={edit} agentId="web_scout" models={models} />
     ),
@@ -991,7 +1241,7 @@ const ROW_DEFS: RowDef[] = [
   {
     key: 'web-scout-max-uses',
     section: 'agents',
-    tab: 'agents',
+    page: 'agents',
     group: 'Web scout',
     label: 'Searches per run',
     hint: 'Web searches one run may make, enforced provider-side. Empty = the code default.',
@@ -1003,6 +1253,134 @@ const ROW_DEFS: RowDef[] = [
         extrasKey="max_uses"
         fallback={4}
       />
+    ),
+  },
+  {
+    key: 'sources-enabled',
+    section: 'sources',
+    page: 'general',
+    label: 'Semantic search',
+    hint: 'The master switch for searching your library by meaning. Off, uploads are still stored and searched by exact words only, and the local embedding model is never loaded — the way to run a lean install with no torch. Applies live.',
+    tour: 'settings-sources-enabled',
+    control: (draft, edit) => (
+      <Switch
+        checked={draft.sources.semantic_enabled}
+        label="Semantic search over your library"
+        onChange={(enabled) =>
+          edit((next) => {
+            next.sources.semantic_enabled = enabled
+          })
+        }
+      />
+    ),
+  },
+  {
+    key: 'embedding-model',
+    section: 'sources',
+    page: 'embedding',
+    label: 'Model',
+    hint: 'A sentence-transformers model id, downloaded once and run locally. Changing it means re-ingesting the library — its stored vectors were made by the old model — and the next search loads the new one.',
+    control: (draft, edit) => (
+      <SourcesText draft={draft} edit={edit} group="embedding" field="model" />
+    ),
+  },
+  {
+    key: 'embedding-dim',
+    section: 'sources',
+    page: 'embedding',
+    label: 'Vector size',
+    hint: 'The dimension of the vectors the model produces — 384 for MiniLM. It must match the model; a mismatch is logged at load and search returns nothing useful.',
+    control: (draft, edit) => (
+      <SourcesNumber draft={draft} edit={edit} group="embedding" field="dim" min={1} />
+    ),
+  },
+  {
+    key: 'embedding-query-prefix',
+    section: 'sources',
+    page: 'embedding',
+    label: 'Query prefix',
+    hint: 'Text put in front of search queries only, never stored passages. Asymmetric-retrieval models (bge, e5) want an instruction here; MiniLM wants it empty.',
+    control: (draft, edit) => (
+      <SourcesText draft={draft} edit={edit} group="embedding" field="query_prefix" />
+    ),
+  },
+  {
+    key: 'embedding-device',
+    section: 'sources',
+    page: 'embedding',
+    label: 'Device',
+    hint: "'auto' lets sentence-transformers pick the best available — CUDA, Apple's mps, else CPU. Set a torch device ('cpu', 'cuda:1', 'mps') to override; one that will not load falls back to CPU rather than breaking search.",
+    control: (draft, edit) => (
+      <SourcesText draft={draft} edit={edit} group="embedding" field="device" placeholder="auto" />
+    ),
+  },
+  {
+    key: 'chunking-chars',
+    section: 'sources',
+    page: 'chunking',
+    label: 'Passage size (characters)',
+    hint: 'How long each embedded passage is. Bigger passages carry more context but must fit the model — MiniLM truncates past roughly 1,000 characters, and anything beyond that is embedded into nothing, i.e. unsearchable.',
+    control: (draft, edit) => (
+      <SourcesNumber draft={draft} edit={edit} group="chunking" field="chars" min={1} />
+    ),
+  },
+  {
+    key: 'chunking-overlap',
+    section: 'sources',
+    page: 'chunking',
+    label: 'Overlap (characters)',
+    hint: 'Characters shared by consecutive passages, so a sentence straddling a boundary stays findable from either side. Must be smaller than the passage size.',
+    control: (draft, edit) => (
+      <SourcesNumber draft={draft} edit={edit} group="chunking" field="overlap" min={0} />
+    ),
+  },
+  {
+    key: 'retrieval-search-k',
+    section: 'sources',
+    page: 'retrieval',
+    label: 'Passages per search',
+    hint: "How many passages one search of the library returns — to the assistant's search_sources tool during research, and to the Library's own search. More is more grounding and a longer prompt.",
+    tour: 'settings-search-k',
+    control: (draft, edit) => (
+      <SourcesNumber draft={draft} edit={edit} group="retrieval" field="search_k" min={1} />
+    ),
+  },
+  {
+    key: 'retrieval-chat-k',
+    section: 'sources',
+    page: 'retrieval',
+    label: 'Passages for a library-only answer',
+    hint: 'Retrieved when a question is answered from your library alone, with no graph — higher than a search, because these passages are the only grounding the answer gets.',
+    control: (draft, edit) => (
+      <SourcesNumber draft={draft} edit={edit} group="retrieval" field="chat_k" min={1} />
+    ),
+  },
+  {
+    key: 'retrieval-hybrid',
+    section: 'sources',
+    page: 'retrieval',
+    label: 'Hybrid ranking',
+    hint: 'Fuse the semantic ranking with an exact-words one (BM25), so proper nouns and rare terms the embedder blurs together still surface. Off is pure vector search.',
+    control: (draft, edit) => (
+      <Switch
+        checked={draft.sources.retrieval.hybrid}
+        label="Hybrid ranking"
+        onChange={(hybrid) =>
+          edit((next) => {
+            next.sources.retrieval.hybrid = hybrid
+          })
+        }
+      />
+    ),
+  },
+  {
+    key: 'retrieval-rrf-k',
+    section: 'sources',
+    page: 'retrieval',
+    label: 'Rank fusion constant',
+    hint: 'The damping constant in Reciprocal Rank Fusion, which merges the two rankings when hybrid is on. 60 is the value from the RRF paper; there is rarely a reason to move it.',
+    control: (draft, edit) => (
+      <SourcesNumber draft={draft} edit={edit} group="retrieval" field="rrf_k" min={1} />
     ),
   },
 ]
@@ -1025,10 +1403,18 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const [errorFields, setErrorFields] = useState<SettingsFieldError[]>([])
   const [saving, setSaving] = useState(false)
   const [locationDraft, setLocationDraft] = useState('')
-  const [models, setModels] = useState<AgentModels>({ models: {}, vendors: [], known: [] })
+  const [models, setModels] = useState<AgentModels>({
+    models: {},
+    vendors: [],
+    known: [],
+    tiers: {},
+  })
   // '' is the section's own landing page. A section with sub-pages opens
   // there rather than dropping you into an arbitrary first child.
-  const [page, setPage] = useState<AgentTab | ''>('')
+  const [page, setPage] = useState<PageId | ''>('')
+  // The settings tour: auto-runs once ever on the first open (its own
+  // seen-flag, like the app's two phases), then only from the ? button.
+  const [tourOpen, setTourOpen] = useState(false)
   // Which group headings the reader has folded away. Tracked as the negative
   // so everything is open on arrival: folding is for tidying a section you are
   // done with, not a wall you have to dismantle before you can read anything.
@@ -1051,8 +1437,24 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     if (open) {
       void refresh()
       void getAgentModels().then(setModels)
+      if (!localStorage.getItem(TOUR_KEYS.settings)) setTourOpen(true)
     }
   }, [open, refresh])
+
+  /** Done, Skip, ✕ and Esc all mark the tour seen — it never nags twice. */
+  const closeTour = useCallback(() => {
+    localStorage.setItem(TOUR_KEYS.settings, '1')
+    setTourOpen(false)
+  }, [])
+
+  /** Walk the nav for a tour step: a stage is `<section>` or `<section>/<page>`. */
+  const onTourStage = useCallback((stage?: string) => {
+    if (!stage) return
+    const [target, sub] = stage.split('/')
+    setFilter('')
+    setSection(target as SectionId)
+    setPage((sub ?? '') as PageId | '')
+  }, [])
 
   const query = filter.trim().toLowerCase()
 
@@ -1149,8 +1551,6 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     }
   }
 
-  // A search reaches across both sub-tabs — hiding a matching row behind an
-  // unselected tab is the thing search exists to avoid.
   // A search reaches across sub-pages and ignores folding — hiding a matching
   // row behind either is the thing search exists to avoid.
   const searching = query !== ''
@@ -1166,7 +1566,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const rows = ROW_DEFS.filter(
     (row) =>
       row.section === section &&
-      (searching || row.tab === undefined || row.tab === page) &&
+      (searching || pages === undefined || (row.page ?? '') === page) &&
       matches(row.label, row.hint, row.group),
   )
 
@@ -1196,45 +1596,57 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
         <aside className="settings-sidebar">
           <input
             className="settings-search"
+            data-tour="settings-search"
             placeholder="Search settings"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
           />
           <div className="settings-nav-group">Settings</div>
-          {visibleSections.map((entry) => {
-            const pages = 'pages' in entry ? entry.pages : undefined
-            const here = section === entry.id
-            return (
-              <div key={entry.id}>
-                <button
-                  className={`settings-nav-item ${here && (!pages || page === '') ? 'active' : ''}`}
-                  onClick={() => {
-                    setSection(entry.id)
-                    setPage('')
-                  }}
-                >
-                  <span className="settings-nav-icon">{entry.icon}</span>
-                  {entry.label}
-                </button>
-                {/* Sub-pages show only for the section you are in — the nav is
+          <div data-tour="settings-nav">
+            {visibleSections.map((entry) => {
+              const pages = 'pages' in entry ? entry.pages : undefined
+              const here = section === entry.id
+              return (
+                <div key={entry.id}>
+                  <button
+                    className={`settings-nav-item ${here && (!pages || page === '') ? 'active' : ''}`}
+                    onClick={() => {
+                      setSection(entry.id)
+                      setPage('')
+                    }}
+                  >
+                    <span className="settings-nav-icon">{entry.icon}</span>
+                    {entry.label}
+                  </button>
+                  {/* Sub-pages show only for the section you are in — the nav is
                     a place to navigate, not an outline of everything. */}
-                {pages &&
-                  here &&
-                  pages.map((sub) => (
-                    <button
-                      key={sub.id}
-                      className={`settings-nav-item sub ${page === sub.id ? 'active' : ''}`}
-                      onClick={() => setPage(sub.id)}
-                    >
-                      {sub.label}
-                    </button>
-                  ))}
-              </div>
-            )
-          })}
+                  {pages &&
+                    here &&
+                    pages.map((sub) => (
+                      <button
+                        key={sub.id}
+                        className={`settings-nav-item sub ${page === sub.id ? 'active' : ''}`}
+                        onClick={() => setPage(sub.id)}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                </div>
+              )
+            })}
+          </div>
         </aside>
 
         <div className="settings-content">
+          <button
+            className="settings-help"
+            onClick={() => setTourOpen(true)}
+            aria-label="Tour the settings"
+            title="Tour the settings"
+            data-tour="settings-help"
+          >
+            ?
+          </button>
           <button className="settings-close" onClick={onClose} aria-label="Close settings">
             ✕
           </button>
@@ -1256,18 +1668,6 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
                 {activeSection?.blurb && !searching && !pageLabel && (
                   <p className="settings-blurb">{activeSection.blurb}</p>
                 )}
-                {onLanding &&
-                  pages.map((sub) => (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      className="settings-landing-link"
-                      onClick={() => setPage(sub.id)}
-                    >
-                      {sub.label}
-                    </button>
-                  ))}
-
                 {groups.map((group) => {
                   // A search opens everything it matched: the reader asked for
                   // exactly these rows and should not have to unfold them.
@@ -1283,34 +1683,46 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
                           onClick={() => toggleGroup(group.name as string)}
                         >
                           {group.name}
-                          {GROUP_BADGES[group.name] && (
-                            <span
-                              className={`settings-group-badge${
-                                GROUP_BADGES[group.name].free ? ' free' : ''
-                              }`}
-                            >
-                              {GROUP_BADGES[group.name].text}
-                            </span>
-                          )}
                           <span className="settings-group-rule" />
                           <span className="settings-group-caret">{open ? '▾' : '▸'}</span>
                         </button>
                       )}
+                      {open && group.name !== undefined && GROUP_BLURBS[group.name] && (
+                        <p className="settings-group-blurb">{GROUP_BLURBS[group.name]}</p>
+                      )}
                       {open &&
-                        group.rows.map((row) => (
-                          <div key={row.key} className="settings-row">
-                            <div className="settings-row-label">
-                              <span>{row.label}</span>
-                              {row.hint && <span className="settings-hint">{row.hint}</span>}
+                        group.rows.map((row) =>
+                          row.bare ? (
+                            <div key={row.key} className="settings-row bare" data-tour={row.tour}>
+                              {row.control(draft, edit, models, setPage)}
                             </div>
-                            <div className="settings-row-control">
-                              {row.control(draft, edit, models)}
+                          ) : (
+                            <div key={row.key} className="settings-row" data-tour={row.tour}>
+                              <div className="settings-row-label">
+                                <span>{row.label}</span>
+                                {row.hint && <span className="settings-hint">{row.hint}</span>}
+                              </div>
+                              <div className="settings-row-control">
+                                {row.control(draft, edit, models, setPage)}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ),
+                        )}
                     </div>
                   )
                 })}
+                {/* A section's own rows, if any, sit above the way in. */}
+                {onLanding &&
+                  pages.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      className="settings-landing-link"
+                      onClick={() => setPage(sub.id)}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
                 {rows.length === 0 && query !== '' && (
                   <div className="settings-loading">No matching settings here.</div>
                 )}
@@ -1319,7 +1731,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
 
             {draft && section === 'general' && matches(FILE_ROW_TEXT) && (
               <>
-                <div className="settings-row">
+                <div className="settings-row" data-tour="settings-location">
                   <div className="settings-row-label">
                     <span>Location</span>
                     <span className="settings-hint">
@@ -1384,6 +1796,9 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
             )}
           </div>
         </div>
+        {tourOpen && draft && (
+          <Tour steps={SETTINGS_TOUR} onClose={closeTour} onStage={onTourStage} />
+        )}
       </div>
     </div>
   )

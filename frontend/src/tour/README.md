@@ -14,7 +14,8 @@ only through the controls' one-line hint.
 tour/
   Tour.tsx  — the generic overlay: resolves targets, spotlights, positions
               the bubble, walks the steps (arrow keys / Esc wired)
-  steps.ts  — HOME_TOUR (the search surface) + GRAPH_TOUR (the graph tools),
+  steps.ts  — HOME_TOUR (the search surface) + GRAPH_TOUR (the graph tools)
+              + SETTINGS_TOUR (the settings modal's own walk),
               and TOUR_KEYS, one seen-flag per phase
   tour.css  — backdrop (z 60) < spotlight (61) < bubble (62); the dimming is
               the spotlight's 200vmax box-shadow, so there's exactly one hole
@@ -31,6 +32,17 @@ auto-runs when the first graph lands. `Atlas.tsx` picks the list by whether a
 graph is up — the same "?" click tours whatever the user is actually looking
 at. Swapping the `steps` prop mid-run restarts the walk from the new list's
 first stop.
+
+## The third list: the settings modal (v7.29.0)
+
+`SETTINGS_TOUR` is not driven by `Atlas.tsx` at all: `SettingsModal` mounts
+`Tour` itself, inside the modal so it stacks above it, and launches it from
+the ringed **?** beside its ✕ (auto-run once on the first open, under
+`TOUR_KEYS.settings`). Its steps stage `<section>` or `<section>/<page>`,
+which the modal turns into a nav click — the same staging contract, with a
+nav in place of drawers. Every staged step uses the nav itself as its
+`presentIf` proxy, since the nav is always there and the rows only render
+once their section is.
 
 ## Staged steps — the tour opens panels
 

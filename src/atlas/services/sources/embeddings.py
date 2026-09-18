@@ -33,8 +33,22 @@ log = logging.getLogger(__name__)
 
 # Cached singletons. `_model` is the loaded SentenceTransformer; `_load_failed`
 # flips True after a failed attempt so we don't retry (and re-log) every query.
+# Both are tagged with the config that produced them (`_loaded_for`): the
+# settings modal applies a saved config live, and a changed model id or device
+# has to drop the cached model — or a failed attempt — rather than pin the
+# process to whatever config.json said at first use.
 _model = None
 _load_failed = False
+_loaded_for: tuple[str, str] | None = None
+
+
+def _config_key() -> tuple[str, str]:
+    """The config facts that decide which model is loaded, as a cache key.
+
+    Returns:
+        The embedding model id and device string.
+    """
+    return (config.sources.embedding.model, config.sources.embedding.device)
 
 
 def _resolve_device() -> str | None:
@@ -72,12 +86,15 @@ def _load_model():
         The loaded ``SentenceTransformer``, or None when semantic search is
         disabled, the package is missing, or the model failed to load.
     """
-    global _model, _load_failed
+    global _model, _load_failed, _loaded_for
+    # Off is a config state, not a failure: nothing is loaded and nothing is
+    # remembered, so flipping the switch back on in settings works at once.
+    if not config.sources.semantic_enabled:
+        return None
+    if _loaded_for != _config_key():
+        _model, _load_failed, _loaded_for = None, False, _config_key()
     if _model is not None or _load_failed:
         return _model
-    if not config.sources.semantic_enabled:
-        _load_failed = True
-        return None
     # Asked before doing, so a lean install reports a *configuration* rather
     # than logging a traceback: the caller already treats None as "no semantic
     # search", and an exception dump here would read like a crash for what is

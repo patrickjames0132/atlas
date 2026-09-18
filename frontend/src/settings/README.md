@@ -75,6 +75,54 @@ overlays).
   default as a placeholder; typing writes an override into the entry's
   `extras`; clearing deletes the override.
 - **Every section carries a one-paragraph `blurb`** saying what it is for.
+- **Library is a section of four sub-pages** (since v7.29.0; the config
+  block is `sources`, the app calls the feature the Library): *General*
+  holds the master switch `semantic_enabled`, and *Embedding*, *Chunking*
+  and *Retrieval* mirror the three typed sub-blocks of `config.sources`.
+  The switch sat on the section's landing page at first, above the links —
+  the reasoning being that a sub-page of one field wastes space — and moved
+  to its own General page because a control on a landing page reads as
+  part of the navigation. The row filter still supports a section's own
+  rows: in a section with `pages`, a row with no `page` shows on the landing
+  page only, never repeated on every sub-page; nothing uses it now. The number
+  fields (`SourcesNumber`) refuse to be cleared, unlike an agent knob: the
+  file always carries a value here, there is no code default to fall back
+  to. The backend's embedder cache is keyed on the config that loaded it, so
+  a saved model/device edit applies live (see `services/sources/README.md`).
+- **Every vendor group ends in an "Apply Default Models" button** (v7.29.0,
+  `VendorApply`, a `bare` row — no label column, the control alone where a
+  label would start) that puts the **lecturer and researcher** on the
+  vendor's *advanced* model and the **summarizer and both scouts** on its
+  *light* one (`ADVANCED_AGENTS`), the same split `config.example.json`
+  ships with, leaving the knobs alone — and then **moves the modal to Agent
+  Settings**, where every agent's row shows the new vendor: the change is
+  visible where it happened, not implied by a Save bar. That is why
+  `RowDef.control` takes a fourth argument, `goToPage`. The button's tooltip
+  names both picks before it is pressed; with no credential in the draft or
+  nothing listed it is disabled and the tooltip says why (enter the key and
+  Save, or the key/server could not be listed). It was briefly a labelled
+  row, "Run every agent here", with a caption line under the button — the
+  label only restated the button and the caption was clutter. The picks are the backend's:
+  `GET /api/settings/models` returns `tiers` per listed vendor, ranked by name
+  on the newest-first listing (`routes/settings.py`'s `_tiers`: Sonnet/Haiku,
+  mainline gpt-/-mini, Flash/Flash-Lite — never Pro on Google, it 429s on the
+  free tier — and Ollama by parameter count). Two earlier shapes are worth
+  not retrying: a row of its own at the top of the page (vendor select +
+  model select + Apply) was bulky, and one model for every agent was the wrong
+  idea anyway — the long generations and the short structured calls want
+  different models; and a pill button on the group heading beside a cost
+  badge looked stray. Under the credentials, it reads as the next step after
+  entering a key.
+- **The modal has its own tour** (v7.29.0): the ringed **?** beside the ✕
+  (`.settings-help`) mounts the shared `Tour` engine over `SETTINGS_TOUR`
+  (`tour/steps.ts`), *inside* the modal so it stacks above it. Steps carry a
+  `stage` of `<section>` or `<section>/<page>`, which `onTourStage` turns into
+  a nav click (and clears any search) before the step is measured, so the walk
+  drives the modal's own nav; targets are `data-tour` anchors on the search
+  box, the nav, the help button, and individual rows via `RowDef.tour`. It
+  auto-runs once ever on the first open (`TOUR_KEYS.settings`), like the app's
+  two phases, then only from the button; Done, Skip, ✕ and Esc all mark it
+  seen.
 - **The Agents section is two nav sub-pages of foldable groups** (since
   v7.13.0): *Model Providers* and *Agent Settings*, reached from the sidebar
   tree rather than a tab strip inside the pane. Sub-pages show only while their
@@ -89,6 +137,15 @@ overlays).
   always returns there. The links are links, not cards — a boxed row per
   sub-page reads as a control worth deliberating over, when these are only the
   way through.
+- **An agent group opens with what the agent is** (`GROUP_BLURBS`, v7.29.0):
+  an italic, muted paragraph under the heading, above the knobs, with clear
+  air before the first row (a left rule and a translucent card were tried
+  and dropped as too cute). The Model row's hint
+  used to carry the job description and it was the wrong place — that row is
+  only the LLM driving the agent, and its hint now says so plus what kind of
+  model suits (small and fast for the scouts, quality for the lecturer and
+  researcher, a cloud vendor for the web scout). The description is the
+  group's because the whole group *is* the agent.
 - **Group headings fold their own rows.** Both sub-pages keep the modal's
   ordinary label-hint-control row; what folds is the heading, so the layout
   matches every other section and long pages can still be tidied. Groups are
@@ -96,14 +153,16 @@ overlays).
   with, not a wall to dismantle first — so state is tracked as the set of
   *folded* names. The heading is a `<button>` and therefore needs an explicit
   `font: inherit`, or it renders in the platform UI font.
-- **One group per vendor, cost as a badge in the heading** (`Google` +
-  `free tier`, tinted). Cost is the deciding fact for the reader this screen
-  exists for, so it rides the heading rather than a hint. Every vendor the
-  backend can build gets a group whether configured or not: the two free paths
-  are precisely what a newcomer has *not* set up, so listing only what already
+- **One group per vendor, every vendor listed.** Every vendor the backend
+  can build gets a group whether configured or not: the two free paths are
+  precisely what a newcomer has *not* set up, so listing only what already
   works would hide the options most worth finding. `GET /api/settings/models`
-  returns `{models: {vendor: [...]}, vendors: [...], known: [...]}`, and
-  `known` is what drives that.
+  returns `{models: {vendor: [...]}, vendors: [...], known: [...], tiers}`,
+  and `known` is what drives that. (The headings carried a cost badge —
+  `paid` / `free tier` — from v7.13.0 to v7.29.0; it went as clutter, and the
+  free vendors' key-field hints already say they cost nothing.) OpenAI's
+  `base_url` — the OpenAI-compatible-server hook — is config-file-only since
+  v7.29.0: a row for it was superfluous for the one-key common case.
 - **An agent's model is two controls, not one string.** The single
   `"vendor:model"` dropdown this replaced made the vendor invisible — a prefix
   inside a long string — where the real fact is that **each agent picks its own
@@ -130,7 +189,9 @@ overlays).
 ## Verified by
 
 `frontend/test/settings/` (drafting, dirty detection, save/error paths, the
-location switch) plus the backend contract in `test/atlas/routes/test_settings.py`.
+location switch, the Library landing/sub-page split and its edits, a
+vendor's one-click crew, the tour's auto-run and ?-launch) plus the backend
+contract in `test/atlas/routes/test_settings.py`.
 
 
 ## The one row that isn't a setting: Drop cache (v7.6.0)

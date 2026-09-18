@@ -199,6 +199,7 @@ whether or not it names anything.
 | `PUT /api/settings/location` | repoint the app at another config file (`""` = default) |
 | `POST /api/settings/pick` | open the OS file chooser server-side, return the picked path |
 | `POST /api/settings/drop_cache` | empty the derived-data cache; returns `{removed}` |
+| `GET /api/settings/models` | per configured vendor, the model ids its own API lists (`KNOWN_MODELS` as the offline fallback), narrowed to chat-capable families and newest-first; plus `tiers` — each listed vendor's *advanced* and *light* pick (`_tiers`, by name rank: Sonnet/Haiku, mainline gpt-/-mini, Flash/Flash-Lite, Ollama by parameter count), which the modal's per-vendor "Use for all agents" button applies to the crew (v7.29.0) |
 
 The modal is a **config-file editor**, so the file stays the single source of
 truth: PUT validates the whole body as a `Config` *before* writing anything

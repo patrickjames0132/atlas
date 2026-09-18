@@ -3573,6 +3573,45 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **Settings: a Library section, per-vendor "Apply Default Models", a
+      settings tour, and the dead frontier-window row gone** *(v7.29.0)* — four
+      things the settings modal had been missing, found while switching
+      vendors after v7.28.1. **Library** (the `sources` config block, editable
+      only by hand until now) is a section of four sub-pages — *General* holds
+      the `semantic_enabled` master switch, *Embedding* / *Chunking* /
+      *Retrieval* mirror the three typed sub-blocks — and applies live: the
+      embedder's process-wide singleton is now keyed on the config that loaded
+      it, so a saved model/device edit reloads on the next search and the
+      switch flipped off and on works without a restart. **Apply Default
+      Models** ends each vendor's group on *Model Providers*: one click puts
+      the lecturer and researcher on the vendor's *advanced* model and the
+      summarizer and both scouts on its *light* one, then moves the modal to
+      Agent Settings so the change is visible where it happened; the picks are
+      the backend's (`GET /api/settings/models` now carries `tiers`, ranked by
+      name on the newest-first listing — Sonnet/Haiku, mainline `gpt-`/`-mini`
+      with dated snapshots skipped in favour of the alias, Flash/Flash-Lite
+      and never Pro because Pro 429s on the free tier, Ollama by parameter
+      count), the tooltip names both before pressing, and the button greys
+      out with no credential in the draft. The `live` voice line (`gpt-live-1`,
+      `gemini-live-*`) joined the non-chat markers — it had been the "advanced"
+      pick purely because letters sort above digits. The **settings tour** is
+      the modal's own ringed **?** beside its ✕: the shared `Tour` engine over
+      `SETTINGS_TOUR`, mounted inside the modal, whose steps stage
+      `<section>/<page>` so the walk drives the nav; auto-runs once on first
+      open, then only from the button. Also: the cost badges on the vendor
+      headings and OpenAI's compatible-server-URL row are gone as clutter;
+      each agent group opens with an italic line saying what the agent *is*,
+      with the Model row's hint reduced to "the LLM that drives this agent"
+      plus what kind suits; and the lecturer's *Frontier window* row — which
+      `LecturerExtras` had dropped in v7.17.0 and, being `extra="forbid"`,
+      would have rejected any value typed into it — is deleted. Shapes tried
+      and dropped on the way, recorded in `settings/README.md` so nobody
+      retries them: an every-agent row of vendor + model selects (bulky, and
+      one model for every agent is the wrong idea), a pill on the group
+      heading (stray), a labelled "Run every agent here" row with a caption
+      line (restated the button), the master switch on the Library landing
+      page (read as navigation), and a left rule / translucent card behind the
+      agent blurb (too cute). *(2026-09-18.)*
 - [x] **Make the provenance line a control, not a caption** *(v7.22.0)* — **superseded
       2026-09-14 by *Threads — one thread, one graph* (Larger phases):**
       under threads a turn's papers are always on its own graph, so the

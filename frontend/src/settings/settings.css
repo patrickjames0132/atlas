@@ -129,6 +129,31 @@
   color: var(--text-strong);
 }
 
+/* The tour launcher: a ringed ? beside the ✕, the same idle/hover tones. It
+   is deliberately small — a way in for the curious, not a call to action. */
+.settings-help {
+  position: absolute;
+  top: 15px;
+  right: 44px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1.5px solid var(--muted);
+  border-radius: 50%;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.settings-help:hover {
+  color: var(--text-strong);
+  border-color: var(--text-strong);
+}
+
 /* No rule between rows: the section headings already draw one each, and a
    line per field turned a long page into a ladder. Spacing separates rows
    instead, which is why the vertical padding is a touch wider than it was. */
@@ -385,7 +410,8 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
-.drop-cache button {
+.drop-cache button,
+.vendor-apply button {
   padding: 6px 9px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -395,14 +421,17 @@
   color: var(--text);
   cursor: pointer;
 }
-.drop-cache button:hover:not(:disabled) {
+.drop-cache button:hover:not(:disabled),
+.vendor-apply button:hover:not(:disabled) {
   border-color: var(--accent);
 }
-.drop-cache button:focus-visible {
+.drop-cache button:focus-visible,
+.vendor-apply button:focus-visible {
   outline: none;
   border-color: var(--accent);
 }
-.drop-cache button:disabled {
+.drop-cache button:disabled,
+.vendor-apply button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
@@ -461,6 +490,22 @@
 .agent-model input {
   flex: 1 1 auto;
   width: 190px;
+}
+
+/* A row with no label column — the control is the whole row, left-aligned
+   where a label would start. The vendor groups' Apply Defaults button is the
+   one such row: a labelled "Run every agent here" row was tried and the label
+   only restated the button. */
+.settings-row.bare {
+  display: block;
+}
+
+/* A vendor's one-click crew: one button, flush with the label column; the
+   two picks it will make are its tooltip (a caption line under it was
+   tried and was clutter, as was hanging the button so its text aligned). */
+.vendor-apply {
+  display: flex;
+  align-items: flex-start;
 }
 
 /* Group headings fold their own rows. The flat version showed four
@@ -529,20 +574,6 @@
 /* The cost badge beside a vendor heading. Free is tinted, paid is not: the
    colour is carrying "this one costs you nothing", which is the whole reason
    the cost is in the heading at all. */
-.settings-group-badge {
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.settings-group-badge.free {
-  color: var(--seed-ref);
-  border-color: color-mix(in srgb, var(--seed-ref) 40%, transparent);
-}
-
 /* A sub-page under its section, PyCharm-style: indented under the parent and
    shown only while that section is open. */
 .settings-nav-item.sub {
@@ -565,6 +596,21 @@
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* An agent's job, under its heading and above its knobs: italic, a size
+   down, narrower, with clear air before the first row — so it reads as a
+   sentence *about* the group and not as one more row hint that has lost its
+   label, which is exactly what the first cut (hint-styled, full width) did.
+   A left rule, then a translucent card with an accent rule, were both tried
+   and dropped as too cute; plain italic + spacing is the settled look. */
+.settings-group-blurb {
+  margin: 4px 0 20px;
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.55;
 }
 
 /* Plain links, not cards. A boxed row per sub-page reads as a control worth

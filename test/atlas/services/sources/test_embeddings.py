@@ -28,9 +28,11 @@ def _reset_singletons():
     """Clear the cached model between tests — it's a process-wide singleton."""
     embeddings._model = None
     embeddings._load_failed = False
+    embeddings._loaded_for = None
     yield
     embeddings._model = None
     embeddings._load_failed = False
+    embeddings._loaded_for = None
 
 
 class _FakeModel:
@@ -141,3 +143,29 @@ def test_semantic_disabled_never_loads(monkeypatch) -> None:
     assert embeddings._load_model() is None
     assert attempted == []
     assert embeddings.available() is False
+
+
+def test_semantic_reenabled_loads_without_restart(monkeypatch) -> None:
+    """Off is a config state, not a remembered failure: the settings modal
+    applies config live, so flipping the switch back on must load."""
+    attempted = _install_fake(monkeypatch)
+    monkeypatch.setattr(config.sources, "semantic_enabled", False)
+    assert embeddings._load_model() is None
+
+    monkeypatch.setattr(config.sources, "semantic_enabled", True)
+    assert embeddings._load_model() is not None
+    assert attempted == [None]
+
+
+def test_changed_model_or_device_reloads(monkeypatch) -> None:
+    """A saved model/device edit drops the cached model instead of pinning the
+    process to first-use config — and forgets a failure under the old one."""
+    attempted = _install_fake(monkeypatch)
+    monkeypatch.setattr(config.sources.embedding, "device", "cpu")
+    first = embeddings._load_model()
+    assert embeddings._load_model() is first  # same config: cached
+
+    monkeypatch.setattr(config.sources.embedding, "device", "cuda")
+    second = embeddings._load_model()
+    assert second is not first
+    assert attempted == ["cpu", "cuda"]

@@ -231,6 +231,12 @@ workers it sends out, `paper_scout` and `web_scout`. Each entry:
 
 ## `sources` — bring-your-own sources
 
+Editable in **Settings ▸ Library** since v7.29.0 — the master switch on its
+General sub-page, the rest on Embedding / Chunking / Retrieval — and a saved change applies live: the embedder is keyed on the
+config that loaded it, so a new model or device loads on the next search
+(the sources still need re-ingesting, see below), and the switch flipped off
+and on reloads rather than staying "failed" until restart.
+
 - **`embedding.model`**: `all-MiniLM-L6-v2`, 384-dim, symmetric (no query
   prefix needed). Swapping in an asymmetric model (e.g.
   `BAAI/bge-small-en-v1.5`) needs a non-empty `query_prefix` *and*
