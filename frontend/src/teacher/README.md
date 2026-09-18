@@ -11,7 +11,18 @@ this transcript onto a different canvas.
 `Teacher.tsx` owns input, menus, scope controls, scroll behavior and transcript
 rendering. `useConversation.ts` asks the router whether the message wants the
 researcher or lecturer; graphless conversations bypass that choice. The routing
-label lets readers correct a model-selected destination. Lectures are ordinary
+label lets readers correct a model-selected destination **in either
+direction**: `lectureInChat` and `ask` both take a `routed` flag and stamp
+their turn (`turnRouted`) only when the router chose them, so *"Answered as a
+question · Lecture on it instead"* is the mirror of *"Answered as a lecture ·
+Answer it instead"* (the answer side's stamp was missing until v7.27.0). A
+correction, a retry, or a graph-free question carries no stamp and so no
+offer — those were never a choice a model made. The transcript follows the
+bottom while an answer builds **only if the reader is already there** —
+scrolling up mid-answer to re-read must not be fought — with one exception:
+starting a turn (a send from the bar, or a reroute click, which is by
+definition made from further up) re-arms the follow, so the new turn's first
+frame lands in view rather than below the fold. Lectures are ordinary
 chat replies with beats, including real figures and citations. (A `/lecture`
 command was the explicit path from v7.21.0 to v7.23.0; asking in words
 replaced it once the router could read everything the command said, and more.)

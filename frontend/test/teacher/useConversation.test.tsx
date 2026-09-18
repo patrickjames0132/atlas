@@ -211,6 +211,35 @@ describe('the scope priority list, resolved once per turn', () => {
     expect(store.getState().workspace.selectedNodeIds).toEqual(['c1', 'r2'])
   })
 
+  it('stamps a router-chosen answer, so the transcript can offer the lecture instead', async () => {
+    // The mirror of the lecture side, which has carried its stamp since the
+    // router shipped: a misroute in EITHER direction is one click, not a
+    // wrong answer to work around.
+    const { result, lastTurn } = await setUp(answer('screen'))
+    await act(async () => {
+      await result.current.send('what do these have in common?', undefined)
+    })
+    expect(lastTurn().routedTo).toBe('answer')
+  })
+
+  it('leaves no stamp on a correction — a route the reader chose has nothing to second-guess', async () => {
+    const { store, result, lastTurn } = await setUp(lecture('screen'))
+    await act(async () => {
+      await result.current.send('lecture me on these', undefined)
+    })
+    expect(lastTurn().routedTo).toBe('lecture')
+    const chat = store.getState().transcript.byKey[store.getState().transcript.activeKey].chat
+    await act(async () => {
+      result.current.reroute(chat.length - 1)
+      await Promise.resolve()
+    })
+    // The corrected turn is appended, answered by the researcher, unstamped:
+    // offering the lecture back would invite ping-pong between two answers
+    // the reader already has.
+    expect(lastTurn().text).toBe('An answer.')
+    expect(lastTurn().routedTo).toBeUndefined()
+  })
+
   it('grounds a question in the selection even where the filters hide part of it', async () => {
     const { store, result, streamAsk, lastTurn } = await setUp(answer('screen'))
     store.dispatch(nodeSelectionSet(['r1', 'r2']))

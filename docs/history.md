@@ -746,6 +746,30 @@
 
 ### AI teacher & lectures
 
+- [x] **"Lecture on it instead" on a router-chosen answer** *(v7.27.0)* —
+      the transcript had rendered the offer in both directions since the
+      router shipped, and `reroute` handled both — but only `lectureInChat`
+      stamped its turn as routed; `ask` never did, so an answer the model
+      chose over a lecture showed no line and no offer. Patrick, 2026-09-17,
+      after v7.26.0: *"I would also like to answer as a lecture if the
+      router chooses an answer instead."* Then, on reflection: *"just add
+      the missing piece of stamping its turn in the ask(); that should be
+      sufficient. We don't need to get cute beyond that."* So `ask` takes the
+      same `routed` flag as its mirror, set only from the router's path —
+      which draws the line he'd raised ("not all kinds of questions should
+      be able to transform to lectures") where the code already draws it:
+      the router only runs with a graph on screen, so graph-free library
+      questions, retries and corrections carry no offer. A finer line (the
+      router flagging whether a lecture was *plausible*) was considered and
+      declined as not worth the extra field. One more from the browser
+      round: the corrected turn opened **below the fold** — the transcript's
+      follow-scroll only chases the bottom while the reader is already
+      there, and a reroute is clicked on an older turn, from further up. A
+      send from the bar had the same gap. Starting a turn now re-arms the
+      follow (`followNextTurn`), so the new turn's first frame scrolls into
+      view; scrolling up mid-answer is still respected. *(Browser-tested and
+      approved by Patrick, 2026-09-17.)*
+
 - [x] **Scope contract, part (b): the whole graph by name, and a period that
       binds discovery** *(v7.25.0)* — the two pieces of Codex's v7.24.0 review
       deliberately left for a second step. **`graph`** is a sixth scope kind

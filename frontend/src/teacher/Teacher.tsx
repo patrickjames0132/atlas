@@ -256,6 +256,7 @@ export default function Teacher({
     if (!question || asking || searching) return
     setInput('')
     mentions.reset()
+    followNextTurn()
     // A pasted arXiv id/URL is a statement of intent, not a question: land on
     // that exact paper. First in the tree because it needs no lookup at all —
     // the id IS the answer, where every branch below has to resolve something.
@@ -427,6 +428,15 @@ export default function Teacher({
     // several in flight at once fight each other into a visible judder.
     box.scrollTop = box.scrollHeight
   }, [chat])
+  // The one exception to "only while already at the bottom": starting a turn
+  // is a request to watch it. A reroute is clicked on an older turn — by
+  // definition from further up — and a question is sent from the bar with
+  // the transcript wherever it was left, and either way the new turn opened
+  // below the fold, with the agent thinking out of sight. Re-arming here
+  // lets the `[chat]` effect above take the very next frame to the bottom.
+  const followNextTurn = () => {
+    following.current = true
+  }
 
   // The composer's drop, on the first question of a landing session. Empty, it
   // sits optically centred with the greeting; the moment a conversation starts
@@ -643,7 +653,14 @@ export default function Teacher({
         // Only offered on a turn a *model* routed, and only while nothing
         // else is running — a reroute sends a new message, and two at once
         // would abort each other.
-        onReroute={message.routedTo && !asking && !searching ? () => reroute(index) : undefined}
+        onReroute={
+          message.routedTo && !asking && !searching
+            ? () => {
+                followNextTurn()
+                reroute(index)
+              }
+            : undefined
+        }
       />
     )
   })
