@@ -111,7 +111,13 @@ normalizes; the table below is told the metric is cosine to match.)
 - **The model runs locally** (`embeddings.py`, sentence-transformers /
   MiniLM) — no API, no key, the text never leaves the machine. It's loaded lazily
   and degrades gracefully (`store.HAS_VEC` / `embeddings.available()`); if it
-  can't load, semantic search is simply skipped.
+  can't load, semantic search is simply skipped. The cached model is keyed on
+  the config that loaded it (model id + device, since v7.29.0): the settings
+  modal applies a saved config live, so a changed model reloads on next use
+  instead of pinning the process to first-use config, and `semantic_enabled`
+  off is a config state rather than a remembered failure — switch it back on
+  and the next search loads the model. (A changed model still means
+  re-ingesting: stored vectors came from the old one.)
 - **Vectors live in sqlite-vec.** `chunks_vec` is a `vec0` virtual table (from the
   **sqlite-vec** extension) declared `float[384] distance_metric=cosine`, holding
   one embedding per chunk. sqlite-vec is a *loadable* extension — reloaded on

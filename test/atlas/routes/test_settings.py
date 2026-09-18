@@ -364,3 +364,85 @@ def test_models_endpoint_names_every_vendor_not_just_the_configured_ones(
     payload = client.get("/api/settings/models").json
     assert payload["known"] == ["anthropic", "openai", "google", "ollama"]
     assert payload["vendors"] == ["anthropic"]
+
+
+@pytest.mark.parametrize(
+    ("vendor", "ids", "advanced", "light"),
+    [
+        # Newest first, as every listing is; Sonnet over Opus for price.
+        (
+            "anthropic",
+            ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5", "claude-sonnet-4-6"],
+            "claude-sonnet-5",
+            "claude-haiku-4-5",
+        ),
+        # Mainline gpt- over its -pro/-mini/-nano/-codex side lines, and the
+        # undated alias over the dated snapshot that sorts above it.
+        (
+            "openai",
+            [
+                "gpt-6-astra",
+                "gpt-5.6-pro",
+                "gpt-5.6-luna",
+                "gpt-5.5",
+                "gpt-5.4-mini-2026-03-17",
+                "gpt-5.4-mini",
+                "gpt-5.4-nano",
+                "o4-mini",
+            ],
+            "gpt-6-astra",
+            "gpt-5.4-mini",
+        ),
+        # Flash, never Pro: Pro 429s on the free tier.
+        (
+            "google",
+            ["gemini-flash-latest", "gemini-pro-latest", "gemini-flash-lite-latest"],
+            "gemini-flash-latest",
+            "gemini-flash-lite-latest",
+        ),
+        # Ollama: by parameter count parsed from the tag.
+        ("ollama", ["qwen3:8b", "llama3.2:1b", "qwen3:32b"], "qwen3:32b", "llama3.2:1b"),
+        # One usable model covers both tiers; nothing is left blank.
+        ("anthropic", ["claude-sonnet-5"], "claude-sonnet-5", "claude-sonnet-5"),
+        # An unknown vendor gets its first id for both.
+        ("mystery", ["m-large", "m-small"], "m-large", "m-large"),
+    ],
+)
+def test_tiers_pick_an_advanced_and_a_light_model(vendor, ids, advanced, light):
+    """The one-click crew: lecturer/researcher on advanced, the rest on light."""
+    from atlas.routes import settings as settings_routes
+
+    assert settings_routes._tiers(vendor, ids) == {"advanced": advanced, "light": light}
+
+
+def test_tiers_are_absent_for_an_empty_listing():
+    from atlas.routes import settings as settings_routes
+
+    assert settings_routes._tiers("anthropic", []) is None
+
+
+def test_models_endpoint_carries_tiers(client, _config_file, monkeypatch):
+    """The modal's per-vendor button reads its picks straight off the payload."""
+    from atlas.routes import settings as settings_routes
+
+    _only_vendor(monkeypatch, "anthropic")
+    monkeypatch.setattr(
+        settings_routes, "_fetch_anthropic_models",
+        lambda api_key: ["claude-sonnet-5", "claude-haiku-4-5"],
+    )
+    payload = client.get("/api/settings/models").json
+    assert payload["tiers"] == {
+        "anthropic": {"advanced": "claude-sonnet-5", "light": "claude-haiku-4-5"}
+    }
+
+
+
+def test_chat_models_drop_the_live_voice_line():
+    """`gpt-live-1` is the streaming voice API, not a chat model — and it sorts
+    above every numbered generation, so it was the advanced pick until named."""
+    from atlas.routes import settings as settings_routes
+
+    ids = ["gpt-live-1", "gpt-6-astra", "gpt-5.5"]
+    assert settings_routes._chat_models("openai", ids) == ["gpt-6-astra", "gpt-5.5"]
+    google = ["gemini-live-2.5-flash", "gemini-flash-latest"]
+    assert settings_routes._chat_models("google", google) == ["gemini-flash-latest"]

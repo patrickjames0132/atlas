@@ -54,8 +54,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from flask import Blueprint, current_app, request
@@ -292,11 +294,15 @@ _CHAT_FAMILIES: dict[str, tuple[str, ...]] = {
 #: Modality suffixes that appear *inside* an allowed family — Gemini ships
 #: `-tts`, `-image` and `-transcribe` variants under the `gemini-` prefix, and
 #: OpenAI ships `-audio`/`-realtime` under `gpt-`. The prefix allowlist can't
-#: see these, so they're stripped second.
+#: see these, so they're stripped second. `live` is the streaming voice line
+#: on both sides (`gpt-live-1`, `gemini-live-2.5-flash`) — and on OpenAI it
+#: also sorts above every numbered generation, which made it the modal's
+#: "advanced" pick until it was named here (2026-09-18).
 _NON_CHAT_MARKERS = (
     "audio",
     "embedding",
     "image",
+    "live",
     "moderation",
     "realtime",
     "robotics",
@@ -389,6 +395,101 @@ def _fetch_openai_models(api_key: str, base_url: str) -> list[str]:
     return _chat_models("openai", sorted(names, reverse=True))
 
 
+#: Ollama tags carry their parameter count (`qwen3:8b`, `llama3.2:1b`), which
+#: is the only size signal a local listing offers.
+_OLLAMA_PARAMS = re.compile(r":(\d+(?:\.\d+)?)b\b")
+
+#: OpenAI id fragments that mark a model as something other than the mainline
+#: flagship: the small tiers, the coding/chat/search variants, and `-pro`,
+#: which is the slow, expensive research tier rather than a better default.
+_OPENAI_SIDE_LINES = ("mini", "nano", "codex", "chat", "search", "instruct", "pro", "preview")
+
+#: A dated snapshot (`gpt-5.4-mini-2026-03-17`). The undated alias beside it
+#: tracks the line, which is what a default should do — and the snapshot
+#: sorts *above* its alias in the reverse-alphabetical listing, so without
+#: this the picks would always be pinned to a date.
+_DATED_SNAPSHOT = re.compile(r"-\d{4}-\d{2}-\d{2}$")
+
+
+def _first(ids: list[str], keep: Callable[[str], bool]) -> str | None:
+    """The first id passing ``keep`` — newest, since every listing leads with it.
+
+    Args:
+        ids: A vendor's model ids, newest first.
+        keep: A predicate over an id.
+
+    Returns:
+        The first matching id, or None.
+    """
+    return next((name for name in ids if keep(name)), None)
+
+
+def _tiers(vendor: str, ids: list[str]) -> dict[str, str] | None:
+    """A vendor's *advanced* and *light* picks, for the modal's one-click crew.
+
+    "Run every agent on this vendor" is two decisions, not one: the lecturer
+    and researcher carry the long, judgment-heavy generations and want the
+    strongest sensible model, while the summarizer and the scouts are short
+    structured calls that a light model does as well and far cheaper. The
+    split is by name rank per vendor, on the newest-first listing, so the
+    pick tracks whatever the vendor ships:
+
+    * Anthropic — Sonnet / Haiku. Sonnet rather than Opus on purpose: Opus
+      is several times the price for a lecture the reader mostly wants
+      quickly, and Sonnet is the house default (``config.example.json``).
+    * OpenAI — the newest mainline ``gpt-`` (no ``-mini``/``-nano``/``-pro``
+      or variant suffix) / the newest ``-mini``, else ``-nano``.
+    * Google — Flash / Flash-Lite. Not Pro: on the free tier every Pro call
+      answers ``429 RESOURCE_EXHAUSTED`` (see ``docs/configuration.md``),
+      and the free tier is the reason to pick Google at all.
+    * Ollama — the largest / smallest parameter count parsed from the tag.
+
+    A vendor with one usable model gets it for both tiers; an unknown vendor
+    gets its first id for both.
+
+    Args:
+        vendor: The vendor key.
+        ids: The vendor's model ids, newest first.
+
+    Returns:
+        ``{"advanced": id, "light": id}``, or None when the list is empty.
+    """
+    if not ids:
+        return None
+    advanced: str | None = None
+    light: str | None = None
+    match vendor:
+        case "anthropic":
+            advanced = _first(ids, lambda name: "sonnet" in name) or _first(
+                ids, lambda name: "opus" in name
+            )
+            light = _first(ids, lambda name: "haiku" in name)
+        case "openai":
+            undated = [name for name in ids if not _DATED_SNAPSHOT.search(name)]
+            advanced = _first(
+                undated,
+                lambda name: name.startswith("gpt-")
+                and not any(mark in name for mark in _OPENAI_SIDE_LINES),
+            )
+            light = _first(undated, lambda name: "mini" in name) or _first(
+                undated, lambda name: "nano" in name
+            )
+        case "google":
+            advanced = _first(ids, lambda name: "flash" in name and "lite" not in name)
+            light = _first(ids, lambda name: "flash-lite" in name)
+        case "ollama":
+            sized = [
+                (float(found.group(1)), name)
+                for name in ids
+                if (found := _OLLAMA_PARAMS.search(name))
+            ]
+            if sized:
+                advanced = max(sized)[1]
+                light = min(sized)[1]
+    advanced = advanced or ids[0]
+    return {"advanced": advanced, "light": light or advanced}
+
+
 @bp.get("/api/settings/models")
 def list_agent_models() -> ResponseReturnValue:
     """The model ids available, per configured vendor.
@@ -398,10 +499,12 @@ def list_agent_models() -> ResponseReturnValue:
     be reached costs the user autocomplete, never the ability to configure.
 
     Returns:
-        ``{"models": {"<vendor>": [...]}, "vendors": [...], "known": [...]}``.
+        ``{"models": {"<vendor>": [...]}, "vendors": [...], "known": [...],
+        "tiers": {"<vendor>": {"advanced": id, "light": id}}}``.
         ``models`` holds one entry per *configured* vendor and ``vendors``
-        names them; ``known`` names **every** vendor the factory can build,
-        configured or not. That last one matters: the modal has to offer the
+        names them; ``tiers`` is the modal's one-click crew per vendor (see
+        ``_tiers``), present for every vendor with a non-empty list; ``known``
+        names **every** vendor the factory can build, configured or not. That last one matters: the modal has to offer the
         free vendors to someone who has not set them up yet, so a list of only
         what is already working would hide exactly the options a newcomer
         needs to find.
@@ -433,7 +536,10 @@ def list_agent_models() -> ResponseReturnValue:
         # /models route still offers something to pick from.
         if not models[vendor]:
             models[vendor] = KNOWN_MODELS.get(vendor, [])
-    return {"models": models, "vendors": configured, "known": known}
+    tiers = {
+        vendor: picks for vendor in configured if (picks := _tiers(vendor, models[vendor]))
+    }
+    return {"models": models, "vendors": configured, "known": known, "tiers": tiers}
 
 
 def _native_pick() -> str | None:

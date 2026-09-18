@@ -139,8 +139,10 @@ graph explorer runs fine without it, but the Assistant panel needs it.
     server** (Groq, OpenRouter, Together, LM Studio), several with free tiers.
 
   Which vendor each agent uses is set per agent in `llm.agents`
-  (`"model": "ollama:qwen3:8b"`), so mixing them is normal — Settings ▸ Agents
-  has a one-click "run every agent on" picker for the simple case.
+  (`"model": "ollama:qwen3:8b"`), so mixing them is normal — and each vendor
+  in Settings ▸ Agents ▸ Model Providers has a **"Use for all agents"** button
+  that puts the lecturer and researcher on its advanced model and the
+  summarizer and scouts on its light one, in one click.
 
 ### 2. Build the frontend & run
 

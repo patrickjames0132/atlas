@@ -37,6 +37,12 @@ export interface AtlasConfig {
   }
   graph: { cache_ttl: number; [key: string]: unknown }
   ui: { default_theme: 'dark' | 'light'; [key: string]: unknown }
+  sources: {
+    semantic_enabled: boolean
+    embedding: { model: string; dim: number; query_prefix: string; device: string }
+    chunking: { chars: number; overlap: number }
+    retrieval: { search_k: number; hybrid: boolean; rrf_k: number; chat_k: number }
+  }
   llm: {
     providers: {
       anthropic?: { api_key: string; [key: string]: unknown }
@@ -161,6 +167,10 @@ export interface AgentModels {
   /** Every vendor the backend can build, configured or not — what the modal
    *  offers, so the free ones are discoverable before they are set up. */
   known: string[]
+  /** Per listed vendor, the backend's one-click crew: the model for the
+   *  lecturer and researcher (`advanced`) and for the summarizer and scouts
+   *  (`light`). Absent for a vendor with nothing listed. */
+  tiers: Record<string, { advanced: string; light: string }>
 }
 
 /**
@@ -176,9 +186,14 @@ export async function getAgentModels(): Promise<AgentModels> {
   try {
     const res = await fetch('/api/settings/models')
     const body = (await res.json()) as Partial<AgentModels>
-    return { models: body.models ?? {}, vendors: body.vendors ?? [], known: body.known ?? [] }
+    return {
+      models: body.models ?? {},
+      vendors: body.vendors ?? [],
+      known: body.known ?? [],
+      tiers: body.tiers ?? {},
+    }
   } catch {
-    return { models: {}, vendors: [], known: [] }
+    return { models: {}, vendors: [], known: [], tiers: {} }
   }
 }
 

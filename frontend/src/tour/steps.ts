@@ -12,6 +12,9 @@
  * the search surface and auto-runs on first launch, before any graph exists;
  * {@link GRAPH_TOUR} covers the graph tools and auto-runs on the first graph.
  * `Atlas.tsx` picks the list (and the seen-flag) by whether a graph is up.
+ * A third list, {@link SETTINGS_TOUR}, belongs to the settings modal, which
+ * mounts it itself (the ? beside its ✕): its steps *stage* the section or
+ * sub-page they point at, so the walk drives the modal's own nav.
  * Within a list, steps whose control isn't on screen skip themselves (the
  * year/citation sliders only render when the graph spans a range, the detail
  * panel needs a selected paper, the ask bar needs the assistant open),
@@ -29,6 +32,8 @@ export const TOUR_KEYS = {
   home: 'atlas.tour.home',
   /** The graph-tools tour — first graph. */
   graph: 'atlas.tour.graph',
+  /** The settings modal's tour — first time it is opened. */
+  settings: 'atlas.tour.settings',
 } as const
 
 /** The startup tour: the chat bar, before any graph is loaded. */
@@ -344,5 +349,107 @@ export const GRAPH_TOUR: TourStep[] = [
       'map as each part of the story arrives, and the beats read as the reply, in the ' +
       'conversation with everything else. Every turn it guessed on says which assistant ' +
       'answered and offers the other in a click, so a wrong guess costs nothing.',
+  },
+]
+
+/** Every staged settings step's presence proxy: the nav is always there. */
+const SETTINGS_NAV = '[data-tour="settings-nav"]'
+
+/** The settings modal's tour. Stages are `<section>` or `<section>/<page>`,
+ *  which `SettingsModal` turns into a nav click before the step is measured. */
+export const SETTINGS_TOUR: TourStep[] = [
+  {
+    target: '[data-tour="settings-search"]',
+    title: 'Find any setting',
+    body:
+      'Type here and the sidebar narrows to the sections with a match while the pane ' +
+      'shows only the matching rows — it reaches individual settings, wherever they live, ' +
+      'including ones tucked away on a sub-page.',
+  },
+  {
+    target: SETTINGS_NAV,
+    title: 'The sections',
+    body:
+      'General, Graph, Data Providers, Agents and Library. Everything here is one ' +
+      'config file, edited in place: change something and a Save bar appears at the ' +
+      'bottom; nothing touches the file until you press Save, and a saved change applies ' +
+      'to the running app without a restart.',
+  },
+  {
+    target: '[data-tour="settings-location"]',
+    title: 'Which config file',
+    body:
+      'The file every setting reads from and saves to. Type a path or browse with 📁 to ' +
+      'switch — handy for keeping one file per machine or per experiment. This row applies ' +
+      'immediately; it is a setting about the file, not part of it.',
+    stage: 'general',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-adaptive"]',
+    title: 'Graph size',
+    body:
+      'Left on, Atlas sizes each graph from the seed’s own citation pool. Turn it off to ' +
+      'set the band shape yourself. These live in this browser, not the file, and apply as ' +
+      'you change them — the current graph rebuilds when you close settings.',
+    stage: 'graph',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-s2-key"]',
+    title: 'Where the papers come from',
+    body:
+      'Semantic Scholar and OpenAlex both work with no key, on tighter public rate ' +
+      'limits. A free S2 key is the single biggest speed-up available, and this is also ' +
+      'where the optional offline citations corpus is pointed.',
+    stage: 'providers',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-vendor-apply"]',
+    title: 'The AI teacher’s vendors',
+    body:
+      'Model Providers holds the credentials for each vendor Atlas can reach — Google ' +
+      'and a local Ollama cost nothing. Under each one, "Apply Default Models" puts the ' +
+      'lecturer and researcher on its advanced model and the summarizer and scouts on its ' +
+      'light one in one click, and takes you to Agent Settings to see it — the quick way ' +
+      'onto a free tier, or off a vendor that is rate-limiting you.',
+    stage: 'agents/providers',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-agent-model"]',
+    title: 'One model per agent',
+    body:
+      'Agent Settings is where each agent picks its own vendor and model, plus its ' +
+      'tuning knobs. Mixing is normal — a free local model for the lecturer while the web ' +
+      'scout stays on a cloud one that can actually search the web.',
+    stage: 'agents/agents',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-sources-enabled"]',
+    title: 'Your library',
+    body:
+      'Uploaded PDFs and fetched pages are embedded and searched on this machine — no ' +
+      'API, nothing leaves the computer. This switch is the gate: off, the library is ' +
+      'still stored and searched by exact words, and the local model is never loaded.',
+    stage: 'sources/general',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-search-k"]',
+    title: 'How much a search hands over',
+    body:
+      'Retrieval sets how many passages the assistant gets per search of your library. ' +
+      'Embedding picks the local model and device; Chunking decides how the text is cut ' +
+      'into passages — change the model and the library needs re-ingesting.',
+    stage: 'sources/retrieval',
+    presentIf: SETTINGS_NAV,
+  },
+  {
+    target: '[data-tour="settings-help"]',
+    title: 'Run this again',
+    body: 'This walk is always one click away. Close settings with the ✕ beside it.',
   },
 ]

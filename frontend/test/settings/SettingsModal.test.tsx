@@ -6,7 +6,9 @@
  * The settings modal: loading the active config into a draft, dirty
  * detection + the Save/Discard bar, a rejected save surfacing the server's
  * field error in the footer, the PyCharm-style search reaching individual
- * rows, agent-extras editing, and the native-picker config-file switch.
+ * rows, agent-extras editing, the native-picker config-file switch, the
+ * Library section's landing switch and sub-page fields, a vendor's one-click
+ * crew button, and the modal's own tour (auto-run once, then the ?).
  *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
@@ -40,8 +42,22 @@ function makeConfig(): AtlasConfig {
     },
     graph: { cache_ttl: 86400 },
     ui: { default_theme: 'dark' },
+    sources: {
+      semantic_enabled: true,
+      embedding: {
+        model: 'sentence-transformers/all-MiniLM-L6-v2',
+        dim: 384,
+        query_prefix: '',
+        device: 'auto',
+      },
+      chunking: { chars: 900, overlap: 150 },
+      retrieval: { search_k: 6, hybrid: true, rrf_k: 60, chat_k: 8 },
+    },
     llm: {
-      providers: { anthropic: { api_key: 'sk-test' } },
+      providers: {
+        anthropic: { api_key: 'sk-test' },
+        ollama: { base_url: 'http://localhost:11434/v1' },
+      },
       agents: [
         { id: 'summarizer', model: 'anthropic:claude-haiku-4-5', extras: {} },
         // Unique among the agents, so a display-value query lands on it.
@@ -67,6 +83,9 @@ const fetchState = {
 }
 
 beforeEach(() => {
+  // The settings tour auto-runs once ever; every test but the tour's own
+  // starts with it already seen, or its bubble text lands in the queries.
+  localStorage.setItem('atlas.tour.settings', '1')
   fetchState.config = makeConfig()
   fetchState.path = '/repo/config.json'
   fetchState.failPutWith = null
@@ -76,9 +95,13 @@ beforeEach(() => {
     if (!init?.method && String(url).endsWith('/api/settings/models')) {
       return new Response(
         JSON.stringify({
-          models: { anthropic: ['claude-opus-4-8'], ollama: ['qwen3:8b'] },
+          models: { anthropic: ['claude-opus-4-8'], ollama: ['qwen3:8b', 'llama3.2:1b'] },
           vendors: ['anthropic', 'ollama'],
           known: ['anthropic', 'openai', 'google', 'ollama'],
+          tiers: {
+            anthropic: { advanced: 'claude-opus-4-8', light: 'claude-opus-4-8' },
+            ollama: { advanced: 'qwen3:8b', light: 'llama3.2:1b' },
+          },
         }),
         { status: 200 },
       )
@@ -105,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  localStorage.clear()
 })
 
 /** Render the modal open and wait for the config to load. */
@@ -259,13 +283,11 @@ describe('SettingsModal', () => {
     // not set up, so a list of working vendors would hide them.
     await renderOpen()
     openModelProviders()
-    // Each vendor is its own foldable group, and the heading badge carries the
-    // cost — the deciding fact for the reader this list exists for.
+    // Each vendor is its own foldable group; the free ones say so in their
+    // key-field hints rather than in a heading badge.
     expect(await screen.findByRole('button', { name: /Ollama/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Google/ })).toBeTruthy()
-    // The cost rides the heading as a badge.
-    expect(screen.getByText('free, local')).toBeTruthy()
-    expect(screen.getByText('free tier')).toBeTruthy()
+    expect(screen.queryByText('free tier')).toBeNull()
   })
 
   it('a group heading folds its own rows away', async () => {
@@ -370,5 +392,119 @@ describe('SettingsModal', () => {
     await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull())
     const body = fetchState.lastPutBody as { config: AtlasConfig }
     expect(body.config.llm.providers.anthropic?.api_key).toBe('sk-new')
+  })
+
+  it('the dead frontier-window knob is gone from the lecturer', async () => {
+    // LecturerExtras dropped `frontier_window_months` in v7.17.0 and forbids
+    // unknown keys, so the row it left behind could only produce a rejected save.
+    await renderOpen()
+    openAgentTuning()
+    await screen.findAllByLabelText('Vendor')
+    expect(screen.queryByText(/Frontier window/)).toBeNull()
+  })
+
+  it("a vendor's button puts the crew on its picks and shows the result", async () => {
+    await renderOpen()
+    openModelProviders()
+    // A button under every vendor; only the two the backend listed are live.
+    const buttons = await screen.findAllByText('Apply Default Models')
+    expect(buttons.length).toBe(4)
+    expect(buttons.filter((button) => !(button as HTMLButtonElement).disabled).length).toBe(2)
+    // Clearing a key in the draft greys its button out at once — the listing
+    // was fetched on open and would otherwise vouch for a vendor that is gone.
+    const keyField = screen.getByDisplayValue('sk-test')
+    fireEvent.change(keyField, { target: { value: '' } })
+    expect((screen.getAllByText('Apply Default Models')[0] as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    fireEvent.change(keyField, { target: { value: 'sk-test' } })
+    // The picks are spelled out in the tooltip before pressing.
+    expect(buttons[3].getAttribute('title')).toMatch(
+      /qwen3:8b for the lecturer and researcher; llama3.2:1b for/,
+    )
+    fireEvent.click(buttons[3]) // Ollama's — the groups follow VENDOR_LABELS order
+    // The modal moves to Agent Settings — the per-agent Vendor selects only
+    // render there — where every agent now shows the new vendor.
+    const vendors = (await screen.findAllByLabelText('Vendor')) as HTMLSelectElement[]
+    expect(vendors.length).toBe(5)
+    expect(new Set(vendors.map((select) => select.value))).toEqual(new Set(['ollama']))
+    fireEvent.click(await screen.findByText('Save'))
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull())
+    const body = fetchState.lastPutBody as { config: AtlasConfig }
+    const model = (id: string) => body.config.llm.agents.find((agent) => agent.id === id)?.model
+    expect(model('lecturer')).toBe('ollama:qwen3:8b')
+    expect(model('researcher')).toBe('ollama:qwen3:8b')
+    expect(model('summarizer')).toBe('ollama:llama3.2:1b')
+    expect(model('paper_scout')).toBe('ollama:llama3.2:1b')
+    expect(model('web_scout')).toBe('ollama:llama3.2:1b')
+    // The knobs are untouched — this changes who runs, not how.
+    expect(body.config.llm.agents.find((agent) => agent.id === 'researcher')?.extras).toEqual({
+      max_steps: 20,
+    })
+  })
+
+  it('Library opens on its four ways in; the master switch is on General', async () => {
+    await renderOpen()
+    fireEvent.click(screen.getByText('Library'))
+    expect(await screen.findByText(/Your library/)).toBeTruthy()
+    expect(screen.getAllByText('Retrieval').length).toBe(2) // nav + landing link
+    expect(screen.queryByText('Passages per search')).toBeNull()
+    expect(screen.queryByLabelText('Semantic search over your library')).toBeNull()
+    // General (the sub-page, not the top-level section) holds the switch —
+    // second match, since the section's own nav item renders first.
+    fireEvent.click(screen.getAllByText('General')[1])
+    expect(await screen.findByLabelText('Semantic search over your library')).toBeTruthy()
+    openSubPage('Retrieval')
+    expect(await screen.findByText('Passages per search')).toBeTruthy()
+    expect(screen.queryByLabelText('Semantic search over your library')).toBeNull()
+  })
+
+  it('the master switch and a retrieval count edit config.sources', async () => {
+    await renderOpen()
+    fireEvent.click(screen.getByText('Library'))
+    fireEvent.click(screen.getAllByText('General')[1])
+    fireEvent.click(await screen.findByLabelText('Semantic search over your library'))
+    openSubPage('Retrieval')
+    fireEvent.change(await screen.findByDisplayValue('6'), { target: { value: '9' } })
+    fireEvent.click(await screen.findByText('Save'))
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull())
+    const body = fetchState.lastPutBody as { config: AtlasConfig }
+    expect(body.config.sources.semantic_enabled).toBe(false)
+    expect(body.config.sources.retrieval.search_k).toBe(9)
+    // Everything else in the block rode along untouched.
+    expect(body.config.sources.chunking).toEqual({ chars: 900, overlap: 150 })
+  })
+
+  it('a library count refuses to be cleared — the file always carries a value', async () => {
+    await renderOpen()
+    fireEvent.click(screen.getByText('Library'))
+    openSubPage('Chunking')
+    fireEvent.change(await screen.findByDisplayValue('150'), { target: { value: '' } })
+    expect(screen.getByDisplayValue('150')).toBeTruthy()
+    expect(screen.queryByText('Unsaved changes')).toBeNull()
+  })
+
+  it('the ? runs the settings tour, which walks the nav for its stops', async () => {
+    await renderOpen()
+    expect(screen.queryByRole('dialog', { name: 'Guided tour' })).toBeNull()
+    fireEvent.click(screen.getByLabelText('Tour the settings'))
+    const tour = await screen.findByRole('dialog', { name: 'Guided tour' })
+    expect(tour.textContent).toContain('Find any setting')
+    // Two Nexts in: the config-file stop, which stages General (already
+    // there); a third stages Graph and the pane follows the tour.
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    fireEvent.click(screen.getByText('Next'))
+    await waitFor(() => expect(tour.textContent).toContain('Graph size'))
+    expect(screen.getByLabelText('Size graphs automatically')).toBeTruthy()
+  })
+
+  it('the settings tour auto-runs once on first open, then stays behind the ?', async () => {
+    localStorage.removeItem('atlas.tour.settings')
+    await renderOpen()
+    expect(await screen.findByRole('dialog', { name: 'Guided tour' })).toBeTruthy()
+    fireEvent.click(screen.getByText('Skip tips'))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Guided tour' })).toBeNull())
+    expect(localStorage.getItem('atlas.tour.settings')).toBe('1')
   })
 })
