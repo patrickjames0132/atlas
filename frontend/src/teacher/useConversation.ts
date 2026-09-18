@@ -400,6 +400,23 @@ export function useConversation() {
     highlight([])
   }, [dispatch, highlight, askCtrl])
 
+  /**
+   * Ask the researcher, streaming the answer into the active thread.
+   *
+   * @param question  The message as typed.
+   * @param sourceIds Library scope: which uploaded sources it may search.
+   * @param filters   Search filters, forwarded to the researcher's own search.
+   * @param history   Client-owned history to send; defaults to the thread's.
+   * @param mentioned Papers `@`-mentioned in the message, attached as grounding.
+   * @param scope     The turn's scope, resolved once by `send`; defaults to
+   *                  the store's own.
+   * @param routed    Whether a model chose this destination. True marks the
+   *                  turn so the transcript can offer the lecturer instead —
+   *                  the mirror of `lectureInChat`'s flag, so a misroute in
+   *                  either direction costs one click. False (every caller
+   *                  but the router) leaves no offer: graph-free questions,
+   *                  retries and corrections were never a choice a model made.
+   */
   const ask = useCallback(
     async (
       question: string,
@@ -408,6 +425,7 @@ export function useConversation() {
       history?: HistoryTurn[],
       mentioned?: MentionPaper[],
       scope?: ResolvedScope,
+      routed = false,
     ) => {
       // The turn's scope, resolved ONCE — by `send`, with the message's
       // request in play, or here from the store for the callers that skip
@@ -471,6 +489,7 @@ export function useConversation() {
         )
         dispatch(turnScopeStamped(scopeStamp(turnScope), key))
       }
+      if (routed) dispatch(turnRouted('answer', key))
       // Why it ended, if it ended badly. The default covers the commonest
       // case by far — the run was simply abandoned (tab closed, exploration
       // deleted), which raises nothing worth quoting at a reader.
@@ -876,7 +895,7 @@ export function useConversation() {
         void lectureInChat(question, decision.framing, true, scope)
         return
       }
-      void ask(question, sourceIds, filters, undefined, mentioned, scope)
+      void ask(question, sourceIds, filters, undefined, mentioned, scope, true)
     },
     [seedNode, provider, ask, lectureInChat, store, dispatch],
   )
