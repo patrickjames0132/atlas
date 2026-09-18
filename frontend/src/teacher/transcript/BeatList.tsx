@@ -58,26 +58,24 @@ export default function BeatList({
   onBeatClick: (index: number, beat: Beat) => void
   /** Spotlight one paper from a clicked inline `[n]` marker in a beat. */
   onRefClick?: (nodeId: string) => void
-  /** Paper ids still on the graph; a beat (and a `[n]`) outside it greys out.
-   *  Undefined means "don't check" — every beat stays a control, which is the
-   *  right way round for a caller that forgets to pass the set. */
   onEnlarge: (figure: AnswerFigure) => void
 }) {
   if (beats.length === 0) return null
   return (
     <ol className="beats">
       {beats.map((beat, index) => {
-        // Note this also covers a beat with **no** papers at all: there is
-        // nothing for it to light, so it stops pretending to be a button.
+        // A beat with no papers — the synthesis that closes most lectures —
+        // has nothing to light, so it is not a control: no pointer, no hover,
+        // no click. It keeps the card's full colour, though; it used to be
+        // dimmed like a beat whose papers had left the graph, and read as
+        // disabled or broken when it is the paragraph that ties the lecture
+        // together.
         const lightable = beat.node_ids.length > 0
         return (
           <li
             key={index}
-            className={`beat ${activeBeat === index ? 'active' : ''}${lightable ? '' : ' stale'}`}
+            className={`beat ${activeBeat === index ? 'active' : ''}${lightable ? '' : ' paperless'}`}
             onClick={lightable ? () => onBeatClick(index, beat) : undefined}
-            title={
-              lightable ? undefined : 'None of this beat’s papers are on the graph currently open'
-            }
           >
             {beat.heading && (
               <div className="beat-heading">

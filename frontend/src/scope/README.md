@@ -32,16 +32,27 @@ message scoping; a question ignored the router's `scope`.
 Codex's design review (2026-09-15) tightened the fix into four rules, and
 this folder is where they live:
 
-- **Message scope becomes the selection — and stays.** `send` dispatches
-  `nodeSelectionSet` with the resolved papers, so they ring, draw past the
-  filters, and remain the scope after the turn, exactly as if the reader had
-  marqueed them. This is Patrick's call over the review's alternative (an
-  override layer released at the turn's end, exposing the prior selection):
-  *"if the scope changes for a user's request, it should change permanently
-  and not revert back to the user's manual scope."* One consequence worth
-  knowing: there is no separate scope state at all — the selection *is* the
-  scope, whoever set it, and Esc clears it either way. A mid-turn edit by
-  hand simply edits it.
+- **Message scope becomes the selection for the turn, and the turn's end
+  clears it.** `send` dispatches `nodeSelectionSet` with the resolved papers,
+  so they ring and draw past the filters for as long as the agent works —
+  the rings are how the reader sees which papers the request was about —
+  and when the answer lands (`ask`'s and `lectureInChat`'s endings, on the
+  thread on screen) the selection is cleared to **nothing**
+  (`nodeSelectionCleared`), whoever set it, while the papers the answer
+  cited or the lecture narrated stay lit. Two decisions of Patrick's, a
+  fortnight apart, shape this. The review (2026-09-15) proposed an override
+  layer released at the turn's end *exposing the prior selection*, and he
+  overruled it: *"it should change permanently and not revert back to the
+  user's manual scope."* Then, on the v7.27.0 browser round (2026-09-17):
+  *"It should only scope at the beginning … to show the user what nodes are
+  in scope for this request. By the end of the agent's response, the scoping
+  (blue rings) should go away and reset to nothing."* Clearing is not
+  reverting, so both hold. One consequence worth knowing: there is still no
+  separate scope state — the selection *is* the scope, whoever set it, Esc
+  clears it either way, and a hand-picked selection is consumed by the turn
+  it grounds: ask a follow-up about the same papers and they are the visible
+  default again, unless re-picked or named. A mid-turn edit by hand simply
+  edits it, and is cleared with the rest.
 - **Absent ≠ empty.** A request that asks for something and matches nothing
   comes back as `{ source: 'message', nodes: [] }` — the **empty-scope
   signal** — and the caller fails the turn in words. It never falls through

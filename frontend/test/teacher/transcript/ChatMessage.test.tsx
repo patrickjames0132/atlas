@@ -52,6 +52,31 @@ describe('a turn whose answer is a lecture', () => {
     expect(screen.getByText('The first idea.')).toBeTruthy()
   })
 
+  it('keeps a paperless beat in full colour, just not clickable', () => {
+    // The synthesis that closes most lectures cites nothing, so it has
+    // nothing to light — but dimming it (the old "stale" treatment) made the
+    // paragraph that ties the lecture together look disabled.
+    const onBeatClick = vi.fn()
+    const closing: Beat = { heading: 'Where the pieces meet', text: 'Two rivers.', node_ids: [] }
+    const { container } = render(
+      <ChatMessage
+        message={turn({ beats: [BEAT, closing], routedTo: 'lecture' })}
+        active={false}
+        streaming={false}
+        onBeatClick={onBeatClick}
+        onEnlarge={() => {}}
+      />,
+    )
+    const cards = container.querySelectorAll('.beat')
+    expect(cards[0].classList.contains('paperless')).toBe(false)
+    expect(cards[1].classList.contains('paperless')).toBe(true)
+    expect(container.querySelector('.beat.stale')).toBeNull()
+    fireEvent.click(screen.getByText('Two rivers.'))
+    expect(onBeatClick).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('The first idea.'))
+    expect(onBeatClick).toHaveBeenCalledTimes(1)
+  })
+
   it('shows no thinking dots once beats are arriving', () => {
     // The turn's `text` stays empty for a lecture, which is exactly the
     // condition the placeholder dots key off — so beats have to suppress them
