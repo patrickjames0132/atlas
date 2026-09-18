@@ -4,21 +4,28 @@
    panel rather than an overlay pasted on top. */
 
 /* Anchored above the composer: the bar sits at the bottom of the panel, so a
-   list below it would open off-screen. Capped and scrollable because a long
-   title wraps to two lines and eight of those would cover the transcript. */
+   list below it would open off-screen. Capped because a long title wraps to
+   two lines and eight of those would cover the transcript — but the CAP is
+   here and the SCROLL is on `.mention-list` inside, so the footer hint below
+   the list stays in view however long the list gets. */
 .mention-panel {
   position: absolute;
   left: 0;
   right: 0;
   bottom: calc(100% + 6px);
   z-index: 20;
+  display: flex;
+  flex-direction: column;
   max-height: 320px;
-  overflow-y: auto;
   padding: 8px;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 10px;
   background: var(--panel);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.mention-list {
+  min-height: 0;
+  overflow-y: auto;
 }
 .mention-head {
   display: flex;
@@ -78,5 +85,20 @@
 .mention-meta {
   font-size: 11px;
   line-height: 1.3;
+  color: var(--muted);
+}
+/* A second section head sits below the first section's rows, and needs air
+   above it so the two lists don't read as one. */
+.mention-row + .mention-head {
+  margin-top: 6px;
+}
+/* The footer rule: muted, and separated by a hairline so it can't be mistaken
+   for a row. `flex: none` so the list above is what gives way to the cap. */
+.mention-hint {
+  flex: none;
+  margin-top: 6px;
+  padding: 6px 6px 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  font-size: 11px;
   color: var(--muted);
 }

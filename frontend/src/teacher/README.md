@@ -41,10 +41,17 @@ which read as the lecture pointing at its ending rather than at what it
 covered.
 
 Bare paper mentions and pasted paper ids open graph threads. Paper mentions
-inside questions attach those papers without changing the graph. `@thread` opens
-a sibling-discussion picker; choosing a row inserts `@thread[Title]`. The thread
-mention is handled before paper lookup, so it cannot accidentally launch a
-literature search. Both pickers retain their own keyboard behavior.
+inside questions attach those papers without changing the graph. The same `@`
+dropdown lists this exploration's other discussions above the paper results;
+choosing one inserts `@thread[Title]`, which `readMessage` keeps away from the
+paper scout so a bare thread mention can never launch a literature search.
+Nothing in the dropdown is pre-selected: Enter on an untouched list sends the
+message as typed (a bare `@phrase` to the scout); Enter on a chosen paper that
+is the whole message opens it in one press (Tab only completes the text); a
+paper inside a sentence or a thread completes and waits for the question. The
+composer feeds its resolved-mention keys back into the dropdown so a picked
+title ends its mention rather than the question after it becoming the query.
+See `../mentions/README.md`.
 
 `useConversation.ts` captures the conversation key when a run starts. Background
 tokens and beats land there, and discoveries are held for that thread if it is
@@ -62,7 +69,7 @@ and `<<FIG n>>` placement markers are stripped. Every research request carries
 client history; the backend no longer maintains endpoint-specific copies.
 
 Each request also carries a sibling index: titles and summaries from this
-exploration only. Explicit `@thread` references attach that discussion's completed
+exploration only. Explicit `@thread[Title]` references attach that discussion's completed
 history. The server bounds sibling count, summary length, history turns and total
 borrowed text; it labels the result as quoted background with independent paper
 numbering. Replies show a `Context from` line linking to explicitly attached

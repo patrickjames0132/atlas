@@ -3,7 +3,8 @@
  *
  * Description:
  * The `@`-mention grammar, as pure functions: finding the mention being typed,
- * inserting a picked paper, and reading a finished message's mentions back out.
+ * inserting a pick (a paper or a sibling thread), and reading a finished
+ * message's mentions back out.
  *
  * All of it lives here rather than in the composer because these are the rules
  * that decide what a message *means* — whether it seeds the graph, grounds a
@@ -16,9 +17,43 @@
 
 import type { MentionPaper } from '../api'
 
-/** The shortest query worth looking up — matches the backend's own floor, so
- *  the composer never fires a request the server will refuse to serve. */
+/** The shortest query worth a *paper* lookup — matches the backend's own
+ *  floor, so the composer never fires a request the server will refuse to
+ *  serve. Threads are matched from the first character: they are a local
+ *  list of a handful of titles, and cost nothing to filter. */
 export const MENTION_MIN_CHARS = 3
+
+/** A sibling discussion in the current exploration, as the dropdown offers it. */
+export interface MentionThread {
+  /** The thread's stable id — what the sent turn's `Context from` link navigates to. */
+  id: string
+  /** Its title, which is also the text the mention carries. */
+  title: string
+}
+
+/** What a dropdown row stands for: a paper the assistant can read, or another
+ *  discussion whose history the message should carry along. */
+export type MentionChoice =
+  | { kind: 'paper'; paper: MentionPaper }
+  | { kind: 'thread'; thread: MentionThread }
+
+/**
+ * The sibling threads whose title contains the query, case-insensitively.
+ *
+ * A substring match rather than a fuzzy one: thread titles are short, the
+ * reader named or watched them being named, and a list of five needs no
+ * ranking. An empty query matches every thread, so `@` alone shows what can
+ * be attached — the way the reader discovers that threads are mentionable
+ * at all.
+ *
+ * @param threads The other threads in the current exploration.
+ * @param query   The text typed after the `@`.
+ * @returns The matching threads, in their exploration order.
+ */
+export function threadMatches(threads: MentionThread[], query: string): MentionThread[] {
+  const needle = query.trim().toLowerCase()
+  return threads.filter((thread) => thread.title.toLowerCase().includes(needle))
+}
 
 /** The mention the caret is currently inside, as found by {@link activeMention}. */
 export interface ActiveMention {
@@ -28,7 +63,16 @@ export interface ActiveMention {
   start: number
   /** Index just past the caret — where the replacement ends. */
   end: number
+  /** Whether the mention is the whole message: nothing but whitespace before
+   *  the `@` or after the caret. A bare mention is a statement of intent
+   *  (see {@link readMessage}), so picking a paper into one can send it in
+   *  the same keystroke. */
+  whole: boolean
 }
+
+/** A closed thread reference: `@thread[` … `]`. The bracket is the delimiter
+ *  a paper mention doesn't have, so a thread mention ends itself. */
+const CLOSED_THREAD_RE = /^@thread\[[^\]\n]*\]/
 
 /**
  * The `@`-mention the caret sits inside, or null when it doesn't.
@@ -44,44 +88,80 @@ export interface ActiveMention {
  * is only used while typing, and {@link mentionsIn} reads a finished message a
  * different way.
  *
- * @param text  The full composer text.
- * @param caret The caret position (selectionStart).
+ * What DOES end a mention is its completion. Once `@Attention Is All You
+ * Need ` has been picked into the text, the sentence typed after it is a
+ * sentence, not a longer query — without this rule the lookup kept running
+ * on "Attention Is All You Need what does it say about" for every keystroke
+ * of the question. So an `@` that opens a mention the draft has already
+ * resolved (`completed`, the inserted texts) is not an active one, and
+ * neither is a closed `@thread[…]`, whose bracket is its own delimiter.
+ * Editing *inside* a completed mention reopens it, since the text before the
+ * caret is then only a prefix of the completed one.
+ *
+ * @param text      The full composer text.
+ * @param caret     The caret position (selectionStart).
+ * @param completed The mention texts already picked into this draft.
  * @returns The active mention, or null.
  */
-export function activeMention(text: string, caret: number): ActiveMention | null {
+export function activeMention(
+  text: string,
+  caret: number,
+  completed: Iterable<string> = [],
+): ActiveMention | null {
   const before = text.slice(0, caret)
   const at = before.lastIndexOf('@')
   if (at === -1) return null
   // `@` must open a word: start of message, or preceded by whitespace.
   if (at > 0 && !/\s/.test(before[at - 1])) return null
-  const query = before.slice(at + 1)
+  const fromAt = before.slice(at)
+  if (CLOSED_THREAD_RE.test(fromAt)) return null
+  for (const done of completed) {
+    if (fromAt.startsWith(done)) return null
+  }
+  const query = fromAt.slice(1)
   if (query.includes('\n')) return null
-  return { query, start: at, end: caret }
+  const whole = text.slice(0, at).trim() === '' && text.slice(caret).trim() === ''
+  return { query, start: at, end: caret, whole }
 }
 
 /**
- * Splice a picked paper into the composer text, replacing the mention being
- * typed with `@<title>`.
+ * The text a pick puts in the message.
  *
- * The inserted text is the paper's **full title**, not a truncation and not
- * its id. A title is what the reader recognises, and it is also the key
+ * A paper is `@<title>`: its **full title**, not a truncation and not its id.
+ * A title is what the reader recognises, and it is also the key
  * {@link mentionsIn} matches on, so shortening it would either lose the paper
  * or need a second, hidden identifier to survive.
+ *
+ * A thread is `@thread[<title>]` — bracketed because a thread title is
+ * arbitrary text ("PPO", "General") and the brackets are what tells the send
+ * path (`teacher/history.ts`, `useConversation`'s `turnContextSet`) that the
+ * words name a discussion to attach rather than a paper to look up.
+ *
+ * @param choice The pick.
+ * @returns The mention text, without the trailing space.
+ */
+export function mentionText(choice: MentionChoice): string {
+  return choice.kind === 'paper' ? `@${choice.paper.title}` : `@thread[${choice.thread.title}]`
+}
+
+/**
+ * Splice a pick into the composer text, replacing the mention being typed
+ * with its {@link mentionText}.
  *
  * A trailing space is added so the reader can keep typing the sentence without
  * re-opening the dropdown on the mention they just resolved.
  *
  * @param text   The full composer text.
  * @param active The mention being replaced.
- * @param paper  The picked paper.
+ * @param choice The picked paper or thread.
  * @returns The new text and where to put the caret.
  */
 export function insertMention(
   text: string,
   active: ActiveMention,
-  paper: MentionPaper,
+  choice: MentionChoice,
 ): { text: string; caret: number } {
-  const inserted = `@${paper.title} `
+  const inserted = `${mentionText(choice)} `
   return {
     text: text.slice(0, active.start) + inserted + text.slice(active.end),
     caret: active.start + inserted.length,
@@ -140,7 +220,9 @@ export type MessageIntent =
  *   are attached as grounding so it can read and cite them without the graph
  *   you're looking at being thrown away. An *unresolved* `@phrase` inside a
  *   question is simply part of the question — the researcher has its own paper
- *   search and will use it if the answer needs one.
+ *   search and will use it if the answer needs one. A thread mention
+ *   (`@thread[…]`) always lands here too, even alone: it names a discussion
+ *   to carry along, not a paper to find, so it must never reach the scout.
  *
  * @param text     The trimmed composer text.
  * @param resolved Papers picked from the dropdown this draft.
@@ -153,7 +235,7 @@ export function readMessage(text: string, resolved: Map<string, MentionPaper>): 
   for (const paper of mentioned) {
     if (message === `@${paper.title}`) return { kind: 'seed', paper }
   }
-  if (mentioned.length === 0 && message.startsWith('@')) {
+  if (mentioned.length === 0 && message.startsWith('@') && !message.includes('@thread[')) {
     const query = message.slice(1).trim()
     if (query.length >= MENTION_MIN_CHARS && !query.includes('\n')) {
       return { kind: 'find', query }

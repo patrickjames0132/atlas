@@ -12,8 +12,8 @@ the graph on it and keep exploring.
 Each **exploration** contains a permanent **General** discussion and a thread
 for each graph. Switching threads restores that graph and its conversation.
 Paper citations highlight the current graph; graph icons open or resume a graph
-thread directly. Use **@thread** to bring another discussion into the agent's
-context. Lectures remain part of their thread's history, including follow-up
+thread directly. Type **@** and pick another discussion from the suggestions to
+bring it into the agent's context. Lectures remain part of their thread's history, including follow-up
 questions after a reload. Existing saved sessions migrate lazily when opened.
 
 It connects to the academic-graph ecosystem **dynamically** — there's no local

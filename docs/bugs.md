@@ -22,6 +22,57 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### A paper search was invisible to the model (v7.26.0)
+
+- **Symptom.** A scout search in General, then from a graph thread
+  `@thread[General] what other papers appeared in this search?` → *"I don't
+  have any record of a prior search … the sibling thread doesn't have a
+  summary yet."* The list was right there on screen. The same follow-up
+  *inside* General would have failed the same way, and General never got a
+  summary however much was searched in it.
+- **Root cause.** `useDirectSearch.runSearch` opened its turn with
+  `turnStarted` (which sets `unfinished: true` on the assistant message) and
+  drove `answerSet`/`paperRefsSet`, but never dispatched `turnCompleted`. On
+  screen nothing distinguishes an unfinished turn from a finished one; for
+  the model, `teacher/history.ts`'s `conversationHistory` drops unfinished
+  turns entirely — the rule that keeps an aborted answer out of history — so
+  every scout result stayed unfinished forever and never reached a prompt:
+  not as this thread's history, not as `@thread[…]` context, not as the
+  summarizer's input.
+- **Fix.** `dispatch(turnCompleted())` after the final `answerSet`, on
+  success only (`frontend/src/search/useDirectSearch.ts`).
+- **Lesson / guard.** A path that reuses the streamed-answer reducers has to
+  reuse the *whole* sequence, including the terminal one; a turn that renders
+  fine can still be a turn the model never sees. Guard:
+  `frontend/test/search/useDirectSearch.test.ts` replays the dispatches
+  through the real reducer and asserts the exchange is in
+  `conversationHistory` (and that a broken run is not).
+
+### The `@` lookup kept running on the question typed after a pick (v7.26.0)
+
+- **Symptom.** Pick `@thread[General]` (or a paper), keep typing the
+  question, and the dropdown reopens with *"All paper results · Searching
+  Semantic Scholar"* on every keystroke — a provider lookup for *"thread[General]
+  what are some of the other releat"*.
+- **Root cause.** A mention deliberately has no closing delimiter (titles
+  contain spaces, so `@attention is all you need` must be one mention), which
+  means `activeMention` runs from the last `@` before the caret to the caret.
+  After a pick the `@` at the start of the message is still the last `@`, so
+  the whole sentence after it is the query. Pre-existing for paper picks
+  since v7.18.0; noticed with threads because the bracketed text looks so
+  obviously finished.
+- **Fix.** A completed mention ends the mention: `activeMention` takes the
+  draft's completed texts (the composer passes its resolved-mention keys) and
+  an `@` opening one of them is not active; a closed `@thread[…]` ends itself
+  by regex, its bracket being the delimiter a title lacks. Editing *inside* a
+  completed title reopens it, since the text before the caret is then only a
+  prefix (`frontend/src/mentions/parse.ts`).
+- **Lesson / guard.** "No delimiter" needs a stated end condition somewhere,
+  or the open end swallows the sentence. Guards in
+  `frontend/test/mentions/parse.test.ts`: ends at a completed paper mention,
+  ends at a closed thread reference, reopens inside a completed mention, and
+  a later `@` after a completed one is its own mention.
+
 ### "OpenAlex requests are failing" — the seed was an S2 paperId (v7.22.2)
 
 - **Symptom.** Switching the provider dropdown from S2 to OpenAlex on a graph

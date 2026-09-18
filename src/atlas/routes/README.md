@@ -93,7 +93,7 @@ Design decisions worth knowing:
 
 | Endpoint | Job |
 | --- | --- |
-| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | paper search (SSE): the paper scout, run alone |
+| `GET /api/search?q=&provider=&limit=&year_from=&year_to=&fields=` | paper search (SSE): the paper scout, run alone, with the `@` typeahead's nickname resolve running alongside it |
 | `GET /api/mentions?q=&provider=&source=` | the composer's `@` typeahead. `source=local` is the cache-only answer (plain JSON) the composer fires per keystroke; the full one **streams** (`step` frames then `result`), adding a day-cached provider search, a relevance re-rank across both, and — when no title matches exactly — a nickname resolve through one cached model call |
 | `GET /api/taxonomy/<provider>` | a provider's field vocabulary (`s2` / `openalex`) |
 
@@ -121,6 +121,23 @@ Design decisions worth knowing:
   window). The same filters ride on `/api/ask` and `/api/ask_sources`
   (`routes/agents.py`'s `_opt_filters`), because they belong to the chat bar
   rather than to one of its modes — one set of filters, both destinations.
+- **The nickname resolve runs here too, alongside the scout.** The `@`
+  dropdown learned that `dqn` reaches *Playing Atari with Deep Reinforcement
+  Learning* only through world knowledge (`services/search/naming.py`), and
+  the scout — a text-searching agent — has exactly the same blind spot: asked
+  for `dqn` it led with a 2020 paper *titled* "Deep Q-Networks" and called it
+  canonical. So the same day-cached `paper_by_name` runs in its own small
+  thread pool (`_RESOLVERS` — it is synchronous, and must not sit on the loop
+  the scout streams from) from before the scout starts, and its confirmed
+  paper is **prepended** to the scout's list under the dropdown's exact gate:
+  only when no found title already *is* the query (`has_exact_title_match`;
+  see `naming.py` for why "contains" is the wrong test). It overlaps the whole
+  scout run, so it costs no wall-clock; a hit leaves one `trace` chip in the
+  dropdown's own words for the phase, a miss leaves nothing — most queries
+  aren't a paper's name, and "nothing new" after every search would be noise
+  about a step the reader never asked for. A bare `@dqn` sent from the
+  dropdown therefore lands on the same paper the dropdown would have offered,
+  usually straight from the cache its own lookup just filled.
 - **A pasted arXiv id/URL never reaches this route.** The frontend routes it
   straight to the graph: an id is exact, so resolving it needs a regex, not a
   model. (It used to short-circuit *inside* `live_search`; with a model on

@@ -12,6 +12,11 @@
  * runs while someone types — so what costs money is counted here rather than
  * trusted.
  *
+ * Also pinned: the keyboard selection. Nothing is selected until the reader
+ * chooses a row (so Enter on an untouched list sends rather than picks), the
+ * selection follows its row through a re-rank, and sibling threads are rows
+ * of the same list, offered from the first character with no lookup at all.
+ *
  * Authors:
  * Charles Patrick James <charles.patrick.james@gmail.com>
  */
@@ -180,11 +185,95 @@ describe('useMentionSuggestions', () => {
     await act(async () => {
       vi.advanceTimersByTime(300)
     })
-    expect(result.current.choice?.title).toBe('A')
+    // Nothing is selected until the reader moves: Enter on this list must
+    // send the message, not pick a row they never chose.
+    expect(result.current.highlighted).toBe(-1)
+    expect(result.current.choice).toBeNull()
+    act(() => result.current.move(1)) // down from nothing lands on the top
+    expect(result.current.choice).toEqual({ kind: 'paper', paper: two[0] })
     act(() => result.current.move(-1)) // up from the top wraps to the bottom
-    expect(result.current.choice?.title).toBe('B')
+    expect(result.current.choice).toEqual({ kind: 'paper', paper: two[1] })
     act(() => result.current.move(1))
-    expect(result.current.choice?.title).toBe('A')
+    expect(result.current.choice).toEqual({ kind: 'paper', paper: two[0] })
+  })
+
+  it('up from nothing selected lands on the last row', async () => {
+    const two = [
+      { id: 'a', arxiv_id: null, title: 'A' },
+      { id: 'b', arxiv_id: null, title: 'B' },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('source=local')
+          ? Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ papers: two, partial: true }),
+            })
+          : Promise.resolve(sseResponse([['result', { papers: two }]])),
+      ),
+    )
+    const { result } = renderHook(() => useMentionSuggestions('s2'))
+    act(() => result.current.onInput('@dqn', 4))
+    await flush()
+    act(() => result.current.move(-1))
+    expect(result.current.choice).toEqual({ kind: 'paper', paper: two[1] })
+  })
+
+  it('offers matching sibling threads above the papers, from the first character', async () => {
+    const threads = [
+      { id: 't1', title: 'General' },
+      { id: 't2', title: 'PPO' },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        calls.push(url)
+        const found = [{ id: 'a', arxiv_id: null, title: 'PPO explained' }]
+        return url.includes('source=local')
+          ? Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ papers: found, partial: true }),
+            })
+          : Promise.resolve(sseResponse([['result', { papers: found }]]))
+      }),
+    )
+    const { result } = renderHook(() => useMentionSuggestions('s2', threads))
+    // `@` alone: every thread, no lookup of any kind — this is how a reader
+    // finds out that discussions are mentionable.
+    act(() => result.current.onInput('@', 1))
+    expect(result.current.open).toBe(true)
+    expect(result.current.threads).toEqual(threads)
+    expect(result.current.papers).toEqual([])
+    expect(calls).toEqual([])
+    // Two characters: the threads narrow, and still nothing is fetched.
+    act(() => result.current.onInput('@pp', 3))
+    expect(result.current.threads).toEqual([threads[1]])
+    expect(calls).toEqual([])
+    // Three: the paper lookups fire, and the papers land BELOW the thread.
+    act(() => result.current.onInput('@ppo', 4))
+    await flush()
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(freeCalls()).toHaveLength(1)
+    expect(paidCalls()).toHaveLength(1)
+    expect(result.current.threads).toEqual([threads[1]])
+    expect(result.current.papers.map((paper) => paper.title)).toEqual(['PPO explained'])
+    // The keyboard walks one list: thread first, then the paper.
+    act(() => result.current.move(1))
+    expect(result.current.choice).toEqual({ kind: 'thread', thread: threads[1] })
+    act(() => result.current.move(1))
+    expect(result.current.choice?.kind).toBe('paper')
+  })
+
+  it('is shut for a short query when no thread matches it', () => {
+    // Below the paper floor and with nothing local to show, there is no
+    // dropdown — same as before threads joined the list.
+    const { result } = renderHook(() => useMentionSuggestions('s2', [{ id: 't1', title: 'PPO' }]))
+    act(() => result.current.onInput('@dq', 3))
+    expect(result.current.open).toBe(false)
+    expect(calls).toEqual([])
   })
 
   it('keeps the keyboard on the SAME PAPER when the full list re-ranks', async () => {
@@ -232,19 +321,26 @@ describe('useMentionSuggestions', () => {
     // Let the free pass land, then move the reader onto the second row.
     await flush()
     act(() => result.current.move(1))
-    expect(result.current.choice?.title).toBe('B')
+    act(() => result.current.move(1))
+    expect(result.current.choice).toEqual({
+      kind: 'paper',
+      paper: { id: 'b', arxiv_id: null, title: 'B' },
+    })
     // The ranked list arrives and puts B first.
     await act(async () => {
       vi.advanceTimersByTime(300)
     })
     expect(result.current.papers.map((paper) => paper.title)).toEqual(['B', 'A'])
     // Still on B — the row moved, the selection followed it.
-    expect(result.current.choice?.title).toBe('B')
+    expect(result.current.choice).toEqual({
+      kind: 'paper',
+      paper: { id: 'b', arxiv_id: null, title: 'B' },
+    })
     expect(result.current.highlighted).toBe(0)
     expect(callCount).toBe(2)
   })
 
-  it('falls back to the top row when a re-rank drops the tracked paper', async () => {
+  it('falls back to NO selection when a re-rank drops the tracked paper', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
@@ -266,13 +362,18 @@ describe('useMentionSuggestions', () => {
     const { result } = renderHook(() => useMentionSuggestions('s2'))
     act(() => result.current.onInput('@abc', 4))
     await flush()
-    expect(result.current.choice?.title).toBe('Cached only')
+    act(() => result.current.move(1))
+    expect(result.current.choice?.kind === 'paper' && result.current.choice.paper.title).toBe(
+      'Cached only',
+    )
     await act(async () => {
       vi.advanceTimersByTime(300)
     })
-    // The tracked paper is not in the new list; Enter must still be safe.
-    expect(result.current.highlighted).toBe(0)
-    expect(result.current.choice?.title).toBe('Ranked')
+    // The tracked paper is not in the new list. Enter must still be safe, and
+    // the safe thing is to pick nothing — not to quietly move onto a paper the
+    // reader never chose.
+    expect(result.current.highlighted).toBe(-1)
+    expect(result.current.choice).toBeNull()
   })
 
   it('surfaces each phase the server names, latest only', async () => {

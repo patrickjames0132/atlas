@@ -20,6 +20,7 @@ Charles Patrick James <charles.patrick.james@gmail.com>
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from queue import Empty, Queue
 from typing import Iterator
 
@@ -38,6 +39,19 @@ from .sse import sse, sse_response
 log = logging.getLogger(__name__)
 
 bp = Blueprint("search", __name__)
+
+#: Where a direct search's nickname resolve runs while the scout works. Its
+#: own pool rather than the agent loop because :func:`paper_by_name` is
+#: synchronous (a ``run_sync`` micro-agent plus a blocking provider call) and
+#: must not sit on the loop the scout is streaming from. Small: one resolve per
+#: search, and searches are something a reader does one at a time.
+_RESOLVERS = ThreadPoolExecutor(max_workers=4, thread_name_prefix="atlas-name-resolve")
+
+#: The trace chip a successful resolve leaves behind, in the same words the
+#: `@`-mention dropdown uses for the phase. Only a hit gets a chip: most
+#: queries are not a paper's name, and "nothing new" after every search would
+#: be noise about a step the reader never asked for.
+_RESOLVE_LABEL = "Working out which paper “{query}” is"
 
 _PICKER_BRIEF = (
     "\n\n(What you find goes straight to a reader choosing ONE paper to open on "
@@ -163,6 +177,19 @@ def api_search() -> ResponseReturnValue:
     researcher does: a ``trace`` frame per lookup as the scout issues it, so
     the chips appear while the work happens.
 
+    **The nickname resolve runs here too.** The `@`-mention dropdown learned
+    (``api_mentions``) that ``dqn`` reaches *Playing Atari with Deep
+    Reinforcement Learning* only through world knowledge — no text search
+    gets there — and the scout, a text-searching agent, has exactly the same
+    blind spot: asked for ``dqn`` it came back leading with a 2020 paper
+    *titled* "Deep Q-Networks" and called it canonical. So the same
+    day-cached resolve (``naming.paper_by_name``) runs **alongside** the scout
+    in its own thread, costing no wall-clock, and the confirmed paper is
+    prepended to the scout's list under the same gate the dropdown uses: only
+    when no found title already *is* the query. Sending a bare ``@dqn`` from
+    the dropdown thus lands on the same paper the dropdown would have offered
+    — and usually from the cache the dropdown's own lookup just filled.
+
     Returns:
         An SSE stream: one optional ``cached`` frame up front (papers already
         in the local snapshot cache — an instant provisional list, superseded
@@ -205,6 +232,11 @@ def api_search() -> ResponseReturnValue:
         # (label, papers) — papers is None for the issued/pending announcement
         # and the lookup's new papers when it lands.
         lookups: Queue[tuple[str, list[dict] | None]] = Queue()
+        # Started before the scout so it overlaps all of the scout's run: the
+        # resolve is one model call and one provider lookup, the scout is
+        # several of each, so this finishes first in practice and costs the
+        # reader nothing. Collected below, once the scout's chips are done.
+        resolving = _RESOLVERS.submit(search_service.paper_by_name, query, provider)
         future = streams.submit(
             papers.scout(
                 query + _PICKER_BRIEF,
@@ -260,12 +292,26 @@ def api_search() -> ResponseReturnValue:
             yield sse("error", {"message": f"Search failed: {exc}"})
             yield sse("done", {})
             return
+        found = list(result.found)
+        try:
+            named = resolving.result()
+        except Exception:
+            # `paper_by_name` already swallows its own failures; this guards
+            # the pool itself. A miss here is a miss, never a broken search.
+            log.warning("direct search: name resolve failed for %r", query, exc_info=True)
+            named = None
+        # Prepended, not re-ranked in, and only when nothing the scout found
+        # is already titled what was typed — the dropdown's rule exactly (see
+        # `naming.has_exact_title_match` for why "contains" would be wrong).
+        if named and not search_service.has_exact_title_match(found, query):
+            found = search_service.merge_mentions([named], found, len(found) + 1)
+            yield from _lookup_frames(_RESOLVE_LABEL.format(query=query), [named])
         yield sse(
             "result",
             {
                 "q": query,
-                "count": len(result.found),
-                "papers": result.found,
+                "count": len(found),
+                "papers": found,
                 "summary": result.summary,
                 "queries": result.queries,
             },

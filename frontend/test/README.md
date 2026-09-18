@@ -48,10 +48,14 @@ test/
   scope/
     resolve.test.ts           — the priority list rung by rung, the
                                 empty-scope signal, periods, and the words
+  search/
+    useDirectSearch.test.ts   — the scout's turn completes (so the search is
+                                history), and a broken run stays unfinished
   teacher/
     Teacher.test.tsx          — the panel's folding sections: the defaults,
-                                the carets, tour staging, and which of its two
-                                homes the 📚 source picker renders in
+                                the carets, tour staging, which of its two
+                                homes the 📚 source picker renders in, and
+                                what Enter does with the @ dropdown open
     HopDots.test.tsx          — the shared indicator's accessibility contract
     ScopePicker.test.tsx      — the controlled open/close contract (popover
                                 only when `open`; trigger and ✕ report via

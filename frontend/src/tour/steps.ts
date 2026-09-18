@@ -46,14 +46,14 @@ export const HOME_TOUR: TourStep[] = [
     // Anchored to the bar itself: `@` is typed INTO it, so there is no control
     // to point at — which is the improvement over the toggle this replaced.
     target: '[data-tour="ask"]',
-    title: 'Type @ to name a paper',
+    title: 'Type @ to name a paper or a thread',
     body:
-      'Start any word with @ and suggestions appear as you type — pick one and the ' +
-      'assistant knows exactly which paper you mean. Send just “@” and a paper and it ' +
-      'lands on the map; put one inside a question ("what does @… say about X?") and it ' +
-      'answers from that paper without disturbing the graph you are looking at. If the ' +
-      'paper is new to you, no suggestion appears — send it anyway and Atlas searches ' +
-      'properly and lists what it found.',
+      'Start any word with @ and suggestions appear as you type: this exploration’s ' +
+      'other discussions first, then papers. Arrow onto a paper (or hover it) and Enter ' +
+      'opens it on the map; put one inside a question ("what does @… say about X?") and ' +
+      'Enter completes the title, then it answers from that paper without disturbing the ' +
+      'graph you are looking at. Nothing is picked for you — press Enter with no row ' +
+      'chosen and Atlas searches properly for what you typed and lists what it found.',
   },
   {
     target: '[data-tour="search-filters"]',
@@ -95,7 +95,8 @@ export const HOME_TOUR: TourStep[] = [
     body:
       'Click a paper citation to highlight it on the current graph. A graph icon opens ' +
       'that paper’s graph thread directly. General stays available for searches and broad questions; ' +
-      'each graph thread keeps its own conversation. Type @thread to attach another discussion.',
+      'each graph thread keeps its own conversation. Type @ and pick another discussion to bring it ' +
+      'into the one you are in.',
   },
   {
     target: '[data-tour="rail"]',
