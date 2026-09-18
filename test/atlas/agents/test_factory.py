@@ -56,7 +56,7 @@ def test_unwired_provider_fails_loudly(monkeypatch):
     ("model_string", "vendor_field", "credential", "expected_class"),
     [
         ("anthropic:claude-test-1", "anthropic", "api_key", "AnthropicModel"),
-        ("openai:gpt-5", "openai", "api_key", "OpenAIChatModel"),
+        ("openai:gpt-5", "openai", "api_key", "OpenAIResponsesModel"),
         ("google:gemini-2.5-flash", "google", "api_key", "GoogleModel"),
         ("ollama:qwen3:8b", "ollama", "base_url", "OllamaModel"),
     ],
@@ -75,6 +75,27 @@ def test_each_vendor_builds_its_own_model_type(
     # An ollama model name carries its own colon ("qwen3:8b") — only the first
     # separator is the vendor, which is why build_model splits with maxsplit=1.
     assert model.model_name == model_string.split(":", 1)[1]
+
+
+def test_openai_proper_uses_the_responses_api(monkeypatch):
+    """A blank base_url is OpenAI itself, whose current models reason by
+    default — and chat-completions refuses function tools while reasoning is
+    on. Responses is the endpoint that accepts them (and carries web search)."""
+    monkeypatch.setattr(config.llm, "agents", [make_entry(model="openai:gpt-5.6")])
+    monkeypatch.setattr(config.llm.providers.openai, "api_key", "k")
+    monkeypatch.setattr(config.llm.providers.openai, "base_url", "")
+    assert type(factory.build_model("probe")).__name__ == "OpenAIResponsesModel"
+
+
+def test_openai_compatible_servers_keep_chat_completions(monkeypatch):
+    """A custom base_url is a Groq/OpenRouter/LM-Studio-style server, and those
+    speak chat-completions — few implement the Responses API at all."""
+    monkeypatch.setattr(config.llm, "agents", [make_entry(model="openai:llama-3.3-70b")])
+    monkeypatch.setattr(config.llm.providers.openai, "api_key", "k")
+    monkeypatch.setattr(config.llm.providers.openai, "base_url", "https://api.groq.com/openai/v1")
+    model = factory.build_model("probe")
+    assert type(model).__name__ == "OpenAIChatModel"
+    assert model.model_name == "llama-3.3-70b"
 
 
 def test_blank_vendor_is_a_request_time_error_naming_the_alternatives(monkeypatch):

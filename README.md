@@ -135,8 +135,8 @@ graph explorer runs fine without it, but the Assistant panel needs it.
   - **`anthropic.api_key`** — paid. A
     [Claude API key](https://console.anthropic.com/settings/keys).
   - **`openai.api_key`** / **`openai.base_url`** — paid at OpenAI, but the
-    `base_url` points the same adapter at **any OpenAI-compatible server**
-    (Groq, OpenRouter, Together, LM Studio), several with free tiers.
+    `base_url` points the same vendor block at **any OpenAI-compatible
+    server** (Groq, OpenRouter, Together, LM Studio), several with free tiers.
 
   Which vendor each agent uses is set per agent in `llm.agents`
   (`"model": "ollama:qwen3:8b"`), so mixing them is normal — Settings ▸ Agents

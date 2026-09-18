@@ -31,7 +31,7 @@ from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.models.ollama import OllamaModel
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIChatModel, OpenAIResponsesModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.ollama import OllamaProvider
@@ -141,18 +141,28 @@ def build_model(agent_id: str) -> Model:
                 settings=AnthropicModelSettings(anthropic_eager_input_streaming=True),
             )
         case "openai":
-            # One adapter, many endpoints: a blank base_url is OpenAI proper,
-            # and any other value points the same client at an OpenAI-compatible
-            # server (Groq, OpenRouter, Together, LM Studio, ...). `or None`
+            # One provider, two wire APIs. A blank base_url is OpenAI proper,
+            # which gets the Responses API (`/v1/responses`): its current
+            # models reason by default, and on the older chat-completions
+            # endpoint OpenAI refuses function tools while reasoning is on
+            # ("use /v1/responses or set reasoning_effort to 'none'") — and
+            # every agent here IS function tools, structured output included.
+            # Turning reasoning off instead would throw away what the model is
+            # for, and older models reject 'none' anyway. Responses is also
+            # where OpenAI's provider-side web search lives, which the web
+            # scout relies on (see `supports_web_search`). Any other base_url
+            # points at an OpenAI-*compatible* server (Groq, OpenRouter,
+            # Together, LM Studio, ...), and those speak chat-completions —
+            # few implement Responses — so they keep the chat model. `or None`
             # matters — the provider treats None as "use the default host",
             # while "" would be sent as a literal empty URL.
-            return OpenAIChatModel(
-                model_name,
-                provider=OpenAIProvider(
-                    api_key=vendors.openai.api_key or None,
-                    base_url=vendors.openai.base_url or None,
-                ),
+            provider = OpenAIProvider(
+                api_key=vendors.openai.api_key or None,
+                base_url=vendors.openai.base_url or None,
             )
+            if vendors.openai.base_url.strip():
+                return OpenAIChatModel(model_name, provider=provider)
+            return OpenAIResponsesModel(model_name, provider=provider)
         case "google":
             return GoogleModel(
                 model_name, provider=GoogleProvider(api_key=vendors.google.api_key)

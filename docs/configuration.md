@@ -155,7 +155,7 @@ Two of the four cost nothing, which is the point of having them:
 | Vendor | Cost | Notes |
 | --- | --- | --- |
 | `anthropic` | paid | Billed per lecture and per question. |
-| `openai` | paid | `base_url` blank = OpenAI itself. Set it and the same adapter drives **any OpenAI-compatible server** — Groq, OpenRouter, Together, LM Studio — several with free tiers. |
+| `openai` | paid | `base_url` blank = OpenAI itself, driven over its Responses API (the one that accepts function tools on its reasoning models). Set it and the same key/URL pair drives **any OpenAI-compatible server** — Groq, OpenRouter, Together, LM Studio — several with free tiers, over chat-completions, which is what those servers speak. An org with **no payment method** on file is capped at **10,000 TPM** (measured 2026-09-17: `Rate limit reached for gpt-6-… on tokens per min (TPM): Limit 10000`) — a single researcher request runs ~6.6k tokens and a turn makes several, so it trips on nearly every turn; either add a payment method or keep OpenAI for the lighter agents (summarizer, scouts). |
 | `google` | **free tier** | A Google AI Studio key is free and quota-limited. The quota covers the **flash** models — `gemini-pro-latest` answers `429 RESOURCE_EXHAUSTED` on it (measured 2026-08-27), and a busy flash model can answer `503` transiently. A key on a paid project with spent credits 429s on everything, which looks identical and isn't. |
 | `ollama` | **free, local** | No key, no signup, nothing leaves the machine. `base_url` is normally `http://localhost:11434/v1` — keep the `/v1`, that is where Ollama's OpenAI-compatible surface lives. |
 

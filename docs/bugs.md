@@ -22,6 +22,39 @@ recur with the next data release, and its workaround must survive future cleanup
 
 ## Ours
 
+### No current OpenAI model could run an agent at all (v7.28.1)
+
+- **Symptom.** Point any agent at `openai:gpt-5.6-…` (or `gpt-6-…`) with a
+  blank `base_url` and every run failed on the first request:
+  `Function tools with reasoning_effort are not supported for gpt-5.6-luna
+  in /v1/chat/completions. To use function tools, use /v1/responses or set
+  reasoning_effort to 'none'.` Atlas never sets `reasoning_effort` anywhere,
+  which is what made the message read like someone else's bug.
+- **Root cause.** `agents/factory.py`'s `openai` arm built PydanticAI's
+  `OpenAIChatModel`, i.e. the legacy chat-completions endpoint. We send no
+  `reasoning_effort`, so OpenAI applies the model's default — on its current
+  models that is reasoning *on* — and chat-completions refuses function tools
+  in that state. Every Atlas agent is function tools (structured output is a
+  tool call), so the arm could not drive a current OpenAI model at all. A
+  second, silent loss hid behind the same choice: on chat-completions
+  PydanticAI strips `WebSearchTool` from every model that isn't a
+  `-search-preview` variant, so the web scout on OpenAI would have been
+  prompted to search with no way to.
+- **Fix.** The arm picks the wire API from `base_url`: blank (OpenAI proper)
+  → `OpenAIResponsesModel` (`/v1/responses`, which accepts tools while
+  reasoning and carries web search natively); anything else (Groq,
+  OpenRouter, LM Studio, … — compatible servers that speak chat-completions
+  and rarely implement Responses) → `OpenAIChatModel` as before. Forcing
+  `reasoning_effort='none'` was rejected: it throws away what the model is
+  for, and older models refuse `'none'`.
+- **Lesson / guard.** "OpenAI-compatible" means chat-completions-compatible;
+  OpenAI itself has moved on. `test_factory.py` pins both halves
+  (`test_openai_proper_uses_the_responses_api`,
+  `test_openai_compatible_servers_keep_chat_completions`). The follow-on
+  symptom is a different animal: `Rate limit reached … tokens per min (TPM):
+  Limit 10000` is OpenAI's no-payment-method tier, and a researcher request
+  alone is ~6.6k tokens — see the vendor table in `docs/configuration.md`.
+
 ### A paper search was invisible to the model (v7.26.0)
 
 - **Symptom.** A scout search in General, then from a graph thread
