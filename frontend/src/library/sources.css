@@ -1,20 +1,32 @@
-/* The Sources drawer (Phase 3d): upload / list / remove the user's local
-   semantic library. The drawer shell and row classes (.sources-drawer,
-   .source-row, .src-btn, …) are also reused by the Sessions drawer, which
-   imports this file explicitly. */
+/* The Library modal: upload / list / remove the user's local semantic
+   library. The shell mirrors the Settings modal (settings.css: the same
+   scrim, the same card radius/shadow, the same centring) so the rail's two
+   management entries open the same kind of thing; only the size differs —
+   the library is one column, so it is narrower. The two are kept as separate
+   rules rather than one shared class because Settings' card is a fixed
+   two-pane layout and this one hugs its content up to a cap. */
 
-.sources-drawer {
+.library-backdrop {
   position: fixed;
-  top: 0;
-  right: 0;
-  width: min(400px, 92vw);
-  height: 100vh;
+  inset: 0;
+  background: rgba(10, 12, 16, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Below the tour's 60–62, so its spotlight can single the card out. */
+  z-index: 50;
+}
+.library-modal {
+  width: min(680px, 92vw);
+  max-height: min(720px, 86vh);
   background: var(--panel);
-  border-left: 1px solid var(--border);
-  z-index: 41;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px var(--shadow);
+  color: var(--text);
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 18px 20px 20px;
   gap: 12px;
   overflow-y: auto;
 }
@@ -214,13 +226,4 @@
   border-radius: 2px;
   background: var(--accent, #6ea8fe);
   transition: width 0.25s ease;
-}
-
-/* The library as a main-pane view (the left rail switches to it) rather than
-   a floating drawer. Same content and the same vertical rhythm — only the
-   positioning differs, so the drawer's own rules stay untouched. */
-.sources-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }

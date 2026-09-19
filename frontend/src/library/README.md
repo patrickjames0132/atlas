@@ -1,9 +1,9 @@
 # `src/library`
 
-The Sources drawer (user-facing label "Library" / "Your library" since
-2026-07-14; the component keeps its original name): manage the local semantic
-library the teacher searches — upload PDFs (several at once), paste a URL,
-list, remove.
+The Library modal (user-facing label "Library" / "Your library" since
+2026-07-14; the component keeps its original `Sources` name): manage the
+local semantic library the teacher searches — upload PDFs (several at once),
+paste a URL, list, remove.
 
 ## Design decisions worth knowing
 
@@ -22,10 +22,10 @@ list, remove.
   flag — the UI explains a disabled semantic search instead of failing
   mysteriously. (Ingestion genuinely requires embeddings; chat retrieval
   degrades without them.)
-- Upload/ingest progress state is drawer-local (`useState` where it's used),
+- Upload/ingest progress state is modal-local (`useState` where it's used),
   but **the source list lives in the store's `library` slice**: every
   mutation here (upload, URL ingest, delete) re-loads it through
-  `loadLibrary`, and the drawer re-loads on open — so the teacher panel's
+  `loadLibrary`, and the modal re-loads on open — so the teacher panel's
   source-scope picker sees a new source the moment it lands instead of
   after a page reload.
 
@@ -35,14 +35,21 @@ Rendered by the shell behind the header's 📚 toggle. `tsc` strict +
 oxlint; upload progress and failure-lingering are browser-milestone items.
 
 
-## Drawer or pane (v7.8.0)
+## A modal (v7.32.0)
 
-`variant` picks the wrapper: `drawer` floats over the app (the original
-shape, still what the guided tour stages), `pane` fills the main area, which
-is what the left rail switches to. The content between them is identical —
-only the wrapper and the dismiss affordance differ (✕ Close vs ← Back).
+The Library is a centred dialog over the workspace, the same shell as
+Settings (`.library-backdrop` / `.library-modal` in `sources.css` mirror
+`settings.css`'s scrim and card; only the size differs, this being one
+column). It has had three shapes: a right-hand drawer to v7.8.0, then a
+**main-pane view** the rail switched to — the drawer's 400px was too narrow
+for a growing list, and the view hid the workspace, which the `variant` prop
+let the tour keep staging as a drawer — and now the modal, because the rail's
+two management entries, Library and Settings, should open the same kind of
+thing, and a full-pane detour for a list-and-upload form was more page than
+the job needed. The `variant` prop and the `ShellView` state that drove the
+pane went with it.
 
-The workspace behind a pane stays **mounted**, just hidden. Visiting the
-library is a detour, not a teardown: unmounting would cost the graph and the
-conversation, which is the same reasoning that keeps `Teacher` at one position
-in the tree.
+Whatever the wrapper, the workspace behind it stays **mounted** and untouched.
+Visiting the library is a detour, not a teardown: unmounting would cost the
+graph and the conversation, which is the same reasoning that keeps `Teacher`
+at one position in the tree.

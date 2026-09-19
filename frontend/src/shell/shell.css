@@ -330,19 +330,6 @@
   color: var(--accent);
 }
 
-/* --- the library, as a main-pane view rather than a drawer --- */
-.pane-view {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
-  display: flex;
-  justify-content: center;
-  padding: 28px 20px;
-}
-.pane-view-inner {
-  width: min(720px, 100%);
-}
-
 /* Reopen the assistant once it's collapsed — the header tab that used to do
    this is gone, so it sits at the edge the panel flies in from. */
 .pane-assistant {

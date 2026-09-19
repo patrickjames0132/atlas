@@ -116,9 +116,10 @@ look are browser-pass items.
 The header is gone, so the steps that pointed at it moved. The two Sessions
 steps (a button and its drawer) became one `[data-tour="rail"]` step, since
 saved graphs are now a band in the rail rather than a drawer behind a button;
-`[data-tour="provider"]` moved onto the rail's data-source select; and
-`library-panel` still resolves because `Sources` keeps its drawer variant for
-the tour's staging.
+`[data-tour="provider"]` moved onto the rail's data-source entry; and
+`library-panel` sits on the Library modal's card (v7.32.0 — it was the drawer
+`Sources` kept a variant for until then). The modal's scrim is at z-index 50
+so the tour's 60–62 still spotlights the card.
 
 Worth remembering when moving anchors: `presentIf` **silently skips** a step
 whose target is missing. That is the right behaviour at runtime and a poor one

@@ -37,17 +37,13 @@ import SessionRow from './SessionRow'
  *  here because the unfold-by-drag has to measure from what is on screen. */
 const RAIL_COLLAPSED_WIDTH = 56
 
-/** The main-pane view a rail entry switches to. */
-export type ShellView = 'workspace' | 'library'
-
 /** Props for {@link SideBar}. */
 export interface SideBarProps {
   /** The rail is expanded (labels visible); false is the icon rail. */
   open: boolean
   onToggle: () => void
-  /** Which main-pane view is showing — drives the active entry. */
-  view: ShellView
-  onView: (view: ShellView) => void
+  /** Open the Library modal. */
+  onOpenLibrary: () => void
   /** Clear the workspace and start a fresh exploration. */
   onNewGraph: () => void
   /** The saved explorations, newest-updated first. */
@@ -230,8 +226,7 @@ function ProviderPicker({ provider, onChange, disabled, labelled }: ProviderPick
 export default function SideBar({
   open,
   onToggle,
-  view,
-  onView,
+  onOpenLibrary,
   onNewGraph,
   sessions,
   openSessionId,
@@ -385,11 +380,10 @@ export default function SideBar({
         />
         <button
           type="button"
-          className={`rail-item${view === 'library' ? ' active' : ''}`}
+          className="rail-item"
           data-tour="library-btn"
-          onClick={() => onView(view === 'library' ? 'workspace' : 'library')}
+          onClick={onOpenLibrary}
           title="Your library — books, PDFs, and pages the assistant can search"
-          aria-pressed={view === 'library'}
         >
           <span className="rail-glyph" aria-hidden="true">
             📚
