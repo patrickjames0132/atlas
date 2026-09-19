@@ -83,29 +83,103 @@ interface ProviderPickerProps {
   provider: Provider
   onChange: (provider: Provider) => void
   disabled: boolean
+  /** The rail is expanded, so the entry shows its label like every other. */
+  labelled: boolean
 }
 
 /**
- * The data source as a single icon + popup, for the collapsed rail.
+ * The data-source glyph: a database cylinder — two ellipses and the sides
+ * between them.
  *
- * The expanded rail shows a labelled `<select>`, because a name is the only
- * thing this control has to say. Collapsed there is no room for one, so the
- * cylinder stands in and the choice moves into a popup.
+ * @returns The inline SVG, sized by the `.rail-glyph` it sits in.
+ */
+function DatabaseGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" focusable="false">
+      <ellipse
+        cx="8"
+        cy="3.9"
+        rx="5.2"
+        ry="2.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M2.8 3.9v8.2c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+    </svg>
+  )
+}
+
+/**
+ * The data source, as a rail entry in either state.
  *
- * **One click selects and closes** — unlike the chat bar's source picker,
- * which is a multi-select and has to stay open while you tick things. This is
- * one-of-two, so a menu that lingered after the choice would just be a second
- * click to dismiss.
+ * **Expanded** it is a native `<select>` dressed as a rail row: the cylinder
+ * in the glyph lane, the chosen backend's name on the label column, a caret
+ * at the far end, and the browser's own list on click. It lines up with
+ * Library and Settings beneath it — the bordered box it was until v7.31.0
+ * had its own left edge and its own text column, the one thing on the rail
+ * that lined up with nothing. The row shows the *choice* rather than the
+ * word "Data source" because a native select can only display its selected
+ * option; the heading is the tooltip's job. (A custom popup was tried first:
+ * beside the rail it sat a whole rail-width from its entry, and above the
+ * entry it looked like a second control. The browser's list is anchored
+ * where readers expect a select's to be.)
+ *
+ * **Collapsed** there is no width to show a value in, so the cylinder stands
+ * alone and the choice moves into a popup opening to the right of the rail.
+ * **One click there selects and closes** — unlike the chat bar's source
+ * picker, which is a multi-select and has to stay open while you tick
+ * things. This is one-of-two, so a menu that lingered after the choice would
+ * just be a second click to dismiss.
  *
  * @param provider The selected backend.
  * @param onChange Commit a new backend.
  * @param disabled A build is in flight, so switching is refused.
- * @returns The icon button and, when open, its menu.
+ * @param labelled The rail is expanded, so the entry shows its value.
+ * @returns The rail entry and, collapsed and open, its menu.
  */
-function ProviderPicker({ provider, onChange, disabled }: ProviderPickerProps) {
+function ProviderPicker({ provider, onChange, disabled, labelled }: ProviderPickerProps) {
   const [open, setOpen] = useState(false)
+  const title = `Data source: ${PROVIDER_LABEL[provider]} — which academic database graphs are built from; references, citations and the seed all come from this one source`
+  if (labelled)
+    return (
+      <label className="rail-item rail-provider-row" data-tour="provider" title={title}>
+        <span className="rail-glyph" aria-hidden="true">
+          <DatabaseGlyph />
+        </span>
+        <select
+          value={provider}
+          onChange={(event) => {
+            onChange(event.target.value as Provider)
+            // A select keeps focus after its list closes, and browsers count
+            // that focus as keyboard-visible even off a mouse click — so the
+            // row stayed lit after every choice. The choice is made; let go.
+            event.target.blur()
+          }}
+          disabled={disabled}
+          aria-label="Data source"
+        >
+          {(Object.keys(PROVIDER_LABEL) as Provider[]).map((key) => (
+            <option key={key} value={key}>
+              {PROVIDER_LABEL[key]}
+            </option>
+          ))}
+        </select>
+      </label>
+    )
   return (
-    <div className="rail-provider-mini">
+    <div className="rail-provider" data-tour="provider">
       <button
         type="button"
         className="rail-item"
@@ -113,34 +187,11 @@ function ProviderPicker({ provider, onChange, disabled }: ProviderPickerProps) {
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="menu"
-        title={`Data source: ${PROVIDER_LABEL[provider]}`}
+        title={title}
         aria-label={`Data source: ${PROVIDER_LABEL[provider]}`}
       >
         <span className="rail-glyph" aria-hidden="true">
-          {/* A database cylinder: two ellipses and the sides between them. */}
-          <svg viewBox="0 0 16 16" focusable="false">
-            <ellipse
-              cx="8"
-              cy="3.9"
-              rx="5.2"
-              ry="2.1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.3"
-            />
-            <path
-              d="M2.8 3.9v8.2c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.9"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.3"
-            />
-            <path
-              d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.3"
-            />
-          </svg>
+          <DatabaseGlyph />
         </span>
       </button>
       {open && (
@@ -325,31 +376,13 @@ export default function SideBar({
             top of the graph controls; it belongs here, where it is also
             reachable with NO graph open — which matters, because it decides
             which backend the assistant's own paper searches hit (v6.14.0),
-            and the canvas version was gated on a graph existing.
-
-            Expanded-only, like the saved list: a bare 🌐 glyph can't show
-            which source is selected, and that is the only thing this control
-            has to say at a glance. */}
-        {!open && (
-          <ProviderPicker provider={provider} onChange={onProviderChange} disabled={loadingGraph} />
-        )}
-        {open && (
-          <label className="rail-provider" data-tour="provider">
-            <span className="rail-provider-label">Data source</span>
-            <select
-              value={provider}
-              onChange={(event) => onProviderChange(event.target.value as Provider)}
-              disabled={loadingGraph}
-              title="Which academic database graphs are built from — references, citations and the seed all come from this one source"
-            >
-              {(Object.keys(PROVIDER_LABEL) as Provider[]).map((key) => (
-                <option key={key} value={key}>
-                  {PROVIDER_LABEL[key]}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+            and the canvas version was gated on a graph existing. */}
+        <ProviderPicker
+          provider={provider}
+          onChange={onProviderChange}
+          disabled={loadingGraph}
+          labelled={open}
+        />
         <button
           type="button"
           className={`rail-item${view === 'library' ? ' active' : ''}`}

@@ -272,11 +272,51 @@
 /* --- the data-source picker, in the rail's bottom band --- */
 
 /* Collapsed: the cylinder alone, with its choice in a popup. */
-.rail-provider-mini {
+/* Expanded: a native select dressed as a rail row. The select is stripped to
+   its text — no border, no background, no native arrow — and inherits the
+   row's font and colour, so the chosen name sits on the label column exactly
+   as "Library" does below it; the row's own hover/disabled treatment does
+   the rest. The caret is the row's, drawn at its far end, so it reads as one
+   control whose whole width opens the list. */
+.rail-provider-row {
+  cursor: pointer;
+  padding-right: 24px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%237c8392' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 10px 6px;
+}
+.rail-provider-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: inherit;
+  appearance: none;
+}
+/* Keyboard focus lights the row the way hover does, instead of ringing the
+   text: the ring boxed the name alone, which made the row look like an input
+   with an icon parked beside it. */
+.rail-provider-row select:focus-visible {
+  outline: none;
+}
+.rail-provider-row:has(select:focus-visible) {
+  background: var(--hover, rgba(127, 127, 127, 0.12));
+}
+.rail-provider-row:has(select:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Collapsed: the cylinder alone, with the choice in a popup. */
+.rail-provider {
   position: relative;
 }
-/* The rail is 56px wide, so this menu can't hang inside it — it opens to the
-   RIGHT of the rail instead of below the button. */
+/* The rail is 56px wide, so the menu can't fit inside it, and this is the
+   bottom band, so it can't hang below — it opens to the RIGHT instead. */
 .rail-menu-right {
   top: auto;
   bottom: 0;
@@ -288,42 +328,6 @@
   width: 12px;
   flex-shrink: 0;
   color: var(--accent);
-}
-
-.rail-provider {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px 8px;
-}
-.rail-provider-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-}
-.rail-provider select {
-  width: 100%;
-  padding: 6px 26px 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%237c8392' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  background-size: 10px 6px;
-}
-.rail-provider select:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.rail-provider select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* --- the library, as a main-pane view rather than a drawer --- */

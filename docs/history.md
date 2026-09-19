@@ -3573,6 +3573,30 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The data source is a rail row** *(v7.31.0)* — the expanded rail's
+      *Data source* was a heading plus a bordered `<select>`, and while the
+      Backlog ticket it closes (*"The Data Provider dropdown's text sits
+      off-centre"*, filed 2026-08-14 against the header-era
+      `.provider-select`) had gone stale with the move to the rail, the
+      control was still the one thing on the rail that lined up with nothing:
+      its box started at the heading column and its text sat 9px in from
+      that, on no column at all, above a band of entries whose glyphs and
+      labels share one grid. It is now a **native `<select>` dressed as a
+      rail row** — the database cylinder (hoisted into a shared
+      `DatabaseGlyph`, so the collapsed icon and the row draw the same mark)
+      in the glyph lane, the chosen backend's name on the label column, a
+      caret at the row's far end, and the browser's own list on click. The
+      row shows the *choice* rather than the words "Data source" because a
+      native select can only display its selected option; the tooltip
+      carries the heading. Two custom-popup shapes were tried and rejected on
+      the way: opening beside the rail (the collapsed rail's behaviour) put
+      the list a whole rail-width from its entry, and popping it up from the
+      entry read as a second control. One wrinkle: a select keeps focus after
+      its list closes and browsers count that as keyboard-visible even off a
+      mouse click, so the row stayed ringed after every choice — the change
+      handler blurs it, and keyboard focus lights the row like a hover
+      instead of boxing the text. Collapsed, the cylinder alone with its
+      right-hand popup is unchanged.
 - [x] **The search chip names the corpus; the settings nav icons match; "Atlas"
       lines up** *(v7.30.0)* — three things found looking at the app after
       v7.29.0. The researcher's paper-search chip reads **`🔎 Searching
