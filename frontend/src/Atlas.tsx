@@ -30,7 +30,6 @@ import { applyConfiguredDefault, setTheme, useTheme } from './ui/theme'
 import { useAppDispatch, useAppSelector } from './store'
 import { errorSet, loadGraph, providerSet, switchProvider } from './store/workspace'
 import SideBar from './shell/SideBar'
-import type { ShellView } from './shell/SideBar'
 import { useExplorations } from './shell/useExplorations'
 import './shell/shell.css'
 
@@ -57,12 +56,11 @@ export default function Atlas() {
     (state) => state.workspace,
   )
 
-  // Drawer visibility + the assistant toggle — shell-local UI.
-  // Which main-pane view is up. The workspace stays MOUNTED behind the
-  // library rather than unmounting — the graph and the conversation are
-  // expensive, live state, and visiting the library is a detour, not a
-  // teardown (the same reasoning that keeps Teacher at one tree position).
-  const [view, setView] = useState<ShellView>('workspace')
+  // Modal visibility + the assistant toggle — shell-local UI. Both modals sit
+  // over a workspace that stays MOUNTED — the graph and the conversation are
+  // expensive, live state, and a visit to either is a detour, not a teardown
+  // (the same reasoning that keeps Teacher at one tree position).
+  const [showLibrary, setShowLibrary] = useState(false)
   // The rail's expanded/collapsed state, remembered — it's a workspace
   // preference, not a per-visit one.
   const [railOpen, setRailOpen] = useState(() => localStorage.getItem(RAIL_KEY) !== '0')
@@ -169,7 +167,7 @@ export default function Atlas() {
     // twice; a re-run is a deliberate "?" click. Drawers a step staged open
     // are put away (the assistant panel stays — it invites use).
     localStorage.setItem(hasGraph ? TOUR_KEYS.graph : TOUR_KEYS.home, '1')
-    setView('workspace')
+    setShowLibrary(false)
     setTourStage(undefined)
     setTourOpen(false)
   }, [hasGraph])
@@ -184,7 +182,7 @@ export default function Atlas() {
    *  it is the whole job. */
   const onTourStage = useCallback((stage?: string) => {
     setTourStage(stage)
-    setView(stage === 'library' ? 'library' : 'workspace')
+    setShowLibrary(stage === 'library')
     if (stage === 'assistant') setAssistantOpen(true)
   }, [])
 
@@ -281,8 +279,7 @@ export default function Atlas() {
       <SideBar
         open={railOpen}
         onToggle={() => setRailOpen((prev) => !prev)}
-        view={view}
-        onView={setView}
+        onOpenLibrary={() => setShowLibrary(true)}
         onNewGraph={goHome}
         sessions={sessions}
         openSessionId={openSessionId}
@@ -319,12 +316,9 @@ export default function Atlas() {
           }}
         />
 
-        {/* The library is a VIEW, not a drawer, and the workspace behind it
-            stays mounted — going to the library and back must not cost the
-            graph or the conversation. */}
-        <Sources open={view === 'library'} variant="pane" onClose={() => setView('workspace')} />
+        <Sources open={showLibrary} onClose={() => setShowLibrary(false)} />
 
-        <div className="atlas-body" hidden={view !== 'workspace'}>
+        <div className="atlas-body">
           {/* The overlays belong to whichever surface is up: over the canvas in
               graph mode, over the landing chat before one exists. */}
           {graph ? (

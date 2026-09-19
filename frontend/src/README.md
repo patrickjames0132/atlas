@@ -21,7 +21,7 @@ components nest inside their parent's folder (e.g. `teacher/transcript/`).
 │                                   — the header died here in v7.8.0; the
 │                                   search box had already left in v7.6.0, so
 │                                   the chat bar is the app's only text input
-├─ Library (a main-pane VIEW)      library/Sources.tsx (variant="pane")
+├─ Library modal (📚)              library/Sources.tsx
 ├─ Settings modal (⚙)             settings/SettingsModal.tsx (config-file editor)
 ├─ guided tour overlay (?)         tour/Tour.tsx (two phases in tour/steps.ts —
 │                                   search on first launch, graph tools on the

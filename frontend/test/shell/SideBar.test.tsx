@@ -42,8 +42,7 @@ async function setup() {
       <SideBar
         open
         onToggle={() => {}}
-        view="workspace"
-        onView={() => {}}
+        onOpenLibrary={() => {}}
         onNewGraph={() => store.dispatch(explorationOpened(newExploration()))}
         sessions={[{ id: record.id, name: record.title } as api.SavedSessionMeta]}
         openSessionId={activeId}

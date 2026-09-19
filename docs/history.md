@@ -3573,6 +3573,22 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The Library is a modal** *(v7.32.0)* — the rail's 📚 entry now opens
+      a centred dialog over the workspace, the same shell as Settings (scrim,
+      card radius, shadow — `.library-backdrop` / `.library-modal` mirror
+      `settings.css`; narrower, at 680px, since the library is one column,
+      and it hugs its content up to 86vh). Its third shape: a right-hand
+      drawer to v7.8.0, then a **main-pane view** the rail switched to and
+      that hid the workspace behind it — the drawer's 400px had been too
+      narrow for a growing list, but a full-pane detour was more page than a
+      list-and-upload form needed, and the rail's two management entries,
+      Library and Settings, ought to open the same kind of thing. The
+      workspace stays mounted and untouched behind it, as it did behind the
+      view; what went is the plumbing the view needed — the `ShellView` state,
+      the rail's active-entry toggle, `atlas-body`'s `hidden`, the `variant`
+      prop with the drawer wrapper the tour had been staging, and the dead
+      `.drawer-backdrop`. The modal's scrim sits at z-index 50 so the tour's
+      60–62 still spotlights the card on the "Inside the library" step.
 - [x] **The data source is a rail row** *(v7.31.0)* — the expanded rail's
       *Data source* was a heading plus a bordered `<select>`, and while the
       Backlog ticket it closes (*"The Data Provider dropdown's text sits

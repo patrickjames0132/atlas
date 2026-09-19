@@ -203,10 +203,3 @@
 .link-btn:hover {
   color: var(--text-strong);
 }
-/* The scrim behind every drawer/modal (Sources, Sessions, library chat). */
-.drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--shadow);
-  z-index: 40;
-}
