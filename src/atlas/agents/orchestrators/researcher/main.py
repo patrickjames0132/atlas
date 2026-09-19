@@ -249,7 +249,7 @@ def _must_have_looked(ctx: RunContext[ResearcherDeps], output: Answer) -> Answer
     )
 
 
-def _pending_trace(call: ToolCallPart) -> events.Event | None:
+def _pending_trace(call: ToolCallPart, provider: Provider) -> events.Event | None:
     """The "starting now" trace for a tool that will take a visible while.
 
     Both scout tools run a whole sub-agent — several provider calls deep for
@@ -270,6 +270,9 @@ def _pending_trace(call: ToolCallPart) -> events.Event | None:
 
     Args:
         call: The tool call the model just made.
+        provider: The corpus a paper search will run against, so the chip can
+            name it from the moment it appears rather than only once the
+            finished trace fills it in.
 
     Returns:
         The pending trace, or None for tools that return promptly enough not
@@ -279,7 +282,7 @@ def _pending_trace(call: ToolCallPart) -> events.Event | None:
     if not isinstance(need, str) or not need.strip():
         return None
     if call.tool_name == "find_papers":
-        return events.SearchTrace(ok=True, query=need, pending=True)
+        return events.SearchTrace(ok=True, query=need, provider=provider, pending=True)
     if call.tool_name == "search_web":
         return events.WebSearchTrace(ok=True, need=need, pending=True)
     return None
@@ -506,7 +509,7 @@ def answer(
 
         answer_grew = False
         if isinstance(event, PartEndEvent) and isinstance(event.part, ToolCallPart):
-            pending = _pending_trace(event.part)
+            pending = _pending_trace(event.part, deps.provider)
             if pending is not None:
                 yield pending
         elif isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):

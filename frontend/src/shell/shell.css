@@ -121,10 +121,11 @@
    them tipped the whole row off the icon.
    It is a `.rail-item` like every other entry, so its glyph lands on the same
    vertical line and its hover highlight spans the rail rather than boxing the
-   icon. Only the gap is tighter: 10px between a glyph and a label reads as a
-   menu entry, and this row is a wordmark. */
+   icon — and it keeps the entry's 10px gap too. A tighter one read as a
+   wordmark in isolation, but under it "Atlas" started 4px left of every
+   label below, and a column of labels with one nudged out of line looks
+   misaligned before it looks like anything else. */
 .rail-brandrow {
-  gap: 6px;
   min-width: 0;
 }
 .rail-brand {

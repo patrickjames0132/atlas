@@ -58,18 +58,23 @@ const MAX_PER_BAND = 200 // OpenAlex's page cap — no query can return more.
  *  A section with `pages` is navigated as sub-pages in the nav tree rather
  *  than as tabs inside the pane: Agents holds two unrelated jobs — vendor
  *  credentials and per-agent tuning — and a tab strip framed them as two views
- *  of one thing. */
+ *  of one thing.
+ *
+ *  The gear and the web carry U+FE0F (the emoji variation selector): both
+ *  code points default to *text* presentation, so without it the font draws
+ *  them as small monochrome glyphs beside three full-size colour emoji, and
+ *  the column looks like two different icon sets. */
 const SECTIONS = [
   {
     id: 'general',
-    icon: '⚙',
+    icon: '⚙\uFE0F',
     label: 'General',
     blurb:
       'App-wide preferences: which citation source new graphs open on, the colour theme, how long cached graph snapshots stay fresh, and a button to drop that cache.',
   },
   {
     id: 'graph',
-    icon: '🕸',
+    icon: '🕸\uFE0F',
     label: 'Graph',
     blurb:
       "How big a graph comes back and how far back its recent-citer queries reach. Left automatic, Atlas sizes each graph from the seed's own citation pool; turn that off to size it yourself.",

@@ -1027,6 +1027,22 @@ def test_a_scout_announces_itself_before_it_runs(monkeypatch):
     ]
 
 
+def test_a_paper_search_names_the_corpus_it_ran_against(monkeypatch):
+    """The chip says "Searching OpenAlex", then "Searched OpenAlex" — and it is
+    the event that carries the name, not the dropdown at render time, so a
+    turn replayed after the reader switched providers still tells the truth.
+    Both the announcement and the report name it: the pending chip is on
+    screen for the whole run, and that is when the reader is looking."""
+    stub_scout(monkeypatch)
+    model = scripted(
+        [("find_papers", ['{"need": "recent work"}'])],
+        [final("Answering.", [])],
+    )
+    out = run(model, monkeypatch, provider="openalex")
+    traces = [event for event in out if isinstance(event, events.SearchTrace)]
+    assert [trace.provider for trace in traces] == ["openalex", "openalex"]
+
+
 def test_the_chat_bars_filters_reach_the_scout_the_researcher_sends_out(monkeypatch):
     """One set of filters for the whole bar, not one per mode: a reader who
     narrows to 2020+ compsci means it whether they direct-search or ask."""

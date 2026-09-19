@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { PROVIDER_LABEL } from '../../api'
 import type { AnswerFigure, Beat, ChatMsg, Provider, TraceEvent } from '../../api'
 import MathText from '../../notation/MathText'
 import FigCard from '../figures/FigCard'
@@ -103,10 +104,17 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
         )}
       </div>
     )
-  if (trace.action === 'search')
+  if (trace.action === 'search') {
+    // "Searching OpenAlex for …" names the corpus while it runs, then
+    // "Searched OpenAlex for …" once it has. The name comes off the event,
+    // never the dropdown: a turn saved under one provider and replayed under
+    // the other still says where it looked. Turns from before the field
+    // existed have no name to give and read as they always did.
+    const corpus = trace.provider ? PROVIDER_LABEL[trace.provider] : null
+    const verb = trace.pending ? 'Searching' : trace.ok ? 'Searched' : 'Tried'
     return (
       <div className={`trace-line ${trace.ok ? '' : 'fail'}${trace.pending ? ' pending' : ''}`}>
-        🔎 {trace.pending ? 'Searching for' : trace.ok ? 'Searched' : 'Tried'}{' '}
+        🔎 {corpus ? `${verb} ${corpus} for` : trace.pending ? 'Searching for' : verb}{' '}
         <b>“{trace.query}”</b>
         {trace.year_from || trace.year_to ? (
           <span>
@@ -121,6 +129,7 @@ function TraceLine({ trace }: { trace: TraceEvent }) {
         {!trace.ok && searchFailReason(trace.reason) && <em>{searchFailReason(trace.reason)}</em>}
       </div>
     )
+  }
   if (trace.action === 'expand')
     return (
       <div className={`trace-line ${trace.ok ? '' : 'fail'}`}>

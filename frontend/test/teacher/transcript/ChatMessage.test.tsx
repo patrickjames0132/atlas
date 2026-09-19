@@ -20,7 +20,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Beat, ChatMsg } from '../../../src/api'
+import type { Beat, ChatMsg, TraceEvent } from '../../../src/api'
 import ChatMessage from '../../../src/teacher/transcript/ChatMessage'
 
 const BEAT: Beat = { heading: 'Where it started', text: 'The first idea.', node_ids: ['n1'] }
@@ -369,5 +369,40 @@ describe('the route line', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lecture on it instead' }))
     expect(onReroute).toHaveBeenCalledOnce()
     expect(onActivate).not.toHaveBeenCalled()
+  })
+})
+
+describe('the paper-search chip', () => {
+  /** A turn whose trace holds one paper search, rendered mid-run so it is open. */
+  const searching = (trace: TraceEvent) =>
+    render(
+      <ChatMessage
+        message={turn({ trace: [trace] })}
+        active={false}
+        streaming={false}
+        working={true}
+        onEnlarge={() => {}}
+      />,
+    )
+
+  it('names the corpus while the search runs, and again once it has', () => {
+    // The name is off the event, not the dropdown: a turn saved under one
+    // provider and replayed under the other still says where it looked.
+    const { unmount } = searching({
+      action: 'search',
+      ok: true,
+      pending: true,
+      query: 'diffusion',
+      provider: 'openalex',
+    })
+    expect(screen.getByText(/^🔎 Searching OpenAlex for/)).toBeTruthy()
+    unmount()
+    searching({ action: 'search', ok: true, query: 'diffusion', provider: 's2', found: 3 })
+    expect(screen.getByText(/^🔎 Searched Semantic Scholar for/)).toBeTruthy()
+  })
+
+  it('reads as it always did on a turn saved before the corpus was recorded', () => {
+    searching({ action: 'search', ok: true, query: 'diffusion', found: 3 })
+    expect(screen.getByText(/^🔎 Searched\s*$/)).toBeTruthy()
   })
 })

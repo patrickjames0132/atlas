@@ -51,6 +51,11 @@ Design points worth knowing:
   `{"type": "trace", "action": "read", ...}` dict comes back as a
   `ReadTrace`. The old teacher passed loose `{"action": ..., ...}` dicts
   whose shapes you had to reverse-engineer from five `_run_*` functions.
+- **`SearchTrace` records which corpus it ran against** (`provider`, v7.30.0)
+  — on the pending announcement as well as the finished report, since the
+  pending chip is what the reader stares at for the whole run. It is on the
+  event rather than inferred from the workspace at render time so a saved
+  turn replayed under the other provider still names the one it used.
 - **`Discovery` reuses the graph's own models.** `DiscoveredNode`
   *inherits* `services.graph.Node`, adding only `discovered: Literal[True]`
   and `idx` — the number the model knows the paper by (`None` tolerated
