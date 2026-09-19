@@ -946,17 +946,6 @@ than deleted so the plan doesn't get re-proposed.
       **with** the question, which needs no side channel at all and may cover
       most of the want. *(From the `todos.md` inbox, 2026-08-15.)*
 
-- [ ] **The Data Provider dropdown's text sits off-centre** — minor, and the
-      cause is already visible: `.provider-select select`
-      (`header/header.css`) uses `padding: 7px 26px 7px 10px`, where the 26px
-      right pad reserves a lane for the custom data-URI caret (the native
-      arrow rendered outside the rounded border on macOS, hence
-      `appearance: none`). The text is centred in the *element*, so the
-      asymmetric padding pushes it visibly left of optical centre. Either
-      balance the horizontal padding and let the caret overlap its own lane, or
-      commit to left-aligning the label so the offset reads as intentional.
-      *(From the `todos.md` inbox, 2026-08-14.)*
-
 - [ ] **Say what each agent actually does, in Agent Settings** — the Agents
       page now lists five foldable groups (Lecturer, Researcher, Summarizer,
       Paper scout, Web scout — `FIELDS` in
