@@ -561,16 +561,20 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
     deps = ctx.deps
     need = need.strip()
     if not need:
-        deps.emit(events.SearchTrace(ok=False, query=need, reason="empty_query"))
+        deps.emit(events.SearchTrace(ok=False, query=need, provider=deps.provider, reason="empty_query"))
         return "Invalid find_papers call (empty need)."
     if not _spend_step(deps):
-        deps.emit(events.SearchTrace(ok=False, query=need, reason="steps_exhausted"))
+        deps.emit(events.SearchTrace(
+                ok=False, query=need, provider=deps.provider, reason="steps_exhausted"
+            ))
         return STEPS_EXHAUSTED
     if deps.searches_left <= 0:
-        deps.emit(events.SearchTrace(ok=False, query=need, reason="budget_exhausted"))
+        deps.emit(events.SearchTrace(
+                ok=False, query=need, provider=deps.provider, reason="budget_exhausted"
+            ))
         return "Search budget exhausted — answer with what you've found."
     if need.lower() in deps.searched:
-        deps.emit(events.SearchTrace(ok=True, query=need, found=0))
+        deps.emit(events.SearchTrace(ok=True, query=need, provider=deps.provider, found=0))
         return f'Already searched for "{need}" — see the numbered papers above.'
     deps.searched.add(need.lower())
     deps.searches_left -= 1
@@ -622,7 +626,10 @@ async def find_papers(ctx: RunContext[ResearcherDeps], need: str) -> str:
     # search's.
     deps.emit(
         events.SearchTrace(
-            ok=True, query=result.queries[-1] if result.queries else need, found=len(lines)
+            ok=True,
+            query=result.queries[-1] if result.queries else need,
+            provider=deps.provider,
+            found=len(lines),
         )
     )
     if lines:

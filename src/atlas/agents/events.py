@@ -336,10 +336,10 @@ class ExpandTrace(BaseModel):
 
 
 class SearchTrace(BaseModel):
-    """The researcher ran a free-text Semantic Scholar search.
+    """The researcher sent the paper scout out over a provider's corpus.
 
     ``reason`` distinguishes *why* a failed search never turned anything up —
-    "the budget ran out" and "Semantic Scholar errored" read very differently
+    "the budget ran out" and "the provider errored" read very differently
     to someone debugging a stuck answer. ``None`` on success, and also on
     saved sessions from before this field existed (the frontend falls back to
     a generic "Tried" for those).
@@ -351,6 +351,13 @@ class SearchTrace(BaseModel):
     action: Literal["search"] = "search"
     ok: bool
     query: str
+    #: Which corpus the scout searched, so the chip can say "Searched OpenAlex"
+    #: rather than a bare "Searched". Recorded on the event and not looked up
+    #: from the dropdown at render time: a saved turn replayed after the
+    #: reader switched providers must still name the one it actually ran
+    #: against. ``None`` on sessions saved before the field existed — the
+    #: chip drops the name then.
+    provider: Provider | None = None
     found: int | None = None
     year_from: int | None = None
     year_to: int | None = None

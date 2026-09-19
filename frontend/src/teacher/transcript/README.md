@@ -122,6 +122,13 @@ transcript/
   ends. **A reader's own click wins from then on** — the automatic collapse
   stops fighting them for the rest of that turn, because the point of an
   affordance is to be in control of it.
+- **The paper-search chip names the corpus** — `🔎 Searching OpenAlex for
+  “…”` while the scout runs, `🔎 Searched OpenAlex for “…” · 3 new` once it
+  has. The name is read off the trace event (`TraceEvent.provider`, v7.30.0),
+  never off the provider dropdown at render time: a turn saved under one
+  provider and replayed under the other must still say where it actually
+  looked. Turns from before the field existed carry no name and render the
+  bare `Searched “…”` they always did.
 - **A failed answer says so on the turn itself**, not in panel state. The
   commonest failure by far is a run the reader *left* — closed the tab, or the
   page died mid-answer — so a message living in component state would be gone

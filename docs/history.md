@@ -3573,6 +3573,25 @@ into two relations with distinct meaning, colour, filter, and (later) slider:
 
 ### UI & rendering polish
 
+- [x] **The search chip names the corpus; the settings nav icons match; "Atlas"
+      lines up** *(v7.30.0)* — three things found looking at the app after
+      v7.29.0. The researcher's paper-search chip reads **`🔎 Searching
+      Semantic Scholar for “…”`** while the scout runs and **`🔎 Searched
+      OpenAlex for “…” · 3 new`** once it has, instead of a bare `Searching
+      for` / `Searched`. The name rides the trace event (`SearchTrace.provider`,
+      on the pending announcement as well as the finished report, since the
+      pending chip is what the reader stares at for the whole run) rather than
+      the dropdown at render time, so a turn saved under one provider and
+      replayed under the other still says where it actually looked; turns from
+      before the field existed render the bare verb they always did. In the
+      settings modal, **General's gear was visibly smaller than the other
+      four** section icons: `⚙` (U+2699) and `🕸` (U+1F578) are *text-default*
+      code points, so the font drew them as small monochrome glyphs beside
+      three full-size colour emoji — both now carry U+FE0F, the emoji
+      variation selector, and the column is one icon set. And the rail's
+      **brand row kept a tighter 6px gap** than the 10px every other entry
+      uses ("this row is a wordmark", said the comment), which put "Atlas" 4px
+      left of every label below it; it takes the entry's gap now.
 - [x] **Settings: a Library section, per-vendor "Apply Default Models", a
       settings tour, and the dead frontier-window row gone** *(v7.29.0)* — four
       things the settings modal had been missing, found while switching

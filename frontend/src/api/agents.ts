@@ -259,6 +259,12 @@ export interface TraceEvent {
   found?: number | null
   /** Free-text query — find_papers (the scout's last one) / search_sources. */
   query?: string
+  /** Which corpus a find_papers search ran against, so the chip can name it
+   *  ("Searched OpenAlex"). On the event rather than read off the dropdown at
+   *  render time: a turn replayed after the reader switched providers still
+   *  names the one it actually used. Absent on sessions saved before v7.30.0;
+   *  the chip then drops the name. */
+  provider?: Provider
   /** What the researcher asked the web scout for, in its own words — not a
    *  query string, since the scout writes those itself and may write several.
    *  search_web only. */
